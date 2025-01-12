@@ -34,7 +34,7 @@
 						   Foreground="White"
 						   Text="游戏目录"/>
 				<TextBlock FontSize="12"
-						   FontFamily="Sanserif"
+						   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 						   Foreground="DarkGray">
 					您想要安装模组的游戏目录.
 					<LineBreak/>
@@ -58,12 +58,12 @@
 						   Margin="0 10 0 0"
 						   Text="存储目录"/>
 				<TextBlock FontSize="12"
-						   FontFamily="Sanserif"
+						   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 						   Foreground="DarkGray">
 					用于存放添加到模组管理器中的所有模组的目录.
 				</TextBlock>
 				<TextBlock FontSize="12"
-						   FontFamily="Sanserif"
+						   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 						   Foreground="Red">
 					Purge before changing this as a record of the installed files is stored in this!
 				</TextBlock>
@@ -85,7 +85,7 @@
 						   Margin="0 10 0 0"
 						   Text="临时目录"/>
 				<TextBlock FontSize="12"
-						   FontFamily="Sanserif"
+						   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 						   Foreground="DarkGray">
 					用于存放临时文件的目录.例如：:
 					<LineBreak/>
@@ -113,7 +113,7 @@
 						   Margin="0 10 0 0"
 						   Text="不透明度"/>
 				<TextBlock FontSize="12"
-						   FontFamily="Sanserif"
+						   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 						   Foreground="DarkGray">
 					更改窗口背景的不透明度.
 				</TextBlock>
@@ -130,7 +130,7 @@
 						   Margin="0 10 0 0"
 						   Text="日志级别"/>
 				<TextBlock FontSize="12"
-						   FontFamily="Sanserif"
+						   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 						   Foreground="DarkGray">
 					This sets the level of messages which should be logged to the log file.
 					The option set and anything below it will be captured an logged.
@@ -162,7 +162,7 @@
 					<TextBlock Grid.Row="0"
 							   Grid.Column="1"
 							   FontSize="12"
-							   FontFamily="Sanserif"
+							   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 							   Foreground="DarkGray"
 							   Text="区分大小写"
 							   VerticalAlignment="Center"/>
@@ -177,7 +177,7 @@
 						HorizontalAlignment="Left"/>
 				<TextBlock Grid.Column="0"
 						   FontSize="12"
-						   FontFamily="Sanserif"
+						   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 						   Foreground="DarkGray"
 						   Margin="0 0 0 5">
 					这会将所有设置重置为默认值!
@@ -193,7 +193,7 @@
 						   Text="跳过列表"/>
 				<TextBlock Grid.Column="0"
 						   FontSize="12"
-						   FontFamily="Sanserif"
+						   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 						   Foreground="DarkGray"
 						   Margin="0 0 0 5">
 					这将在Mod应用期间跳过所有指定文件的第 0 个索引.

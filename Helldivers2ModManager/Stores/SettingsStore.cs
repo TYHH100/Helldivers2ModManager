@@ -1,4 +1,4 @@
-﻿using Helldivers2ModManager.Exceptions;
+﻿using Helldivers2ModManager.Extensions;
 using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;

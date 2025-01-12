@@ -135,6 +135,7 @@ namespace Helldivers2ModManager.Components
 			this.message.Text = message.Message;
 			input.MaxLength = message.MaxLength;
 			input.Visibility = Visibility.Visible;
+			input.Text = string.Empty;
 			cancelButton.Visibility = Visibility.Visible;
 			okButton.Visibility = Visibility.Visible;
 			Visibility = Visibility.Visible;
@@ -145,6 +146,7 @@ namespace Helldivers2ModManager.Components
 			Reset();
 
 			_confirmAction = message.Confirm;
+			_abortAction = message.Abort;
 
 			title.Text = message.Title;
 			brush.Color = Colors.Yellow;
