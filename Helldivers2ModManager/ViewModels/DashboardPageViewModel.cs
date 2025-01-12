@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Components;
+using Helldivers2ModManager.Exceptions;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -190,9 +191,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
 		{
-			Title = "Saving mod configuration",
-			Message = "Please wait democratically."
-		});
+			Title = "保存Mod配置",
+			Message = "请民主官耐心等待."
+        });
 
 		var enabledFile = new FileInfo(Path.Combine(_settingsStore.StorageDirectory, "enabled.json"));
 		var list = _mods.Select(static m => m.Data.Manifest.Version switch
@@ -246,16 +247,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 			InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
 			Filter = "Archive|*.rar;*.7z;*.zip;*.tar",
 			Multiselect = false,
-			Title = "Please select a mod archive to add..."
-		};
+			Title = "请选择一个模组压缩包文件 进行添加..."
+        };
 
 		if (dialog.ShowDialog() ?? false)
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
 			{
-				Title = "Adding Mod",
-				Message = "Please wait democratically."
-			});
+				Title = "添加模组",
+				Message = "请民主官耐心等待."
+            });
 			try
 			{
 				await _modStore.TryAddModFromArchiveAsync(new FileInfo(dialog.FileName));
@@ -304,9 +305,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
 		{
-			Title = "Purging Mods",
-			Message = "Please wait democratically."
-		});
+			Title = "禁用模组",
+			Message = "请民主官耐心等待."
+        });
 
 		await _modStore.PurgeAsync();
 
@@ -320,16 +321,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "Unable to deploy! Helldivers 2 Path not set. Please go to settings."
-			});
+				Message = "无法启用Mod,因为未设置游戏目录 请点击设置选项进行配置."
+            });
 			return;
 		}
 
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
 		{
-			Title = "Deploying Mods",
-			Message = "Please wait democratically."
-		});
+			Title = "启用模组",
+			Message = "请民主官耐心等待."
+        });
 
 		var mods = _mods.Where(static vm => vm.Enabled).ToArray();
 		var guids = mods.Select(static vm => vm.Guid).ToArray();
@@ -342,8 +343,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 
 			WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
 			{
-				Message = "Deployment successful."
-			});
+				Message = "成功启用"
+            });
 		}
 		catch(Exception ex)
 		{

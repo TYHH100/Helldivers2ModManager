@@ -13,11 +13,11 @@ namespace Helldivers2ModManager;
 
 internal partial class App : Application
 {
-	public static readonly Version Version = new(1, 2, 0, 1);
+    public static readonly Version Version = new(1, 2, 1, 0);
 
-	public static readonly string? VersionAddition = null;
+    public static readonly string? VersionAddition = "(Error Preview 2)";
 
-	public static new App Current => (App)Application.Current;
+    public static new App Current => (App)Application.Current;
 
 	public IHost Host { get; }
 
@@ -42,7 +42,8 @@ internal partial class App : Application
 			log.SetMinimumLevel(LogLevel.Trace);
 			log.AddDebug();
 #endif
-			log.AddFile("ModManager");
+            log.AddConsole();
+            log.AddFile("ModManager");
 		});
 		builder.Services.AddTransient<MainWindow>();
 		

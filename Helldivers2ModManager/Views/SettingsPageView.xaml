@@ -32,13 +32,13 @@
 			<StackPanel Margin="3">
 				<TextBlock FontSize="24"
 						   Foreground="White"
-						   Text="Game Directory"/>
+						   Text="游戏目录"/>
 				<TextBlock FontSize="12"
 						   FontFamily="Sanserif"
 						   Foreground="DarkGray">
-					This is the games directory where you want the mods to be installed.
+					您想要安装模组的游戏目录.
 					<LineBreak/>
-					(Clicking "..." will prompt you to select the games directory)
+					(点击"..."选择游戏目录)
 				</TextBlock>
 				<Grid>
 					<Grid.ColumnDefinitions>
@@ -56,11 +56,11 @@
 				<TextBlock FontSize="24"
 						   Foreground="White"
 						   Margin="0 10 0 0"
-						   Text="Storage Directory"/>
+						   Text="存储目录"/>
 				<TextBlock FontSize="12"
 						   FontFamily="Sanserif"
 						   Foreground="DarkGray">
-					This is where files about all the managed mods are stored.
+					用于存放添加到模组管理器中的所有模组的目录.
 				</TextBlock>
 				<TextBlock FontSize="12"
 						   FontFamily="Sanserif"
@@ -83,17 +83,17 @@
 				<TextBlock FontSize="24"
 						   Foreground="White"
 						   Margin="0 10 0 0"
-						   Text="Temporary Directory"/>
+						   Text="临时目录"/>
 				<TextBlock FontSize="12"
 						   FontFamily="Sanserif"
 						   Foreground="DarkGray">
-					This is the directory where all temporary files will be stored. Examples are:
+					用于存放临时文件的目录.例如：:
 					<LineBreak/>
-					- Download files
+					- 下载文件
 					<LineBreak/>
-					- Staging files
+					- 启用Mod期间的文件
 					<LineBreak/>
-					- Decompressed files
+					- 解压缩文件
 				</TextBlock>
 				<Grid>
 					<Grid.ColumnDefinitions>
@@ -111,11 +111,11 @@
 				<TextBlock FontSize="24"
 						   Foreground="White"
 						   Margin="0 10 0 0"
-						   Text="Opacity"/>
+						   Text="不透明度"/>
 				<TextBlock FontSize="12"
 						   FontFamily="Sanserif"
 						   Foreground="DarkGray">
-					Change the opacity of the window background.
+					更改窗口背景的不透明度.
 				</TextBlock>
 				<Slider HorizontalAlignment="Left"
 						Width="200"
@@ -128,7 +128,7 @@
 				<TextBlock FontSize="24"
 						   Foreground="White"
 						   Margin="0 10 0 0"
-						   Text="Log Level"/>
+						   Text="日志级别"/>
 				<TextBlock FontSize="12"
 						   FontFamily="Sanserif"
 						   Foreground="DarkGray">
@@ -143,7 +143,7 @@
 				<TextBlock FontSize="24"
 						   Foreground="White"
 						   Margin="0 10 0 0"
-						   Text="Search"/>
+						   Text="搜索"/>
 				<Grid>
 					<Grid.ColumnDefinitions>
 						<ColumnDefinition Width="Auto"/>
@@ -164,14 +164,14 @@
 							   FontSize="12"
 							   FontFamily="Sanserif"
 							   Foreground="DarkGray"
-							   Text="Case Sensitive"
+							   Text="区分大小写"
 							   VerticalAlignment="Center"/>
 				</Grid>
 				<TextBlock FontSize="24"
 						   Foreground="White"
 						   Margin="0 10 0 0"
-						   Text="Utilities"/>
-				<Button Content="Reset"
+						   Text="实用工具"/>
+                <Button Content="重置"
 						Style="{DynamicResource CancelButton}"
 						Command="{Binding ResetCommand}"
 						HorizontalAlignment="Left"/>
@@ -180,23 +180,23 @@
 						   FontFamily="Sanserif"
 						   Foreground="DarkGray"
 						   Margin="0 0 0 5">
-					This will this will reset all the setting to their default values!
+					这会将所有设置重置为默认值!
 				</TextBlock>
 				<TextBlock FontSize="24"
 						   Foreground="White"
 						   Margin="0 10 0 0"
-						   Text="Dev Options"
+						   Text="开发者选项"
 						   TextDecorations="Underline"/>
 				<TextBlock FontSize="18"
 						   Foreground="White"
 						   Margin="0 5 0 0"
-						   Text="Skip List"/>
+						   Text="跳过列表"/>
 				<TextBlock Grid.Column="0"
 						   FontSize="12"
 						   FontFamily="Sanserif"
 						   Foreground="DarkGray"
 						   Margin="0 0 0 5">
-					This skips the 0th index of all specified files during deployment.
+					这将在Mod应用期间跳过所有指定文件的第 0 个索引.
 				</TextBlock>
 				<ListBox Width="300"
 						 MinHeight="50"

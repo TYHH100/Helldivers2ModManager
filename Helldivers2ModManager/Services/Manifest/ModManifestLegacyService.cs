@@ -1,8 +1,10 @@
-﻿using Helldivers2ModManager.Models;
+﻿using Helldivers2ModManager.Exceptions;
+using Helldivers2ModManager.Models;
 using Microsoft.Extensions.Logging;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Helldivers2ModManager.Services.Manifest;
 
@@ -44,7 +46,7 @@ internal sealed class ModManifestLegacyService(ILogger<ModManifestLegacyService>
 		var iconPath = root.OptionalStringProp("IconPath");
 		var options = root.OptionalStringArrayProp("Options");
 
-		return new ModManifestLegacy
+        return new ModManifestLegacy
 		{
 			Guid = guid,
 			Name = name,
@@ -61,7 +63,7 @@ internal sealed class ModManifestLegacyService(ILogger<ModManifestLegacyService>
 
 		var guid = Guid.NewGuid();
 		var name = directory.Name;
-		var description = "A locally imported mod.";
+		var description = "从本地导入的mod";
 		string? iconPath = null;
 		string[]? options = null;
 

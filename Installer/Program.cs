@@ -33,8 +33,15 @@ namespace Installer
 						{
 							WorkingDirectory = "[INSTALLDIR]"
 						}
+					),
+                    new Dir(
+                        @"\Helldivers2ModManager",
+                        new Files(
+                            $@"{rootDir}\Helldivers2ModManager\bin\Release\net8.0-windows\*.*",
+                            f => f.EndsWith(".exe") || f.EndsWith(".dll") || f.EndsWith(".json")
+                        )
 					)
-				},
+                },
 				Platform = Platform.x64,
 				ManagedUI = ManagedUI.Empty,
 				OutFileName = "HD2MM",

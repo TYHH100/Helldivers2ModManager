@@ -50,8 +50,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			_storageDirChanged = true;
 			WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
 			{
-				Message = "Storage directory changed. The application needs to be restarted and will quit once you hit \"OK\"."
-			});
+				Message = "存储目录已改变,点击\"OK\"后管理器会自动关闭."
+            });
 		}
 	}
 
@@ -190,8 +190,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		var dialog = new OpenFolderDialog
 		{
 			Multiselect = false,
-			Title = "Please select you Helldivers 2 folder..."
-		};
+			Title = "请选择您的Helldivers 2文件夹..."
+        };
 
 		if (dialog.ShowDialog() ?? false)
 		{
@@ -206,8 +206,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			{
 				WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 				{
-					Message = "The selected Helldivers 2 folder does not reside in a valid directory!"
-				});
+					Message = "选择的Helldivers 2文件夹不是有效目录中!\nThe selected Helldivers 2 folder does not reside in a valid directory!"
+                });
 				return;
 			}
 
@@ -216,24 +216,24 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			{
 				WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 				{
-					Message = "The selected Helldivers 2 root path does not contain a directory named \"data\"!"
-				});
+					Message = "所选的 Helldivers 2 根目录中并没有名为 \"data\"文件夹!"
+                });
 				return;
 			}
 			if (!subDirs.Any(static dir => dir.Name == "tools"))
 			{
 				WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 				{
-					Message = "The selected Helldivers 2 root path does not contain a directory named \"tools\"!"
-				});
+					Message = "所选的 Helldivers 2 根目录中并没有名为 \"tools\"文件夹!"
+                });
 				return;
 			}
 			if (!subDirs.Any(static dir => dir.Name == "bin"))
 			{
 				WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 				{
-					Message = "The selected Helldivers 2 root path does not contain a directory named \"bin\"!"
-				});
+					Message = "所选的 Helldivers 2 根目录中并没有名为 \"bin\"文件夹!"
+                });
 				return;
 			}
 
@@ -243,8 +243,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "The selected path is not a valid Helldivers 2 root!"
-			});
+				Message = "所选的目录不是有效的Helldivers 2根目录!"
+            });
 		}
 	}
 
@@ -255,8 +255,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			Multiselect = false,
 			ValidateNames = true,
-			Title = "Please select a folder where you want this manager to store its mods..."
-		};
+			Title = "选择您想要模组管理器|存放模组的文件夹..."
+        };
 
 		if (dialog.ShowDialog() ?? false)
 			StorageDir = dialog.FolderName;
@@ -269,8 +269,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			Multiselect = false,
 			ValidateNames = true,
-			Title = "Please select a folder which you want this manager to use for temporary files..."
-		};
+			Title = "选择您想要模组管理器|存放临时文件的文件夹..."
+        };
 
 		if (dialog.ShowDialog() ?? false)
 			TempDir = dialog.FolderName;
@@ -304,7 +304,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
 		{
-			Title = "File name?",
+			Title = "文件名?",
 			Message = "Please enter the 16 character name of an archive file you want to skip patch 0 for.",
 			MaxLength = 16,
 			Confirm = (str) =>
@@ -314,8 +314,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 				else
 					WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
 					{
-						Message = "Archive file names can only be 16 characters long."
-					});
+						Message = "Mod文件名的长度只能为 16 字符串."
+                    });
 			}
 		});
 	}

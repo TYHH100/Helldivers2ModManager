@@ -1,4 +1,5 @@
-﻿using Helldivers2ModManager.Models;
+﻿using Helldivers2ModManager.Exceptions;
+using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Microsoft.Extensions.Logging;
 using SharpCompress.Archives;

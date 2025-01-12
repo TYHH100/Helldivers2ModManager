@@ -369,3 +369,4 @@ FodyWeavers.xsd
 *.wixpdb
 *.wixobj
 *.zip
+.github/workflows/Build.yml
