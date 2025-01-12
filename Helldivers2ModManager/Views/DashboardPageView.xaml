@@ -66,28 +66,28 @@
 					Grid.Column="1"
 					Orientation="Horizontal"
 					HorizontalAlignment="Right">
-			<Button Content="Purge"
+            <Button Content="禁用"
 					Style="{DynamicResource CancelButton}"
 					Command="{Binding PurgeCommand}">
 				<Button.ToolTip>
-					<TextBlock Text="Removes all patch files from the games data directory."
+                    <TextBlock Text="从 data 文件夹中删除所有模组."
 							   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
 							   Margin="5 0"/>
 				</Button.ToolTip>
 			</Button>
-			<Button Content="Deploy"
+            <Button Content="启用"
 					Style="{DynamicResource ConfirmButton}"
 					Command="{Binding DeployCommand}">
 				<Button.ToolTip>
-					<TextBlock Text="Installs all selected mods patch files into the games data directory."
+                    <TextBlock Text="将所有勾选的模组,自动编号并添加到 data 文件夹中."
 							   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
 							   Margin="5 0"/>
 				</Button.ToolTip>
 			</Button>
-			<Button Content="Launch HD2"
+            <Button Content="启动 HD2"
 					Command="{Binding RunCommand}">
 				<Button.ToolTip>
-					<TextBlock Text="Runs the game through steam."
+                    <TextBlock Text="通过 Steam 运行游戏."
 							   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
 							   Margin="5 0"/>
 				</Button.ToolTip>
