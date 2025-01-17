@@ -112,8 +112,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "Game directory can not be left empty!"
-			});
+				Message = "游戏目录不能为空!"
+            });
 			return false;
 		}
 
@@ -121,8 +121,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "Storage directory can not be left empty!"
-			});
+				Message = "存储目录不能为空!"
+            });
 			return false;
 		}
 
@@ -130,8 +130,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "Temporary directory can not be left empty!"
-			});
+				Message = "临时目录不能为空!"
+            });
 			return false;
 		}
 
@@ -170,8 +170,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
 		{
-			Title = "Reset?",
-			Message = "Do you really want to reset your settings?",
+			Title = "重置?",
+			Message = "您真的要重置设置?",
 			Confirm = () =>
 			{
 				_settingsStore.Reset();
