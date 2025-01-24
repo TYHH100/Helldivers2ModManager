@@ -51,7 +51,7 @@
 							 FontSize="18"
 							 VerticalAlignment="Center"/>
 					<Button Grid.Column="1"
-							Content="Auto detect"
+							Content="自动检测"
 							Command="{Binding DetectGameCommand}"/>
 					<Button Grid.Column="2"
 							Content="..."

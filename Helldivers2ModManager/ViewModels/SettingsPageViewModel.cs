@@ -111,35 +111,35 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		if (!dir.Exists)
 		{
-			error = "The selected Helldivers 2 folder does not exist!";
+			error = "选择的Helldivers 2文件夹不存在!";
 			return false;
 		}
 
 		if (dir is not DirectoryInfo { Name: "Helldivers 2" })
 		{
-			error = "The selected Helldivers 2 folder does not reside in a valid directory!";
+			error = "选择的Helldivers 2文件夹并不在有效目录中!";
 			return false;
 		}
 
 		var subDirs = dir.EnumerateDirectories();
 		if (!subDirs.Any(static d => d.Name == "data"))
 		{
-			error = "The selected Helldivers 2 root path does not contain a directory named \"data\"!";
+			error = "选择的Helldivers 2根目录中没有名为 \"data\" 文件夹!";
 			return false;
 		}
 		if (!subDirs.Any(static d => d.Name == "tools"))
 		{
-			error = "The selected Helldivers 2 root path does not contain a directory named \"tools\"!";
+			error = "选择的Helldivers 2根目录中没有名为 \"tools\" 文件夹!";
 			return false;
 		}
 		if (subDirs.FirstOrDefault(static d => d.Name == "bin") is not DirectoryInfo binDir)
 		{
-			error = "The selected Helldivers 2 root path does not contain a directory named \"bin\"!";
+			error = "选择的Helldivers 2根目录中没有名为 \"bin\" 文件夹!";
 			return false;
 		}
 		if (!binDir.GetFiles("helldivers2.exe").Any())
 		{
-			error = "The selected Helldivers 2 path does not contain a file named \"helldivers2.exe\" in a folder called \"bin\"!";
+			error = "选定的Helldivers 2文件路径中,在 \"bin\" 文件夹中没有 \"helldivers2.exe\" 文件!";
 			return false;
 		}
 
@@ -341,8 +341,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
 		{
-			Title = "Looking for game",
-			Message = "Please wait democratically."
+			Title = "查找游戏",
+			Message = "请民主官耐心等待."
 		});
 
 		var (result, path) = await Task.Run<(bool, string?)>(static () =>
@@ -374,7 +374,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		else
 			WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
 			{
-				Message = "Your Helldivers 2 game could not be found automatically. Please set it manually."
+				Message = "无法自动找到Helldivers 2游戏,请手动设置."
 			});
 	}
 }
