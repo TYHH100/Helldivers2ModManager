@@ -1,0 +1,48 @@
+name: Build
+
+on:
+  push:
+    tags: 
+      - "v*"
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: actions/setup-dotnet@v4
+              with:
+                dotnet-version: '8.0.x'
+
+            - name: Build
+              run: |
+                cd Helldivers2ModManager
+                dotnet publish Helldivers2ModManager.csproj --configuration Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o Complete
+            
+            - name: Zip Build Complete File
+              uses: vimtor/action-zip@v1.2
+              with:
+                files: Helldivers2ModManager/Complete
+                dest: Helldivers2ModManager.zip
+
+            - name: Upload
+              uses: actions/upload-artifact@v4
+              with:
+                path: |
+                  name: Zip Build Complete File
+                  Helldivers2ModManager.zip
+
+            - name: Upload Build Complete File to Release
+              uses: softprops/action-gh-release@v2
+              with:
+                token: ${{ secrets.GITHUB_TOKEN }}
+                tag_name: latest
+                name: Releases ${{github.ref_name}}
+                #draft: false
+                #prerelease: false
+                files: |
+                  Helldivers2ModManager.zip
