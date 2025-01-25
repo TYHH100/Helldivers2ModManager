@@ -35,7 +35,7 @@
 			</md:MarkdownScrollViewer.MarkdownStyle>
 		</md:MarkdownScrollViewer>
 		<Grid Grid.Row="1">
-			<Button Content="Back"
+			<Button Content="返回"
 					Command="{Binding BackCommand}"
 					HorizontalAlignment="Right"/>
 		</Grid>

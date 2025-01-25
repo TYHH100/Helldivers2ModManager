@@ -322,7 +322,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "Unable to purge! Helldivers 2 Path not set. Please go to settings."
+				Message = "无法禁用Mod,因为未设置游戏目录 请点击设置选项进行配置."
 			});
 			return;
 		}

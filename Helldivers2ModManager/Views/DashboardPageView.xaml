@@ -29,13 +29,13 @@
 			<Button Content="添加"
 					Command="{Binding AddCommand}"/>
 			<!--
-			<Button Content="Browse"
+			<Button Content="浏览"
 					Command="{Binding BrowseCommand}"/>
-			<Button Content="Create"
+			<Button Content="创建"
 					Command="{Binding CreateCommand}"/>
-			<Button Content="Export"
+			<Button Content="导出"
 					Command="{Binding ExportCommand}"/>
-			<Button Content="Import"
+			<Button Content="导入"
 					Command="{Binding ImportCommand}"/>
 			-->
 			<Button Content="报告 Bug"

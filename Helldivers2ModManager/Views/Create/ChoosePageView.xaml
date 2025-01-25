@@ -17,9 +17,9 @@
 				   FontSize="16"
 				   TextWrapping="Wrap"
 				   Margin="0 0 0 5">
-			Lets start with a simple question:
+			让我们从一个简单的问题开始:
 			<LineBreak/>
-			Will your mod have options to choose from?
+			您的模组有可选项吗(比如颜色切换)?
 		</TextBlock>
 		<RadioButton GroupName="HasOptions"
 					 Foreground="White"

@@ -14,9 +14,11 @@
 				   FontFamily="Sanserif"
 				   FontSize="16"
 				   TextWrapping="Wrap">
-			Welcome to the mod creation wizard.
-			This tool will assist and guide you through the process of creating a mod.
-			Press "Next" to continue.
+			欢迎来到模组创建向导.
+			<LineBreak/>
+			该工具将会协助和指导您完成模组的创建.
+			<LineBreak/>
+			请点击"下一步"继续
 		</TextBlock>
 	</StackPanel>
 </Page>

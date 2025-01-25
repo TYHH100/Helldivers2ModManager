@@ -21,7 +21,7 @@
 			<RowDefinition Height="Auto"/>
 		</Grid.RowDefinitions>
 		<TextBlock Grid.Row="0"
-				   Text="Create a Mod"
+				   Text="创建 Mod"
 				   Foreground="Yellow"
 				   FontSize="24"
 				   HorizontalAlignment="Center"/>
@@ -38,15 +38,15 @@
 			</Frame.Resources>
 		</Frame>
 		<Grid Grid.Row="2">
-			<Button Content="Cancel"
+			<Button Content="返回"
 					HorizontalAlignment="Left"
 					Command="{Binding CancelCommand}"/>
 			<StackPanel Orientation="Horizontal"
 						HorizontalAlignment="Right">
-				<Button Content="Back"
+				<Button Content="上一步"
 						HorizontalAlignment="Right"
 						Command="{Binding BackCommand}"/>
-				<Button Content="Next"
+				<Button Content="下一步"
 						HorizontalAlignment="Right"
 						Command="{Binding NextCommand}"/>
 			</StackPanel>
