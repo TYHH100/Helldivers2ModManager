@@ -43,7 +43,7 @@ jobs:
               uses: softprops/action-gh-release@v2
               with:
                 token: ${{ secrets.GITHUB_TOKEN }}
-                tag_name: latest
+                tag_name: ${{github.ref_name}}
                 name: Releases ${{github.ref_name}}
                 #draft: false
                 #prerelease: false
