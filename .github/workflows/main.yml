@@ -48,6 +48,6 @@ jobs:
                 #body_path: ${{ github.workspace }}
                 #draft: false
                 #prerelease: false
-                 append_body: true
+                append_body: true
                 files: |
                   Helldivers2ModManager.zip
