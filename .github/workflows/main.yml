@@ -1,8 +1,8 @@
-name: Build
+名字: Build Test
 
 on:
   push:
-    tags: 
+    标签: 
       - "v*"
 
 jobs:
@@ -10,15 +10,15 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - name: Checkout
+            - 名字: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup
+            - 名字: Setup
               uses: actions/setup-dotnet@v4
               with:
                 dotnet-version: '8.0.x'
 
-            - name: Build
+            - 名字: Build
               run: |
                 cd Helldivers2ModManager
                 dotnet publish Helldivers2ModManager.csproj --configuration Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o Complete
@@ -26,25 +26,25 @@ jobs:
             #-name: sign
             # uses: skymatic/code-sign-action@v1
             
-            - name: Zip Build Complete File
+            - 名字: Zip Build Complete File
               uses: vimtor/action-zip@v1.2
               with:
                 files: Helldivers2ModManager/Complete
                 dest: Helldivers2ModManager.zip
 
-            - name: Upload
+            - 名字: Upload
               uses: actions/upload-artifact@v4
               with:
                 path: |
                   name: Zip Build Complete File
                   Helldivers2ModManager.zip
 
-            - name: Upload Build Complete File to Release
+            - 名字: Upload Build Complete File to Release
               uses: softprops/action-gh-release@v2
               with:
                 token: ${{ secrets.GITHUB_TOKEN }}
                 tag_name: ${{github.ref_name}}
-                name: Releases ${{github.ref_name}}
+                名字: Releases ${{github.ref_name}}
                 #body_path: ${{ github.workspace }}
                 #draft: false
                 #prerelease: false
