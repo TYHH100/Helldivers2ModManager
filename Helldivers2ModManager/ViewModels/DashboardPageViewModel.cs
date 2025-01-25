@@ -292,16 +292,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
 		{
-			Title = "How to report bugs",
+			Title = "如何报告 bug",
 			Message = """
-			If you want to report a bug please include the latest log file.
+			如果您想要报告bug,在说明的时候请附带上最新的log文件
 				- If you report a crash or an error, describe what you did until the error occurred.
 				- If you want to report a bug of a mod not deploying, specify your mod list and the mod that caused the error.
 				- If you want to report a bug of a mod not working correctly, this is not the place for that.
 
 			If your issue is more specific feel free to join the Modding Discord.
 
-			Continue?
+			是否继续?
 			""",
 			Confirm = static () => Process.Start(s_reportStartInfo)
 		});
