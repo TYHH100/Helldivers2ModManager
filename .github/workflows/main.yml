@@ -45,6 +45,7 @@ jobs:
                 token: ${{ secrets.GITHUB_TOKEN }}
                 tag_name: ${{github.ref_name}}
                 name: Releases ${{github.ref_name}}
+                body_path: ${{ github.workspace }}
                 #draft: false
                 #prerelease: false
                 files: |
