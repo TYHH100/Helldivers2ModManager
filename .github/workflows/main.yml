@@ -1,9 +1,7 @@
 名字: Build Test
 
 on:
-  push:
-    标签: 
-      - "v*"
+  push
 
 jobs:
     build:
