@@ -1,9 +1,7 @@
 name: Build
 
 on:
-  push:
-    tags: 
-      - "v*"
+  push
 
 jobs:
     build:
@@ -35,18 +33,14 @@ jobs:
             - name: Upload
               uses: actions/upload-artifact@v4
               with:
-                path: |
-                  name: Zip Build Complete File
-                  Helldivers2ModManager.zip
+                path: Helldivers2ModManager.zip
 
             - name: Upload Build Complete File to Release
               uses: softprops/action-gh-release@v2
               with:
                 token: ${{ secrets.GITHUB_TOKEN }}
-                tag_name: ${{github.ref_name}}
+                tag_name: ${{ github.sha }}
                 name: Releases ${{github.ref_name}}
-                body_path: ${{ github.workspace }}
-                #draft: false
+                draft: true
                 #prerelease: false
-                files: |
-                  Helldivers2ModManager.zip
+                files: Helldivers2ModManager.zip
