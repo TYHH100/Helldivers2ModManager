@@ -45,4 +45,5 @@ jobs:
                 name: Releases ${{github.ref_name}}
                 draft: true
                 #prerelease: false
+                append_body: true
                 files: Helldivers2ModManager.zip
