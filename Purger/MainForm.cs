@@ -71,7 +71,7 @@ public partial class MainForm : Form
 			return files.Length;
 		});
 
-		MessageBox.Show(this, $"Deleted {count} files!\nIt's recommended to verify your game files now.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+		MessageBox.Show(this, $"删除 {count} 文件!\n建议验证游戏完整性.\n在Steam游戏库右键属性、已安装文件、点击验证游戏文件的完整性", "信息", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
 		btnBrowse.Enabled = true;
 		btnPurge.Enabled = true;

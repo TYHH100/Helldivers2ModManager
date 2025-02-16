@@ -369,9 +369,12 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			return (false, null);
 		});
 
-		if (result)
+        if (result && path != null)
+        {
+            GameDir = path;
 			WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-		else
+        }
+        else
 			WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
 			{
 				Message = "无法自动找到Helldivers 2游戏,请手动设置."

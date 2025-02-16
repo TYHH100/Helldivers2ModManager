@@ -322,8 +322,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "无法禁用Mod,因为未设置游戏目录 请点击设置选项进行配置."
-			});
+				Message = "无法禁用模组,因为未设置游戏目录 请点击设置选项进行配置."
+            });
 			return;
 		}
 
@@ -345,7 +345,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "无法启用Mod,因为未设置游戏目录 请点击设置选项进行配置."
+				Message = "无法启用模组,因为未设置游戏目录 请点击设置选项进行配置."
             });
 			return;
 		}
@@ -367,7 +367,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 
 			WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
 			{
-				Message = "成功启用"
+				Message = "成功启用模组"
             });
 		}
 		catch(DeployException ex)

@@ -51,7 +51,7 @@ partial class MainForm
 		label1.Name = "label1";
 		label1.Size = new Size(89, 15);
 		label1.TabIndex = 1;
-		label1.Text = "Game Directory";
+		label1.Text = "游戏目录";
 		// 
 		// btnBrowse
 		// 
@@ -79,13 +79,13 @@ partial class MainForm
 		btnPurge.Name = "btnPurge";
 		btnPurge.Size = new Size(260, 23);
 		btnPurge.TabIndex = 4;
-		btnPurge.Text = "Purge";
+		btnPurge.Text = "清理";
 		btnPurge.UseVisualStyleBackColor = true;
 		btnPurge.Click += btnPurge_Click;
 		// 
 		// folderDialog
 		// 
-		folderDialog.Description = "Select your Helldivers 2 installation location";
+		folderDialog.Description = "选择您的Helldivers 2文件夹";
 		// 
 		// MainForm
 		// 
@@ -100,7 +100,7 @@ partial class MainForm
 		FormBorderStyle = FormBorderStyle.FixedSingle;
 		MaximizeBox = false;
 		Name = "MainForm";
-		Text = "Purger";
+		Text = "Mod清理";
 		ResumeLayout(false);
 		PerformLayout();
 	}
