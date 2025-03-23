@@ -178,7 +178,7 @@
 										Margin="3"
 										Width="50"
 										Foreground="White"
-										Content="Edit"
+										Content="编辑"
 										VerticalContentAlignment="Center"
 										Padding="0"
 										Visibility="{Binding EditVisible}"

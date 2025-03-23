@@ -1,68 +1,64 @@
-﻿Need help? You've come to the right place. This document will discuss
-the usage of the manager and common issues you might encounter.
-As well as instructions for developers.
+﻿您需要帮助? 那就来对了.  
+管理器使用的时候,您可能会遇到的一些常见问题.  
+以及面向开发者的说明.
 
-Read a nicer formatted version [here](https://github.com/teutinsa/Helldivers2ModManager/blob/master/Helldivers2ModManager/Resources/Text/Help.md).
+在Github查看该文件 [原文](https://github.com/teutinsa/Helldivers2ModManager/blob/master/Helldivers2ModManager/Resources/Text/Help.md)|[翻译](https://github.com/TYHH100/Helldivers2ModManager/blob/zh-cn_Translations/Helldivers2ModManager/Resources/Text/Help.md).
 
-# For users
+---
+# 对于用户
 
-## Setting up
-This section will guide you though setting up the manager for the first time.
+## 设置
+本节将会指导您如何首次设置管理器
 
-Setting the manager up for the first time is easy. All you need to know is your
-Helldivers 2 installation location. 
+首次设置管理器,很简单您只需要Helldivers 2安装位置即可(然后现在更新了自动检测好像也不需要了)
+
+---
+## 添加模组
+本章节会指导你如何添加模组以及配置功能
+
+添加模组,只需要点击"**添加**"然后选择[Nexus](https://www.nexusmods.com/helldivers2)或其他地方获取到的压缩包.
+就会自动添加到模组列表中,部分模组可能支持.
+在下拉菜单中的选择预设变体.
+点击"**编辑**"可以进行更加详细的设置.
+
+点击"**编辑**"后您可以看到模组包含的独立组件列表,可以自由的启用或禁用组件
+如果模组还提供了组件的变体也可以进行选择
+
+---
+## 常见问题
+本节将说明可能遇到的常见问题
+
+1 模组没有生效 
+   - 请先查看作者说明是否需要一些额外操作,其次检查模组文件是否完整
+   - 对于模型音效模组.模型模组需要有对应的东西,音效模组您需要有对应触发音效的条件
 
 
-## Adding mods
-This section will discuss how to add mods and how use their options.
+2 游戏打不开了
+   - 由于模组(有些不一定)和游戏是不断在更新的,可能是会产生一些兼容性问题
+   - 当然大多数情况都是游戏更新后一些模组无法使用,您需要去下载模组地方的看看作者最新的说明
+   - 建议先逐步排查,把那些失效的模组禁用
+   - 确保游戏能够正常启动和游玩
 
-To add a mod all you need to do is hit the "Add" button and select a zip archive
-you've downloaded from the [Nexus](https://www.nexusmods.com/helldivers2).
-From there it will be added to your list. Some mods provide options for customization,
-either by providing a simple drop down to select a variant or by exposing and "Edit"
-button to select more detailed options.
+3 排序
+   - 排序,只需鼠标长按该模组然后拖动即可
 
-When clicking the "Edit" button you'll be faced with a list of components you can
-individually toggle and if provided pick a variant for.
+---
+# 对于开发者
+本章节模组创作者
+将说明如何适配模组管理器并提升用户体验
 
-Once you're satisfied with your mods hit the "Deploy" button and wait for it to finish.
-Do **NOT** verify your game files after the deployment is complete.
-Now you can launch the game through Steam or hitting the "Run" button.
+大多数模组不需要额外配置就可以被管理器识别,
+管理器通过文件结构自动检测模组的结构,但仅支持单层子目录.
+但是如果文件结构很复杂,比如多层嵌套,管理器正常显示但是可能无法正确启用
 
 
-## Common problems
-This section will discuss some of the more common issues you might encounter.
+## 清单(manifest.json)
+可优化模组在管理器中的显示效果.该文件需置于模组根目录
 
-### My mod doesn't show in game.
-Are you sure? Some armor and weapon mods only not appear in the menu but once
-you've equipped them they will show up just fine.
-
-### My game does not start now.
-This can happen. Mods and the game itself are constantly changing so one might break
-the other. When you encounter something like this it's recommended to go though your
-mod list and disable them one by one to see what mod is causing the issue.
-Should your game still not start click the "Purge" button and verify your game files
-to get back to a state were your game runs without mods.
-
-# For developers
-This section is intended for the wonderful people that make mods.
-Here we will discuss how to make your mod work with the manager
-and how you can improve the users experience.
-
-First things first. Most mods work with the manager out of the box because
-it can infer your mods structure based on the directory layout it comes in.
-That being said it can only look one layer deep while doing so. Should your mod
-be anything more complex it will show in the manager but not deploy as intended.
-
-## Manifests
-In order to improver your mods appearance in the manager you'll need to write
-a manifest for it. These manifests are a single JSON fine in the root of you mod.
-
-### Simple manifest
-Below is an example of a very simple manifest without any options.
-Meaning that you're mod is just a couple patch files with no sub folder.
+### 基础清单
+适用于无自定义选项的简单模组,示例如下:
 ```
-└┬ My Mod
+└┬ 您的模组
  ├── abcdefghijklmnopq.patch_0
  ├── abcdefghijklmnopq.patch_0.stream
  ├── abcdefghijklmnopq.patch_0.gpu_resources
@@ -73,35 +69,30 @@ Meaning that you're mod is just a couple patch files with no sub folder.
 {
     "Version": 1,
     "Guid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-    "Name": "Your mod name here",
-    "Description": "Your mod description here"
+    "Name": "模组名称",
+    "Description": "模组描述"
 }
 ```
-Explanation:
-- `Version` : This needs to alway be `1`.
-  This does **not** describe the version of your mod, it tells the manager that
-  this is the newest manifest format.
-- `Guid` : This is called a global unique identifier. It's used by the manager
-  under the hood to tell you mod apart from others.
-  You can generate one [here](https://www.uuidgenerator.net/guid).
-- `Name` : This is the name of your mod.
-- `Description` : This is a short description of your mod.
+说明:
+- `Version` : 必须设置为'1'表示用最新的清单格式,所以这个不能作为模组的版本.
+- `Guid` : 全局唯一标识,用于区分不同的模组.可以通过[在线网站](https://www.uuidgenerator.net/guid)生成.
+- `Name` : 您的模组名字.
+- `Description` : 您的模组描述.
 
-We can still keep in simple and add an icon for your mod as well:
+在上文的基础上,添加上模组的图标:
 ```json
 {
     "Version": 1,
     "Guid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-    "Name": "Your mod name here",
-    "Description": "Your mod description here",
+    "Name": "模组名称",
+    "Description": "模组描述",
     "IconPath": "icon.png"
 }
 ```
-Explanation:
-- `IconPath` : This is a path to an image to use as an icon for your mod.
-  The path is relative to the manifest.
+说明:
+- `IconPath` : 模组图标(图片文件跟清单一起).
 
-### Advanced manifest
+### 高级清单
 The new manifest allows for mods to have individual components.
 Let's say you have a mod that provides two armors and one has a helmet with two variants.
 An example manifest for that scenario would look like this:
