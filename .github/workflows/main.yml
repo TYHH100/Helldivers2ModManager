@@ -45,7 +45,7 @@ jobs:
                 token: ${{ secrets.GITHUB_TOKEN }}
                 tag_name: ${{github.ref_name}}
                 name: Releases ${{github.ref_name}}
-                #draft: false
+                draft: true
                 #prerelease: false
                 files: |
                   Helldivers2ModManager.zip
