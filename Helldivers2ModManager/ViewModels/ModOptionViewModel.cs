@@ -3,12 +3,13 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Helldivers2ModManager.Models;
 
 namespace Helldivers2ModManager.ViewModels;
 
 internal sealed class ModOptionViewModel(ModViewModel vm, int idx) : ObservableObject
 {
-	public string Name => _vm.Data.Manifest.V1.Options![_idx].Name;
+	public string Name => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].Name;
 
 	public bool Enabled
 	{
@@ -22,28 +23,27 @@ internal sealed class ModOptionViewModel(ModViewModel vm, int idx) : ObservableO
 		}
 	}
 
-	public string Description => _vm.Data.Manifest.V1.Options![_idx].Description;
+	public string Description => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].Description;
 
-	public Visibility ImageVisibility => _vm.Data.Manifest.V1.Options![_idx].Image is not null ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility ImageVisibility => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].Image is not null ? Visibility.Visible : Visibility.Collapsed;
 
 	public ImageSource? Image
 	{
 		get
 		{
-			if (_vm.Data.Manifest.V1.Options![_idx].Image is string path)
-			{
-				var bmp = new BitmapImage();
-				bmp.BeginInit();
-				bmp.UriSource = new Uri(Path.Combine(_vm.Data.Directory.FullName, path));
-				bmp.CacheOption = BitmapCacheOption.None;
-				bmp.EndInit();
-				return bmp;
-			}
-			return null;
+			var path = ((V1ModManifest)_vm.Data.Manifest).Options![_idx].Image;
+			if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
+				return null;
+			var bmp = new BitmapImage();
+			bmp.BeginInit();
+			bmp.UriSource = new Uri(Path.Combine(_vm.Data.Directory.FullName, path));
+			bmp.CacheOption = BitmapCacheOption.None;
+			bmp.EndInit();
+			return bmp;
 		}
 	}
 
-	public Visibility SubOptionVisibility => _vm.Data.Manifest.V1.Options![_idx].SubOptions is not null ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility SubOptionVisibility => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions is not null ? Visibility.Visible : Visibility.Collapsed;
 
 	public ModSubOptionViewModel[]? SubOptions => _subs;
 
@@ -61,5 +61,5 @@ internal sealed class ModOptionViewModel(ModViewModel vm, int idx) : ObservableO
 
 	private readonly ModViewModel _vm = vm;
 	private readonly int _idx = idx;
-	private readonly ModSubOptionViewModel[]? _subs = vm.Data.Manifest.V1.Options![idx].SubOptions?.Select((_, i) => new ModSubOptionViewModel(vm, idx, i)).ToArray();
+	private readonly ModSubOptionViewModel[]? _subs = ((V1ModManifest)vm.Data.Manifest).Options![idx].SubOptions?.Select((_, i) => new ModSubOptionViewModel(vm, idx, i)).ToArray();
 }

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Helldivers2ModManager;
 

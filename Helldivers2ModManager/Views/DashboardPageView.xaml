@@ -26,9 +26,10 @@
 		<StackPanel Grid.Row="0"
 					Grid.RowSpan="2"
 					Grid.Column="0">
-            <Button Content="添加"
-					Command="{Binding AddCommand}"/>
-            <!--
+			<Button Content="Add"
+					Command="{Binding AddCommand}"
+					IsEnabled="{Binding Initialized}"/>
+			<!--
 			<Button Content="浏览"
 					Command="{Binding BrowseCommand}"/>
 			<Button Content="创建"
@@ -68,7 +69,8 @@
 					HorizontalAlignment="Right">
             <Button Content="禁用模组"
 					Style="{DynamicResource CancelButton}"
-					Command="{Binding PurgeCommand}">
+					Command="{Binding PurgeCommand}"
+					IsEnabled="{Binding Initialized}">
 				<Button.ToolTip>
                     <TextBlock Text="从 data 文件夹中删除所有模组."
 							   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
@@ -77,17 +79,19 @@
 			</Button>
             <Button Content="启用模组"
 					Style="{DynamicResource ConfirmButton}"
-					Command="{Binding DeployCommand}">
+					Command="{Binding DeployCommand}"
+					IsEnabled="{Binding Initialized}">
 				<Button.ToolTip>
                     <TextBlock Text="将所有勾选的模组,自动编号并添加到 data 文件夹中."
 							   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
 							   Margin="5 0"/>
 				</Button.ToolTip>
 			</Button>
-            <Button Content="启动 HD2"
-					Command="{Binding RunCommand}">
+			<Button Content="启动HD2"
+					Command="{Binding RunCommand}"
+					IsEnabled="{Binding Initialized}">
 				<Button.ToolTip>
-                    <TextBlock Text="通过 Steam 运行游戏."
+                    <TextBlock Text="在Steam上启动游戏."
 							   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
 							   Margin="5 0"/>
 				</Button.ToolTip>

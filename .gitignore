@@ -371,3 +371,6 @@ FodyWeavers.xsd
 *.zip
 Complete
 /Helldivers2ModManager.1.2.1.0
+
+# Jetbrains Rider
+.idea/
