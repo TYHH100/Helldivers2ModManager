@@ -5,7 +5,7 @@ namespace Helldivers2ModManager.Services;
 
 internal interface IModManifestService
 {
-	protected static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg", ".bmp", ".jfif"];
+	protected static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg", ".bmp", ".jfif", ".webp"];
 	protected static readonly JsonDocumentOptions DocOptions = new()
 	{
 		AllowTrailingCommas = true,

@@ -19,7 +19,10 @@
 		AllowsTransparency="True"
 		WindowStartupLocation="CenterScreen"
 		Background="{Binding Background}"
-		d:Background="Black">
+		d:Background="Black"
+		AllowDrop="True"
+		DragOver="Window_DragOver"
+		Drop="Window_Drop">
 	<Window.Resources>
 		<DataTemplate DataType="{x:Type vms:DashboardPageViewModel}">
 			<views:DashboardPageView/>

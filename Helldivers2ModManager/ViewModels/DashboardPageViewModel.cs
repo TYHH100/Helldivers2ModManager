@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Components;
@@ -239,38 +239,58 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 	}
 
 	[RelayCommand(AllowConcurrentExecutions = false)]
-	async Task Add()
+	async Task Add(string? filePath = null)
 	{
-		var dialog = new OpenFileDialog
+		if (string.IsNullOrEmpty(filePath))
 		{
-			CheckFileExists = true,
-			CheckPathExists = true,
-			InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
-			Filter = "Archive|*.rar;*.7z;*.zip;*.tar",
-			Multiselect = false,
-			Title = "请选择一个模组压缩包文件 进行添加..."
-        };
+			var dialog = new OpenFileDialog
+			{
+				CheckFileExists = true,
+				CheckPathExists = true,
+				InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
+				Filter = "Archive|*.rar;*.7z;*.zip;*.tar",
+				Multiselect = false,
+				Title = "请选择一个模组压缩包文件 进行添加..."
+            };
 
-		if (dialog.ShowDialog() ?? false)
+			if (dialog.ShowDialog() ?? false)
+			{
+				filePath = dialog.FileName;
+			}
+			else
+			{
+				return;
+			}
+		}
+
+		// 确保文件存在
+		if (!File.Exists(filePath))
 		{
-			WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
+			_logger.LogWarning("File does not exist: {}", filePath);
+			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Title = "添加模组",
-				Message = "请民主官耐心等待."
-            });
-			try
+				Message = "文件不存在: " + filePath
+			});
+			return;
+		}
+
+		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
+		{
+			Title = "添加模组",
+			Message = "请民主官耐心等待."
+        });
+		try
+		{
+			await _modStore.TryAddModFromArchiveAsync(new FileInfo(filePath));
+			WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+		}
+		catch(Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to add mod");
+			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				await _modStore.TryAddModFromArchiveAsync(new FileInfo(dialog.FileName));
-				WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-			}
-			catch(Exception ex)
-			{
-				_logger.LogWarning(ex, "Failed to add mod");
-				WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-				{
-					Message = ex.Message
-				});
-			}
+				Message = ex.Message
+			});
 		}
 	}
 
