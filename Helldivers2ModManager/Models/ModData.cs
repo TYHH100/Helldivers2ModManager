@@ -6,7 +6,7 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest)
 {
     public DirectoryInfo Directory { get; } = dir;
 
-    public IModManifest Manifest { get; } = manifest;
+    public IModManifest Manifest { get; set; } = manifest;
 
     public bool Enabled { get; set; } = true;
 
@@ -42,5 +42,80 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest)
             Toggled = EnabledOptions,
             Selected = SelectedOptions,
         };
+    }
+
+    public void UpdateManifestName(string newName)
+    {
+        Manifest = Manifest.Version switch
+        {
+            ManifestVersion.Legacy => new LegacyModManifest
+            {
+                Guid = Manifest.Guid,
+                Name = newName,
+                Description = Manifest.Description,
+                IconPath = Manifest.IconPath,
+                Options = ((LegacyModManifest)Manifest).Options,
+            },
+            ManifestVersion.V1 => new V1ModManifest
+            {
+                Guid = Manifest.Guid,
+                Name = newName,
+                Description = Manifest.Description,
+                IconPath = Manifest.IconPath,
+                Options = ((V1ModManifest)Manifest).Options,
+            },
+            _ => throw new NotImplementedException()
+        };
+        ModManifest.SaveToFile(Manifest, Directory);
+    }
+
+    public void UpdateManifestDescription(string newDescription)
+    {
+        Manifest = Manifest.Version switch
+        {
+            ManifestVersion.Legacy => new LegacyModManifest
+            {
+                Guid = Manifest.Guid,
+                Name = Manifest.Name,
+                Description = newDescription,
+                IconPath = Manifest.IconPath,
+                Options = ((LegacyModManifest)Manifest).Options,
+            },
+            ManifestVersion.V1 => new V1ModManifest
+            {
+                Guid = Manifest.Guid,
+                Name = Manifest.Name,
+                Description = newDescription,
+                IconPath = Manifest.IconPath,
+                Options = ((V1ModManifest)Manifest).Options,
+            },
+            _ => throw new NotImplementedException()
+        };
+        ModManifest.SaveToFile(Manifest, Directory);
+    }
+
+    public void UpdateManifestIconPath(string? newIconPath)
+    {
+        Manifest = Manifest.Version switch
+        {
+            ManifestVersion.Legacy => new LegacyModManifest
+            {
+                Guid = Manifest.Guid,
+                Name = Manifest.Name,
+                Description = Manifest.Description,
+                IconPath = newIconPath,
+                Options = ((LegacyModManifest)Manifest).Options,
+            },
+            ManifestVersion.V1 => new V1ModManifest
+            {
+                Guid = Manifest.Guid,
+                Name = Manifest.Name,
+                Description = Manifest.Description,
+                IconPath = newIconPath,
+                Options = ((V1ModManifest)Manifest).Options,
+            },
+            _ => throw new NotImplementedException()
+        };
+        ModManifest.SaveToFile(Manifest, Directory);
     }
 }

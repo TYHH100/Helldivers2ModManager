@@ -406,6 +406,7 @@ internal sealed partial class ModService
 		}
 
 		_logger.LogInformation("Copying files");
+		var copyTasks = new List<Task>();
 		foreach (var (name, list) in groups)
 		{
 			int offset = 0;
@@ -418,44 +419,47 @@ internal sealed partial class ModService
 				var index = i + offset;
 
 				var newPatchPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}");
-				FileInfo pathDest;
 				if (triplet.Patch is not null)
 				{
-					pathDest = triplet.Patch.CopyTo(newPatchPath);
+					copyTasks.Add(CopyFileAsync(triplet.Patch.FullName, newPatchPath));
 				}
 				else
 				{
-					pathDest = new FileInfo(newPatchPath);
-					pathDest.Create().Dispose();
+					using var fs = new FileStream(newPatchPath, FileMode.Create);
 				}
 
 				var newGpuResourcesPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}.gpu_resources");
-				FileInfo gpuResourceDest;
 				if (triplet.GpuResources is not null)
 				{
-					gpuResourceDest = triplet.GpuResources.CopyTo(newGpuResourcesPath);
+					copyTasks.Add(CopyFileAsync(triplet.GpuResources.FullName, newGpuResourcesPath));
 				}
 				else
 				{
-					gpuResourceDest = new FileInfo(newGpuResourcesPath);
-					gpuResourceDest.Create().Dispose();
+					using var fs = new FileStream(newGpuResourcesPath, FileMode.Create);
 				}
 
 				var newStreamPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}.stream");
-				FileInfo streamDest;
 				if (triplet.Stream is not null)
 				{
-					streamDest = triplet.Stream.CopyTo(newStreamPath);
+					copyTasks.Add(CopyFileAsync(triplet.Stream.FullName, newStreamPath));
 				}
 				else
 				{
-					streamDest = new FileInfo(newStreamPath);
-					streamDest.Create().Dispose();
+					using var fs = new FileStream(newStreamPath, FileMode.Create);
 				}
 			}
 		}
 
+		await Task.WhenAll(copyTasks);
+
 		_logger.LogInformation("Deployment success");
+	}
+
+	private async Task CopyFileAsync(string sourcePath, string destinationPath)
+	{
+		using var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
+		using var destinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+		await sourceStream.CopyToAsync(destinationStream);
 	}
 
 	public async Task PurgeAsync()

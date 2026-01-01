@@ -1,5 +1,6 @@
 <Page x:Class="Helldivers2ModManager.Views.DashboardPageView"
 	  x:ClassModifier="internal"
+	  x:Name="ThisPage"
 	  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -26,7 +27,7 @@
 		<StackPanel Grid.Row="0"
 					Grid.RowSpan="2"
 					Grid.Column="0">
-			<Button Content="Add"
+            <Button Content="添加模组"
 					Command="{Binding AddCommand}"
 					IsEnabled="{Binding Initialized}"/>
 			<!--
@@ -136,7 +137,24 @@
 					<DataTemplate DataType="vms:ModViewModel">
 						<Border Height="70"
 							    Background="#E000"
-								Margin="0 3">
+							    Margin="0 3"
+							    Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}">
+							    <Border.ContextMenu>
+							        <ContextMenu>
+							            <MenuItem Header="打开文件位置"
+							                      Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+							                      CommandParameter="{Binding}"/>
+							            <MenuItem Header="编辑图片"
+							                      Command="{Binding PlacementTarget.Tag.EditImageCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+							                      CommandParameter="{Binding}"/>
+							            <MenuItem Header="编辑名字"
+							                      Command="{Binding PlacementTarget.Tag.EditNameCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+							                      CommandParameter="{Binding}"/>
+							            <MenuItem Header="编辑描述"
+							                      Command="{Binding PlacementTarget.Tag.EditDescriptionCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+							                      CommandParameter="{Binding}"/>
+							        </ContextMenu>
+							    </Border.ContextMenu>
 							<Grid>
 								<Grid.ColumnDefinitions>
 									<ColumnDefinition Width="70"/>
@@ -279,7 +297,7 @@
 			<Border Background="Black"
 					BorderBrush="DarkGray"
 					BorderThickness="3">
-				<Grid Margin="3">
+					<Grid Margin="3">
 					<Grid.RowDefinitions>
 						<RowDefinition Height="Auto"/>
 						<RowDefinition Height="*"/>

@@ -1,109 +1,125 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
+using Microsoft.Extensions.Logging;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Diagnostics;
+using CommunityToolkit.Mvvm.Messaging;
+using MessageBox = Helldivers2ModManager.Components.MessageBox;
 
 namespace Helldivers2ModManager.ViewModels;
 
 internal sealed partial class ModViewModel : ObservableObject
 {
-	public Guid Guid => _mod.Manifest.Guid;
+    public event EventHandler? SaveEnabledRequired;
 
-	public string Name => _mod.Manifest.Name;
+    private readonly ILogger _logger;
 
-	public string Description => _mod.Manifest.Description;
+    public Guid Guid => _mod.Manifest.Guid;
 
-	public Visibility OptionsVisible
-	{
-		get
-		{
-			if (_mod.Manifest.Version == ManifestVersion.Legacy && (_mod.Manifest as LegacyModManifest)!.Options is not null)
-				return Visibility.Visible;
-			return Visibility.Collapsed;
-		}
-	}
+    public string Name => _mod.Manifest.Name;
 
-	public Visibility EditVisible => _mod.Manifest.Version == ManifestVersion.V1 ? Visibility.Visible : Visibility.Collapsed;
+    public string Description => _mod.Manifest.Description;
 
-	public ImageSource Icon { get; }
+    public Visibility OptionsVisible
+    {
+        get
+        {
+            if (_mod.Manifest.Version == ManifestVersion.Legacy && (_mod.Manifest as LegacyModManifest)!.Options is not null)
+                return Visibility.Visible;
+            return Visibility.Collapsed;
+        }
+    }
 
-	public ModData Data => _mod;
+    public Visibility EditVisible => _mod.Manifest.Version == ManifestVersion.V1 ? Visibility.Visible : Visibility.Collapsed;
 
-	public string[]? LegacyOptions { get; }
+    [ObservableProperty]
+    private ImageSource? _icon;
 
-	public bool Enabled
-	{
-		get => _mod.Enabled;
+    public ModData Data => _mod;
 
-		set
-		{
-			if (_mod.Enabled == value)
-				return;
-			OnPropertyChanging();
-			_mod.Enabled = value;
-			OnPropertyChanged();
-		}
-	}
+    public string[]? LegacyOptions { get; }
 
-	public int LegacySelectedOption
-	{
-		get => _mod.Manifest.Version == ManifestVersion.Legacy ? _mod.SelectedOptions[0] : -1;
+    public bool Enabled
+    {
+        get => _mod.Enabled;
 
-		set
-		{
-			if (_mod.Manifest.Version != ManifestVersion.Legacy)
-				return;
-			OnPropertyChanging();
-			_mod.SelectedOptions[0] = value;
-			OnPropertyChanged();
-		}
-	}
+        set
+        {
+            if (_mod.Enabled == value)
+                return;
+            OnPropertyChanging();
+            _mod.Enabled = value;
+            OnPropertyChanged();
+        }
+    }
 
-	public ModOptionViewModel[]? Options { get; }
+    public int LegacySelectedOption
+    {
+        get => _mod.Manifest.Version == ManifestVersion.Legacy ? _mod.SelectedOptions[0] : -1;
 
-	private readonly ModData _mod;
+        set
+        {
+            if (_mod.Manifest.Version != ManifestVersion.Legacy)
+                return;
+            OnPropertyChanging();
+            _mod.SelectedOptions[0] = value;
+            OnPropertyChanged();
+        }
+    }
 
-	public ModViewModel(ModData mod)
-	{
-		_mod = mod;
+    public ModOptionViewModel[]? Options { get; }
 
-		switch (_mod.Manifest.Version)
-		{
-			case ManifestVersion.Legacy:
-				LegacyOptions = ((LegacyModManifest)_mod.Manifest).Options?.ToArray();
-				break;
+    private readonly ModData _mod;
 
-			case ManifestVersion.V1:
-			{
-				var manifest = (V1ModManifest)_mod.Manifest;					
-				if (manifest.Options is null)
-					break;
-				Options = new ModOptionViewModel[manifest.Options.Count];
-				for (int i = 0; i < manifest.Options.Count; i++)
-					Options[i] = new ModOptionViewModel(this, i);
-				break;
-			}
-			
-			case ManifestVersion.V2:
-				throw new NotSupportedException();
-			
-			default:
-				throw new NotImplementedException();
-		}
+    public ModViewModel(ModData mod, ILogger logger)
+    {
+        _mod = mod;
+        _logger = logger;
 
-		var bmp = new BitmapImage();
-		bmp.BeginInit();
-		var path = _mod.Manifest.IconPath;
-		if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
-			bmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
-		else
-		{
-			bmp.UriSource = new Uri(Path.Combine(_mod.Directory.FullName, path));
-			bmp.CacheOption = BitmapCacheOption.OnLoad;
-		}
-		bmp.EndInit();
-		Icon = bmp;
-	}
+        switch (_mod.Manifest.Version)
+        {
+            case ManifestVersion.Legacy:
+                LegacyOptions = ((LegacyModManifest)_mod.Manifest).Options?.ToArray();
+                break;
+
+            case ManifestVersion.V1:
+            {
+                var manifest = (V1ModManifest)_mod.Manifest;                    
+                if (manifest.Options is null)
+                    break;
+                Options = new ModOptionViewModel[manifest.Options.Count];
+                for (int i = 0; i < manifest.Options.Count; i++)
+                    Options[i] = new ModOptionViewModel(this, i);
+                break;
+            }
+            
+            case ManifestVersion.V2:
+                throw new NotSupportedException();
+            
+            default:
+                throw new NotImplementedException();
+        }
+
+        LoadIcon();
+    }
+
+    public void LoadIcon()
+    {
+        var bmp = new BitmapImage();
+        bmp.BeginInit();
+        var path = _mod.Manifest.IconPath;
+        if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
+            bmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
+        else
+        {
+            bmp.UriSource = new Uri(Path.Combine(_mod.Directory.FullName, path));
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+        }
+        bmp.EndInit();
+        Icon = bmp;
+    }
 }

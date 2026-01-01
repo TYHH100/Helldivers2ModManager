@@ -1,4 +1,4 @@
-﻿// Ignore Spelling: Helldivers
+// Ignore Spelling: Helldivers
 
 using CommunityToolkit.Mvvm.Messaging;
 using System.Windows;
