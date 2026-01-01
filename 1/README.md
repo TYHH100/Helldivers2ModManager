@@ -1,1 +1,0 @@
-# Helldivers2ModManager
