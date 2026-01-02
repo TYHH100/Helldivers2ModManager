@@ -5,8 +5,8 @@ on:
     branches: [ zh-cn_Translations ]
   pull_request:
     branches: [ zh-cn_Translations ]
-  tags: 
-    - "v*"
+  #tags: 
+  #  - "v*"
 
 jobs:
     HD2MM-build:
