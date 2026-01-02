@@ -125,6 +125,22 @@ internal sealed class SettingsService
 			_caseSensitiveSearch = value;
 		}
 	}
+
+	public bool UseSymbolicLinks
+	{
+		get
+		{
+			GuardInitialized();
+			return _useSymbolicLinks;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_useSymbolicLinks = value;
+		}
+	}
 	
 	private static readonly FileInfo s_file = new("settings.json");
 	private static readonly JsonDocumentOptions s_options = new()
@@ -141,6 +157,7 @@ internal sealed class SettingsService
 	private float _opacity;
 	private ObservableCollection<string> _skipList = null!;
 	private bool _caseSensitiveSearch;
+	private bool _useSymbolicLinks;
 
 	public SettingsService(ILogger<SettingsService> logger)
 	{
@@ -207,10 +224,11 @@ internal sealed class SettingsService
 			writer.WriteString(nameof(LogLevel), _logLevel.ToString());
 			writer.WriteNumber(nameof(Opacity), _opacity);
 				writer.WriteStartArray(nameof(SkipList));
-					foreach (var elm in _skipList)
-						writer.WriteStringValue(elm);
+				foreach (var elm in _skipList)
+					writer.WriteStringValue(elm);
 				writer.WriteEndArray();
 			writer.WriteBoolean(nameof(CaseSensitiveSearch), _caseSensitiveSearch);
+			writer.WriteBoolean(nameof(UseSymbolicLinks), _useSymbolicLinks);
 		writer.WriteEndObject();
 		
 		await writer.DisposeAsync();
@@ -324,7 +342,9 @@ internal sealed class SettingsService
 			_skipList = new ObservableCollection<string>(list);
 		}
 		if (root.TryGetProperty(nameof(CaseSensitiveSearch), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
-			_caseSensitiveSearch = prop.GetBoolean();
+		_caseSensitiveSearch = prop.GetBoolean();
+	if (root.TryGetProperty(nameof(UseSymbolicLinks), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		_useSymbolicLinks = prop.GetBoolean();
 
 		document.Dispose();
 		await stream.DisposeAsync();
@@ -340,5 +360,6 @@ internal sealed class SettingsService
 		_opacity = 0.8f;
 		_skipList = [];
 		_caseSensitiveSearch = false;
+		_useSymbolicLinks = false;
 	}
 }

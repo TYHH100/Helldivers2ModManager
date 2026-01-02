@@ -1,4 +1,4 @@
-﻿// Ignore Spelling: App
+// Ignore Spelling: App
 
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;

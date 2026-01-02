@@ -14,7 +14,7 @@ namespace Helldivers2ModManager.ViewModels;
 
 internal sealed partial class ModViewModel : ObservableObject
 {
-    public event EventHandler? SaveEnabledRequired;
+    //public event EventHandler? SaveEnabledRequired;
 
     private readonly ILogger _logger;
 

@@ -457,9 +457,23 @@ internal sealed partial class ModService
 
 	private async Task CopyFileAsync(string sourcePath, string destinationPath)
 	{
-		using var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
-		using var destinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
-		await sourceStream.CopyToAsync(destinationStream);
+		GuardInitialized();
+		
+		if (_settingsService.UseSymbolicLinks)
+		{
+			if (File.Exists(destinationPath))
+			{
+				File.Delete(destinationPath);
+			}
+			File.CreateSymbolicLink(destinationPath, sourcePath);
+			await Task.CompletedTask;
+		}
+		else
+		{
+			using var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
+			using var destinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+			await sourceStream.CopyToAsync(destinationStream);
+		}
 	}
 
 	public async Task PurgeAsync()

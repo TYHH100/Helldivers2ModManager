@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Components;
@@ -83,6 +83,17 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			OnPropertyChanging();
 			_settingsService.CaseSensitiveSearch = value;
+			OnPropertyChanged();
+		}
+	}
+
+	public bool UseSymbolicLinks
+	{
+		get => _settingsService.Initialized ? _settingsService.UseSymbolicLinks : false;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.UseSymbolicLinks = value;
 			OnPropertyChanged();
 		}
 	}
@@ -228,6 +239,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(Opacity));
 		OnPropertyChanged(nameof(SkipList));
 		OnPropertyChanged(nameof(CaseSensitiveSearch));
+		OnPropertyChanged(nameof(UseSymbolicLinks));
 	}
 
 	private void SkipList_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
