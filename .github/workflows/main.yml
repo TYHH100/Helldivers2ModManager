@@ -2,8 +2,11 @@ name: Build
 
 on:
   push:
-    tags: 
-      - "v*"
+    branches: [ zh-cn_Translations ]
+  pull_request:
+    branches: [ zh-cn_Translations ]
+  tags: 
+    - "v*"
 
 jobs:
     HD2MM-build:
