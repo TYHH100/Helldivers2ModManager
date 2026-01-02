@@ -144,9 +144,9 @@
 							            <MenuItem Header="打开文件位置"
 							                      Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 							                      CommandParameter="{Binding}"/>
-							            <MenuItem Header="编辑图片"
+							            <!--<MenuItem Header="更改图片"
 							                      Command="{Binding PlacementTarget.Tag.EditImageCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-							                      CommandParameter="{Binding}"/>
+							                      CommandParameter="{Binding}"/>-->
 							            <MenuItem Header="编辑名字"
 							                      Command="{Binding PlacementTarget.Tag.EditNameCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 							                      CommandParameter="{Binding}"/>

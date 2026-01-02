@@ -40,6 +40,8 @@ internal sealed class MessageBoxInputMessage
 	public required Action<string> Confirm { get; init; }
 
 	public int MaxLength { get; init; } = -1;
+
+	public string InitialText { get; init; } = string.Empty;
 }
 
 internal sealed class MessageBoxConfirmMessage
@@ -145,7 +147,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		this.message.Text = message.Message;
 		input.MaxLength = message.MaxLength;
 		input.Visibility = Visibility.Visible;
-		input.Text = string.Empty;
+		input.Text = message.InitialText;
 		cancelButton.Visibility = Visibility.Visible;
 		okButton.Visibility = Visibility.Visible;
 		Visibility = Visibility.Visible;

@@ -51,6 +51,7 @@ internal sealed class V1ModManifest : IModManifest
     public void Serialize(Utf8JsonWriter writer)
     {
         writer.WriteStartObject();
+        writer.WriteNumber(nameof(Version), (int)Version);
         writer.WriteString(nameof(Guid), Guid.ToString());
         writer.WriteString(nameof(Name), Name);
         writer.WriteString(nameof(Description), Description);

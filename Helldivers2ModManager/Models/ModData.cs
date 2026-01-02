@@ -1,12 +1,31 @@
+using System.ComponentModel;
 using System.IO;
 
 namespace Helldivers2ModManager.Models;
 
-internal sealed class ModData(DirectoryInfo dir, IModManifest manifest)
+internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotifyPropertyChanged
 {
     public DirectoryInfo Directory { get; } = dir;
 
-    public IModManifest Manifest { get; set; } = manifest;
+    private IModManifest _manifest = manifest;
+    public IModManifest Manifest
+    {
+        get => _manifest;
+        set
+        {
+            if (_manifest == value)
+                return;
+            _manifest = value;
+            OnPropertyChanged(nameof(Manifest));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged(string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
 
     public bool Enabled { get; set; } = true;
 

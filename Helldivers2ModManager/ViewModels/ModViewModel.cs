@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -80,6 +81,9 @@ internal sealed partial class ModViewModel : ObservableObject
         _mod = mod;
         _logger = logger;
 
+        // 订阅ModData的PropertyChanged事件
+        _mod.PropertyChanged += ModData_PropertyChanged;
+
         switch (_mod.Manifest.Version)
         {
             case ManifestVersion.Legacy:
@@ -105,6 +109,21 @@ internal sealed partial class ModViewModel : ObservableObject
         }
 
         LoadIcon();
+    }
+
+    private void ModData_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ModData.Manifest))
+        {
+            // 当Manifest属性更改时，更新相关属性
+            OnPropertyChanged(nameof(Name));
+            OnPropertyChanged(nameof(Description));
+            OnPropertyChanged(nameof(OptionsVisible));
+            OnPropertyChanged(nameof(EditVisible));
+            OnPropertyChanged(nameof(LegacySelectedOption));
+            // 重新加载图标
+            LoadIcon();
+        }
     }
 
     public void LoadIcon()

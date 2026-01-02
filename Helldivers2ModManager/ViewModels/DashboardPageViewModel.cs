@@ -537,6 +537,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
                 Title = "编辑名称",
                 Message = "请输入新的模组名称：",
                 MaxLength = 64,
+                InitialText = modVm.Name,
                 Confirm = (newName) =>
                 {
                     if (string.IsNullOrWhiteSpace(newName))
@@ -570,6 +571,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
                 Title = "编辑描述",
                 Message = "请输入新的模组描述：",
                 MaxLength = 1024,
+                InitialText = modVm.Description,
                 Confirm = (newDescription) =>
                 {
                     modVm.Data.UpdateManifestDescription(newDescription);

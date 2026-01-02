@@ -83,9 +83,6 @@ internal static class ModManifest
         var file = new FileInfo(Path.Combine(dir.FullName, "manifest.json"));
         using var stream = file.Open(FileMode.Create, FileAccess.Write);
         using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-        writer.WriteStartObject();
-        writer.WriteNumber(nameof(manifest.Version), (int)manifest.Version);
         manifest.Serialize(writer);
-        writer.WriteEndObject();
     }
 }
