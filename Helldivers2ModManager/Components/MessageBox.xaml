@@ -38,6 +38,7 @@
 				<Grid.RowDefinitions>
 					<RowDefinition Height="*"/>
 					<RowDefinition Height="Auto"/>
+					<RowDefinition Height="Auto"/>
 				</Grid.RowDefinitions>
 				<ScrollViewer Grid.Row="0"
 							  Margin="3"
@@ -45,15 +46,21 @@
 							  VerticalScrollBarVisibility="Auto"
 							  HorizontalScrollBarVisibility="Auto">
 					<TextBlock x:Name="message"
-							   Foreground="WhiteSmoke"
-							   FontSize="16"
-							   FontFamily="Sanserif"/>
+						   Foreground="WhiteSmoke"
+						   FontSize="16"
+						   FontFamily="Sanserif"/>
 				</ScrollViewer>
 				<TextBox Grid.Row="1"
 						 x:Name="input"
 						 Margin="3"
 						 Height="30"
 						 FontSize="16"/>
+				<ComboBox Grid.Row="2"
+						  x:Name="selectionComboBox"
+						  Margin="3"
+						  Height="30"
+						  FontSize="16"
+						  Visibility="Collapsed"/>
 			</Grid>
 			<Button Grid.Row="2"
 					x:Name="cancelButton"

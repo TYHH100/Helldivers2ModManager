@@ -55,7 +55,18 @@ internal sealed class MessageBoxConfirmMessage
 	public Action? Abort { get; init; }
 }
 
-internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>
+internal sealed class MessageBoxSelectionMessage
+{
+	public required string Title { get; init; }
+
+	public required string Message { get; init; }
+
+	public required IEnumerable<object> Options { get; init; }
+
+	public required Action<object> Confirm { get; init; }
+}
+
+internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>
 {
 	public static bool IsRegistered { get; private set; }
 
@@ -64,6 +75,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	private Action<string>? _inputAction;
 	private Action? _abortAction;
 	private Action? _confirmAction;
+	private Action<object>? _selectionAction;
 
 	public MessageBox()
 	{
@@ -76,6 +88,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		WeakReferenceMessenger.Default.Register<MessageBoxHideMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxInputMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxConfirmMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxSelectionMessage>(this);
 
 		if (!IsRegistered)
 		{
@@ -167,15 +180,34 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		Visibility = Visibility.Visible;
 	}
 
+	public void Receive(MessageBoxSelectionMessage message)
+	{
+		Reset();
+
+		_selectionAction = message.Confirm;
+
+		title.Text = message.Title;
+		brush.Color = Colors.White;
+		this.message.Text = message.Message;
+		selectionComboBox.ItemsSource = message.Options;
+		selectionComboBox.SelectedIndex = 0;
+		selectionComboBox.Visibility = Visibility.Visible;
+		cancelButton.Visibility = Visibility.Visible;
+		okButton.Visibility = Visibility.Visible;
+		Visibility = Visibility.Visible;
+	}
+
 	private void Reset()
 	{
 		_inputAction = null;
 		_confirmAction = null;
+		_selectionAction = null;
 
 		title.Visibility = Visibility.Visible;
 		brush.Color = Colors.White;
 		message.Visibility = Visibility.Visible;
 		input.Visibility = Visibility.Collapsed;
+		selectionComboBox.Visibility = Visibility.Collapsed;
 		cancelButton.Visibility = Visibility.Hidden;
 		okButton.Visibility = Visibility.Hidden;
 		yesNoStack.Visibility = Visibility.Hidden;
@@ -186,7 +218,14 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	{
 		Receive(new MessageBoxHideMessage());
 
-		_inputAction?.Invoke(input.Text);
+		if (_inputAction != null)
+		{
+			_inputAction(input.Text);
+		}
+		else if (_selectionAction != null)
+		{
+			_selectionAction(selectionComboBox.SelectedItem);
+		}
 	}
 
 	private void NoButton_Click(object sender, RoutedEventArgs e)

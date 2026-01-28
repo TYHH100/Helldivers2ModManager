@@ -98,31 +98,81 @@
 				</Button.ToolTip>
 			</Button>
 		</StackPanel>
-		<Grid Grid.Row="0"
-			  Grid.Column="1">
-			<Grid.ColumnDefinitions>
-				<ColumnDefinition Width="Auto"/>
-				<ColumnDefinition Width="*"/>
-				<ColumnDefinition Width="Auto"/>
-			</Grid.ColumnDefinitions>
-			<TextBlock Grid.Column="0"
-					   Text="搜索:"
-					   Foreground="White"
-					   FontSize="24"
-					   VerticalAlignment="Center"
-					   Margin="3"/>
-			<TextBox Grid.Column="1"
-					 FontFamily="../Resources/Fonts/#FS Sinclair Regular"
-					 FontSize="20"
-					 Margin="3"
-					 Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-			<Button Grid.Column="2"
-					Command="{Binding ClearSearchCommand}">
-				<Path Stroke="White"
-					  StrokeThickness="2"
-					  Data="M5,0 L0,5 L5,10 M0,5 L10,5"/>
-			</Button>
-		</Grid>
+		<StackPanel Grid.Row="0"
+					Grid.Column="1"
+					Orientation="Vertical">
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="Auto"/>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="Auto"/>
+				</Grid.ColumnDefinitions>
+				<TextBlock Grid.Column="0"
+						   Text="搜索:" 
+						   Foreground="White"
+						   FontSize="24"
+						   VerticalAlignment="Center"
+						   Margin="3"/>
+				<TextBox Grid.Column="1"
+						 FontFamily="../Resources/Fonts/#FS Sinclair Regular"
+						 FontSize="20"
+						 Margin="3"
+						 Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+				<Button Grid.Column="2"
+						 Command="{Binding ClearSearchCommand}">
+					<Path Stroke="White"
+						  StrokeThickness="2"
+						  Data="M5,0 L0,5 L5,10 M0,5 L10,5"/>
+				</Button>
+			</Grid>
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="Auto"/>
+					<ColumnDefinition Width="150"/>
+					<ColumnDefinition Width="Auto"/>
+					<ColumnDefinition Width="Auto"/>
+					<ColumnDefinition Width="Auto"/>
+				</Grid.ColumnDefinitions>
+				<TextBlock Grid.Column="0"
+						   Text="分组:" 
+						   Foreground="White"
+						   FontSize="16"
+						   VerticalAlignment="Center"
+						   Margin="3"/>
+				<ComboBox Grid.Column="1"
+						  Margin="3"
+						  ItemsSource="{Binding GroupItems}"
+						  SelectedItem="{Binding SelectedGroupItem, Mode=TwoWay}">
+					<ComboBox.ItemTemplate>
+						<DataTemplate>
+							<TextBlock Foreground="White">
+								<TextBlock.Text>
+									<Binding Path=".">
+										<Binding.Converter>
+											<local:GroupItemConverter/>
+										</Binding.Converter>
+									</Binding>
+								</TextBlock.Text>
+							</TextBlock>
+						</DataTemplate>
+					</ComboBox.ItemTemplate>
+				</ComboBox>
+				<Button Grid.Column="2"
+						 Content="创建"
+						 Command="{Binding CreateGroupCommand}"
+						 Margin="3"/>
+				<Button Grid.Column="3"
+						 Content="删除"
+						 Command="{Binding DeleteGroupCommand}"
+						 CommandParameter="{Binding SelectedGroup}"
+						 Margin="3"/>
+				<Button Grid.Column="4"
+						 Content="重命名"
+						 Command="{Binding RenameGroupCommand}"
+						 CommandParameter="{Binding SelectedGroup}"
+						 Margin="3"/>
+			</Grid>
+		</StackPanel>
 		<ScrollViewer Grid.Row="1"
 					  Grid.Column="1"
 					  Margin="3"
@@ -152,6 +202,10 @@
 							                      CommandParameter="{Binding}"/>
 							            <MenuItem Header="编辑描述"
 							                      Command="{Binding PlacementTarget.Tag.EditDescriptionCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+							                      CommandParameter="{Binding}"/>
+							            <Separator/>
+							            <MenuItem Header="设置分组"
+							                      Command="{Binding PlacementTarget.Tag.SetGroupCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 							                      CommandParameter="{Binding}"/>
 							        </ContextMenu>
 							    </Border.ContextMenu>

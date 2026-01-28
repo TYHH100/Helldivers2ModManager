@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using System.Runtime.Serialization;
 using System.Text.Json;
 
@@ -13,6 +13,8 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 	public required bool[] Toggled { get; init; }
 
 	public required int[] Selected { get; init; }
+
+	public Guid? GroupId { get; init; }
 
 	public static EnabledData Deserialize(JsonElement root, ILogger? logger = null)
 	{
@@ -36,12 +38,26 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 		for (int i = 0; i < arr.Length; i++)
 			selected[i] = arr[i].GetInt32();
 
+		Guid? groupId = null;
+		if (root.TryGetProperty(nameof(GroupId), out var groupIdProp) && groupIdProp.ValueKind != JsonValueKind.Null)
+		{
+			try
+			{
+				groupId = Guid.Parse(groupIdProp.GetString()!);
+			}
+			catch (Exception ex)
+			{
+				logger?.LogWarning(ex, "Failed to parse GroupId, defaulting to null");
+			}
+		}
+
 		return new EnabledData
 		{
 			Guid = guid,
 			Enabled = enabled,
 			Toggled = toggled,
 			Selected = selected,
+			GroupId = groupId,
 		};
 	}
 
@@ -58,11 +74,15 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 		foreach (var elm in Selected)
 			writer.WriteNumberValue(elm);
 		writer.WriteEndArray();
+		if (GroupId.HasValue)
+		{
+			writer.WriteString(nameof(GroupId), GroupId.Value.ToString());
+		}
 		writer.WriteEndObject();
 	}
 
 	public override string ToString()
 	{
-		return $"{{ {nameof(Guid)} = \"{{{Guid}}}\", {nameof(Enabled)} = {Enabled}, {nameof(Toggled)} = {string.Join(", ", Toggled)}, {nameof(Selected)} = {string.Join(", ", Selected)} }}";
+		return $"{{ {nameof(Guid)} = \"{{{Guid}}}\", {nameof(Enabled)} = {Enabled}, {nameof(Toggled)} = {string.Join(", ", Toggled)}, {nameof(Selected)} = {string.Join(", ", Selected)}, {nameof(GroupId)} = {(GroupId.HasValue ? $"\"{{{GroupId.Value}}}\"" : "null")} }}";
 	}
 }

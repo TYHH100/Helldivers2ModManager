@@ -45,11 +45,14 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
         _ => throw new NotImplementedException()
     };
 
+    public Guid? GroupId { get; set; }
+
     public void ApplyData(in EnabledData data)
     {
         Enabled = data.Enabled;
         EnabledOptions = data.Toggled;
 		SelectedOptions = data.Selected;
+        GroupId = data.GroupId;
     }
 
     public EnabledData ToEnabledData()
@@ -60,6 +63,7 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
             Enabled = Enabled,
             Toggled = EnabledOptions,
             Selected = SelectedOptions,
+            GroupId = GroupId,
         };
     }
 

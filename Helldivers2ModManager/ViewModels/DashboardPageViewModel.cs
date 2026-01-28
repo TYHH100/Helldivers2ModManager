@@ -46,6 +46,75 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     private string _searchText = string.Empty;
     [ObservableProperty]
     private bool _initialized = false;
+    private object? _selectedGroupItem = "无";
+    public object? SelectedGroupItem
+    {
+        get
+        {
+            return _selectedGroupItem;
+        }
+        set
+        {
+            if (_selectedGroupItem != value)
+            {
+                _selectedGroupItem = value;
+                OnPropertyChanged(nameof(SelectedGroupItem));
+                OnPropertyChanged(nameof(SelectedGroup));
+                
+                // Enable only mods in the selected group
+                var selectedGroup = SelectedGroup;
+                foreach (var mod in _mods)
+                {
+                    if (selectedGroup == null)
+                    {
+                        // If no group is selected, enable only mods without a group
+                        mod.Enabled = mod.Data.GroupId == null;
+                    }
+                    else
+                    {
+                        // Enable only mods in the selected group
+                        mod.Enabled = mod.Data.GroupId == selectedGroup.Id;
+                    }
+                }
+                
+                UpdateView();
+            }
+        }
+    }
+    public ModGroup? SelectedGroup
+    {
+        get
+        {
+            if (_selectedGroupItem is ModGroup group)
+            {
+                return group;
+            }
+            return null;
+        }
+        set
+        {
+            if (value == null)
+            {
+                SelectedGroupItem = "无";
+            }
+            else
+            {
+                SelectedGroupItem = value;
+            }
+        }
+    }
+    public IReadOnlyList<ModGroup> Groups => _settingsService.Groups;
+    public IEnumerable<object> GroupItems
+    {
+        get
+        {
+            yield return "无";
+            foreach (var group in _settingsService.Groups)
+            {
+                yield return group;
+            }
+        }
+    }
 
     public DashboardPageViewModel(ILogger<DashboardPageViewModel> logger, IServiceProvider provider, SettingsService settingsService, ModService modService, ProfileService profileService)
     {
@@ -72,34 +141,52 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
             ClearSearchCommand.NotifyCanExecuteChanged();
             UpdateView();
         }
+        else if (e.PropertyName == nameof(SelectedGroup))
+        {
+            UpdateView();
+        }
 
         base.OnPropertyChanged(e);
     }
 
     private async Task SaveEnabled()
     {
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
+        if (!_settingsService.IsReadonly)
         {
-            Title = "保存模组配置中",
-            Message = "请民主官耐心等待."
-        });
+            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
+            {
+                Title = "保存模组配置中",
+                Message = "请民主官耐心等待."
+            });
 
-        await _profileService.SaveAsync(_settingsService, _mods.Select(static vm => vm.Data));
+            await _profileService.SaveAsync(_settingsService, _mods.Select(static vm => vm.Data));
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+        }
     }
 
     private void UpdateView()
     {
-        if (IsSearchEmpty)
-            Mods = _mods;
-        else
-            Mods = _mods.Where(vm =>
+        IEnumerable<ModViewModel> filteredMods = _mods;
+
+        // Filter by group if selected
+        if (SelectedGroup != null)
+        {
+            filteredMods = filteredMods.Where(vm => vm.Data.GroupId == SelectedGroup.Id);
+        }
+
+        // Filter by search text if not empty
+        if (!IsSearchEmpty)
+        {
+            filteredMods = filteredMods.Where(vm =>
             {
                 if (_settingsService.CaseSensitiveSearch)
                     return vm.Name.Contains(SearchText, StringComparison.InvariantCulture);
                 return vm.Name.Contains(SearchText, StringComparison.InvariantCultureIgnoreCase);
-            }).ToArray();
+            });
+        }
+
+        Mods = filteredMods.ToArray();
         OnPropertyChanged(nameof(Mods));
     }
 
@@ -115,8 +202,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         });
         try
         {
-            if (!await _settingsService.InitAsync(true))
-                _settingsService.InitDefault(true);
+            if (!await _settingsService.InitAsync(false))
+                _settingsService.InitDefault(false);
         }
         catch (Exception ex)
         {
@@ -288,13 +375,17 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     {
         _mods.Add(new ModViewModel(mod, _logger));
         SearchText = string.Empty;
+        UpdateView();
     }
 
     private void ModService_ModRemoved(ModData mod)
     {
         var vm = _mods.First((vm) => vm.Data == mod);
         if (vm is not null)
+        {
             _mods.Remove(vm);
+            UpdateView();
+        }
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
@@ -672,6 +763,153 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     }
 
     [RelayCommand]
+    void CreateGroup()
+    {
+        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+        {
+            Title = "创建分组",
+            Message = "请输入新分组的名称：",
+            MaxLength = 32,
+            Confirm = (groupName) =>
+            {
+                if (string.IsNullOrWhiteSpace(groupName))
+                {
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "分组名称不能为空" });
+                    return;
+                }
+
+                _settingsService.Groups.Add(new ModGroup(groupName));
+                if (!_settingsService.IsReadonly)
+                {
+                    _ = _settingsService.SaveAsync();
+                    OnPropertyChanged(nameof(GroupItems));
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "分组创建成功" });
+                }
+                else
+                {
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法创建分组，设置处于只读模式" });
+                }
+            }
+        });
+    }
+
+    [RelayCommand]
+    void DeleteGroup(ModGroup group)
+    {
+        if (group == null)
+            return;
+
+        // Check if any mod is assigned to this group
+        var modsInGroup = _mods.Where(vm => vm.Data.GroupId == group.Id).ToArray();
+        if (modsInGroup.Length > 0)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法删除分组，因为有模组已分配到该分组" });
+            return;
+        }
+
+        if (!_settingsService.IsReadonly)
+        {
+            // Show confirmation dialog
+            WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+            {
+                Title = "确认删除",
+                Message = $"确定要删除分组 '{group.Name}' 吗？此操作不可恢复。",
+                Confirm = () =>
+                {
+                    _settingsService.Groups.Remove(group);
+                    if (SelectedGroup == group)
+                    {
+                        SelectedGroup = null;
+                    }
+                    _ = _settingsService.SaveAsync();
+                    OnPropertyChanged(nameof(GroupItems));
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "分组删除成功" });
+                }
+            });
+        }
+        else
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法删除分组，设置处于只读模式" });
+        }
+    }
+
+    [RelayCommand]
+    void RenameGroup(ModGroup group)
+    {
+        if (group == null)
+            return;
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+        {
+            Title = "重命名分组",
+            Message = "请输入新的分组名称：",
+            MaxLength = 32,
+            InitialText = group.Name,
+            Confirm = (newName) =>
+            {
+                if (string.IsNullOrWhiteSpace(newName))
+                {
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "分组名称不能为空" });
+                    return;
+                }
+
+                if (!_settingsService.IsReadonly)
+                {
+                    group.Name = newName;
+                    _ = _settingsService.SaveAsync();
+                    OnPropertyChanged(nameof(GroupItems));
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "分组重命名成功" });
+                }
+                else
+                {
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法重命名分组，设置处于只读模式" });
+                }
+            }
+        });
+    }
+
+    [RelayCommand]
+    void SetGroup(ModViewModel modVm)
+    {
+        if (modVm == null)
+            return;
+
+        // Create a list of group options including "None"
+        var groupOptions = new List<object> { "无" };
+        groupOptions.AddRange(_settingsService.Groups);
+
+        // Show a selection dialog
+        WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
+        {
+            Title = "设置分组",
+            Message = "请为模组选择一个分组：",
+            Options = groupOptions,
+            Confirm = (selectedOption) =>
+            {
+                if (!_settingsService.IsReadonly)
+                {
+                    if (selectedOption.ToString() == "无")
+                    {
+                        modVm.Data.GroupId = null;
+                    }
+                    else if (selectedOption is ModGroup selectedGroup)
+                    {
+                        modVm.Data.GroupId = selectedGroup.Id;
+                    }
+
+                    _ = SaveEnabled();
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "模组分组已更新" });
+                }
+                else
+                {
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法设置分组，设置处于只读模式" });
+                }
+            }
+        });
+    }
+
+    [RelayCommand]
     void ApplyAll()
-    {}
+    {
+    }
 }

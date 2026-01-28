@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Helldivers2ModManager.Extensions;
+using Helldivers2ModManager.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -141,6 +142,15 @@ internal sealed class SettingsService
 			_useSymbolicLinks = value;
 		}
 	}
+
+	public ObservableCollection<ModGroup> Groups
+	{
+		get
+		{
+			GuardInitialized();
+			return _groups;
+		}
+	}
 	
 	private static readonly FileInfo s_file = new("settings.json");
 	private static readonly JsonDocumentOptions s_options = new()
@@ -158,13 +168,13 @@ internal sealed class SettingsService
 	private ObservableCollection<string> _skipList = null!;
 	private bool _caseSensitiveSearch;
 	private bool _useSymbolicLinks;
+	private ObservableCollection<ModGroup> _groups = null!;
 
 	public SettingsService(ILogger<SettingsService> logger)
 	{
 		_logger = logger;
 	}
 
-	[MemberNotNullWhen(true, nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList))]
 	public async Task<bool> InitAsync(bool @readonly = false)
 	{
 		if (Initialized)
@@ -186,7 +196,6 @@ internal sealed class SettingsService
 		return true;
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList))]
 	public void InitDefault(bool @readonly = false)
 	{
 		if (Initialized)
@@ -201,7 +210,7 @@ internal sealed class SettingsService
 		_logger.LogInformation("Settings service initialization complete");
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_groups))]
 	public void Reset()
 	{
 		GuardInitialized();
@@ -224,11 +233,20 @@ internal sealed class SettingsService
 			writer.WriteString(nameof(LogLevel), _logLevel.ToString());
 			writer.WriteNumber(nameof(Opacity), _opacity);
 				writer.WriteStartArray(nameof(SkipList));
-				foreach (var elm in _skipList)
-					writer.WriteStringValue(elm);
-				writer.WriteEndArray();
+			foreach (var elm in _skipList)
+				writer.WriteStringValue(elm);
+			writer.WriteEndArray();
 			writer.WriteBoolean(nameof(CaseSensitiveSearch), _caseSensitiveSearch);
 			writer.WriteBoolean(nameof(UseSymbolicLinks), _useSymbolicLinks);
+			writer.WriteStartArray(nameof(Groups));
+			foreach (var group in _groups)
+			{
+				writer.WriteStartObject();
+				writer.WriteString("id", group.Id.ToString());
+				writer.WriteString("name", group.Name);
+				writer.WriteEndObject();
+			}
+			writer.WriteEndArray();
 		writer.WriteEndObject();
 		
 		await writer.DisposeAsync();
@@ -342,24 +360,46 @@ internal sealed class SettingsService
 			_skipList = new ObservableCollection<string>(list);
 		}
 		if (root.TryGetProperty(nameof(CaseSensitiveSearch), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
-		_caseSensitiveSearch = prop.GetBoolean();
-	if (root.TryGetProperty(nameof(UseSymbolicLinks), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
-		_useSymbolicLinks = prop.GetBoolean();
+			_caseSensitiveSearch = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(UseSymbolicLinks), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_useSymbolicLinks = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(Groups), JsonValueKind.Array, out var groupsArr))
+		{
+			var groupsList = new List<ModGroup>();
+			foreach (var groupElm in groupsArr.EnumerateArray())
+			{
+				if (groupElm.ValueKind == JsonValueKind.Object)
+				{
+					try
+					{
+						var id = Guid.Parse(groupElm.GetProperty("id").GetString()!);
+						var name = groupElm.GetProperty("name").GetString()!;
+						groupsList.Add(new ModGroup(id, name));
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Failed to parse group, skipping");
+					}
+				}
+			}
+			_groups = new ObservableCollection<ModGroup>(groupsList);
+		}
 
 		document.Dispose();
 		await stream.DisposeAsync();
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_groups))]
 	private void ResetInternal()
 	{
 		_gameDirectory = string.Empty;
 		_storageDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Helldivers2ModManager");
 		_tempDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp", "Helldivers2ModManager");
-		_logLevel = LogLevel.Warning;
+		_logLevel = LogLevel.Trace;
 		_opacity = 0.8f;
 		_skipList = [];
 		_caseSensitiveSearch = false;
 		_useSymbolicLinks = false;
+		_groups = [];
 	}
 }
