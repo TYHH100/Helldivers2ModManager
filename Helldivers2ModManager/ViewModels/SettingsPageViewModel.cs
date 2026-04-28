@@ -422,6 +422,19 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 		var (result, path) = await Task.Run<(bool, string?)>(static () =>
 		{
+			var steamPath = GetSteamInstallPath();
+			if (!string.IsNullOrEmpty(steamPath))
+			{
+				var steamLibraries = GetSteamLibraryFolders(steamPath);
+				
+				foreach (var library in steamLibraries)
+				{
+					var gamePath = Path.Combine(library, "steamapps", "common", "Helldivers 2");
+					if (ValidateGameDir(new DirectoryInfo(gamePath), out _))
+						return (true, gamePath);
+				}
+			}
+
 			foreach(var drive in Environment.GetLogicalDrives())
 			{
 				string path;
@@ -454,5 +467,96 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			{
 				Message = "无法自动找到Helldivers 2游戏,请手动设置."
 			});
+	}
+
+	private static string? GetSteamInstallPath()
+	{
+		try
+		{
+			// 从当前用户注册表查找 Steam
+			using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
+			{
+				if (key != null)
+				{
+					var steamPath = key.GetValue("SteamPath") as string;
+					if (!string.IsNullOrEmpty(steamPath) && Directory.Exists(steamPath))
+						return steamPath;
+				}
+			}
+			
+			// 从本地机器注册表查找（64位）
+			using (var key = Registry.LocalMachine.OpenSubKey(@"Software\Valve\Steam"))
+			{
+				if (key != null)
+				{
+					var installPath = key.GetValue("InstallPath") as string;
+					if (!string.IsNullOrEmpty(installPath) && Directory.Exists(installPath))
+						return installPath;
+				}
+			}
+			
+			// 从本地机器注册表查找（32位）
+			using (var key = Registry.LocalMachine.OpenSubKey(@"Software\Wow6432Node\Valve\Steam"))
+			{
+				if (key != null)
+				{
+					var installPath = key.GetValue("InstallPath") as string;
+					if (!string.IsNullOrEmpty(installPath) && Directory.Exists(installPath))
+						return installPath;
+				}
+			}
+		}
+		catch
+		{
+			// 注册表访问出错，忽略
+		}
+		
+		return null;
+	}
+
+	private static List<string> GetSteamLibraryFolders(string steamPath)
+	{
+		var libraries = new List<string> { steamPath }; // Steam 安装目录本身也是一个库
+		
+		try
+		{
+			var libraryFoldersPath = Path.Combine(steamPath, "steamapps", "libraryfolders.vdf");
+			if (!File.Exists(libraryFoldersPath))
+				return libraries;
+			
+			var content = File.ReadAllText(libraryFoldersPath);
+			
+			// 简单解析 libraryfolders.vdf，查找 "path" 键对应的目录
+			// libraryfolders.vdf 的格式类似：
+			// "libraryfolders"
+			// {
+			//   "0"
+			//   {
+			//     "path"		"C:\\Program Files (x86)\\Steam"
+			//     ...
+			//   }
+			//   "1"
+			//   {
+			//     "path"		"D:\\SteamLibrary"
+			//     ...
+			//   }
+			// }
+			
+			var pattern = @"""path""\s*""([^""]+)""";
+			var matches = System.Text.RegularExpressions.Regex.Matches(content, pattern);
+			
+			foreach (System.Text.RegularExpressions.Match match in matches)
+			{
+				var path = match.Groups[1].Value.Replace(@"\\", @"\");
+				if (!libraries.Contains(path) && Directory.Exists(path))
+					libraries.Add(path);
+			}
+		}
+		catch
+		{
+			// 解析出错，只返回默认的 Steam 安装目录
+		}
+		
+		return libraries;
 	}
 }

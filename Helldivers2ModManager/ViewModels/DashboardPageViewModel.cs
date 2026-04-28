@@ -490,14 +490,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
-                Message = "无法启用模组! 因为游戏路径未设置."
+                Message = "无法部署模组! 因为游戏路径未设置."
             });
             return;
         }
 
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
         {
-            Title = "启用模组中",
+            Title = "部署模组中",
             Message = "请民主官耐心等待."
         });
 

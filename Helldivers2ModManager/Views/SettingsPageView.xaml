@@ -174,11 +174,11 @@
 				<TextBlock FontSize="24"
 					   Foreground="White"
 					   Margin="0 10 0 0"
-					   Text="模组启用方式"/>
+					   Text="模组部署方式"/>
 				<TextBlock FontSize="12"
 					   FontFamily="..\Resources\Fonts\#FS Sinclair Regular"
 					   Foreground="DarkGray">
-					使用符号链接来代替文件复制, 来降低启用模组期间的硬盘写入
+					使用符号链接来代替文件复制, 来降低部署模组期间的硬盘写入
                     <LineBreak/>
                     需要以管理员权限启动应用
 				</TextBlock>

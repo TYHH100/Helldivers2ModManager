@@ -68,7 +68,7 @@
 					Grid.Column="1"
 					Orientation="Horizontal"
 					HorizontalAlignment="Right">
-            <Button Content="禁用模组"
+            <Button Content="清理模组"
 					Style="{DynamicResource CancelButton}"
 					Command="{Binding PurgeCommand}"
 					IsEnabled="{Binding Initialized}">
@@ -78,7 +78,7 @@
 							   Margin="5 0"/>
 				</Button.ToolTip>
 			</Button>
-            <Button Content="启用模组"
+            <Button Content="部署模组"
 					Style="{DynamicResource ConfirmButton}"
 					Command="{Binding DeployCommand}"
 					IsEnabled="{Binding Initialized}">
