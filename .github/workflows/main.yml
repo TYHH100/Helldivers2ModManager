@@ -2,12 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [ test ]
-  pull_request:
-    branches: [ test ]
+    tags:
+      - "v*"
   workflow_dispatch:
-  #tags: 
-  #  - "v*"
 
 jobs:
     HD2MM-build:
