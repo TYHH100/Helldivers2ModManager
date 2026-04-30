@@ -2,9 +2,10 @@ name: Build
 
 on:
   push:
-    branches: [ zh-cn_Translations ]
+    branches: [ test ]
   pull_request:
-    branches: [ zh-cn_Translations ]
+    branches: [ test ]
+  workflow_dispatch:
   #tags: 
   #  - "v*"
 
