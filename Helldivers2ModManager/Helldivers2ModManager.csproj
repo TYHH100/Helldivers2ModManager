@@ -31,6 +31,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Reference Include="Microsoft.VisualBasic" />
 		<PackageReference Include="CommunityToolkit.Common" Version="8.4.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
 		<PackageReference Include="gong-wpf-dragdrop" Version="4.0.0" />

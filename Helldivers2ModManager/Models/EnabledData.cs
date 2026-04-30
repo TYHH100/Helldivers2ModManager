@@ -16,6 +16,8 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 
 	public Guid? GroupId { get; init; }
 
+	public List<Guid>? TagIds { get; init; }
+
 	public static EnabledData Deserialize(JsonElement root, ILogger? logger = null)
 	{
 		var guid = Guid.Parse(root.GetProperty(nameof(Guid)).GetString()!);
@@ -51,6 +53,26 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 			}
 		}
 
+		List<Guid>? tagIds = null;
+		if (root.TryGetProperty(nameof(TagIds), out var tagIdsProp) && tagIdsProp.ValueKind == JsonValueKind.Array)
+		{
+			tagIds = [];
+			foreach (var tagIdElm in tagIdsProp.EnumerateArray())
+			{
+				if (tagIdElm.ValueKind == JsonValueKind.String)
+				{
+					try
+					{
+						tagIds.Add(Guid.Parse(tagIdElm.GetString()!));
+					}
+					catch (Exception ex)
+					{
+						logger?.LogWarning(ex, "Failed to parse TagId, skipping");
+					}
+				}
+			}
+		}
+
 		return new EnabledData
 		{
 			Guid = guid,
@@ -58,6 +80,7 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 			Toggled = toggled,
 			Selected = selected,
 			GroupId = groupId,
+			TagIds = tagIds,
 		};
 	}
 
@@ -77,6 +100,13 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 		if (GroupId.HasValue)
 		{
 			writer.WriteString(nameof(GroupId), GroupId.Value.ToString());
+		}
+		if (TagIds != null && TagIds.Count > 0)
+		{
+			writer.WriteStartArray(nameof(TagIds));
+			foreach (var tagId in TagIds)
+				writer.WriteStringValue(tagId.ToString());
+			writer.WriteEndArray();
 		}
 		writer.WriteEndObject();
 	}

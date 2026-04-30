@@ -3,6 +3,7 @@
 using CommunityToolkit.Mvvm.Messaging;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace Helldivers2ModManager.Components;
@@ -66,7 +67,29 @@ internal sealed class MessageBoxSelectionMessage
 	public required Action<object> Confirm { get; init; }
 }
 
-internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>
+internal sealed class MessageBoxTagSelectionMessage
+{
+	public required string Title { get; init; }
+
+	public required string Message { get; init; }
+
+	public required List<Models.TagSelectionItem> Tags { get; init; }
+
+	public required Action<IEnumerable<Models.TagSelectionItem>> Confirm { get; init; }
+}
+
+internal sealed class MessageBoxColorPickerMessage
+{
+	public required string Title { get; init; }
+
+	public required string Message { get; init; }
+
+	public required string CurrentColor { get; init; }
+
+	public required Action<string> Confirm { get; init; }
+}
+
+internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxColorPickerMessage>
 {
 	public static bool IsRegistered { get; private set; }
 
@@ -76,6 +99,9 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	private Action? _abortAction;
 	private Action? _confirmAction;
 	private Action<object>? _selectionAction;
+	private Action<IEnumerable<Models.TagSelectionItem>>? _tagSelectionAction;
+	private Action<string>? _colorPickerAction;
+	private string? _selectedColor;
 
 	public MessageBox()
 	{
@@ -89,6 +115,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		WeakReferenceMessenger.Default.Register<MessageBoxInputMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxConfirmMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxSelectionMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxTagSelectionMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxColorPickerMessage>(this);
 
 		if (!IsRegistered)
 		{
@@ -197,17 +225,73 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		Visibility = Visibility.Visible;
 	}
 
+	public void Receive(MessageBoxTagSelectionMessage message)
+	{
+		Reset();
+
+		_tagSelectionAction = message.Confirm;
+
+		title.Text = message.Title;
+		brush.Color = Colors.White;
+		this.message.Text = message.Message;
+		this.message.Margin = new Thickness(0, 0, 0, 8);
+		tagSelectionList.ItemsSource = message.Tags;
+		tagSelectionList.Visibility = Visibility.Visible;
+		cancelButton.Visibility = Visibility.Visible;
+		okButton.Visibility = Visibility.Visible;
+		Visibility = Visibility.Visible;
+	}
+
+	public void Receive(MessageBoxColorPickerMessage message)
+	{
+		Reset();
+
+		_colorPickerAction = message.Confirm;
+		_selectedColor = message.CurrentColor;
+
+		title.Text = message.Title;
+		brush.Color = Colors.White;
+		this.message.Text = message.Message;
+		colorPickerPanel.Visibility = Visibility.Visible;
+		UpdateColorPreview();
+		cancelButton.Visibility = Visibility.Visible;
+		okButton.Visibility = Visibility.Visible;
+		Visibility = Visibility.Visible;
+	}
+
+	private void UpdateColorPreview()
+	{
+		if (!string.IsNullOrEmpty(_selectedColor) && ColorConverter.ConvertFromString(_selectedColor) is Color color)
+		{
+			colorPreviewBorder.Background = new SolidColorBrush(color);
+			colorCodeText.Text = _selectedColor;
+		}
+	}
+
+	private void SelectColor(string colorCode)
+	{
+		_selectedColor = colorCode;
+		UpdateColorPreview();
+	}
+
 	private void Reset()
 	{
 		_inputAction = null;
 		_confirmAction = null;
 		_selectionAction = null;
+		_tagSelectionAction = null;
+		_colorPickerAction = null;
+		_selectedColor = null;
 
 		title.Visibility = Visibility.Visible;
 		brush.Color = Colors.White;
 		message.Visibility = Visibility.Visible;
+		message.Margin = new Thickness(0);
 		input.Visibility = Visibility.Collapsed;
 		selectionComboBox.Visibility = Visibility.Collapsed;
+		tagSelectionList.Visibility = Visibility.Collapsed;
+		tagSelectionList.ItemsSource = null;
+		colorPickerPanel.Visibility = Visibility.Collapsed;
 		cancelButton.Visibility = Visibility.Hidden;
 		okButton.Visibility = Visibility.Hidden;
 		yesNoStack.Visibility = Visibility.Hidden;
@@ -225,6 +309,15 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		else if (_selectionAction != null)
 		{
 			_selectionAction(selectionComboBox.SelectedItem);
+		}
+		else if (_tagSelectionAction != null)
+		{
+			var selectedTags = tagSelectionList.ItemsSource.Cast<Models.TagSelectionItem>().Where(t => t.IsSelected).ToList();
+			_tagSelectionAction(selectedTags);
+		}
+		else if (_colorPickerAction != null && _selectedColor != null)
+		{
+			_colorPickerAction(_selectedColor);
 		}
 	}
 
@@ -245,5 +338,13 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	private void CancelButton_Click(object sender, RoutedEventArgs e)
 	{
 		Receive(new MessageBoxHideMessage());
+	}
+
+	private void ColorBorder_Click(object sender, MouseButtonEventArgs e)
+	{
+		if (sender is Border border && border.Tag is string colorCode)
+		{
+			SelectColor(colorCode);
+		}
 	}
 }

@@ -2,93 +2,237 @@
 			 x:ClassModifier="internal"
 			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 			 xmlns:local="clr-namespace:Helldivers2ModManager.Components"
-			 mc:Ignorable="d" 
+			 mc:Ignorable="d"
 			 d:DesignHeight="600"
 			 d:DesignWidth="800"
-			 Background="#6000"
+			 Background="#80000000"
 			 Visibility="Hidden"
 			 d:Visibility="Visible">
-	<Border BorderThickness="3"
-			BorderBrush="DarkGray"
-			Background="Black"
+	<Border Style="{StaticResource FluentMessageDialog}"
 			VerticalAlignment="Center"
 			HorizontalAlignment="Center"
-			MinWidth="300"
-			Margin="100">
+			MinWidth="320"
+			MaxWidth="480">
 		<Grid>
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto"/>
 				<RowDefinition Height="*"/>
 				<RowDefinition Height="Auto"/>
 			</Grid.RowDefinitions>
+
+			<!-- Title -->
 			<TextBlock Grid.Row="0"
 					   x:Name="title"
 					   HorizontalAlignment="Center"
-					   Margin="3"
-					   FontSize="24">
+					   Margin="0 0 0 16"
+					   FontSize="20"
+					   FontWeight="SemiBold">
 				<TextBlock.Foreground>
-					<SolidColorBrush x:Name="brush"
-									 Color="White"/>
+					<SolidColorBrush x:Name="brush" Color="White"/>
 				</TextBlock.Foreground>
 			</TextBlock>
+
+			<!-- Content Area -->
 			<Grid Grid.Row="1">
 				<Grid.RowDefinitions>
-					<RowDefinition Height="*"/>
+					<RowDefinition Height="Auto"/>
+					<RowDefinition Height="Auto"/>
 					<RowDefinition Height="Auto"/>
 					<RowDefinition Height="Auto"/>
 				</Grid.RowDefinitions>
+
+				<!-- Message -->
 				<ScrollViewer Grid.Row="0"
-							  Margin="3"
-							  Padding="3"
+							  Margin="0 0 0 16"
+							  Padding="0"
 							  VerticalScrollBarVisibility="Auto"
-							  HorizontalScrollBarVisibility="Auto">
+							  HorizontalScrollBarVisibility="Auto"
+							  MaxHeight="100">
 					<TextBlock x:Name="message"
-						   Foreground="WhiteSmoke"
-						   FontSize="16"
-						   FontFamily="Sanserif"/>
+							   FontSize="14"
+							   FontFamily="Segoe UI Variable Text"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   TextWrapping="Wrap"/>
 				</ScrollViewer>
+
+				<!-- Input TextBox -->
 				<TextBox Grid.Row="1"
 						 x:Name="input"
-						 Margin="3"
-						 Height="30"
-						 FontSize="16"/>
+						 Margin="0 0 0 16"
+						 FontSize="14"
+						 Style="{StaticResource FluentTextBox}"
+						 Visibility="Collapsed"/>
+
+				<!-- Selection ComboBox -->
 				<ComboBox Grid.Row="2"
 						  x:Name="selectionComboBox"
-						  Margin="3"
-						  Height="30"
-						  FontSize="16"
+						  Margin="0 0 0 16"
+						  FontSize="14"
 						  Visibility="Collapsed"/>
+
+				<!-- Tag Selection List -->
+				<ListBox x:Name="tagSelectionList"
+						 Grid.Row="1"
+						 Margin="0 0 0 16"
+						 FontSize="14"
+						 Background="Transparent"
+						 BorderThickness="0"
+						 Visibility="Collapsed"
+						 SelectionMode="Multiple"
+						 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+					<ListBox.ItemTemplate>
+						<DataTemplate>
+							<StackPanel Orientation="Horizontal" Margin="0 4">
+								<CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+										  VerticalAlignment="Center"
+										  Margin="0 0 8 0"/>
+								<Border Width="16"
+										Height="16"
+										CornerRadius="4"
+										Margin="0 0 8 0"
+										VerticalAlignment="Center">
+									<Border.Background>
+										<SolidColorBrush Color="{Binding Color}"/>
+									</Border.Background>
+								</Border>
+								<TextBlock Text="{Binding Name}"
+										   VerticalAlignment="Center"
+										   Foreground="White"/>
+							</StackPanel>
+						</DataTemplate>
+					</ListBox.ItemTemplate>
+					<ListBox.ItemContainerStyle>
+						<Style TargetType="ListBoxItem">
+							<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+							<Setter Property="Padding" Value="8 4"/>
+							<Setter Property="Background" Value="Transparent"/>
+							<Style.Triggers>
+								<Trigger Property="IsMouseOver" Value="True">
+									<Setter Property="Background" Value="#20FFFFFF"/>
+								</Trigger>
+							</Style.Triggers>
+						</Style>
+					</ListBox.ItemContainerStyle>
+				</ListBox>
+
+				<!-- Color Picker Panel -->
+				<StackPanel x:Name="colorPickerPanel"
+							Grid.Row="1"
+							Margin="0 0 0 16"
+							Visibility="Collapsed">
+					<!-- Color Preview -->
+					<StackPanel Orientation="Horizontal" Margin="0 0 0 12" VerticalAlignment="Center">
+						<Border x:Name="colorPreviewBorder"
+								Width="40"
+								Height="40"
+								CornerRadius="8"
+								BorderThickness="2"
+								BorderBrush="White"
+								Margin="0 0 12 0"/>
+						<StackPanel>
+							<TextBlock Text="当前颜色" FontSize="12" Foreground="#88FFFFFF" Margin="0 0 0 4"/>
+							<TextBlock x:Name="colorCodeText" FontSize="14" Foreground="White" FontFamily="Consolas"/>
+						</StackPanel>
+					</StackPanel>
+
+					<!-- Color Palette -->
+					<TextBlock Text="选择颜色" FontSize="12" Foreground="#88FFFFFF" Margin="0 0 0 8"/>
+					<UniformGrid Columns="8" Rows="6">
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF6200EE" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF6200EE"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF3B82F6" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF3B82F6"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF0078D7" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF0078D7"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF00B7C3" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF00B7C3"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF00D4AA" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF00D4AA"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF107C10" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF107C10"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF34D399" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF34D399"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF84CC16" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF84CC16"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFFFC107" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFFFC107"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFFF8C00" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFFF8C00"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFFF6B35" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFFF6B35"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFFF4500" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFFF4500"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFE81123" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFE81123"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFFF4081" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFFF4081"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFDA70D6" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFDA70D6"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFBA55D3" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFBA55D3"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF6B7280" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF6B7280"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF9CA3AF" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF9CA3AF"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFD1D5DB" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFD1D5DB"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFFFFFFF" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFFFFFFF"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF1F2937" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF1F2937"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF374151" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF374151"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF4B5563" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF4B5563"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF6B7280" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF6B7280"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFE63946" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFE63946"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFF77F00" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFF77F00"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFFFAC00" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFFFAC00"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF2EC4B6" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF2EC4B6"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF9B5DE5" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF9B5DE5"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFF15BB5" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFF15BB5"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF00BBF9" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF00BBF9"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF00F5D4" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF00F5D4"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF8338EC" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF8338EC"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFFB5607" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFFB5607"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFFFBE0B" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFFFBE0B"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF84CC16" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF84CC16"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF10B981" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF10B981"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF06B6D4" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF06B6D4"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF3B82F6" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF3B82F6"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF6366F1" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF6366F1"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFEC4899" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFEC4899"/>
+						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FFDC2626" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FFDC2626"/>
+					</UniformGrid>
+				</StackPanel>
 			</Grid>
-			<Button Grid.Row="2"
-					x:Name="cancelButton"
-					Content="取消"
-					HorizontalAlignment="Left"
-					Click="CancelButton_Click"/>
-			<Button Grid.Row="2"
-					x:Name="okButton"
-					Content="确定"
-					HorizontalAlignment="Right"
-					Click="OkButton_Click"/>
-			<Grid Grid.Row="2"
-				  x:Name="yesNoStack">
-				<Button Content="Yes"
-						Click="YesButton_Click"
-						HorizontalAlignment="Left"/>
-				<Button Content="No"
-						Click="NoButton_Click"
-						HorizontalAlignment="Right"/>
+
+			<!-- Button Area -->
+			<Grid Grid.Row="2">
+				<!-- Cancel/OK Buttons -->
+				<StackPanel x:Name="okCancelStack"
+							Orientation="Horizontal"
+							HorizontalAlignment="Right">
+					<Button x:Name="cancelButton"
+							Content="取消"
+							Style="{StaticResource FluentSecondaryButton}"
+							Click="CancelButton_Click"
+							Padding="16 8"
+							Visibility="Hidden"/>
+					<Button x:Name="okButton"
+							Content="确定"
+							Style="{StaticResource FluentPrimaryButton}"
+							Click="OkButton_Click"
+							Padding="16 8"
+							Visibility="Hidden"/>
+				</StackPanel>
+
+				<!-- Yes/No Buttons -->
+				<StackPanel x:Name="yesNoStack"
+							Orientation="Horizontal"
+							HorizontalAlignment="Right"
+							Visibility="Hidden">
+                    <Button Content="确定"
+							Style="{StaticResource FluentPrimaryButton}"
+							Click="YesButton_Click"	
+							Padding="16 8"/>
+                    <Button Content="取消"
+							Style="{StaticResource FluentSecondaryButton}"
+							Click="NoButton_Click"
+							Padding="16 8"/>
+				</StackPanel>
+
+				<!-- Progress Bar -->
+				<ProgressBar x:Name="progress"
+							 Grid.Row="2"
+							 IsIndeterminate="True"
+							 Height="4"
+							 Margin="0 8 0 0"
+							 Foreground="{StaticResource SystemAccentBrush}"
+							 Background="{StaticResource NeutralBackgroundFillBrush}"
+							 BorderThickness="0"
+							 Visibility="Hidden"/>
 			</Grid>
-			<ProgressBar Grid.Row="2"
-						 x:Name="progress"
-						 IsIndeterminate="True"
-						 Height="8"
-						 Margin="3"
-						 Foreground="Yellow"
-						 Background="Black"
-						 BorderBrush="DarkGray"/>
 		</Grid>
 	</Border>
 </UserControl>

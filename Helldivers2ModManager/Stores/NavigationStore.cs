@@ -1,4 +1,4 @@
-﻿using Helldivers2ModManager.ViewModels;
+using Helldivers2ModManager.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -17,7 +17,12 @@ internal sealed class NavigationStore(IServiceProvider provider, PageViewModelBa
 	public void Navigate(PageViewModelBase viewModel)
 	{
 		_logger.LogInformation("Navigating to \"{}\"", viewModel.Title);
+		
+		var oldViewModel = _currentViewModel;
 		_currentViewModel = viewModel;
+		
+		(oldViewModel as IDisposable)?.Dispose();
+		
 		Navigated?.Invoke(this, EventArgs.Empty);
 	}
 

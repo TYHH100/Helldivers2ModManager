@@ -98,6 +98,28 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	public bool DeleteToRecycleBin
+	{
+		get => _settingsService.Initialized ? _settingsService.DeleteToRecycleBin : true;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.DeleteToRecycleBin = value;
+			OnPropertyChanged();
+		}
+	}
+
+	public bool AutoRemoveMissingMods
+	{
+		get => _settingsService.Initialized ? _settingsService.AutoRemoveMissingMods : false;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.AutoRemoveMissingMods = value;
+			OnPropertyChanged();
+		}
+	}
+
 	private readonly ILogger<SettingsPageViewModel> _logger;
 	private readonly NavigationStore _navStore;
 	private readonly SettingsService _settingsService;
@@ -115,7 +137,18 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		if (MessageBox.IsRegistered)
 			_ = Init();
 		else
-			MessageBox.Registered += (_, _) => _ = Init();
+			MessageBox.Registered += OnMessageBoxRegistered;
+	}
+
+	private void OnMessageBoxRegistered(object? sender, EventArgs e)
+	{
+		_ = Init();
+	}
+
+	protected override void OnDispose()
+	{
+		SkipList.CollectionChanged -= SkipList_CollectionChanged;
+		MessageBox.Registered -= OnMessageBoxRegistered;
 	}
 
 	private static bool ValidateGameDir(DirectoryInfo dir, [NotNullWhen(false)] out string? error)
@@ -203,8 +236,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		_logger.LogInformation("Loading settings...");
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
 		{
-			Title = "Loading settings",
-			Message = "Please wait democratically.",
+			Title = "加载设置中",
+			Message = "请民主官耐心等待.",
 		});
 		try
 		{
@@ -216,8 +249,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			_logger.LogError(ex, "Loading settings failed");
 			WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
 			{
-				Title = "Loading settings failed!",
-				Message = "Do you want to reset your settings?",
+				Title = "加载设置失败!",
+				Message = "是否需要重置设置?",
 				Confirm = () =>
 				{
 					_settingsService.InitDefault();
@@ -228,6 +261,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 		_logger.LogInformation("Settings loaded successfully");
 		WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+		Update();
 	}
 
 	private void Update()
@@ -240,6 +274,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(SkipList));
 		OnPropertyChanged(nameof(CaseSensitiveSearch));
 		OnPropertyChanged(nameof(UseSymbolicLinks));
+		OnPropertyChanged(nameof(DeleteToRecycleBin));
+		OnPropertyChanged(nameof(AutoRemoveMissingMods));
 	}
 
 	private void SkipList_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -257,16 +293,16 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "Invalid settings!",
+				Message = "无效设置!",
 			});
 			return;
 		}
 
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
 		{
-			Title = "Saving Settings",
-			Message = "Please wait democratically."
-		});
+			Title = "保存设置中",
+			Message = "请民主官耐心等待."
+        });
 		try
 		{
 			await _settingsService.SaveAsync();
@@ -276,7 +312,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			_logger.LogWarning(ex, "Failed to save settings");
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = $"Failed to save settings!\n\n{ex.Message}",
+				Message = $"设置保存失败!\n\n{ex.Message}",
 			});
 			return;
 		}
@@ -465,7 +501,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
         else
 			WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
 			{
-				Message = "无法自动找到Helldivers 2游戏,请手动设置."
+				Message = "无法自动找到 Helldivers 2 游戏,请手动设置."
 			});
 	}
 

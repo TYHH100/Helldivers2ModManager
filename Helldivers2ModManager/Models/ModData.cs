@@ -47,12 +47,27 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
 
     public Guid? GroupId { get; set; }
 
+	private List<Guid> _tagIds = [];
+public List<Guid> TagIds
+{
+    get => _tagIds;
+    set
+    {
+        if (_tagIds != value)
+        {
+            _tagIds = value;
+            OnPropertyChanged(nameof(TagIds));
+        }
+    }
+}
+
     public void ApplyData(in EnabledData data)
     {
         Enabled = data.Enabled;
         EnabledOptions = data.Toggled;
 		SelectedOptions = data.Selected;
         GroupId = data.GroupId;
+        TagIds = data.TagIds?.ToList() ?? [];
     }
 
     public EnabledData ToEnabledData()
@@ -64,6 +79,7 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
             Toggled = EnabledOptions,
             Selected = SelectedOptions,
             GroupId = GroupId,
+            TagIds = TagIds,
         };
     }
 

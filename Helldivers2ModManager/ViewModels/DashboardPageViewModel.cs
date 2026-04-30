@@ -15,6 +15,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Media;
 using MessageBox = Helldivers2ModManager.Components.MessageBox;
 
 namespace Helldivers2ModManager.ViewModels;
@@ -24,26 +25,28 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 {
     public override string Title => "Mods";
 
-    public IReadOnlyList<ModViewModel> Mods { get; private set; }
+    public IEnumerable<ModViewModel> Mods { get; private set; }
 
     public bool IsSearchEmpty => string.IsNullOrEmpty(SearchText);
 
     private static readonly ProcessStartInfo s_gameStartInfo = new("steam://run/553850") { UseShellExecute = true };
-    private static readonly ProcessStartInfo s_reportStartInfo = new("https://teutinsa.github.io/hd2mm-site/help/bug_reporting.html") { UseShellExecute = true };
+    private static readonly ProcessStartInfo s_reportStartInfo = new("https://github.com/TYHH100/Helldivers2ModManager/issues") { UseShellExecute = true };
     private static readonly ProcessStartInfo s_discordStartInfo = new("https://discord.gg/helldiversmodding") { UseShellExecute = true };
     private static readonly ProcessStartInfo s_githubStartInfo = new("https://github.com/teutinsa/Helldivers2ModManager") { UseShellExecute = true };
+    private static readonly ProcessStartInfo s_githubForkStartInfo = new("https://github.com/TYHH100/Helldivers2ModManager") { UseShellExecute = true };
     private readonly ILogger<DashboardPageViewModel> _logger;
     private readonly Lazy<NavigationStore> _navStore;
+    private readonly EditModStore _editModStore;
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
     private readonly ProfileService _profileService;
     private ObservableCollection<ModViewModel> _mods;
     [ObservableProperty]
-    private Visibility _editVisibility = Visibility.Hidden;
-    [ObservableProperty]
-    private ModViewModel? _editMod;
-    [ObservableProperty]
     private string _searchText = string.Empty;
+    [ObservableProperty]
+    private Visibility _imagePreviewVisibility = Visibility.Hidden;
+    [ObservableProperty]
+    private ImageSource? _previewImageSource;
     [ObservableProperty]
     private bool _initialized = false;
     private object? _selectedGroupItem = "无";
@@ -103,23 +106,27 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
             }
         }
     }
-    public IReadOnlyList<ModGroup> Groups => _settingsService.Groups;
+    public IReadOnlyList<ModGroup> Groups => _settingsService.Initialized ? _settingsService.Groups : [];
     public IEnumerable<object> GroupItems
     {
         get
         {
             yield return "无";
-            foreach (var group in _settingsService.Groups)
+            if (_settingsService.Initialized)
             {
-                yield return group;
+                foreach (var group in _settingsService.Groups)
+                {
+                    yield return group;
+                }
             }
         }
     }
 
-    public DashboardPageViewModel(ILogger<DashboardPageViewModel> logger, IServiceProvider provider, SettingsService settingsService, ModService modService, ProfileService profileService)
+    public DashboardPageViewModel(ILogger<DashboardPageViewModel> logger, IServiceProvider provider, SettingsService settingsService, ModService modService, ProfileService profileService, EditModStore editModStore)
     {
         _logger = logger;
         _navStore = new(provider.GetRequiredService<NavigationStore>);
+        _editModStore = editModStore;
         _settingsService = settingsService;
         _modService = modService;
         _profileService = profileService;
@@ -169,24 +176,39 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     {
         IEnumerable<ModViewModel> filteredMods = _mods;
 
-        // Filter by group if selected
         if (SelectedGroup != null)
         {
             filteredMods = filteredMods.Where(vm => vm.Data.GroupId == SelectedGroup.Id);
         }
 
-        // Filter by search text if not empty
-        if (!IsSearchEmpty)
+        if (!IsSearchEmpty && _settingsService.Initialized)
         {
-            filteredMods = filteredMods.Where(vm =>
-            {
-                if (_settingsService.CaseSensitiveSearch)
-                    return vm.Name.Contains(SearchText, StringComparison.InvariantCulture);
-                return vm.Name.Contains(SearchText, StringComparison.InvariantCultureIgnoreCase);
-            });
-        }
+            var searchText = SearchText.Trim();
 
-        Mods = filteredMods.ToArray();
+            if (searchText.StartsWith("@"))
+            {
+                var tagName = searchText.Substring(1);
+                if (!string.IsNullOrEmpty(tagName))
+                {
+                    filteredMods = filteredMods.Where(vm =>
+                        vm.Tags.Any(t => t.Name.Contains(tagName, StringComparison.InvariantCultureIgnoreCase)));
+                }
+            }
+            else
+            {
+                filteredMods = filteredMods.Where(vm =>
+                {
+                    if (_settingsService.CaseSensitiveSearch)
+                        return vm.Name.Contains(searchText, StringComparison.InvariantCulture);
+                    return vm.Name.Contains(searchText, StringComparison.InvariantCultureIgnoreCase);
+                });
+            }
+            Mods = filteredMods.ToArray();
+        }
+        else
+        {
+            Mods = _mods;
+        }
         OnPropertyChanged(nameof(Mods));
     }
 
@@ -278,7 +300,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
             _logger.LogError(ex, "Loading profile failed");
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
             {
-                Message = $"Loading profile failed!\n\n{ex}",
+                Message = $"加载配置文件失败!\n\n{ex}",
             });
             return;
         }
@@ -286,11 +308,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         _logger.LogInformation("Profile loaded successfully");
 
         _logger.LogInformation("Applying profile");
-        _mods = new(result.Select(data => new ModViewModel(data, _logger)).ToList());
+        _mods = new(result.Select(data => _modService.GetOrCreateModViewModel(data, _logger, _settingsService)).ToList());
         UpdateView();
 
         if (problems.Length > 0)
-            ShowProblems(problems, "Problems with loading mods:", false, true);
+            ShowProblems(problems, "加载模组时出现问题:", false, true);
         Initialized = true;
         _logger.LogInformation("Initialization successful");
 
@@ -307,7 +329,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         var errors = problems.Where(static p => p.IsError).ToArray();
         if (errors.Length != 0)
         {
-            sb.AppendLine("Errors:");
+            sb.AppendLine("错误:");
             foreach (var e in errors)
             {
                 sb.Append("\t - \"");
@@ -317,13 +339,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
                 sb.Append("\t\t");
                 string desc = e.Kind switch
                 {
-                    ModProblemKind.CantParseManifest => "Can't parse manifest!",
-                    ModProblemKind.UnknownManifestVersion => "Unknown manifest version!",
-                    ModProblemKind.OutOfSupportManifest => $"Unsupported manifest version! Please update.\n\t\tManager version {App.Version} does not support this version of the manifest.",
-                    ModProblemKind.Duplicate => "A mod with the same GUID was already added!",
+                    ModProblemKind.CantParseManifest => "无法解析清单文件!",
+                    ModProblemKind.UnknownManifestVersion => "未知清单版本!",
+                    ModProblemKind.OutOfSupportManifest => $"不支持的清单版本!请更新.\n\t\t管理器版本 {App.Version} 不支持此版本的清单文件.",
+                    ModProblemKind.Duplicate => "已添加一个具有相同 GUID 的模组。!",
                     ModProblemKind.InvalidPath => e.ExtraData is not null
-                        ? $"The include path \"{e.ExtraData}\" is invalid!"
-                        : "A include path is invalid!",
+                        ? $"包含路径  \"{e.ExtraData}\" 无效!"
+                        : "包含路径无效!",
                     _ => throw new NotImplementedException()
                 };
                 sb.AppendLine(desc);
@@ -333,7 +355,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         var warnings = problems.Where(static p => !p.IsError).ToArray();
         if (warnings.Length != 0)
         {
-            sb.AppendLine("Warnings:");
+            sb.AppendLine("警告:");
             foreach (var w in warnings)
             {
                 sb.Append("\t - \"");
@@ -344,15 +366,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
                 string desc = w.Kind switch
                 {
                     ModProblemKind.NoManifestFound => isInit
-                        ? "No manifest found in directory!\n\t\t\tAction: Deleting"
-                        : "No manifest found in directory!\n\t\t\tAction: Inferring from directory",
-                    ModProblemKind.EmptyOptions => "Manifest contains empty options! This mod will likely do nothing.",
-                    ModProblemKind.EmptySubOptions => "Manifest contains empty sub-options! This mod will likely not work as expected.",
-                    ModProblemKind.EmptyIncludes => "Manifest contains empty include lists! This mod my not do anything.",
+                        ? "目录中未找到清单文件!\n\t\t\t执行操作: 删除(Deleting)"
+                        : "目录中未找到清单文件!\n\t\t\t执行操作: 从目录推断(Inferring from directory)",
+                    ModProblemKind.EmptyOptions => "清单包含空选项! 此模组可能不会产生任何效果.",
+                    ModProblemKind.EmptySubOptions => "清单包含空的子选项！此模组可能无法按预期运行.",
+                    ModProblemKind.EmptyIncludes => "清单包含空的包含列表！此模组可能不会产生任何作用.",
                     ModProblemKind.InvalidImagePath => w.ExtraData is not null
-                        ? $"Manifest image path \"{w.ExtraData}\" is invalid!"
-                        : "Manifest contains invalid image path!",
-                    ModProblemKind.EmptyImagePath => "Manifest constains empty image path!",
+                        ? $"清单图片路径 \"{w.ExtraData}\" 无效!"
+                        : "清单包含无效的图片路径!",
+                    ModProblemKind.EmptyImagePath => "清单包含空的图片路径​!",
                     _ => throw new NotImplementedException()
                 };
                 sb.AppendLine(desc);
@@ -373,14 +395,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 
     private void ModService_ModAdded(ModData mod)
     {
-        _mods.Add(new ModViewModel(mod, _logger));
+        _mods.Add(new ModViewModel(mod, _logger, _settingsService));
         SearchText = string.Empty;
         UpdateView();
     }
 
     private void ModService_ModRemoved(ModData mod)
     {
-        var vm = _mods.First((vm) => vm.Data == mod);
+        var vm = _mods.FirstOrDefault((vm) => vm.Data == mod);
         if (vm is not null)
         {
             _mods.Remove(vm);
@@ -389,20 +411,28 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
-    async Task Add()
-    {
-        var dialog = new OpenFileDialog
+        async Task Add(string? filePath = null)
         {
-            CheckFileExists = true,
-            CheckPathExists = true,
-            InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
-            Filter = "Mod档案|*.rar;*.7z;*.zip;*.tar",
-            Multiselect = false,
-            Title = "请选择要添加的模组压缩包..."
-        };
+            string? selectedFile = filePath;
 
-        if (dialog.ShowDialog() ?? false)
-        {
+            if (selectedFile == null)
+            {
+                var dialog = new OpenFileDialog
+                {
+                    CheckFileExists = true,
+                    CheckPathExists = true,
+                    InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
+                    Filter = "Mod档案|*.rar;*.7z;*.zip;*.tar",
+                    Multiselect = false,
+                    Title = "请选择要添加的模组压缩包..."
+                };
+
+                if (!(dialog.ShowDialog() ?? false))
+                    return;
+
+                selectedFile = dialog.FileName;
+            }
+
             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
             {
                 Title = "添加模组中",
@@ -410,13 +440,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
             });
             try
             {
-                var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(dialog.FileName));
+                var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(selectedFile));
                 if (problems.Length > 0)
                 {
                     var error = problems.Any(static p => p.IsError);
                     var prefix = error
-                        ? "Mod adding failed due to problems:"
-                        : "Mod added with warnings:";
+                        ? "由于出现问题，模组添加失败:"
+                        : "模组已添加, 但有些相关问题:";
                     ShowProblems(problems, prefix, error);
                 }
                 else
@@ -431,7 +461,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
                 });
             }
         }
-    }
 
     [RelayCommand]
     void Browse()
@@ -453,6 +482,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
+    async Task TagManagement()
+    {
+        await SaveEnabled();
+
+        _navStore.Value.Navigate<TagManagementPageViewModel>();
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = false)]
     async Task Settings()
     {
         await SaveEnabled();
@@ -463,7 +500,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task Purge()
     {
-        if (string.IsNullOrEmpty(_settingsService.GameDirectory))
+        if (!_settingsService.Initialized || string.IsNullOrEmpty(_settingsService.GameDirectory))
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
@@ -486,7 +523,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task Deploy()
     {
-        if (string.IsNullOrEmpty(_settingsService.GameDirectory))
+        if (!_settingsService.Initialized || string.IsNullOrEmpty(_settingsService.GameDirectory))
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
@@ -512,7 +549,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
             {
-                Message = "启用成功."
+                Message = "部署成功."
             });
         }
         catch (Exception ex)
@@ -546,10 +583,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     [RelayCommand]
     void Remove(ModViewModel modVm)
     {
+        var deleteMessage = _settingsService.DeleteToRecycleBin
+            ? "模组文件将被移动到回收站。"
+            : "模组文件将被永久删除，此操作不可恢复！";
+        
         WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
         {
             Title = "确认删除",
-            Message = $"确定要删除模组 '{modVm.Name}' 吗？此操作不可恢复。",
+            Message = $"确定要删除模组 '{modVm.Name}' 吗？\n{deleteMessage}",
             Confirm = () =>
             {
                 _ = DeleteModAsync(modVm);
@@ -561,7 +602,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     {
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
         {
-            Title = "移除模组中",
+            Title = "删除模组中",
             Message = "请民主官耐心等待."
         });
 
@@ -592,6 +633,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     void Github()
     {
         Process.Start(s_githubStartInfo);
+    }
+
+    [RelayCommand]
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "This is a command of a view model and should not be static.")]
+    void GithubFork()
+    {
+        Process.Start(s_githubForkStartInfo);
     }
 
     [RelayCommand]
@@ -687,7 +735,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         {
             CheckFileExists = true,
             CheckPathExists = true,
-            Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif",
+            Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp",
             Title = "请选择要设置的模组图片..."
         };
 
@@ -740,15 +788,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     [RelayCommand]
     void Edit(ModViewModel vm)
     {
-        EditMod = vm;
-        EditVisibility = Visibility.Visible;
-    }
-
-    [RelayCommand]
-    void EditDone()
-    {
-        EditVisibility = Visibility.Hidden;
-        EditMod = null;
+        _editModStore.CurrentMod = vm;
+        _navStore.Value.Navigate<EditPageViewModel>();
     }
 
     bool CanClearSearch()
@@ -794,28 +835,31 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     }
 
     [RelayCommand]
-    void DeleteGroup(ModGroup group)
+    void DeleteGroup(ModGroup? group)
     {
+        group ??= SelectedGroup;
         if (group == null)
             return;
 
-        // Check if any mod is assigned to this group
         var modsInGroup = _mods.Where(vm => vm.Data.GroupId == group.Id).ToArray();
-        if (modsInGroup.Length > 0)
-        {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法删除分组，因为有模组已分配到该分组" });
-            return;
-        }
 
         if (!_settingsService.IsReadonly)
         {
-            // Show confirmation dialog
+            var message = modsInGroup.Length > 0
+                ? $"确定要删除分组 '{group.Name}' 吗？此操作将清除 {modsInGroup.Length} 个模组的分组信息，且不可恢复。"
+                : $"确定要删除分组 '{group.Name}' 吗？此操作不可恢复。";
+
             WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
             {
                 Title = "确认删除",
-                Message = $"确定要删除分组 '{group.Name}' 吗？此操作不可恢复。",
+                Message = message,
                 Confirm = () =>
                 {
+                    foreach (var mod in modsInGroup)
+                    {
+                        mod.Data.GroupId = null;
+                    }
+
                     _settingsService.Groups.Remove(group);
                     if (SelectedGroup == group)
                     {
@@ -834,8 +878,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     }
 
     [RelayCommand]
-    void RenameGroup(ModGroup group)
+    void RenameGroup(ModGroup? group)
     {
+        group ??= SelectedGroup;
         if (group == null)
             return;
 
@@ -871,7 +916,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     [RelayCommand]
     void SetGroup(ModViewModel modVm)
     {
-        if (modVm == null)
+        if (modVm == null || !_settingsService.Initialized)
             return;
 
         // Create a list of group options including "None"
@@ -911,5 +956,59 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     [RelayCommand]
     void ApplyAll()
     {
+    }
+
+    [RelayCommand]
+    void ShowImagePreview(ImageSource imageSource)
+    {
+        PreviewImageSource = imageSource;
+        ImagePreviewVisibility = Visibility.Visible;
+    }
+
+    [RelayCommand]
+    void HideImagePreview()
+    {
+        ImagePreviewVisibility = Visibility.Hidden;
+        PreviewImageSource = null;
+    }
+
+    [RelayCommand]
+    void EditModTags(ModViewModel modVm)
+    {
+        if (modVm == null || !_settingsService.Initialized)
+            return;
+
+        var selectedTagIds = modVm.Data.TagIds.ToList();
+        var selectableTags = _settingsService.Tags.Select(t => new TagSelectionItem(t, selectedTagIds.Contains(t.Id))).ToList();
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxTagSelectionMessage
+            {
+                Title = "设置标签",
+                Message = "请选择模组的标签：",
+                Tags = selectableTags,
+                Confirm = (selectedTags) =>
+                {
+                    if (!_settingsService.IsReadonly)
+                    {
+                        modVm.Data.TagIds = selectedTags.Select(t => t.Tag.Id).ToList();
+                        _ = SaveEnabled();
+                        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "模组标签已更新" });
+                    }
+                    else
+                    {
+                        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法设置标签，设置处于只读模式" });
+                    }
+                }
+            });
+    }
+
+    public IReadOnlyList<ModTag> AllTags => _settingsService.Initialized ? _settingsService.Tags : [];
+    public IEnumerable<object> TagItems => _settingsService.Initialized ? _settingsService.Tags : [];
+
+    protected override void OnDispose()
+    {
+        _modService.ModAdded -= ModService_ModAdded;
+        _modService.ModRemoved -= ModService_ModRemoved;
+        _mods.Clear();
     }
 }

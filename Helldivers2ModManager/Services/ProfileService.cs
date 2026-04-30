@@ -39,6 +39,8 @@ internal sealed class ProfileService
 		_logger.LogInformation("Found {} potential entries", len);
 
 		var mods = new List<ModData>(modService.Mods.Count);
+		var missingGuids = new List<Guid>();
+		
 		foreach (var elm in root.EnumerateArray())
 		{
 			if (elm.ValueKind != JsonValueKind.Object)
@@ -51,12 +53,19 @@ internal sealed class ProfileService
 			if (mod is null)
 			{
 				_logger.LogWarning("{} has no corresponding mod, skipping", data.Guid);
+				missingGuids.Add(data.Guid);
 				continue;
 			}
 
 			mod.ApplyData(data);
 
 			mods.Add(mod);
+		}
+
+		if (settingsService.AutoRemoveMissingMods && missingGuids.Count > 0)
+		{
+			_logger.LogInformation("Auto-removing {} missing mod entries", missingGuids.Count);
+			await RemoveMissingEntriesAsync(settingsService, missingGuids);
 		}
 
 		var remainder = modService.Mods.Count - len;
@@ -69,6 +78,40 @@ internal sealed class ProfileService
 		}
 
 		return mods.ToArray();
+	}
+
+	private async Task RemoveMissingEntriesAsync(SettingsService settingsService, List<Guid> missingGuids)
+	{
+		var enabledFile = new FileInfo(Path.Combine(settingsService.StorageDirectory, "enabled.json"));
+		
+		using var stream = enabledFile.Open(FileMode.Open, FileAccess.Read, FileShare.Read);
+		var doc = await JsonDocument.ParseAsync(stream);
+		var root = doc.RootElement;
+
+		var remainingEntries = new List<JsonElement>();
+		foreach (var elm in root.EnumerateArray())
+		{
+			if (elm.ValueKind != JsonValueKind.Object)
+				continue;
+
+			var guid = Guid.Parse(elm.GetProperty(nameof(EnabledData.Guid)).GetString()!);
+			if (!missingGuids.Contains(guid))
+			{
+				remainingEntries.Add(elm.Clone());
+			}
+		}
+
+		using var writeStream = enabledFile.Open(FileMode.Create, FileAccess.Write, FileShare.Read);
+		var writer = new Utf8JsonWriter(writeStream);
+
+		writer.WriteStartArray();
+		foreach (var entry in remainingEntries)
+		{
+			entry.WriteTo(writer);
+		}
+		writer.WriteEndArray();
+
+		await writer.DisposeAsync();
 	}
 
 	public IReadOnlyList<ModData> InitDefault(ModService modService)

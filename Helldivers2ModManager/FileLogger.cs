@@ -1,4 +1,4 @@
-﻿using Helldivers2ModManager.Stores;
+using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -21,6 +21,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
 {
 	private readonly FileStream _fileStream;
 	private readonly StreamWriter _stream;
+	private readonly object _lock = new();
 
 	public FileLoggerProvider(string name)
 	{
@@ -33,20 +34,20 @@ internal sealed class FileLoggerProvider : ILoggerProvider
 
 	public ILogger CreateLogger(string categoryName)
 	{
-		return new FileLogger(categoryName, _stream);
+		return new FileLogger(categoryName, _stream, _lock);
 	}
 
 	public void Dispose()
 	{
 		_stream.Dispose();
-		_fileStream.Dispose();
 	}
 }
 
-internal sealed class FileLogger(string name, StreamWriter stream) : ILogger
+internal sealed class FileLogger(string name, StreamWriter stream, object lockObj) : ILogger
 {
 	private readonly string _name = name;
 	private readonly StreamWriter _stream = stream;
+	private readonly object _lock = lockObj;
 
 	public IDisposable? BeginScope<TState>(TState state) where TState : notnull
 	{
@@ -75,7 +76,7 @@ internal sealed class FileLogger(string name, StreamWriter stream) : ILogger
 
 		var builder = new StringBuilder();
 		builder.Append('[');
-		builder.Append(DateTime.Now.ToString("HH:mm::ss"));
+		builder.Append(DateTime.Now.ToString("HH:mm:ss"));
 		builder.Append("] ");
 		builder.Append(_name);
 		builder.Append(" -> ");
@@ -98,7 +99,10 @@ internal sealed class FileLogger(string name, StreamWriter stream) : ILogger
 			}
 		}
 
-		_stream.WriteLine(builder.ToString());
-		_stream.Flush();
+		lock (_lock)
+		{
+			_stream.WriteLine(builder.ToString());
+			_stream.Flush();
+		}
 	}
 }

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Transient)]
+[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class SettingsService
 {
 	public const float OpacityMax = 1.0f;
@@ -143,12 +143,53 @@ internal sealed class SettingsService
 		}
 	}
 
+	public bool DeleteToRecycleBin
+	{
+		get
+		{
+			GuardInitialized();
+			return _deleteToRecycleBin;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_deleteToRecycleBin = value;
+		}
+	}
+
+	public bool AutoRemoveMissingMods
+	{
+		get
+		{
+			GuardInitialized();
+			return _autoRemoveMissingMods;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_autoRemoveMissingMods = value;
+		}
+	}
+
 	public ObservableCollection<ModGroup> Groups
 	{
 		get
 		{
 			GuardInitialized();
 			return _groups;
+		}
+	}
+
+	public ObservableCollection<ModTag> Tags
+	{
+		get
+		{
+			GuardInitialized();
+			return _tags;
 		}
 	}
 	
@@ -168,7 +209,10 @@ internal sealed class SettingsService
 	private ObservableCollection<string> _skipList = null!;
 	private bool _caseSensitiveSearch;
 	private bool _useSymbolicLinks;
+	private bool _deleteToRecycleBin = true;
+	private bool _autoRemoveMissingMods;
 	private ObservableCollection<ModGroup> _groups = null!;
+	private ObservableCollection<ModTag> _tags = null!;
 
 	public SettingsService(ILogger<SettingsService> logger)
 	{
@@ -238,12 +282,24 @@ internal sealed class SettingsService
 			writer.WriteEndArray();
 			writer.WriteBoolean(nameof(CaseSensitiveSearch), _caseSensitiveSearch);
 			writer.WriteBoolean(nameof(UseSymbolicLinks), _useSymbolicLinks);
+			writer.WriteBoolean(nameof(DeleteToRecycleBin), _deleteToRecycleBin);
+			writer.WriteBoolean(nameof(AutoRemoveMissingMods), _autoRemoveMissingMods);
 			writer.WriteStartArray(nameof(Groups));
 			foreach (var group in _groups)
 			{
 				writer.WriteStartObject();
 				writer.WriteString("id", group.Id.ToString());
 				writer.WriteString("name", group.Name);
+				writer.WriteEndObject();
+			}
+			writer.WriteEndArray();
+			writer.WriteStartArray(nameof(Tags));
+			foreach (var tag in _tags)
+			{
+				writer.WriteStartObject();
+				writer.WriteString("id", tag.Id.ToString());
+				writer.WriteString("name", tag.Name);
+				writer.WriteString("color", tag.Color);
 				writer.WriteEndObject();
 			}
 			writer.WriteEndArray();
@@ -363,6 +419,10 @@ internal sealed class SettingsService
 			_caseSensitiveSearch = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(UseSymbolicLinks), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_useSymbolicLinks = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(DeleteToRecycleBin), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_deleteToRecycleBin = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(AutoRemoveMissingMods), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_autoRemoveMissingMods = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(Groups), JsonValueKind.Array, out var groupsArr))
 		{
 			var groupsList = new List<ModGroup>();
@@ -384,12 +444,34 @@ internal sealed class SettingsService
 			}
 			_groups = new ObservableCollection<ModGroup>(groupsList);
 		}
+		if (root.TryGetProperty(nameof(Tags), JsonValueKind.Array, out var tagsArr))
+		{
+			var tagsList = new List<ModTag>();
+			foreach (var tagElm in tagsArr.EnumerateArray())
+			{
+				if (tagElm.ValueKind == JsonValueKind.Object)
+				{
+					try
+					{
+						var id = Guid.Parse(tagElm.GetProperty("id").GetString()!);
+						var name = tagElm.GetProperty("name").GetString()!;
+						var color = tagElm.TryGetProperty("color", out var colorProp) ? colorProp.GetString()! : "#FF6200EE";
+						tagsList.Add(new ModTag(id, name, color));
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Failed to parse tag, skipping");
+					}
+				}
+			}
+			_tags = new ObservableCollection<ModTag>(tagsList);
+		}
 
 		document.Dispose();
 		await stream.DisposeAsync();
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_groups))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_groups), nameof(_tags))]
 	private void ResetInternal()
 	{
 		_gameDirectory = string.Empty;
@@ -401,5 +483,6 @@ internal sealed class SettingsService
 		_caseSensitiveSearch = false;
 		_useSymbolicLinks = false;
 		_groups = [];
+		_tags = [];
 	}
 }

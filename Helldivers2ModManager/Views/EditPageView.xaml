@@ -1,0 +1,214 @@
+<Page x:Class="Helldivers2ModManager.Views.EditPageView"
+	  x:ClassModifier="internal"
+	  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
+	  xmlns:local="clr-namespace:Helldivers2ModManager"
+	  mc:Ignorable="d"
+	  d:DataContext="{d:DesignInstance vms:EditPageViewModel}"
+	  d:Background="{StaticResource MicaBackgroundBrush}"
+	  d:DesignWidth="800"
+	  d:DesignHeight="600"
+	  Title="{Binding Title}">
+	<Grid>
+		<Grid Margin="16">
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto"/>
+				<RowDefinition Height="*"/>
+				<RowDefinition Height="Auto"/>
+			</Grid.RowDefinitions>
+
+			<!-- Header -->
+			<TextBlock Grid.Row="0"
+					   Text="{Binding EditMod.Name}"
+					   Style="{StaticResource FluentSectionHeader}"
+					   HorizontalAlignment="Center"
+					   Margin="0 0 0 16"/>
+
+			<!-- Options List -->
+			<ScrollViewer Grid.Row="1"
+						  HorizontalScrollBarVisibility="Disabled"
+						  VerticalScrollBarVisibility="Auto"
+						  Margin="0 0 0 16">
+				<Border Style="{StaticResource FluentCard}"
+						CornerRadius="8">
+					<ItemsControl ItemsSource="{Binding EditMod.Options}"
+								  Margin="16">
+						<ItemsControl.ItemTemplate>
+							<DataTemplate DataType="vms:ModOptionViewModel">
+								<Border Style="{StaticResource FluentSettingsCard}"
+										Margin="0 0 0 8">
+									<Grid>
+										<Grid.ColumnDefinitions>
+											<ColumnDefinition Width="Auto"/>
+											<ColumnDefinition Width="*"/>
+											<ColumnDefinition Width="Auto"/>
+										</Grid.ColumnDefinitions>
+										<Grid.RowDefinitions>
+											<RowDefinition Height="Auto"/>
+											<RowDefinition Height="Auto"/>
+										</Grid.RowDefinitions>
+
+										<!-- Option Image -->
+										<Image Grid.Column="0"
+											   Grid.Row="0"
+											   Grid.RowSpan="2"
+											   Width="100"
+											   Height="100"
+											   Visibility="{Binding ImageVisibility}"
+											   Source="{Binding Image}"
+											   Stretch="Uniform"
+											   Margin="0 0 12 0"
+											   MouseLeftButtonDown="OptionImage_MouseLeftButtonDown"
+											   Cursor="Hand">
+											<Image.ToolTip>
+												<Image Width="400"
+													   Height="400"
+													   Source="{Binding Image}"
+													   Stretch="Uniform"/>
+											</Image.ToolTip>
+										</Image>
+
+										<!-- Option Name & Description -->
+										<StackPanel Grid.Column="1"
+													Grid.Row="0">
+											<TextBlock Text="{Binding Name}"
+													   FontSize="16"
+													   FontWeight="SemiBold"
+													   Foreground="{StaticResource NeutralForegroundBrush}"/>
+											<TextBlock Text="{Binding Description}"
+													   FontSize="13"
+													   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+													   TextWrapping="Wrap"
+													   Margin="0 4 0 0"/>
+										</StackPanel>
+
+										<!-- Enable Checkbox -->
+										<CheckBox Grid.Column="2"
+												  Grid.Row="0"
+												  IsChecked="{Binding Enabled}"
+												  Width="24"
+												  Height="24"
+												  VerticalAlignment="Top"/>
+
+										<!-- Sub Options ComboBox -->
+										<ComboBox Grid.Column="0"
+												  Grid.ColumnSpan="3"
+												  Grid.Row="1"
+												  Visibility="{Binding SubOptionVisibility}"
+												  ItemsSource="{Binding SubOptions}"
+												  SelectedIndex="{Binding SelectedSubOption}"
+												  HorizontalContentAlignment="Stretch"
+												  Margin="0 8 0 0"
+												  local:ComboBoxScrollBehavior.DisableScroll="True">
+											<ComboBox.ItemTemplate>
+												<DataTemplate DataType="vms:ModSubOptionViewModel">
+													<Grid Margin="4">
+														<Grid.ColumnDefinitions>
+															<ColumnDefinition Width="Auto"/>
+															<ColumnDefinition Width="*"/>
+														</Grid.ColumnDefinitions>
+														<Image Grid.Column="0"
+															   Source="{Binding Image}"
+															   Visibility="{Binding ImageVisibility}"
+															   Width="60"
+															   Height="60"
+															   Margin="0 0 8 0"
+															   Stretch="Uniform"
+															   MouseLeftButtonDown="OptionImage_MouseLeftButtonDown"
+															   Cursor="Hand">
+															<Image.ToolTip>
+																<Image Width="400"
+																	   Height="400"
+																	   Source="{Binding Image}"
+																	   Stretch="Uniform"/>
+															</Image.ToolTip>
+														</Image>
+														<StackPanel Grid.Column="1"
+																	VerticalAlignment="Center">
+															<TextBlock Text="{Binding Name}"
+																	   FontSize="14"
+																	   FontWeight="SemiBold"
+																	   Foreground="{StaticResource NeutralForegroundBrush}"/>
+															<TextBlock Text="{Binding Description}"
+																	   FontSize="12"
+																	   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+																	   TextWrapping="Wrap"/>
+														</StackPanel>
+													</Grid>
+												</DataTemplate>
+											</ComboBox.ItemTemplate>
+										</ComboBox>
+									</Grid>
+								</Border>
+							</DataTemplate>
+						</ItemsControl.ItemTemplate>
+					</ItemsControl>
+				</Border>
+			</ScrollViewer>
+
+			<!-- Navigation Buttons -->
+			<Border Grid.Row="2"
+					Style="{StaticResource FluentCard}"
+					CornerRadius="8">
+				<Grid>
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="*"/>
+						<ColumnDefinition Width="Auto"/>
+					</Grid.ColumnDefinitions>
+
+					<Button Grid.Column="0"
+							Content="取消"
+							Style="{StaticResource FluentSecondaryButton}"
+							Command="{Binding CancelCommand}"
+							HorizontalAlignment="Left"
+							Padding="24 10"/>
+
+					<Button Grid.Column="1"
+							Content="完成"
+							Style="{StaticResource FluentPrimaryButton}"
+							Command="{Binding DoneCommand}"
+							HorizontalAlignment="Right"
+							Padding="24 10"/>
+				</Grid>
+			</Border>
+		</Grid>
+
+		<!-- Image Preview Overlay -->
+		<Border Background="#CC000000"
+				Padding="60 80"
+				Visibility="{Binding ImagePreviewVisibility}"
+				d:Visibility="Hidden"
+				MouseLeftButtonDown="ImagePreviewOverlay_MouseLeftButtonDown">
+			<Border Style="{StaticResource FluentMessageDialog}"
+					MaxWidth="800"
+					MaxHeight="600"
+					VerticalAlignment="Center"
+					HorizontalAlignment="Center"
+					MouseLeftButtonDown="ImagePreviewBorder_MouseLeftButtonDown">
+				<Grid>
+					<Grid.RowDefinitions>
+						<RowDefinition Height="Auto"/>
+						<RowDefinition Height="*"/>
+					</Grid.RowDefinitions>
+
+					<Button Grid.Row="0"
+							Style="{StaticResource FluentIconButton}"
+							Command="{Binding HideImagePreviewCommand}"
+							HorizontalAlignment="Right"
+							Margin="0 0 0 8">
+						<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="20"/>
+					</Button>
+
+					<Image Grid.Row="1"
+						   Source="{Binding PreviewImageSource}"
+						   Stretch="Uniform"
+						   MaxWidth="780"
+						   MaxHeight="550"/>
+				</Grid>
+			</Border>
+		</Border>
+	</Grid>
+</Page>

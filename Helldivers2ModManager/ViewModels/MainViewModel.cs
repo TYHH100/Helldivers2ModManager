@@ -8,7 +8,7 @@ using System.Windows.Media;
 namespace Helldivers2ModManager.ViewModels;
 
 [RegisterService(ServiceLifetime.Transient)]
-internal sealed partial class MainViewModel : ObservableObject
+internal sealed partial class MainViewModel : ObservableObject, IDisposable
 {
 	public string Title => $"HD2 Mod Manager {Version} - {CurrentViewModel.Title}";
 
@@ -19,8 +19,10 @@ internal sealed partial class MainViewModel : ObservableObject
 	public string Version => string.IsNullOrEmpty(App.VersionAddition) ? $"v{App.Version}" : $"v{App.Version} {App.VersionAddition}";
 
 	private static readonly ProcessStartInfo s_helpStartInfo = new(@"https://teutinsa.github.io/hd2mm-site/index.html") { UseShellExecute = true };
+	private static readonly ProcessStartInfo s_reportBugStartInfo = new(@"https://github.com/TYHH100/Helldivers2ModManager/issues") { UseShellExecute = true };
 	private readonly NavigationStore _navigationStore;
 	private readonly SolidColorBrush _background;
+	private bool _disposed;
 
 	public MainViewModel(NavigationStore navigationStore)
 	{
@@ -40,5 +42,29 @@ internal sealed partial class MainViewModel : ObservableObject
 	void Help()
 	{
 		Process.Start(s_helpStartInfo);
+	}
+
+	[RelayCommand]
+	void ReportBug()
+	{
+		Process.Start(s_reportBugStartInfo);
+	}
+
+	public void Dispose()
+	{
+		Dispose(true);
+		GC.SuppressFinalize(this);
+	}
+
+	private void Dispose(bool disposing)
+	{
+		if (_disposed) return;
+
+		if (disposing)
+		{
+			_navigationStore.Navigated -= NavigationStore_Navigated;
+		}
+
+		_disposed = true;
 	}
 }

@@ -45,7 +45,10 @@ internal static class ModManifest
                     _ => throw new UnknownManifestVersionException()
                 };
             else
-                throw new SerializationException($"Could not convert value of property \"{nameof(IModManifest.Version)}\" to `{typeof(int).Name}`!");
+                {
+                    logger?.LogWarning($"Could not convert value of property \"{nameof(IModManifest.Version)}\" to `{typeof(int).Name}`! Automatically converting to v1.");
+                    version = ManifestVersion.V1;
+                }
         }
 
         return version switch

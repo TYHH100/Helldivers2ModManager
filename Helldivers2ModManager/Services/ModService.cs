@@ -1,10 +1,13 @@
 using Helldivers2ModManager.Exceptions;
 using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.VisualBasic.FileIO;
 using SharpCompress;
 using SharpCompress.Archives;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json;
@@ -12,7 +15,7 @@ using System.Text.RegularExpressions;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Transient)]
+[RegisterService(ServiceLifetime.Singleton)]
 internal sealed partial class ModService
 {
 	private readonly struct PatchFileTriplet
@@ -35,6 +38,7 @@ internal sealed partial class ModService
 
 	private readonly ILogger<ModService> _logger;
 	private readonly List<ModData> _mods;
+	private readonly ConcurrentDictionary<Guid, ModViewModel> _modViewModelCache = new();
 	private SettingsService? _settingsService;
 
 	public ModService(ILogger<ModService> logger)
@@ -46,7 +50,7 @@ internal sealed partial class ModService
 	public ModProblem[] Init(SettingsService settings)
 	{
 		if (Initialized)
-			throw new InvalidOperationException("Object already initialized!");
+			return [];
 
 		if (!settings.Validate())
 			throw new ArgumentException("Settings are invalid!", nameof(settings));
@@ -189,18 +193,15 @@ internal sealed partial class ModService
 			});
 			manifest = ModManifest.InferFromDirectory(tmpDir);
 
-			var stream = manifestFile.Open(FileMode.CreateNew, FileAccess.Write, FileShare.Read);
-			var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
+			using var stream = manifestFile.Open(FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+			using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
 			{
 				IndentCharacter = '\t',
 				Indented = true,
 				IndentSize = 1,
 			});
-
 			manifest.Serialize(writer);
-
 			await writer.DisposeAsync();
-			await stream.DisposeAsync();
 		}
 
 		_logger.LogInformation("Moving mod to storage");
@@ -242,7 +243,8 @@ internal sealed partial class ModService
 
 		ModRemoved?.Invoke(mod);
 
-		await Task.Run(() => mod.Directory.Delete(true));
+		var recycleOption = _settingsService.DeleteToRecycleBin ? RecycleOption.SendToRecycleBin : RecycleOption.DeletePermanently;
+		await Task.Run(() => FileSystem.DeleteDirectory(mod.Directory.FullName, UIOption.OnlyErrorDialogs, recycleOption));
 
 		_logger.LogInformation("Mod {} removed", mod.Manifest.Name);
 	}
@@ -510,6 +512,20 @@ internal sealed partial class ModService
 			if (mod.Manifest.Guid == guid)
 				return mod;
 		return null;
+	}
+
+	public ModViewModel GetOrCreateModViewModel(ModData mod, ILogger logger, SettingsService settingsService)
+	{
+		return _modViewModelCache.GetOrAdd(mod.Manifest.Guid, _ => new ModViewModel(mod, logger, settingsService));
+	}
+
+	public void ClearModViewModelCache()
+	{
+		foreach (var kvp in _modViewModelCache)
+		{
+			kvp.Value.Dispose();
+		}
+		_modViewModelCache.Clear();
 	}
 
 	[MemberNotNull(nameof(_settingsService))]

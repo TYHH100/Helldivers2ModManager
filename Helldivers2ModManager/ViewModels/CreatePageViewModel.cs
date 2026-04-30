@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Input;
 using Helldivers2ModManager.Stores;
 using Helldivers2ModManager.ViewModels.Create;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +21,8 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 			if (_currentPage is not null)
 				_currentPage.IsValidChanged -= CurrentPage_IsValidChanged;
 			_currentPage = value;
-			_currentPage.IsValidChanged += CurrentPage_IsValidChanged;
+			if (_currentPage is not null)
+				_currentPage.IsValidChanged += CurrentPage_IsValidChanged;
 			OnPropertyChanged();
 		}
 	}

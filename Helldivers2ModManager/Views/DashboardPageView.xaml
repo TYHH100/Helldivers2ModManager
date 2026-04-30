@@ -10,325 +10,403 @@
 	  xmlns:local="clr-namespace:Helldivers2ModManager"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:DashboardPageViewModel}"
-	  d:Background="Black"
-	  d:DesignWidth="800"
-	  d:DesignHeight="600"
+	  d:Background="{StaticResource MicaBackgroundBrush}"
+	  d:DesignWidth="1000"
+	  d:DesignHeight="700"
 	  Title="{Binding Title}">
-    <Grid>
-		<Grid.ColumnDefinitions>
-			<ColumnDefinition Width="Auto"/>
-			<ColumnDefinition Width="*"/>
-		</Grid.ColumnDefinitions>
+	<Grid Margin="16">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="*"/>
 			<RowDefinition Height="Auto"/>
 		</Grid.RowDefinitions>
-		<StackPanel Grid.Row="0"
-					Grid.RowSpan="2"
-					Grid.Column="0">
-            <Button Content="添加模组"
-					Command="{Binding AddCommand}"
-					IsEnabled="{Binding Initialized}"/>
-			<!--
-			<Button Content="浏览"
-					Command="{Binding BrowseCommand}"/>
-			<Button Content="创建"
-					Command="{Binding CreateCommand}"/>
-			<Button Content="导出"
-					Command="{Binding ExportCommand}"/>
-			<Button Content="导入"
-					Command="{Binding ImportCommand}"/>
-			-->
-			<Button Content="报告 Bug"
-					Command="{Binding ReportBugCommand}"/>
-			<Grid>
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*"/>
-					<ColumnDefinition Width="*"/>
-				</Grid.ColumnDefinitions>
-				<Button Grid.Column="0"
-						Command="{Binding GithubCommand}">
-					<Image Source="..\Resources\Images\github_icon.png"
-						   Height="30"/>
-				</Button>
-				<Button Grid.Column="1"
-						Command="{Binding DiscordCommand}"
-						ToolTip="Need help? Join the community!">
-					<Image Source="..\Resources\Images\discord_icon.png"
-						   Height="30"/>
-				</Button>
-			</Grid>
-		</StackPanel>
-		<Button Grid.Row="2"
+		<Grid.ColumnDefinitions>
+			<ColumnDefinition Width="220"/>
+			<ColumnDefinition Width="*"/>
+		</Grid.ColumnDefinitions>
+
+		<!-- Left Navigation Panel -->
+		<Border Grid.Row="0"
+				Grid.RowSpan="3"
 				Grid.Column="0"
-				Content="设置"
-				Command="{Binding SettingsCommand}"/>
-		<StackPanel Grid.Row="2"
-					Grid.Column="1"
-					Orientation="Horizontal"
-					HorizontalAlignment="Right">
-            <Button Content="清理模组"
-					Style="{DynamicResource CancelButton}"
-					Command="{Binding PurgeCommand}"
-					IsEnabled="{Binding Initialized}">
-				<Button.ToolTip>
-                    <TextBlock Text="从 data 文件夹中删除所有模组."
-							   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
-							   Margin="5 0"/>
-				</Button.ToolTip>
-			</Button>
-            <Button Content="部署模组"
-					Style="{DynamicResource ConfirmButton}"
-					Command="{Binding DeployCommand}"
-					IsEnabled="{Binding Initialized}">
-				<Button.ToolTip>
-                    <TextBlock Text="将所有勾选的模组,自动编号并添加到 data 文件夹中."
-							   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
-							   Margin="5 0"/>
-				</Button.ToolTip>
-			</Button>
-			<Button Content="启动HD2"
-					Command="{Binding RunCommand}"
-					IsEnabled="{Binding Initialized}">
-				<Button.ToolTip>
-                    <TextBlock Text="在Steam上启动游戏."
-							   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
-							   Margin="5 0"/>
-				</Button.ToolTip>
-			</Button>
-		</StackPanel>
-		<StackPanel Grid.Row="0"
-					Grid.Column="1"
-					Orientation="Vertical">
+				Style="{StaticResource FluentElevatedCard}"
+				Margin="0 0 16 0"
+				CornerRadius="8">
+			<DockPanel LastChildFill="False">
+				<!-- App Logo/Header -->
+				<Border Background="{StaticResource SystemAccentBrush}"
+						CornerRadius="4"
+						Padding="12"
+						Margin="0 0 0 16"
+						DockPanel.Dock="Top">
+					<StackPanel>
+						<TextBlock Text="&#xE71D;"
+								   FontFamily="Segoe Fluent Icons"
+								   FontSize="32"
+								   Foreground="White"
+								   HorizontalAlignment="Center"/>
+						<TextBlock Text="MOD MANAGER"
+								   FontSize="10"
+								   FontWeight="Bold"
+								   Foreground="White"
+								   HorizontalAlignment="Center"
+								   Margin="0 4 0 0"/>
+					</StackPanel>
+				</Border>
+
+				<!-- Navigation Buttons -->
+				<StackPanel DockPanel.Dock="Top">
+					<Button Style="{StaticResource FluentNavigationButton}"
+							Command="{Binding AddCommand}"
+							IsEnabled="{Binding Initialized}">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+							<TextBlock Text="添加模组" Margin="12 0 0 0" VerticalAlignment="Center"/>
+						</StackPanel>
+					</Button>					<Button Style="{StaticResource FluentNavigationButton}"
+							Command="{Binding TagManagementCommand}"
+							IsEnabled="{Binding Initialized}">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xE8EC;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+							<TextBlock Text="标签管理" Margin="12 0 0 0" VerticalAlignment="Center"/>
+						</StackPanel>
+					</Button>
+
+					<Button Style="{StaticResource FluentNavigationButton}"
+							Command="{Binding SettingsCommand}">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+							<TextBlock Text="设置" Margin="12 0 0 0" VerticalAlignment="Center"/>
+						</StackPanel>
+					</Button>
+
+					<Border Style="{StaticResource FluentDivider}" Margin="0 8"/>
+				</StackPanel>
+
+				<!-- Social Links - Dock to Bottom -->
+				<StackPanel DockPanel.Dock="Bottom">
+					<!-- Social Links -->
+					<TextBlock Text="相关链接"
+							   FontSize="12"
+							   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+							   Margin="12 8"/>
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="*"/>
+						</Grid.ColumnDefinitions>
+                        <Button x:Name="GithubButton"
+								Style="{StaticResource FluentIconButton}"
+								ToolTip="GitHub"
+								Click="GithubButton_Click">
+                            <Image Source="../Resources/Images/github_icon.png" Height="30"/>
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="原仓库 (teutinsa)"
+                                              Command="{Binding GithubCommand}"/>
+                                    <MenuItem Header="修改版的仓库 (TYHH100)"
+                                              Command="{Binding GithubForkCommand}"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                        <Button Grid.Column="1"
+								Style="{StaticResource FluentIconButton}"
+								Command="{Binding DiscordCommand}"
+								ToolTip="Need help? Join the community!">
+							<Image Source="../Resources/Images/discord_icon.png" Height="30"/>
+						</Button>
+					</Grid>
+				</StackPanel>
+			</DockPanel>
+		</Border>
+
+		<!-- Top Action Bar -->
+		<Border Grid.Row="0"
+				Grid.Column="1"
+				Style="{StaticResource FluentCard}"
+				CornerRadius="8"
+				Margin="0 0 0 16">
 			<Grid>
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="Auto"/>
 					<ColumnDefinition Width="*"/>
 					<ColumnDefinition Width="Auto"/>
 				</Grid.ColumnDefinitions>
-				<TextBlock Grid.Column="0"
-						   Text="搜索:" 
-						   Foreground="White"
-						   FontSize="24"
-						   VerticalAlignment="Center"
-						   Margin="3"/>
-				<TextBox Grid.Column="1"
-						 FontFamily="../Resources/Fonts/#FS Sinclair Regular"
-						 FontSize="20"
-						 Margin="3"
-						 Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-				<Button Grid.Column="2"
-						 Command="{Binding ClearSearchCommand}">
-					<Path Stroke="White"
-						  StrokeThickness="2"
-						  Data="M5,0 L0,5 L5,10 M0,5 L10,5"/>
-				</Button>
+
+				<!-- Search Box -->
+				<Grid Grid.Column="0">
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="*"/>
+						<ColumnDefinition Width="Auto"/>
+					</Grid.ColumnDefinitions>
+					<TextBox Grid.Column="0"
+							 x:Name="SearchBox"
+							 Style="{StaticResource FluentTextBox}"
+							 Margin="0 0 8 0"
+							 VerticalAlignment="Center"
+							 Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+					<Button Grid.Column="1"
+							Style="{StaticResource FluentIconButton}"
+							Command="{Binding ClearSearchCommand}"
+							ToolTip="清空搜索"
+							VerticalAlignment="Center"
+							Margin="0 0 16 0">
+                        <TextBlock Text="&#xe750;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
+					</Button>
+				</Grid>
+
+				<!-- Group Filter -->
+				<StackPanel Grid.Column="1"
+							Orientation="Horizontal">
+                    <TextBlock Text="&#xE8FD;"
+							   FontFamily="Segoe Fluent Icons"
+							   FontSize="16"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   VerticalAlignment="Center"
+							   Margin="0 0 8 0"/>
+					<ComboBox Width="150"
+							  ItemsSource="{Binding GroupItems}"
+							  SelectedItem="{Binding SelectedGroupItem, Mode=TwoWay}">
+						<ComboBox.ItemTemplate>
+							<DataTemplate>
+								<TextBlock Foreground="{StaticResource NeutralForegroundBrush}">
+									<TextBlock.Text>
+										<Binding Path=".">
+											<Binding.Converter>
+												<local:GroupItemConverter/>
+											</Binding.Converter>
+										</Binding>
+									</TextBlock.Text>
+								</TextBlock>
+							</DataTemplate>
+						</ComboBox.ItemTemplate>
+					</ComboBox>
+					<Button Style="{StaticResource FluentIconButton}"
+							Command="{Binding CreateGroupCommand}"
+							ToolTip="创建分组">
+						<TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons"/>
+					</Button>
+					<Button Style="{StaticResource FluentIconButton}"
+							Command="{Binding DeleteGroupCommand}"
+							ToolTip="删除分组">
+						<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons"
+                                   Foreground="{StaticResource DangerBrush}"/>
+					</Button>
+					<Button Style="{StaticResource FluentIconButton}"
+							Command="{Binding RenameGroupCommand}"
+							ToolTip="重命名">
+						<TextBlock Text="&#xE8AC;" FontFamily="Segoe Fluent Icons"/>
+					</Button>
+				</StackPanel>
 			</Grid>
-			<Grid>
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="Auto"/>
-					<ColumnDefinition Width="150"/>
-					<ColumnDefinition Width="Auto"/>
-					<ColumnDefinition Width="Auto"/>
-					<ColumnDefinition Width="Auto"/>
-				</Grid.ColumnDefinitions>
-				<TextBlock Grid.Column="0"
-						   Text="分组:" 
-						   Foreground="White"
-						   FontSize="16"
-						   VerticalAlignment="Center"
-						   Margin="3"/>
-				<ComboBox Grid.Column="1"
-						  Margin="3"
-						  ItemsSource="{Binding GroupItems}"
-						  SelectedItem="{Binding SelectedGroupItem, Mode=TwoWay}">
-					<ComboBox.ItemTemplate>
-						<DataTemplate>
-							<TextBlock Foreground="White">
-								<TextBlock.Text>
-									<Binding Path=".">
-										<Binding.Converter>
-											<local:GroupItemConverter/>
-										</Binding.Converter>
-									</Binding>
-								</TextBlock.Text>
-							</TextBlock>
-						</DataTemplate>
-					</ComboBox.ItemTemplate>
-				</ComboBox>
-				<Button Grid.Column="2"
-						 Content="创建"
-						 Command="{Binding CreateGroupCommand}"
-						 Margin="3"/>
-				<Button Grid.Column="3"
-						 Content="删除"
-						 Command="{Binding DeleteGroupCommand}"
-						 CommandParameter="{Binding SelectedGroup}"
-						 Margin="3"/>
-				<Button Grid.Column="4"
-						 Content="重命名"
-						 Command="{Binding RenameGroupCommand}"
-						 CommandParameter="{Binding SelectedGroup}"
-						 Margin="3"/>
-			</Grid>
-		</StackPanel>
+		</Border>
+
+		<!-- Mod List -->
 		<ScrollViewer Grid.Row="1"
 					  Grid.Column="1"
-					  Margin="3"
+					  Margin="0 0 0 16"
 					  Background="Transparent"
 					  BorderThickness="0"
 					  HorizontalScrollBarVisibility="Disabled"
-					  VerticalScrollBarVisibility="Visible">
+					  VerticalScrollBarVisibility="Auto">
 			<ItemsControl ItemsSource="{Binding Mods}"
 						  dd:DragDrop.IsDragSource="{Binding IsSearchEmpty}"
 						  dd:DragDrop.IsDropTarget="{Binding IsSearchEmpty}">
 				<ItemsControl.ItemTemplate>
 					<DataTemplate DataType="vms:ModViewModel">
-						<Border Height="70"
-							    Background="#E000"
-							    Margin="0 3"
-							    Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}">
-							    <Border.ContextMenu>
-							        <ContextMenu>
-							            <MenuItem Header="打开文件位置"
-							                      Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-							                      CommandParameter="{Binding}"/>
-							            <!--<MenuItem Header="更改图片"
-							                      Command="{Binding PlacementTarget.Tag.EditImageCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-							                      CommandParameter="{Binding}"/>-->
-							            <MenuItem Header="编辑名字"
-							                      Command="{Binding PlacementTarget.Tag.EditNameCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-							                      CommandParameter="{Binding}"/>
-							            <MenuItem Header="编辑描述"
-							                      Command="{Binding PlacementTarget.Tag.EditDescriptionCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-							                      CommandParameter="{Binding}"/>
-							            <Separator/>
-							            <MenuItem Header="设置分组"
-							                      Command="{Binding PlacementTarget.Tag.SetGroupCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-							                      CommandParameter="{Binding}"/>
-							        </ContextMenu>
-							    </Border.ContextMenu>
+						<Border Style="{StaticResource FluentModCard}"
+										Grid.Row="0"
+										Grid.RowSpan="2"
+										Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}">
+							<Border.ContextMenu>
+								<ContextMenu>
+									<MenuItem Header="打开文件位置"
+											  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+											  CommandParameter="{Binding}"/>
+									<MenuItem Header="编辑名字"
+											  Command="{Binding PlacementTarget.Tag.EditNameCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+											  CommandParameter="{Binding}"/>
+									<MenuItem Header="编辑描述"
+											  Command="{Binding PlacementTarget.Tag.EditDescriptionCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+											  CommandParameter="{Binding}"/>
+									<Separator/>
+									<MenuItem Header="设置分组"
+											  Command="{Binding PlacementTarget.Tag.SetGroupCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+											  CommandParameter="{Binding}"/>
+									<MenuItem Header="设置标签"
+											  Command="{Binding PlacementTarget.Tag.EditModTagsCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+											  CommandParameter="{Binding}"/>
+								</ContextMenu>
+							</Border.ContextMenu>
 							<Grid>
 								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="70"/>
-									<ColumnDefinition Width="*"/>
-									<ColumnDefinition Width="Auto"/>
-									<ColumnDefinition Width="Auto"/>
-								</Grid.ColumnDefinitions>
+								<ColumnDefinition Width="60"/>
+								<ColumnDefinition Width="*"/>
+								<ColumnDefinition Width="Auto"/>
+								<ColumnDefinition Width="Auto"/>
+								<ColumnDefinition Width="Auto"/>
+							</Grid.ColumnDefinitions>
 								<Grid.RowDefinitions>
-									<RowDefinition Height="40"/>
-									<RowDefinition Height="30"/>
+									<RowDefinition Height="*"/>
+									<RowDefinition Height="Auto"/>
 								</Grid.RowDefinitions>
+
+								<!-- Mod Icon -->
 								<Viewbox Grid.Column="0"
 										 Grid.Row="0"
 										 Grid.RowSpan="2"
-										 Margin="0 0 3 0">
+										 Margin="0 0 12 0">
 									<Image Source="{Binding Icon}"
-										   Cursor="Hand">
+										   Cursor="Hand"
+										   MouseLeftButtonDown="ModIcon_MouseLeftButtonDown">
 										<Image.ToolTip>
-											<ToolTip Placement="Mouse" 
-											HorizontalOffset="10"
-											VerticalOffset="10"
-											StaysOpen="True">
-											<Image Source="{Binding Icon}" 
-											Stretch="Uniform" 
-											Width="400" 
-											Height="400"/>
+											<ToolTip Placement="Mouse"
+													 HorizontalOffset="10"
+													 VerticalOffset="10"
+													 StaysOpen="True">
+												<Image Source="{Binding Icon}"
+													   Stretch="Uniform"
+													   Width="300"
+													   Height="300"/>
 											</ToolTip>
 										</Image.ToolTip>
 									</Image>
 								</Viewbox>
-								<TextBlock Grid.Column="1"
+
+								<!-- Mod Name and Tags -->
+								<StackPanel Grid.Column="1"
 										   Grid.Row="0"
-										   Text="{Binding Name}"
-										   FontSize="36"
-										   Foreground="White"
-										   TextWrapping="NoWrap"
-										   TextTrimming="CharacterEllipsis"
-										   FontFamily="../Resources/Fonts/#FS Sinclair Medium">
-									<TextBlock.ToolTip>
-										<ToolTip>
-											<TextBlock Text="{Binding Name}"
-													   FontSize="36"
-													   Foreground="White"
-													   FontFamily="../Resources/Fonts/#FS Sinclair Medium"/>
-										</ToolTip>
-									</TextBlock.ToolTip>
-								</TextBlock>
+										   Orientation="Vertical"
+										   VerticalAlignment="Center">
+									<TextBlock Text="{Binding Name}"
+											   FontSize="18"
+											   FontWeight="SemiBold"
+											   Foreground="{StaticResource NeutralForegroundBrush}"
+											   TextWrapping="NoWrap"
+											   TextTrimming="CharacterEllipsis">
+										<TextBlock.ToolTip>
+											<ToolTip>
+												<TextBlock Text="{Binding Name}"
+														   FontSize="18"
+														   FontWeight="SemiBold"
+														   Foreground="{StaticResource NeutralForegroundBrush}"/>
+											</ToolTip>
+										</TextBlock.ToolTip>
+									</TextBlock>
+									<StackPanel Orientation="Horizontal" Margin="0 4 0 0">
+										<ItemsControl ItemsSource="{Binding DisplayTags}">
+											<ItemsControl.ItemsPanel>
+												<ItemsPanelTemplate>
+													<StackPanel Orientation="Horizontal"/>
+												</ItemsPanelTemplate>
+											</ItemsControl.ItemsPanel>
+											<ItemsControl.ItemTemplate>
+												<DataTemplate>
+													<Border Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}"
+															CornerRadius="4"
+															Padding="6 2"
+															Margin="0 0 4 0">
+														<TextBlock Text="{Binding Name}"
+																   FontSize="11"
+																   Foreground="{Binding Foreground}"/>
+													</Border>
+												</DataTemplate>
+											</ItemsControl.ItemTemplate>
+										</ItemsControl>
+										<Border x:Name="MoreTagsButton"
+												Background="#FF6B7280"
+												CornerRadius="4"
+												Padding="6 2"
+												Margin="0 0 4 0"
+												Visibility="{Binding HasHiddenTags, Converter={StaticResource BoolToVisibilityConverter}}">
+											<TextBlock Text="{Binding HiddenTagCount, StringFormat='+{0}'}"
+													   FontSize="11"
+													   Foreground="White"/>
+											<Border.ToolTip>
+												<ToolTip>
+													<StackPanel>
+														<TextBlock Text="更多标签:" FontWeight="SemiBold" Margin="0 0 0 4"/>
+														<ItemsControl ItemsSource="{Binding HiddenTags}">
+															<ItemsControl.ItemsPanel>
+																<ItemsPanelTemplate>
+																	<WrapPanel Orientation="Horizontal"/>
+																</ItemsPanelTemplate>
+															</ItemsControl.ItemsPanel>
+															<ItemsControl.ItemTemplate>
+																<DataTemplate>
+																	<Border Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}"
+																			CornerRadius="4"
+																			Padding="6 2"
+																			Margin="0 0 4 4">
+																		<TextBlock Text="{Binding Name}"
+																				   FontSize="11"
+																				   Foreground="{Binding Foreground}"/>
+																	</Border>
+																</DataTemplate>
+															</ItemsControl.ItemTemplate>
+														</ItemsControl>
+													</StackPanel>
+												</ToolTip>
+											</Border.ToolTip>
+										</Border>
+									</StackPanel>
+								</StackPanel>
+
+								<!-- Mod Description -->
 								<TextBlock Grid.Column="1"
 										   Grid.Row="1"
 										   Text="{Binding Description}"
-										   FontSize="16"
-										   FontFamily="Sanserif"
-										   Foreground="DarkGray"
+										   FontSize="13"
+										   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 										   TextWrapping="NoWrap"
-										   TextTrimming="WordEllipsis"/>
-								<ComboBox Grid.Column="2"
-										  Grid.Row="0"
-										  Margin="3"
-										  Width="150"
-										  Visibility="{Binding OptionsVisible}"
-										  ItemsSource="{Binding LegacyOptions}"
-										  SelectedIndex="{Binding LegacySelectedOption}"/>
-								<Button Grid.Column="2"
-										Grid.Row="0"
-										Margin="3"
-										Width="50"
-										Foreground="White"
-										Content="编辑"
-										VerticalContentAlignment="Center"
-										Padding="0"
-										Visibility="{Binding EditVisible}"
-										Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
-										CommandParameter="{Binding}"/>
-								<CheckBox Grid.Column="2"
-										  Grid.Row="1"
-										  IsChecked="{Binding Enabled}"
-										  VerticalAlignment="Stretch"
-										  HorizontalAlignment="Right"
-										  Width="{Binding ActualHeight, RelativeSource={RelativeSource Mode=Self}}"/>
-								<StackPanel Grid.Column="3"
+										   TextTrimming="WordEllipsis"
+										   VerticalAlignment="Center"/>
+
+								<!-- Options Panel -->
+								<StackPanel Grid.Column="2"
 											Grid.Row="0"
 											Grid.RowSpan="2"
 											Orientation="Horizontal"
-											HorizontalAlignment="Right">
-									<!--
-									<Grid>
-										<Grid.RowDefinitions>
-											<RowDefinition Height="*"/>
-											<RowDefinition Height="*"/>
-										</Grid.RowDefinitions>
-										<Button Grid.Row="0"
-												Command="{Binding DataContext.MoveUpCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
-												CommandParameter="{Binding}">
-											<Path Stroke="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Button}}"
-												  StrokeThickness="2"
-												  Data="M0,5 L5,0 L10,5"/>
-										</Button>
-										<Button Grid.Row="1"
-												Command="{Binding DataContext.MoveDownCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
-												CommandParameter="{Binding}">
-											<Path Stroke="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Button}}"
-												  StrokeThickness="2"
-												  Data="M0,0 L5,5 L10,0"/>
-										</Button>
-									</Grid>
-									-->
-									<Button Width="{Binding Path=ActualHeight, RelativeSource={RelativeSource Mode=Self}}"
-											Padding="5"
-											VerticalContentAlignment="Stretch"
-											HorizontalContentAlignment="Stretch"
-											Style="{DynamicResource RemoveButton}"
-											Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
-											CommandParameter="{Binding}">
-										<Rectangle Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Button}}">
-											<Rectangle.OpacityMask>
-												<ImageBrush ImageSource="../Resources/Images/remove.png"/>
-											</Rectangle.OpacityMask>
-										</Rectangle>
-									</Button>
+											VerticalAlignment="Center">
+									<!-- Legacy Options ComboBox -->
+									<ComboBox Width="140"
+											  Margin="8 0"
+											  Visibility="{Binding OptionsVisible}"
+											  ItemsSource="{Binding LegacyOptions}"
+											  SelectedIndex="{Binding LegacySelectedOption}"/>
+
+									<!-- Edit Button -->
+									<Button Style="{StaticResource FluentSecondaryButton}"
+											Content="编辑"
+											Padding="12 4"
+											Margin="8 0"
+											Visibility="{Binding EditVisible}"
+											Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
+											CommandParameter="{Binding}"/>
 								</StackPanel>
+
+								<!-- Enable Checkbox -->
+								<CheckBox Grid.Column="3"
+										  Grid.Row="0"
+										  Grid.RowSpan="2"
+										  IsChecked="{Binding Enabled}"
+										  Width="24"
+										  Height="24"
+										  Margin="8 0"
+										  VerticalAlignment="Center"/>
+
+								<!-- Remove Button -->
+								<Button Grid.Column="4"
+										Grid.Row="0"
+										Grid.RowSpan="2"
+										Style="{StaticResource FluentIconButton}"
+										Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
+										CommandParameter="{Binding}"
+										ToolTip="删除模组">
+									<TextBlock Text="&#xE74D;"
+											   FontFamily="Segoe Fluent Icons"
+											   FontSize="16"
+											   Foreground="{StaticResource DangerBrush}"/>
+								</Button>
 							</Grid>
 						</Border>
 					</DataTemplate>
@@ -340,149 +418,89 @@
 				</ItemsControl.ItemsPanel>
 			</ItemsControl>
 		</ScrollViewer>
+
+		<!-- Bottom Action Bar -->
+		<Border Grid.Row="2"
+				Grid.Column="1"
+				Style="{StaticResource FluentCard}"
+				CornerRadius="8">
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="Auto"/>
+				</Grid.ColumnDefinitions>
+
+				<!-- Action Buttons -->
+				<StackPanel Grid.Column="1"
+							Orientation="Horizontal">
+					<Button Style="{StaticResource FluentDangerButton}"
+							Content="清理模组"
+							Command="{Binding PurgeCommand}"
+							IsEnabled="{Binding Initialized}"
+							Padding="20 10">
+						<Button.ToolTip>
+							<ToolTip Content="从 data 文件夹中删除所有模组"/>
+						</Button.ToolTip>
+					</Button>
+					<Button Style="{StaticResource FluentConfirmButton}"
+							Content="部署模组"
+							Command="{Binding DeployCommand}"
+							IsEnabled="{Binding Initialized}"
+							Padding="20 10">
+						<Button.ToolTip>
+							<ToolTip Content="将所有勾选的模组,自动编号并添加到 data 文件夹中"/>
+						</Button.ToolTip>
+					</Button>
+					<Button Style="{StaticResource FluentPrimaryButton}"
+							Content="启动 HD2"
+							Command="{Binding RunCommand}"
+							IsEnabled="{Binding Initialized}"
+							Padding="20 10">
+						<Button.ToolTip>
+							<ToolTip Content="在Steam上启动游戏"/>
+						</Button.ToolTip>
+					</Button>
+				</StackPanel>
+			</Grid>
+		</Border>
+
+		<!-- Image Preview Overlay -->
 		<Border Grid.Row="0"
+				Grid.RowSpan="3"
 				Grid.Column="0"
-				Grid.RowSpan="2"
 				Grid.ColumnSpan="2"
-				Background="#6000"
-				Padding="50 100"
-				Visibility="{Binding EditVisibility}"
-				d:Visibility="Hidden">
-			<Border Background="Black"
-					BorderBrush="DarkGray"
-					BorderThickness="3">
-					<Grid Margin="3">
+				Background="#CC000000"
+				Padding="60 80"
+				Visibility="{Binding ImagePreviewVisibility}"
+				d:Visibility="Hidden"
+				MouseLeftButtonDown="ImagePreviewOverlay_MouseLeftButtonDown">
+			<Border Style="{StaticResource FluentMessageDialog}"
+					MaxWidth="800"
+					MaxHeight="600"
+					VerticalAlignment="Center"
+					HorizontalAlignment="Center"
+					MouseLeftButtonDown="Border_MouseLeftButtonDown">
+				<Grid>
 					<Grid.RowDefinitions>
 						<RowDefinition Height="Auto"/>
 						<RowDefinition Height="*"/>
-						<RowDefinition Height="Auto"/>
 					</Grid.RowDefinitions>
-					<TextBlock Grid.Row="0"
-							   Text="{Binding EditMod.Name}"
-							   Foreground="White"
-							   HorizontalAlignment="Center"
-							   FontSize="24"/>
-					<ScrollViewer Grid.Row="1"
-								  HorizontalScrollBarVisibility="Disabled"
-								  VerticalScrollBarVisibility="Visible">
-						<ItemsControl ItemsSource="{Binding EditMod.Options}">
-							<ItemsControl.ItemTemplate>
-								<DataTemplate DataType="vms:ModOptionViewModel">
-									<Border Background="Black"
-											Margin="0 0 0 5">
-										<Grid Margin="3">
-											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="Auto"/>
-												<ColumnDefinition Width="*"/>
-												<ColumnDefinition Width="Auto"/>
-											</Grid.ColumnDefinitions>
-											<Grid.RowDefinitions>
-												<RowDefinition Height="Auto"/>
-												<RowDefinition Height="Auto"/>
-											</Grid.RowDefinitions>
-											<Image Grid.Column="0"
-												   Grid.Row="0"
-												   Width="120"
-												   Height="120"
-												   Visibility="{Binding ImageVisibility}"
-												   Source="{Binding Image}"
-												   Stretch="Uniform"
-												   Margin="0 0 3 0">
-												<Image.ToolTip>
-													<Image Width="500"
-														   Height="500"
-														   Source="{Binding Image}"
-														   Stretch="Uniform"/>
-												</Image.ToolTip>
-											</Image>
-											<StackPanel Grid.Column="1"
-														Grid.Row="0">
-												<TextBlock Text="{Binding Name}"
-														   Foreground="White"
-														   FontSize="18"
-														   VerticalAlignment="Top"/>
-												<TextBlock Text="{Binding Description}"
-														   Foreground="White"
-														   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
-														   FontSize="12"
-														   Margin="3"
-														   VerticalAlignment="Top"/>
-											</StackPanel>
-											<CheckBox Grid.Column="2"
-													  Grid.Row="0"
-													  IsChecked="{Binding Enabled}"
-													  Width="30"
-													  Height="30"
-													  VerticalAlignment="Top"/>
-											<ComboBox Grid.Column="0"
-													  Grid.ColumnSpan="3"
-													  Grid.Row="1"
-													  Visibility="{Binding SubOptionVisibility}"
-													  ItemsSource="{Binding SubOptions}"
-													  SelectedIndex="{Binding SelectedSubOption}"
-													  HorizontalContentAlignment="Stretch"
-													  VerticalContentAlignment="Stretch"
-													  local:ComboBoxScrollBehavior.DisableScroll="True">
-												<ComboBox.ItemTemplate>
-													<DataTemplate DataType="vms:ModSubOptionViewModel">
-														<Border Background="Black">
-															<Grid>
-																<Grid.ColumnDefinitions>
-																	<ColumnDefinition Width="Auto"/>
-																	<ColumnDefinition Width="*"/>
-																</Grid.ColumnDefinitions>
-																<Image Grid.Column="0"
-																	   Source="{Binding Image}"
-																	   Visibility="{Binding ImageVisibility}"
-																	   Width="100"
-																	   Height="100"
-																	   Margin="0 0 3 0"
-																	   Stretch="Uniform">
-																	<Image.ToolTip>
-																		<Image Width="500"
-																			   Height="500"
-																			   Source="{Binding Image}"
-																			   Stretch="Uniform"/>
-																	</Image.ToolTip>
-																</Image>
-																<StackPanel Grid.Column="1">
-																	<TextBlock Text="{Binding Name}"
-																			   Foreground="White"
-																			   FontSize="18"
-																			   VerticalAlignment="Top"
-																			   Margin="0 0 0 3"/>
-																	<TextBlock Text="{Binding Description}"
-																			   Foreground="White"
-																			   FontFamily="../Resources/Fonts/#FS Sinclair Regular"
-																			   FontSize="12"
-																			   VerticalAlignment="Top"/>
-																</StackPanel>
-															</Grid>
-														</Border>
-													</DataTemplate>
-												</ComboBox.ItemTemplate>
-											</ComboBox>
-										</Grid>
-									</Border>
-								</DataTemplate>
-							</ItemsControl.ItemTemplate>
-							<ItemsControl.ItemsPanel>
-								<ItemsPanelTemplate>
-									<StackPanel/>
-								</ItemsPanelTemplate>
-							</ItemsControl.ItemsPanel>
-						</ItemsControl>
-					</ScrollViewer>
-					<StackPanel Grid.Row="2"
-								Grid.Column="0"
-								Grid.ColumnSpan="3"
-								Orientation="Horizontal"
-								HorizontalAlignment="Right">
-						<Button Content="OK"
-								Padding="10 0"
-								Style="{DynamicResource PrimaryButton}"
-								Command="{Binding EditDoneCommand}"/>
-					</StackPanel>
+
+					<!-- Close Button -->
+					<Button Grid.Row="0"
+							Style="{StaticResource FluentIconButton}"
+							Command="{Binding HideImagePreviewCommand}"
+							HorizontalAlignment="Right"
+							Margin="0 0 0 8">
+						<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="20"/>
+					</Button>
+
+					<!-- Preview Image -->
+					<Image Grid.Row="1"
+						   Source="{Binding PreviewImageSource}"
+						   Stretch="Uniform"
+						   MaxWidth="780"
+						   MaxHeight="550"/>
 				</Grid>
 			</Border>
 		</Border>

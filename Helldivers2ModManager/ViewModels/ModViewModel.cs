@@ -1,7 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -13,11 +16,10 @@ using MessageBox = Helldivers2ModManager.Components.MessageBox;
 
 namespace Helldivers2ModManager.ViewModels;
 
-internal sealed partial class ModViewModel : ObservableObject
+internal sealed partial class ModViewModel : ObservableObject, IDisposable
 {
-    //public event EventHandler? SaveEnabledRequired;
-
     private readonly ILogger _logger;
+    private readonly SettingsService _settingsService;
 
     public Guid Guid => _mod.Manifest.Guid;
 
@@ -58,6 +60,62 @@ internal sealed partial class ModViewModel : ObservableObject
         }
     }
 
+    public IEnumerable<ModTag> Tags
+    {
+        get
+        {
+            if (!_settingsService.Initialized)
+                return [];
+            return _settingsService.Tags.Where(t => _mod.TagIds.Contains(t.Id));
+        }
+    }
+
+    public IEnumerable<ModTag> DisplayTags => CalculateDisplayTags();
+
+    public IEnumerable<ModTag> HiddenTags => CalculateHiddenTags();
+
+    public bool HasHiddenTags => Tags.Count() > DisplayTags.Count();
+
+    public int HiddenTagCount => Math.Max(0, Tags.Count() - DisplayTags.Count());
+
+    private const int MaxTotalLength = 55; // 标签总长度上限（字符数）
+    private const int TagPadding = 2; // 每个标签的额外字符数（用于边距）
+
+    private List<ModTag> CalculateDisplayTags()
+    {
+        var tags = Tags.ToList();
+        if (!tags.Any())
+            return [];
+
+        var result = new List<ModTag>();
+        int currentLength = 0;
+
+        foreach (var tag in tags)
+        {
+            var tagLength = tag.Name.Length + TagPadding;
+            if (result.Any())
+                tagLength += TagPadding; // 标签之间的间距
+
+            if (currentLength + tagLength <= MaxTotalLength)
+            {
+                result.Add(tag);
+                currentLength += tagLength;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    private List<ModTag> CalculateHiddenTags()
+    {
+        var displayTags = DisplayTags.ToList();
+        return Tags.Where(t => !displayTags.Contains(t)).ToList();
+    }
+
     public int LegacySelectedOption
     {
         get => _mod.Manifest.Version == ManifestVersion.Legacy ? _mod.SelectedOptions[0] : -1;
@@ -76,12 +134,12 @@ internal sealed partial class ModViewModel : ObservableObject
 
     private readonly ModData _mod;
 
-    public ModViewModel(ModData mod, ILogger logger)
+    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService)
     {
         _mod = mod;
         _logger = logger;
+        _settingsService = settingsService;
 
-        // 订阅ModData的PropertyChanged事件
         _mod.PropertyChanged += ModData_PropertyChanged;
 
         switch (_mod.Manifest.Version)
@@ -115,14 +173,20 @@ internal sealed partial class ModViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(ModData.Manifest))
         {
-            // 当Manifest属性更改时，更新相关属性
             OnPropertyChanged(nameof(Name));
             OnPropertyChanged(nameof(Description));
             OnPropertyChanged(nameof(OptionsVisible));
             OnPropertyChanged(nameof(EditVisible));
             OnPropertyChanged(nameof(LegacySelectedOption));
-            // 重新加载图标
             LoadIcon();
+        }
+        else if (e.PropertyName == nameof(ModData.TagIds))
+        {
+            OnPropertyChanged(nameof(Tags));
+            OnPropertyChanged(nameof(DisplayTags));
+            OnPropertyChanged(nameof(HiddenTags));
+            OnPropertyChanged(nameof(HasHiddenTags));
+            OnPropertyChanged(nameof(HiddenTagCount));
         }
     }
 
@@ -140,5 +204,10 @@ internal sealed partial class ModViewModel : ObservableObject
         }
         bmp.EndInit();
         Icon = bmp;
+    }
+
+    public void Dispose()
+    {
+        _mod.PropertyChanged -= ModData_PropertyChanged;
     }
 }
