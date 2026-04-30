@@ -48,18 +48,18 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
     public Guid? GroupId { get; set; }
 
 	private List<Guid> _tagIds = [];
-public List<Guid> TagIds
-{
-    get => _tagIds;
-    set
+    public List<Guid> TagIds
     {
-        if (_tagIds != value)
+        get => _tagIds;
+        set
         {
-            _tagIds = value;
-            OnPropertyChanged(nameof(TagIds));
+            if (_tagIds != value)
+            {
+                _tagIds = value;
+                OnPropertyChanged(nameof(TagIds));
+            }
         }
     }
-}
 
     public void ApplyData(in EnabledData data)
     {
