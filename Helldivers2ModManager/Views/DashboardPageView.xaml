@@ -63,14 +63,31 @@
 							<TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
 							<TextBlock Text="添加模组" Margin="12 0 0 0" VerticalAlignment="Center"/>
 						</StackPanel>
-					</Button>					<Button Style="{StaticResource FluentNavigationButton}"
-							Command="{Binding TagManagementCommand}"
-							IsEnabled="{Binding Initialized}">
-						<StackPanel Orientation="Horizontal">
-							<TextBlock Text="&#xE8EC;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-							<TextBlock Text="标签管理" Margin="12 0 0 0" VerticalAlignment="Center"/>
-						</StackPanel>
 					</Button>
+					<Button Style="{StaticResource FluentNavigationButton}"
+						Command="{Binding DownloadFromNexusCommand}"
+						IsEnabled="{Binding Initialized}">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+                        <TextBlock Text="从 Nexus 下载" ToolTip="试验性, 未经测试(我没有n网会员所以这个就鸽了)" Margin="12 0 0 0" VerticalAlignment="Center"/>
+					</StackPanel>
+				</Button>
+					<Button Style="{StaticResource FluentNavigationButton}"
+						Command="{Binding ShowDownloadProgressCommand}"
+						IsEnabled="{Binding Initialized}">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE118;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+						<TextBlock Text="下载进度" Margin="12 0 0 0" VerticalAlignment="Center"/>
+					</StackPanel>
+				</Button>
+					<Button Style="{StaticResource FluentNavigationButton}"
+						Command="{Binding TagManagementCommand}"
+						IsEnabled="{Binding Initialized}">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE8EC;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+						<TextBlock Text="标签管理" Margin="12 0 0 0" VerticalAlignment="Center"/>
+					</StackPanel>
+				</Button>
 
 					<Button Style="{StaticResource FluentNavigationButton}"
 							Command="{Binding SettingsCommand}">
@@ -193,7 +210,7 @@
 					</Button>
 					<Button Style="{StaticResource FluentIconButton}"
 							Command="{Binding RenameGroupCommand}"
-							ToolTip="重命名">
+							ToolTip="重命名分组">
 						<TextBlock Text="&#xE8AC;" FontFamily="Segoe Fluent Icons"/>
 					</Button>
 				</StackPanel>
@@ -209,8 +226,7 @@
 					  HorizontalScrollBarVisibility="Disabled"
 					  VerticalScrollBarVisibility="Auto">
 			<ItemsControl ItemsSource="{Binding Mods}"
-						  dd:DragDrop.IsDragSource="{Binding IsSearchEmpty}"
-						  dd:DragDrop.IsDropTarget="{Binding IsSearchEmpty}">
+					  dd:DragDrop.IsDragSource="{Binding IsSearchEmpty}">
 				<ItemsControl.ItemTemplate>
 					<DataTemplate DataType="vms:ModViewModel">
 						<Border Style="{StaticResource FluentModCard}"
@@ -229,6 +245,13 @@
 											  Command="{Binding PlacementTarget.Tag.EditDescriptionCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 											  CommandParameter="{Binding}"/>
 									<Separator/>
+									<!--<MenuItem Header="在 Nexus 上查看"
+											  Command="{Binding OpenNexusPageCommand}"
+											  IsEnabled="{Binding HasNexusData}"/>
+									<MenuItem Header="检查 Nexus 更新"
+											  Command="{Binding CheckForUpdatesCommand}"
+											  IsEnabled="{Binding HasNexusData}"/>
+									<Separator/>-->
 									<MenuItem Header="设置分组"
 											  Command="{Binding PlacementTarget.Tag.SetGroupCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 											  CommandParameter="{Binding}"/>

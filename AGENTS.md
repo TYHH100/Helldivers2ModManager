@@ -156,6 +156,21 @@ internal sealed class MyService
 - `Transient`: 每次请求创建新实例（如 ViewModel）
 - `Scoped`: 作用域内共享（本项目较少使用）
 
+### 3.2.1 ViewModel 与视图绑定规范 ⚠️
+
+**重要**: 使用 `[RegisterService]` 注册 ViewModel 后，还需要在 `MainWindow.xaml` 的 `Window.Resources` 中添加对应的 `DataTemplate`，否则 WPF 无法正确渲染该页面。
+
+```xml
+<Window.Resources>
+    <!-- 其他 DataTemplate... -->
+    <DataTemplate DataType="{x:Type vms:MyNewViewModel}">
+        <views:MyNewView/>
+    </DataTemplate>
+</Window.Resources>
+```
+
+**常见错误**: 如果只添加了 `[RegisterService]` 但没有在 XAML 中添加 DataTemplate，导航到该页面时会显示空白或错误。
+
 ### 3.3 ViewModel规范
 - 继承 `PageViewModelBase` 或 `ObservableObject`
 - 使用 `[ObservableProperty]` 标记可观察属性

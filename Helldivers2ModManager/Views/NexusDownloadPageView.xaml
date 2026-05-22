@@ -1,0 +1,204 @@
+<Page x:Class="Helldivers2ModManager.Views.NexusDownloadPageView"
+	  x:ClassModifier="internal"
+	  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
+	  mc:Ignorable="d"
+	  d:DataContext="{d:DesignInstance vms:NexusDownloadPageViewModel}"
+	  d:Background="{StaticResource MicaBackgroundBrush}"
+	  d:DesignWidth="1000"
+	  d:DesignHeight="700"
+	  Title="{Binding Title}">
+	<Grid Margin="16">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="*"/>
+			<RowDefinition Height="Auto"/>
+		</Grid.RowDefinitions>
+
+		<!-- Header -->
+		<Grid Grid.Row="0">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="Auto"/>
+				<ColumnDefinition Width="*"/>
+				<ColumnDefinition Width="Auto"/>
+			</Grid.ColumnDefinitions>
+			
+			<Button Grid.Column="0"
+					Command="{Binding GoBackCommand}"
+					Style="{StaticResource FluentIconButton}"
+					Margin="0 0 12 0">
+				<StackPanel Orientation="Horizontal">
+					<TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+                    <TextBlock ToolTip="返回" VerticalAlignment="Center"/>
+				</StackPanel>
+			</Button>
+			
+			<TextBlock Grid.Column="1"
+					   Text="从 Nexus Mods 下载模组"
+					   Style="{StaticResource FluentSectionHeader}"
+					   VerticalAlignment="Center"/>
+		</Grid>
+
+		<!-- Main Content -->
+		<ScrollViewer Grid.Row="1"
+					  Margin="0 16 0 16">
+			<StackPanel>
+				<!-- URL Input Section -->
+				<Border Style="{StaticResource FluentSettingsCard}">
+					<StackPanel>
+						<TextBlock Text="Nexus Mods 链接"
+								   Style="{StaticResource FluentSubSectionHeader}"
+								   Margin="0"/>
+						<TextBlock Text="粘贴 Nexus Mods 模组页面链接"
+								   Style="{StaticResource FluentBodyText}"
+								   Margin="0 4 0 12"/>
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*"/>
+								<ColumnDefinition Width="Auto"/>
+							</Grid.ColumnDefinitions>
+							<TextBox Grid.Column="0"
+									 Text="{Binding NexusUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+									 Style="{StaticResource FluentTextBox}"
+									 VerticalAlignment="Center"
+									 IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}"
+									 Margin="0 0 8 0"/>
+							<Button Grid.Column="1"
+									Content="获取模组信息"
+									Style="{StaticResource FluentPrimaryButton}"
+									Command="{Binding FetchModCommand}"
+									IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}"
+									Padding="16 8"/>
+						</Grid>
+						<TextBlock Text="{Binding StatusMessage}"
+								   FontSize="12"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   Margin="0 8 0 0"/>
+					</StackPanel>
+				</Border>
+
+				<!-- Mod Info Section -->
+				<Border Style="{StaticResource FluentSettingsCard}"
+						Margin="0 16 0 0">
+					<StackPanel>
+						<TextBlock Text="模组信息"
+								   Style="{StaticResource FluentSubSectionHeader}"
+								   Margin="0"/>
+						
+						<StackPanel x:Name="ModInfoPanel" 
+									Margin="0 8 0 0"
+									Visibility="{Binding SelectedMod, Converter={StaticResource NullToVisibilityConverter}}">
+							<Grid Margin="0 0 0 8">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="64"/>
+									<ColumnDefinition Width="*"/>
+								</Grid.ColumnDefinitions>
+								
+								<Border Grid.Column="0"
+										Width="64"
+										Height="64"
+										Background="{StaticResource NeutralBackgroundFillBrush}"
+										CornerRadius="4">
+									<Image Source="{Binding SelectedMod.PictureUrl}"
+										   Stretch="UniformToFill"/>
+								</Border>
+								
+								<StackPanel Grid.Column="1" Margin="12 0 0 0">
+									<TextBlock Text="{Binding SelectedMod.Name}"
+											   FontSize="18"
+											   FontWeight="SemiBold"
+											   Foreground="{StaticResource NeutralForegroundBrush}"
+											   TextWrapping="Wrap"/>
+									<TextBlock Text="{Binding SelectedMod.Author}"
+											   FontSize="14"
+											   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+											   Margin="0 4 0 0"
+											   Visibility="{Binding SelectedMod.Author, Converter={StaticResource NullToVisibilityConverter}}"/>
+									<TextBlock Text="{Binding SelectedMod.Summary}"
+											   FontSize="13"
+											   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+											   Margin="0 8 0 0"
+											   TextWrapping="Wrap"
+											   Visibility="{Binding SelectedMod.Summary, Converter={StaticResource NullToVisibilityConverter}}"/>
+								</StackPanel>
+							</Grid>
+							
+							<TextBlock Text="下载文件"
+									   FontSize="14"
+									   FontWeight="SemiBold"
+									   Foreground="{StaticResource NeutralForegroundBrush}"
+									   Margin="0 12 0 8"/>
+							
+							<ListBox ItemsSource="{Binding ModFiles}"
+									 SelectedItem="{Binding SelectedFile}"
+									 MaxHeight="200"
+									 Style="{StaticResource FluentListBox}">
+								<ListBox.ItemTemplate>
+									<DataTemplate DataType="vms:NexusModFileViewModel">
+										<Grid Margin="4">
+											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="*"/>
+												<ColumnDefinition Width="Auto"/>
+											</Grid.ColumnDefinitions>
+											<StackPanel Grid.Column="0">
+												<TextBlock Text="{Binding Name}"
+														   FontSize="14"
+														   FontWeight="SemiBold"
+														   Foreground="{StaticResource NeutralForegroundBrush}"/>
+												<TextBlock Text="{Binding Version}"
+														   FontSize="12"
+														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+														   Margin="0 2 0 0"
+														   Visibility="{Binding Version, Converter={StaticResource NullToVisibilityConverter}}"/>
+											</StackPanel>
+											<StackPanel Grid.Column="1" 
+														HorizontalAlignment="Right">
+												<TextBlock Text="{Binding SizeBytes, Converter={StaticResource BytesToSizeConverter}}"
+														   FontSize="12"
+														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+														   Visibility="{Binding SizeBytes, Converter={StaticResource NullToVisibilityConverter}}"/>
+												<TextBlock Text="{Binding UploadedAt, StringFormat='{}{0:yyyy-MM-dd}'}"
+														   FontSize="11"
+														   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+														   Visibility="{Binding UploadedAt, Converter={StaticResource NullToVisibilityConverter}}"/>
+											</StackPanel>
+										</Grid>
+									</DataTemplate>
+								</ListBox.ItemTemplate>
+							</ListBox>
+							
+							<StackPanel Grid.Column="1" 
+										Orientation="Horizontal"
+										HorizontalAlignment="Right"
+										Margin="0 12 0 0">
+								<Button Content="在浏览器中打开"
+										Style="{StaticResource FluentSecondaryButton}"
+										Command="{Binding OpenInBrowserCommand}"
+										IsEnabled="{Binding SelectedMod, Converter={StaticResource NullToBoolConverter}}"
+										Padding="16 10"/>
+								<Button Content="下载并导入"
+										Style="{StaticResource FluentPrimaryButton}"
+										Command="{Binding DownloadAndImportCommand}"
+										IsEnabled="{Binding SelectedFile, Converter={StaticResource NullToBoolConverter}}"
+										Padding="20 10"
+										Margin="8 0 0 0"/>
+							</StackPanel>
+						</StackPanel>
+						
+						<StackPanel Margin="0 8 0 0"
+									Visibility="{Binding SelectedMod, Converter={StaticResource InverseNullToVisibilityConverter}}">
+							<TextBlock Text="请先获取模组信息"
+									   FontSize="14"
+									   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+									   HorizontalAlignment="Center"
+									   Padding="0 20"/>
+						</StackPanel>
+					</StackPanel>
+				</Border>
+			</StackPanel>
+		</ScrollViewer>
+	</Grid>
+</Page>

@@ -369,10 +369,18 @@ FodyWeavers.xsd
 *.wixpdb
 *.wixobj
 *.zip
+*.7z
 Complete
 
 # Jetbrains Rider
 .idea/
 
+# Trae CN
+.trae/
+
+# Visual Studio Code
+.vscode/
+
+docs/
 settings.json
 Test/

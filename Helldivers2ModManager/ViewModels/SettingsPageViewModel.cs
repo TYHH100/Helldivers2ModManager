@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Stores;
+using Helldivers2ModManager.Services.Nexus;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
@@ -120,17 +121,55 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	public string ExtensionHost
+	{
+		get => _settingsService.Initialized ? _settingsService.ExtensionHost : "localhost";
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.ExtensionHost = value;
+			OnPropertyChanged();
+		}
+	}
+
+	public int ExtensionPort
+	{
+		get => _settingsService.Initialized ? _settingsService.ExtensionPort : 7456;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.ExtensionPort = value;
+			OnPropertyChanged();
+		}
+	}
+
+	public string? NexusApiKey
+	{
+		get => _settingsService.Initialized ? _settingsService.NexusApiKey : null;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.NexusApiKey = value;
+			OnPropertyChanged();
+		}
+	}
+
+	[ObservableProperty]
+	private string? _nexusApiKeyValidationResult;
+
 	private readonly ILogger<SettingsPageViewModel> _logger;
 	private readonly NavigationStore _navStore;
 	private readonly SettingsService _settingsService;
+	private readonly INexusModsService _nexusModsService;
 	[ObservableProperty]
 	private int _selectedSkip = -1;
 
-	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService)
+	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService)
 	{
 		_logger = logger;
 		_navStore = navStore;
 		_settingsService = settingsService;
+		_nexusModsService = nexusModsService;
 
 		SkipList.CollectionChanged += SkipList_CollectionChanged;
 
@@ -276,6 +315,9 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(UseSymbolicLinks));
 		OnPropertyChanged(nameof(DeleteToRecycleBin));
 		OnPropertyChanged(nameof(AutoRemoveMissingMods));
+		OnPropertyChanged(nameof(ExtensionHost));
+		OnPropertyChanged(nameof(ExtensionPort));
+		OnPropertyChanged(nameof(NexusApiKey));
 	}
 
 	private void SkipList_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -445,6 +487,39 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	void RemoveSkip()
 	{
 		SkipList.RemoveAt(SelectedSkip);
+	}
+
+	[RelayCommand]
+	async Task ValidateNexusApiKey()
+	{
+		if (string.IsNullOrWhiteSpace(NexusApiKey))
+		{
+			NexusApiKeyValidationResult = "API Key 不能为空";
+			return;
+		}
+
+		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
+		{
+			Title = "验证 API Key",
+			Message = "正在验证 Nexus Mods API Key..."
+		});
+
+		try
+		{
+			_nexusModsService.Init(NexusApiKey);
+			await _nexusModsService.GetTrendingModsAsync("helldivers2");
+			NexusApiKeyValidationResult = "API Key 验证成功!";
+			_logger.LogInformation("Nexus API Key validated successfully");
+		}
+		catch (Exception ex)
+		{
+			NexusApiKeyValidationResult = $"验证失败: {ex.Message}";
+			_logger.LogError(ex, "Failed to validate Nexus API Key");
+		}
+		finally
+		{
+			WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+		}
 	}
 
 	[RelayCommand]

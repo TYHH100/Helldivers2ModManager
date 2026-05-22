@@ -27,25 +27,65 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
-    public bool Enabled { get; set; } = true;
+    private bool _enabled = true;
+    public bool Enabled
+    {
+        get => _enabled;
+        set
+        {
+            if (_enabled == value)
+                return;
+            _enabled = value;
+            OnPropertyChanged(nameof(Enabled));
+        }
+    }
 
-    public bool[] EnabledOptions { get; private set; } = manifest.Version switch
+    private bool[] _enabledOptions = manifest.Version switch
     {
         ManifestVersion.Legacy => [],
         ManifestVersion.V1 => Enumerable.Repeat(true, ((V1ModManifest)manifest).Options is null ? 0 : ((V1ModManifest)manifest).Options!.Count).ToArray(),
         ManifestVersion.V2 => throw new NotSupportedException(),
         _ => throw new NotImplementedException()
     };
+    public bool[] EnabledOptions
+    {
+        get => _enabledOptions;
+        private set
+        {
+            _enabledOptions = value;
+            OnPropertyChanged(nameof(EnabledOptions));
+        }
+    }
 
-    public int[] SelectedOptions { get; private set; } = manifest.Version switch
+    private int[] _selectedOptions = manifest.Version switch
     {
         ManifestVersion.Legacy => new int[1],
         ManifestVersion.V1 => new int[((V1ModManifest)manifest).Options is null ? 0 : ((V1ModManifest)manifest).Options!.Count],
         ManifestVersion.V2 => throw new NotSupportedException(),
         _ => throw new NotImplementedException()
     };
+    public int[] SelectedOptions
+    {
+        get => _selectedOptions;
+        private set
+        {
+            _selectedOptions = value;
+            OnPropertyChanged(nameof(SelectedOptions));
+        }
+    }
 
-    public Guid? GroupId { get; set; }
+    private Guid? _groupId;
+    public Guid? GroupId
+    {
+        get => _groupId;
+        set
+        {
+            if (_groupId == value)
+                return;
+            _groupId = value;
+            OnPropertyChanged(nameof(GroupId));
+        }
+    }
 
 	private List<Guid> _tagIds = [];
     public List<Guid> TagIds

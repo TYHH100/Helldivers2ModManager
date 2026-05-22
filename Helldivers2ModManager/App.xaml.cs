@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Windows;
+using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
 using Helldivers2ModManager.ViewModels;
 
@@ -32,6 +33,9 @@ internal partial class App : Application
 
 		HostApplicationBuilder builder = new();
 
+		// 注册内存缓存服务
+		builder.Services.AddMemoryCache();
+
 		AddServices(builder.Services);
 		builder.Services.AddSingleton<NavigationStore>(static services => new NavigationStore(services, services.GetRequiredService<DashboardPageViewModel>()));
 		builder.Services.AddLogging(log =>
@@ -56,6 +60,24 @@ internal partial class App : Application
 
 		MainWindow = Host.Services.GetRequiredService<MainWindow>();
 		MainWindow.Show();
+
+		Task.Run(async () =>
+		{
+			await Task.Delay(1000);
+			await Dispatcher.InvokeAsync(() =>
+			{
+				try
+				{
+					var browserExtensionService = Host.Services.GetRequiredService<BrowserExtensionService>();
+					browserExtensionService.Start();
+					_logger?.LogInformation("Browser extension service started successfully");
+				}
+				catch (Exception ex)
+				{
+					_logger?.LogWarning(ex, "Failed to start browser extension service");
+				}
+			});
+		});
 	}
 
 	private static void AddServices(IServiceCollection services)
@@ -73,23 +95,41 @@ internal partial class App : Application
 			{
 				case ServiceLifetime.Singleton:
 					if (attr.Contract is null)
+					{
 						services.AddSingleton(type);
+					}
 					else
-						services.AddSingleton(attr.Contract, type);
+					{
+						// 同时注册接口和具体类型（复用同一单例）
+						services.AddSingleton(type);
+						services.AddSingleton(attr.Contract, sp => sp.GetRequiredService(type));
+					}
 					break;
 				
 				case ServiceLifetime.Scoped:
 					if (attr.Contract is null)
+					{
 						services.AddScoped(type);
+					}
 					else
-						services.AddScoped(attr.Contract, type);
+					{
+						// 同时注册接口和具体类型
+						services.AddScoped(type);
+						services.AddScoped(attr.Contract, sp => sp.GetRequiredService(type));
+					}
 					break;
 				
 				case ServiceLifetime.Transient:
 					if (attr.Contract is null)
+					{
 						services.AddTransient(type);
+					}
 					else
-						services.AddTransient(attr.Contract, type);
+					{
+						// 同时注册接口和具体类型
+						services.AddTransient(type);
+						services.AddTransient(attr.Contract, sp => sp.GetRequiredService(type));
+					}
 					break;
 			}
 		}

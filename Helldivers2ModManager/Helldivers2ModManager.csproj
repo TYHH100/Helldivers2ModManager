@@ -32,12 +32,13 @@
 
 	<ItemGroup>
 		<Reference Include="Microsoft.VisualBasic" />
-		<PackageReference Include="CommunityToolkit.Common" Version="8.4.0" />
-		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+		<PackageReference Include="CommunityToolkit.Common" Version="8.4.2" />
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="gong-wpf-dragdrop" Version="4.0.0" />
 		<PackageReference Include="MdXaml" Version="1.27.0" />
-		<PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
-		<PackageReference Include="SharpCompress" Version="0.38.0" />
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.8" />
+		<PackageReference Include="SharpCompress" Version="0.48.1" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -46,6 +47,10 @@
 	  <Resource Include="Resources\Images\logo.png" />
 	  <Resource Include="Resources\Images\logo_icon.png" />
 	  <Resource Include="Resources\Images\remove.png" />
+	  <Resource Include="Resources\Images\loading.png" />
+	  <Resource Include="Resources\Images\download.png" />
+	  <Resource Include="Resources\Images\check.png" />
+	  <Resource Include="Resources\Images\error.png" />
 	</ItemGroup>
 
 	<ItemGroup>

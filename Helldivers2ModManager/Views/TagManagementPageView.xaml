@@ -115,13 +115,13 @@
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
 												Margin="0 0 8 0"
-												ToolTip="重命名">
+												ToolTip="重命名标签">
                                             <TextBlock Text="&#xE8AC;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
 										</Button>
 										<Button Command="{Binding DataContext.DeleteTagCommand, RelativeSource={RelativeSource AncestorType=Page}}"
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
-												ToolTip="删除">
+												ToolTip="删除标签">
 											<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="16"
                                                        Foreground="{StaticResource DangerBrush}"/>
 										</Button>

@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 
 namespace Helldivers2ModManager.Models;
 
@@ -17,6 +17,7 @@ internal enum ModProblemKind
 	OutOfSupportManifest = -3,
 	Duplicate = -4,
 	InvalidPath = -5,
+	CantReadArchive = -6,
 }
 
 internal class ModProblem

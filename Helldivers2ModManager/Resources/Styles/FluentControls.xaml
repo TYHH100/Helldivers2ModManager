@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="clr-namespace:Helldivers2ModManager">
 
     <!-- ============================================ -->
     <!-- Fluent Design System - Control Styles       -->
@@ -9,6 +10,18 @@
     <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="FluentDesignTokens.xaml"/>
     </ResourceDictionary.MergedDictionaries>
+
+    <!-- Converters -->
+    <local:ContainsConverter x:Key="ContainsConverter"/>
+    <local:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+    <local:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
+    <local:NullToBoolConverter x:Key="NullToBoolConverter"/>
+    <local:InverseBoolConverter x:Key="InverseBoolConverter"/>
+    <local:BytesToSizeConverter x:Key="BytesToSizeConverter"/>
+    <local:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+    <local:DownloadStatusToStringConverter x:Key="DownloadStatusToStringConverter"/>
+    <local:DownloadStatusToVisibilityConverter x:Key="DownloadStatusToVisibilityConverter"/>
+    <local:ProgressWidthConverter x:Key="ProgressWidthConverter"/>
 
     <!-- ============================================ -->
     <!-- Base Button Style (Fluent)                  -->
@@ -344,6 +357,59 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
+                    <Grid>
+                        <Border x:Name="BackgroundBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                MinHeight="36"/>
+                        <Border x:Name="FocusBorder"
+                                BorderBrush="{StaticResource SystemAccentBrush}"
+                                BorderThickness="2"
+                                CornerRadius="4"
+                                Opacity="0"/>
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                       Margin="{TemplateBinding Padding}"
+                                       VerticalAlignment="Center"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{StaticResource NeutralBorderStrongBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsFocused" Value="True">
+                            <Setter TargetName="FocusBorder" Property="Opacity" Value="1"/>
+                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================ -->
+    <!-- PasswordBox Style (Fluent)                  -->
+    <!-- ============================================ -->
+
+    <Style x:Key="FluentPasswordBox" TargetType="PasswordBox">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12 10"/>
+        <Setter Property="CaretBrush" Value="{StaticResource SystemAccentBrush}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource SystemAccentBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="PasswordBox">
                     <Grid>
                         <Border x:Name="BackgroundBorder"
                                 Background="{TemplateBinding Background}"

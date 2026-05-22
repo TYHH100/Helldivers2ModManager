@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -17,9 +17,12 @@ internal sealed class ModOptionViewModel(ModViewModel vm, int idx) : ObservableO
 
 		set
 		{
+			if (_vm.Data.EnabledOptions[_idx] == value)
+				return;
 			OnPropertyChanging();
 			_vm.Data.EnabledOptions[_idx] = value;
 			OnPropertyChanged();
+			_vm.OnOptionsChanged();
 		}
 	}
 
@@ -53,9 +56,12 @@ internal sealed class ModOptionViewModel(ModViewModel vm, int idx) : ObservableO
 
 		set
 		{
+			if (_vm.Data.SelectedOptions[_idx] == value)
+				return;
 			OnPropertyChanging();
 			_vm.Data.SelectedOptions[_idx] = value;
 			OnPropertyChanged();
+			_vm.OnOptionsChanged();
 		}
 	}
 

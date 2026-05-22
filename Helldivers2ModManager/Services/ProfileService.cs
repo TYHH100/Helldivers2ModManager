@@ -4,13 +4,15 @@ using Microsoft.Extensions.Logging;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Text.Json;
+using System.Threading;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Transient)]
+[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class ProfileService
 {
 	private readonly ILogger<ProfileService> _logger;
+	private readonly SemaphoreSlim _saveLock = new(1, 1);
 
 	public ProfileService(ILogger<ProfileService> logger)
 	{
@@ -124,17 +126,40 @@ internal sealed class ProfileService
 	{
 		_logger.LogInformation("Saving profile");
 
-		var stream = File.Open(Path.Combine(settingsService.StorageDirectory, "enabled.json"), FileMode.Create, FileAccess.Write, FileShare.Read);
-		var writer = new Utf8JsonWriter(stream);
+		await _saveLock.WaitAsync();
+		try
+		{
+			for (int retry = 0; retry < 3; retry++)
+			{
+				try
+				{
+					using var stream = File.Open(Path.Combine(settingsService.StorageDirectory, "enabled.json"), FileMode.Create, FileAccess.Write, FileShare.Read);
+					using var writer = new Utf8JsonWriter(stream);
 
-		writer.WriteStartArray();
-		foreach (var elm in mods.Select(static m => m.ToEnabledData()))
-			elm.Serialize(writer);
-		writer.WriteEndArray();
+					writer.WriteStartArray();
+					foreach (var elm in mods.Select(static m => m.ToEnabledData()))
+						elm.Serialize(writer);
+					writer.WriteEndArray();
 
-		await writer.DisposeAsync();
-		await stream.DisposeAsync();
+					await writer.DisposeAsync();
+					await stream.DisposeAsync();
 
-		_logger.LogInformation("Profile saved");
+					_logger.LogInformation("Profile saved");
+					return;
+				}
+				catch (IOException ex) when (ex.HResult == unchecked((int)0x80070020))
+				{
+					_logger.LogWarning("File is locked, retry {}/3", retry + 1);
+					if (retry < 2)
+						await Task.Delay(100);
+					else
+						throw;
+				}
+			}
+		}
+		finally
+		{
+			_saveLock.Release();
+		}
 	}
 }

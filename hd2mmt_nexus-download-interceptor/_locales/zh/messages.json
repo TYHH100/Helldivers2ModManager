@@ -1,0 +1,78 @@
+{
+  "extensionName": {
+    "message": "Nexus Download Interceptor",
+    "description": "扩展名称"
+  },
+  "extensionDescription": {
+    "message": "拦截Nexus Mods下载链接并发送到Helldivers 2 Mod Manager进行管理",
+    "description": "扩展描述"
+  },
+  "actionTitle": {
+    "message": "Nexus Download Interceptor",
+    "description": "扩展按钮标题"
+  },
+  "popupTitle": {
+    "message": "Nexus Download Interceptor",
+    "description": "弹窗标题"
+  },
+  "enableToggle": {
+    "message": "启用拦截",
+    "description": "启用拦截开关标签"
+  },
+  "statusTitle": {
+    "message": "管理器状态",
+    "description": "状态区域标题"
+  },
+  "statusConnected": {
+    "message": "管理器已连接",
+    "description": "已连接状态"
+  },
+  "statusDisconnected": {
+    "message": "管理器未运行",
+    "description": "未连接状态"
+  },
+  "statusChecking": {
+    "message": "检测中...",
+    "description": "检测中状态"
+  },
+  "refreshButton": {
+    "message": "刷新",
+    "description": "刷新按钮文本"
+  },
+  "connectionSettings": {
+    "message": "连接设置",
+    "description": "连接设置标题"
+  },
+  "serverHostLabel": {
+    "message": "服务器地址",
+    "description": "服务器地址标签"
+  },
+  "serverPortLabel": {
+    "message": "端口",
+    "description": "端口标签"
+  },
+  "footerText": {
+    "message": "支持拦截 Nexus Mods 下载并发送到管理器",
+    "description": "页脚文本"
+  },
+  "notificationDownloadForwarded": {
+    "message": "下载已转发",
+    "description": "下载转发通知标题"
+  },
+  "notificationDownloadCompleted": {
+    "message": "下载完成",
+    "description": "下载完成通知标题"
+  },
+  "notificationDownloadFailed": {
+    "message": "下载失败",
+    "description": "下载失败通知标题"
+  },
+  "notificationDownloadTimeout": {
+    "message": "下载超时",
+    "description": "下载超时通知标题"
+  },
+  "notificationForwardFailed": {
+    "message": "转发失败",
+    "description": "转发失败通知标题"
+  }
+}

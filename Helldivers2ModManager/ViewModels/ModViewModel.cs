@@ -1,18 +1,18 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Models.Nexus;
 using Helldivers2ModManager.Services;
-using Microsoft.Extensions.DependencyInjection;
+using Helldivers2ModManager.Services.Nexus;
 using Microsoft.Extensions.Logging;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Diagnostics;
-using CommunityToolkit.Mvvm.Messaging;
-using MessageBox = Helldivers2ModManager.Components.MessageBox;
 
 namespace Helldivers2ModManager.ViewModels;
 
@@ -20,6 +20,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 {
     private readonly ILogger _logger;
     private readonly SettingsService _settingsService;
+    private readonly INexusModsService _nexusModsService;
 
     public Guid Guid => _mod.Manifest.Guid;
 
@@ -42,7 +43,23 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ImageSource? _icon;
 
+    [ObservableProperty]
+    private Mod? _nexusModInfo;
+
+    [ObservableProperty]
+    private string? _nexusUpdateStatus;
+
+    [ObservableProperty]
+    private bool _isCheckingUpdate;
+
     public ModData Data => _mod;
+
+    public event Action? OptionsChanged;
+
+    public void OnOptionsChanged()
+    {
+        OptionsChanged?.Invoke();
+    }
 
     public string[]? LegacyOptions { get; }
 
@@ -134,11 +151,12 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     private readonly ModData _mod;
 
-    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService)
+    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService, INexusModsService nexusModsService)
     {
         _mod = mod;
         _logger = logger;
         _settingsService = settingsService;
+        _nexusModsService = nexusModsService;
 
         _mod.PropertyChanged += ModData_PropertyChanged;
 
@@ -204,6 +222,97 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         }
         bmp.EndInit();
         Icon = bmp;
+    }
+
+    [RelayCommand]
+    public async Task CheckForUpdatesAsync()
+    {
+        var nexusData = GetNexusData();
+        if (nexusData == null || nexusData.ModId == 0)
+            return;
+
+        IsCheckingUpdate = true;
+        NexusUpdateStatus = "正在检查更新...";
+
+        try
+        {
+            if (!_nexusModsService.Initialized && !string.IsNullOrEmpty(_settingsService.NexusApiKey))
+            {
+                _nexusModsService.Init(_settingsService.NexusApiKey);
+            }
+
+            if (!_nexusModsService.Initialized)
+            {
+                NexusUpdateStatus = "未配置 Nexus API Key";
+                return;
+            }
+
+            var mod = await _nexusModsService.GetModAsync("helldivers2", nexusData.ModId.ToString());
+            NexusModInfo = mod;
+
+            var updateInfo = await _nexusModsService.CheckForUpdatesAsync(nexusData.ModId.ToString(), nexusData.Version);
+            
+            if (updateInfo.HasUpdate)
+            {
+                NexusUpdateStatus = $"有更新可用: {updateInfo.LatestVersion}";
+            }
+            else
+            {
+                NexusUpdateStatus = "已是最新版本";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to check for updates for mod {ModName}", Name);
+            NexusUpdateStatus = $"检查更新失败: {ex.Message}";
+        }
+        finally
+        {
+            IsCheckingUpdate = false;
+        }
+    }
+
+    [RelayCommand]
+    public void OpenNexusPage()
+    {
+        var nexusData = GetNexusData();
+        if (nexusData == null || nexusData.ModId == 0)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+            {
+                Message = "此模组未配置 Nexus 数据"
+            });
+            return;
+        }
+        
+        var url = $"https://www.nexusmods.com/helldivers2/mods/{nexusData.ModId}";
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open Nexus page for mod {ModName}", Name);
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = $"无法打开 Nexus 页面: {ex.Message}"
+            });
+        }
+    }
+
+    public bool HasNexusData => GetNexusData() != null && GetNexusData()!.ModId != 0;
+
+    private V1ModManifest.NexusDataModel? GetNexusData()
+    {
+        if (_mod.Manifest is V1ModManifest v1Manifest)
+        {
+            return v1Manifest.NexusData;
+        }
+        return null;
     }
 
     public void Dispose()

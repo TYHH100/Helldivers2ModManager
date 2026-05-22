@@ -351,6 +351,109 @@
 					</StackPanel>
 				</Border>
 
+				<!-- Browser Extension Connection Section -->
+				<Border Style="{StaticResource FluentSettingsCard}">
+					<StackPanel>
+						<TextBlock Text="浏览器扩展连接"
+								   Style="{StaticResource FluentSubSectionHeader}"
+								   Margin="0"/>
+						<TextBlock Text="配置浏览器扩展连接到管理器所需的地址和端口"
+								   Style="{StaticResource FluentBodyText}"
+								   Margin="0 4 0 12"/>
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="Auto"/>
+								<ColumnDefinition Width="200"/>
+								<ColumnDefinition Width="Auto"/>
+								<ColumnDefinition Width="100"/>
+							</Grid.ColumnDefinitions>
+							<Grid.RowDefinitions>
+								<RowDefinition Height="Auto"/>
+								<RowDefinition Height="Auto"/>
+							</Grid.RowDefinitions>
+							<TextBlock Grid.Row="0" Grid.Column="0"
+									   Text="地址:"
+									   VerticalAlignment="Center"
+									   Margin="0 0 8 8"
+									   FontSize="14"
+									   Foreground="{StaticResource NeutralForegroundBrush}"/>
+							<TextBox Grid.Row="0" Grid.Column="1"
+									 Text="{Binding ExtensionHost, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+									 Style="{StaticResource FluentTextBox}"
+									 Margin="0 0 16 8"/>
+							<TextBlock Grid.Row="0" Grid.Column="2"
+									   Text="端口:"
+									   VerticalAlignment="Center"
+									   Margin="0 0 8 8"
+									   FontSize="14"
+									   Foreground="{StaticResource NeutralForegroundBrush}"/>
+							<TextBox Grid.Row="0" Grid.Column="3"
+									 Text="{Binding ExtensionPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+									 Style="{StaticResource FluentTextBox}"
+									 Margin="0 0 0 8"/>
+						</Grid>
+						<TextBlock FontSize="12"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   Margin="0 4 0 0">
+							<Run Text="连接地址: http://"/>
+							<Run Text="{Binding ExtensionHost, Mode=OneWay}"/>
+							<Run Text=":"/>
+							<Run Text="{Binding ExtensionPort, Mode=OneWay}"/>
+							<Run Text="/"/>
+						</TextBlock>
+					</StackPanel>
+				</Border>
+
+				<!-- Nexus Mods API Section -->
+				<Border Style="{StaticResource FluentSettingsCard}">
+					<StackPanel>
+						<TextBlock Text="Nexus Mods API"
+								   Style="{StaticResource FluentSubSectionHeader}"
+								   Margin="0"/>
+						<TextBlock Text="用于从 Nexus Mods 获取模组信息和更新检测"
+								   Style="{StaticResource FluentBodyText}"
+								   Margin="0 4 0 12"/>
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*"/>
+								<ColumnDefinition Width="Auto"/>
+							</Grid.ColumnDefinitions>
+							<PasswordBox x:Name="NexusApiKeyPasswordBox"
+										Grid.Column="0"
+										Style="{StaticResource FluentPasswordBox}"
+										VerticalAlignment="Center"
+										PasswordChanged="NexusApiKeyPasswordBox_PasswordChanged"/>
+							<Button Grid.Column="1"
+									Content="验证"
+									Style="{StaticResource FluentPrimaryButton}"
+									Command="{Binding ValidateNexusApiKeyCommand}"
+									Margin="8 0 0 0"
+									Padding="12 8"/>
+						</Grid>
+						<TextBlock x:Name="NexusApiKeyValidationResult"
+								   Text="{Binding NexusApiKeyValidationResult}"
+								   FontSize="12"
+								   Margin="0 8 0 0">
+							<TextBlock.Style>
+								<Style TargetType="TextBlock">
+									<Setter Property="Foreground" Value="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									<Style.Triggers>
+										<DataTrigger Binding="{Binding NexusApiKeyValidationResult}" Value="API Key 验证成功!">
+											<Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+										</DataTrigger>
+										<DataTrigger Binding="{Binding NexusApiKeyValidationResult}" Value="API Key 不能为空">
+											<Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+										</DataTrigger>
+										<DataTrigger Binding="{Binding NexusApiKeyValidationResult, Converter={StaticResource ContainsConverter}, ConverterParameter=验证失败}">
+											<Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+										</DataTrigger>
+									</Style.Triggers>
+								</Style>
+							</TextBlock.Style>
+						</TextBlock>
+					</StackPanel>
+				</Border>
+
 				<!-- Reset Section -->
 				<Border Style="{StaticResource FluentSettingsCard}">
 					<StackPanel>

@@ -7,9 +7,13 @@ using Microsoft.Extensions.Logging;
 using Microsoft.VisualBasic.FileIO;
 using SharpCompress;
 using SharpCompress.Archives;
+using SharpCompress.Archives.SevenZip;
+using SharpCompress.Common;
+using SharpCompress.Readers;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -169,7 +173,65 @@ internal sealed partial class ModService
 		tmpDir.Create();
 
 		_logger.LogInformation("Extracting archive");
-		await Task.Run(() => ArchiveFactory.Open(file).ExtractToDirectory(tmpDir.FullName));
+		try
+		{
+			await Task.Run(() =>
+			{
+				if (file.Extension.Equals(".7z", StringComparison.OrdinalIgnoreCase))
+					{
+						using var archive = ArchiveFactory.OpenArchive(file.FullName);
+						archive.WriteToDirectory(tmpDir.FullName, new ExtractionOptions
+						{
+							ExtractFullPath = true,
+							Overwrite = true
+						});
+					}
+				else
+				{
+					using (var stream = file.OpenRead())
+					using (var reader = ReaderFactory.OpenReader(stream))
+					{
+						while (reader.MoveToNextEntry())
+						{
+							if (!reader.Entry.IsDirectory)
+							{
+								reader.WriteEntryToDirectory(tmpDir.FullName, new ExtractionOptions
+								{
+									ExtractFullPath = true,
+									Overwrite = true
+								});
+							}
+						}
+					}
+				}
+			});
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Failed to extract archive \"{}\"", file.Name);
+			tmpDir.Delete(true);
+			problems.Add(new ModProblem
+			{
+				Directory = tmpDir,
+				Kind = ModProblemKind.CantReadArchive,
+				ExtraData = ex.Message,
+			});
+			return problems.ToArray();
+		}
+
+		_logger.LogDebug("Checking for unnecessary root folder in extracted archive");
+		var rootFolders = tmpDir.GetDirectories();
+		var rootFiles = tmpDir.GetFiles();
+		
+		if (rootFolders.Length == 1 && rootFiles.Length == 0)
+		{
+			var rootFolder = rootFolders[0];
+			_logger.LogInformation("Detected root folder \"{}\", flattening structure", rootFolder.Name);
+			
+			await MoveDirectoryContentsAsync(rootFolder, tmpDir);
+			rootFolder.Delete(true);
+			_logger.LogDebug("Root folder flattened successfully");
+		}
 
 		var manifestFile = new FileInfo(Path.Combine(tmpDir.FullName, "manifest.json"));
 
@@ -208,14 +270,29 @@ internal sealed partial class ModService
 		var modDir = new DirectoryInfo(Path.Combine(_settingsService.StorageDirectory, "Mods", manifest.Name));
 		if (modDir.Exists)
 		{
-			_logger.LogError("Mod directory already exists in storage");
-			tmpDir.Delete(true);
-			problems.Add(new ModProblem
+			_logger.LogInformation("Mod directory already exists, comparing files");
+			
+			var existingMod = _mods.FirstOrDefault(m => m.Directory.FullName == modDir.FullName);
+			if (existingMod != null && await AreDirectoriesEqualAsync(tmpDir, modDir))
 			{
-				Directory = modDir,
-				Kind = ModProblemKind.Duplicate,
-			});
-			return problems.ToArray();
+				_logger.LogError("Mod files are identical, skipping");
+				tmpDir.Delete(true);
+				problems.Add(new ModProblem
+				{
+					Directory = modDir,
+					Kind = ModProblemKind.Duplicate,
+				});
+				return problems.ToArray();
+			}
+			
+			_logger.LogInformation("Mod files are different, updating");
+			var recycleOption = _settingsService.DeleteToRecycleBin ? RecycleOption.SendToRecycleBin : RecycleOption.DeletePermanently;
+			await Task.Run(() => FileSystem.DeleteDirectory(modDir.FullName, UIOption.OnlyErrorDialogs, recycleOption));
+			
+			if (existingMod != null)
+			{
+				_mods.Remove(existingMod);
+			}
 		}
 		modDir.Parent?.Create();
 		await Task.Run(() => tmpDir.CopyTo(modDir.FullName));
@@ -514,9 +591,9 @@ internal sealed partial class ModService
 		return null;
 	}
 
-	public ModViewModel GetOrCreateModViewModel(ModData mod, ILogger logger, SettingsService settingsService)
+	public ModViewModel GetOrCreateModViewModel(ModData mod, ILogger logger, SettingsService settingsService, Services.Nexus.INexusModsService nexusModsService)
 	{
-		return _modViewModelCache.GetOrAdd(mod.Manifest.Guid, _ => new ModViewModel(mod, logger, settingsService));
+		return _modViewModelCache.GetOrAdd(mod.Manifest.Guid, _ => new ModViewModel(mod, logger, settingsService, nexusModsService));
 	}
 
 	public void ClearModViewModelCache()
@@ -746,4 +823,57 @@ internal sealed partial class ModService
 
 	[GeneratedRegex(@"^(?:[a-z0-9]{16}\.patch_)([0-9]+)(?:(?:\.(?:stream|gpu_resources))?)$")]
 	private static partial Regex GetPatchIndexRegex();
+
+	private static async Task MoveDirectoryContentsAsync(DirectoryInfo source, DirectoryInfo destination)
+	{
+		foreach (var file in source.GetFiles())
+		{
+			file.MoveTo(Path.Combine(destination.FullName, file.Name), true);
+		}
+
+		foreach (var dir in source.GetDirectories())
+		{
+			var newDir = Directory.CreateDirectory(Path.Combine(destination.FullName, dir.Name));
+			await MoveDirectoryContentsAsync(dir, newDir);
+		}
+	}
+
+	private static async Task<bool> AreDirectoriesEqualAsync(DirectoryInfo dir1, DirectoryInfo dir2)
+	{
+		var files1 = dir1.GetFiles("*", System.IO.SearchOption.AllDirectories).OrderBy(f => f.FullName).ToList();
+		var files2 = dir2.GetFiles("*", System.IO.SearchOption.AllDirectories).OrderBy(f => f.FullName).ToList();
+
+		if (files1.Count != files2.Count)
+			return false;
+
+		for (int i = 0; i < files1.Count; i++)
+		{
+			var relativePath1 = files1[i].FullName.Substring(dir1.FullName.Length);
+			var relativePath2 = files2[i].FullName.Substring(dir2.FullName.Length);
+
+			if (!relativePath1.Equals(relativePath2, StringComparison.OrdinalIgnoreCase))
+				return false;
+
+			if (!await AreFilesEqualAsync(files1[i], files2[i]))
+				return false;
+		}
+
+		return true;
+	}
+
+	private static async Task<bool> AreFilesEqualAsync(FileInfo file1, FileInfo file2)
+	{
+		if (file1.Length != file2.Length)
+			return false;
+
+		using var hashAlgorithm = SHA256.Create();
+
+		using var stream1 = file1.OpenRead();
+		using var stream2 = file2.OpenRead();
+
+		var hash1 = await hashAlgorithm.ComputeHashAsync(stream1);
+		var hash2 = await hashAlgorithm.ComputeHashAsync(stream2);
+
+		return hash1.SequenceEqual(hash2);
+	}
 }

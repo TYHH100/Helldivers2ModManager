@@ -64,12 +64,26 @@ internal static class ModManifest
     {
         var dirs = dir.GetDirectories();
 
+        string? iconPath = null;
+        var imageExtensions = new[] { ".png", ".jpg", ".jpeg", ".bmp", ".gif" };
+        var priorityIconNames = new[] { "icon", "Icon", "ICON", "logo", "Logo", "LOGO", "cover", "Cover", "COVER", "thumbnail", "Thumbnail", "THUMBNAIL", "preview", "Preview", "PREVIEW", "banner", "Banner", "BANNER" };
+
+        var imageFiles = dir.GetFiles()
+            .Where(file => imageExtensions.Contains(file.Extension.ToLowerInvariant()))
+            .ToList();
+
+        if (imageFiles.Count > 0)
+        {
+            iconPath = SelectBestIcon(imageFiles, priorityIconNames, logger);
+        }
+
         if (dirs.Length == 0)
             return new LegacyModManifest
             {
                 Guid = Guid.NewGuid(),
                 Name = dir.Name,
                 Description = "A locally imported mod.",
+                IconPath = iconPath,
             };
 
         return new LegacyModManifest
@@ -78,8 +92,60 @@ internal static class ModManifest
 			Name = dir.Name,
 			Description = "A locally imported mod.",
             Options = dirs.Select(static d => d.Name).ToArray(),
+			IconPath = iconPath,
 		};
 	}
+
+    private static string? SelectBestIcon(List<FileInfo> imageFiles, string[] priorityNames, ILogger? logger)
+    {
+        var scoredImages = new List<(FileInfo File, int Score)>();
+
+        foreach (var file in imageFiles)
+        {
+            int score = 0;
+            string fileNameLower = file.Name.ToLowerInvariant();
+            string fileNameWithoutExt = Path.GetFileNameWithoutExtension(fileNameLower);
+
+            for (int i = 0; i < priorityNames.Length; i++)
+            {
+                string priorityNameLower = priorityNames[i].ToLowerInvariant();
+                if (fileNameWithoutExt.Contains(priorityNameLower))
+                {
+                    score += (priorityNames.Length - i) * 10;
+                    if (fileNameWithoutExt == priorityNameLower)
+                    {
+                        score += 5;
+                    }
+                }
+            }
+
+            if (fileNameLower.EndsWith(".png"))
+            {
+                score += 3;
+            }
+
+            long fileSize = file.Length;
+            if (fileSize < 100 * 1024)
+            {
+                score += 5;
+            }
+            else if (fileSize < 500 * 1024)
+            {
+                score += 2;
+            }
+
+            scoredImages.Add((file, score));
+        }
+
+        scoredImages.Sort((a, b) => b.Score.CompareTo(a.Score));
+
+        if (scoredImages.Count > 1 && scoredImages[0].Score == scoredImages[1].Score)
+        {
+            logger?.LogInformation("Multiple images with same highest score found, selecting first one");
+        }
+
+        return scoredImages.FirstOrDefault().File?.Name;
+    }
 
     public static void SaveToFile(IModManifest manifest, DirectoryInfo dir)
     {

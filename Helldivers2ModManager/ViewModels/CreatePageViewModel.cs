@@ -30,7 +30,7 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	private readonly ILogger<CreatePageViewModel> _logger;
 	private readonly NavigationStore _navigationStore;
 	private readonly ChoosePageViewModel _choosePage;
-	private readonly List<WizardViewModelBase> _pages;
+	private readonly List<WizardViewModelBase?> _pages;
 	private WizardViewModelBase _currentPage;
 
 	public CreatePageViewModel(ILogger<CreatePageViewModel> logger, NavigationStore navigationStore)

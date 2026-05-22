@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
+using Helldivers2ModManager.Services.Nexus;
 using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using MessageBox = Helldivers2ModManager.Components.MessageBox;
@@ -40,7 +42,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
     private readonly ProfileService _profileService;
+    private readonly INexusModsService _nexusModsService;
     private ObservableCollection<ModViewModel> _mods;
+    private Timer? _saveTimer;
+    private volatile bool _isSavePending;
+    private readonly object _saveLock = new();
+    
     [ObservableProperty]
     private string _searchText = string.Empty;
     [ObservableProperty]
@@ -122,7 +129,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         }
     }
 
-    public DashboardPageViewModel(ILogger<DashboardPageViewModel> logger, IServiceProvider provider, SettingsService settingsService, ModService modService, ProfileService profileService, EditModStore editModStore)
+    public DashboardPageViewModel(ILogger<DashboardPageViewModel> logger, IServiceProvider provider, SettingsService settingsService, ModService modService, ProfileService profileService, EditModStore editModStore, INexusModsService nexusModsService)
     {
         _logger = logger;
         _navStore = new(provider.GetRequiredService<NavigationStore>);
@@ -130,7 +137,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         _settingsService = settingsService;
         _modService = modService;
         _profileService = profileService;
+        _nexusModsService = nexusModsService;
         _mods = [];
+        _saveTimer = new Timer(OnSaveTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
         Mods = _mods;
 
@@ -156,19 +165,25 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         base.OnPropertyChanged(e);
     }
 
-    private async Task SaveEnabled()
+    private async Task SaveEnabled(bool showProgress = true)
     {
         if (!_settingsService.IsReadonly)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
+            if (showProgress)
             {
-                Title = "保存模组配置中",
-                Message = "请民主官耐心等待."
-            });
+                WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
+                {
+                    Title = "保存模组配置中",
+                    Message = "请民主官耐心等待."
+                });
+            }
 
             await _profileService.SaveAsync(_settingsService, _mods.Select(static vm => vm.Data));
 
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            if (showProgress)
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            }
         }
     }
 
@@ -308,7 +323,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         _logger.LogInformation("Profile loaded successfully");
 
         _logger.LogInformation("Applying profile");
-        _mods = new(result.Select(data => _modService.GetOrCreateModViewModel(data, _logger, _settingsService)).ToList());
+        var modViewModels = result.Select(data => _modService.GetOrCreateModViewModel(data, _logger, _settingsService, _nexusModsService)).ToList();
+        foreach (var vm in modViewModels)
+        {
+            vm.OptionsChanged += ModViewModel_OptionsChanged;
+        }
+        _mods = new(modViewModels);
         UpdateView();
 
         if (problems.Length > 0)
@@ -346,6 +366,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
                     ModProblemKind.InvalidPath => e.ExtraData is not null
                         ? $"包含路径  \"{e.ExtraData}\" 无效!"
                         : "包含路径无效!",
+                    ModProblemKind.CantReadArchive => e.ExtraData is not null
+                        ? $"无法读取压缩文件! 错误: {e.ExtraData}"
+                        : "无法读取压缩文件!",
                     _ => throw new NotImplementedException()
                 };
                 sb.AppendLine(desc);
@@ -395,7 +418,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
 
     private void ModService_ModAdded(ModData mod)
     {
-        _mods.Add(new ModViewModel(mod, _logger, _settingsService));
+        var vm = new ModViewModel(mod, _logger, _settingsService, _nexusModsService);
+        vm.OptionsChanged += ModViewModel_OptionsChanged;
+        _mods.Add(vm);
         SearchText = string.Empty;
         UpdateView();
     }
@@ -405,8 +430,33 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         var vm = _mods.FirstOrDefault((vm) => vm.Data == mod);
         if (vm is not null)
         {
+            vm.OptionsChanged -= ModViewModel_OptionsChanged;
             _mods.Remove(vm);
             UpdateView();
+        }
+    }
+
+    private void ModViewModel_OptionsChanged()
+    {
+        lock (_saveLock)
+        {
+            _isSavePending = true;
+            _saveTimer?.Change(300, Timeout.Infinite);
+        }
+    }
+
+    private async void OnSaveTimerElapsed(object? state)
+    {
+        bool shouldSave;
+        lock (_saveLock)
+        {
+            shouldSave = _isSavePending;
+            _isSavePending = false;
+        }
+        
+        if (shouldSave)
+        {
+            await SaveEnabled(false);
         }
     }
 
@@ -973,6 +1023,24 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     }
 
     [RelayCommand]
+    void DownloadFromNexus()
+    {
+        var message = @"从 Nexus Mods 下载模组功能需要 Nexus Mods Premium
+不过由于我没有N网会员这个功能运行效果如何尚且未知所以不要使用
+但是可以考虑使用扩展的方式替代";
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = message });
+        
+        _navStore.Value.Navigate<NexusDownloadPageViewModel>();
+    }
+
+    [RelayCommand]
+    void ShowDownloadProgress()
+    {
+        _navStore.Value.Navigate<DownloadProgressViewModel>();
+    }
+
+    [RelayCommand]
     void EditModTags(ModViewModel modVm)
     {
         if (modVm == null || !_settingsService.Initialized)
@@ -1009,6 +1077,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     {
         _modService.ModAdded -= ModService_ModAdded;
         _modService.ModRemoved -= ModService_ModRemoved;
+        _saveTimer?.Dispose();
         _mods.Clear();
     }
 }

@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
@@ -192,6 +194,56 @@ internal sealed class SettingsService
 			return _tags;
 		}
 	}
+
+	public string ExtensionHost
+	{
+		get
+		{
+			GuardInitialized();
+			return _extensionHost;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_extensionHost = value;
+		}
+	}
+
+	public int ExtensionPort
+	{
+		get
+		{
+			GuardInitialized();
+			return _extensionPort;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_extensionPort = value;
+		}
+	}
+
+	public string? NexusApiKey
+	{
+		get
+		{
+			GuardInitialized();
+			// 只在需要时解密
+			return DecryptString(_encryptedNexusApiKey);
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			// 立即加密存储
+			_encryptedNexusApiKey = EncryptString(value);
+		}
+	}
 	
 	private static readonly FileInfo s_file = new("settings.json");
 	private static readonly JsonDocumentOptions s_options = new()
@@ -199,6 +251,7 @@ internal sealed class SettingsService
 		AllowTrailingCommas = true,
 		CommentHandling = JsonCommentHandling.Skip
 	};
+	private static readonly byte[] s_optionalEntropy = Encoding.UTF8.GetBytes("Helldivers2ModManager_Entropy_2024");
 
 	private readonly ILogger<SettingsService> _logger;
 	private string _gameDirectory = null!;
@@ -213,10 +266,53 @@ internal sealed class SettingsService
 	private bool _autoRemoveMissingMods;
 	private ObservableCollection<ModGroup> _groups = null!;
 	private ObservableCollection<ModTag> _tags = null!;
+	private string? _encryptedNexusApiKey;
+	private string _extensionHost = "localhost";
+	private int _extensionPort = 7456;
 
 	public SettingsService(ILogger<SettingsService> logger)
 	{
 		_logger = logger;
+	}
+
+	private static string? EncryptString(string? plainText)
+	{
+		if (string.IsNullOrEmpty(plainText))
+			return null;
+
+		try
+		{
+			byte[] plainBytes = Encoding.UTF8.GetBytes(plainText);
+			byte[] encryptedBytes = ProtectedData.Protect(
+				plainBytes,
+				s_optionalEntropy,
+				DataProtectionScope.CurrentUser);
+			return Convert.ToBase64String(encryptedBytes);
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	private static string? DecryptString(string? encryptedText)
+	{
+		if (string.IsNullOrEmpty(encryptedText))
+			return null;
+
+		try
+		{
+			byte[] encryptedBytes = Convert.FromBase64String(encryptedText);
+			byte[] decryptedBytes = ProtectedData.Unprotect(
+				encryptedBytes,
+				s_optionalEntropy,
+				DataProtectionScope.CurrentUser);
+			return Encoding.UTF8.GetString(decryptedBytes);
+		}
+		catch
+		{
+			return null;
+		}
 	}
 
 	public async Task<bool> InitAsync(bool @readonly = false)
@@ -284,6 +380,8 @@ internal sealed class SettingsService
 			writer.WriteBoolean(nameof(UseSymbolicLinks), _useSymbolicLinks);
 			writer.WriteBoolean(nameof(DeleteToRecycleBin), _deleteToRecycleBin);
 			writer.WriteBoolean(nameof(AutoRemoveMissingMods), _autoRemoveMissingMods);
+			writer.WriteString(nameof(ExtensionHost), _extensionHost);
+			writer.WriteNumber(nameof(ExtensionPort), _extensionPort);
 			writer.WriteStartArray(nameof(Groups));
 			foreach (var group in _groups)
 			{
@@ -303,6 +401,8 @@ internal sealed class SettingsService
 				writer.WriteEndObject();
 			}
 			writer.WriteEndArray();
+			if (_encryptedNexusApiKey is not null)
+				writer.WriteString(nameof(NexusApiKey), _encryptedNexusApiKey);
 		writer.WriteEndObject();
 		
 		await writer.DisposeAsync();
@@ -365,6 +465,20 @@ internal sealed class SettingsService
 			foreach (var elm in elms)
 				_skipList.Remove(elm);
 		}
+
+		if (string.IsNullOrWhiteSpace(_extensionHost))
+		{
+			if (IsReadonly)
+				return false;
+			_extensionHost = "localhost";
+		}
+
+		if (_extensionPort is < 1 or > 65535)
+		{
+			if (IsReadonly)
+				return false;
+			_extensionPort = 7456;
+		}
 		
 		return true;
 	}
@@ -423,6 +537,11 @@ internal sealed class SettingsService
 			_deleteToRecycleBin = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(AutoRemoveMissingMods), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_autoRemoveMissingMods = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(ExtensionHost), JsonValueKind.String, out prop))
+			_extensionHost = prop.GetString()!;
+		if (root.TryGetProperty(nameof(ExtensionPort), JsonValueKind.Number, out prop))
+			if (prop.TryGetInt32(out var portValue))
+				_extensionPort = portValue;
 		if (root.TryGetProperty(nameof(Groups), JsonValueKind.Array, out var groupsArr))
 		{
 			var groupsList = new List<ModGroup>();
@@ -466,6 +585,8 @@ internal sealed class SettingsService
 			}
 			_tags = new ObservableCollection<ModTag>(tagsList);
 		}
+		if (root.TryGetProperty(nameof(NexusApiKey), JsonValueKind.String, out prop))
+			_encryptedNexusApiKey = prop.GetString();
 
 		document.Dispose();
 		await stream.DisposeAsync();
@@ -482,7 +603,10 @@ internal sealed class SettingsService
 		_skipList = [];
 		_caseSensitiveSearch = false;
 		_useSymbolicLinks = false;
+		_extensionHost = "localhost";
+		_extensionPort = 7456;
 		_groups = [];
 		_tags = [];
+		_encryptedNexusApiKey = null;
 	}
 }

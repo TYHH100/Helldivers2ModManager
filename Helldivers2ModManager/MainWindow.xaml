@@ -19,10 +19,7 @@
 		AllowsTransparency="True"
 		WindowStartupLocation="CenterScreen"
 		Background="{StaticResource MicaBackgroundBrush}"
-		d:Background="{StaticResource MicaBackgroundBrush}"
-		AllowDrop="True"
-		DragOver="Window_DragOver"
-		Drop="Window_Drop">
+		d:Background="{StaticResource MicaBackgroundBrush}">
 	<Window.Resources>
 		<DataTemplate DataType="{x:Type vms:DashboardPageViewModel}">
 			<views:DashboardPageView/>
@@ -35,6 +32,12 @@
 		</DataTemplate>
 		<DataTemplate DataType="{x:Type vms:TagManagementPageViewModel}">
 			<views:TagManagementPageView/>
+		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:NexusDownloadPageViewModel}">
+			<views:NexusDownloadPageView/>
+		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:DownloadProgressViewModel}">
+			<views:DownloadProgressView/>
 		</DataTemplate>
 	</Window.Resources>
 
