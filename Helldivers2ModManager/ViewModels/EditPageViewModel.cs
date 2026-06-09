@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,16 +23,36 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 
     private readonly NavigationStore _navStore;
     private readonly EditModStore _editModStore;
+    private readonly ProfileService _profileService;
+    private readonly SettingsService _settingsService;
+    private readonly ModService _modService;
 
-    public EditPageViewModel(NavigationStore navStore, EditModStore editModStore)
+    public EditPageViewModel(NavigationStore navStore, EditModStore editModStore,
+        ProfileService profileService, SettingsService settingsService, ModService modService)
     {
         _navStore = navStore;
         _editModStore = editModStore;
+        _profileService = profileService;
+        _settingsService = settingsService;
+        _modService = modService;
     }
 
     [RelayCommand]
-    void Done()
+    async Task Done()
     {
+        // 在退出编辑前保存当前 Mod 配置到数据库，避免导航回 Dashboard 时数据丢失
+        if (!_settingsService.IsReadonly)
+        {
+            try
+            {
+                await _profileService.SaveAsync(_settingsService, _modService.Mods);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"保存 Mod 配置失败: {ex.Message}");
+            }
+        }
+
         _editModStore.CurrentMod = null;
         _navStore.Navigate<DashboardPageViewModel>();
     }

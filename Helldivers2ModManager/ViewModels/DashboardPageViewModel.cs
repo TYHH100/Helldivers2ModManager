@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using GongSolutions.Wpf.DragDrop;
 using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
@@ -23,13 +24,25 @@ using MessageBox = Helldivers2ModManager.Components.MessageBox;
 namespace Helldivers2ModManager.ViewModels;
 
 [RegisterService(ServiceLifetime.Transient)]
-internal sealed partial class DashboardPageViewModel : PageViewModelBase
+internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropTarget
 {
     public override string Title => "Mods";
 
     public IEnumerable<ModViewModel> Mods { get; private set; }
 
     public bool IsSearchEmpty => string.IsNullOrEmpty(SearchText);
+
+    /// <summary>
+    /// 排序方式枚举
+    /// </summary>
+    public enum SortMode
+    {
+        Default,
+        NameAsc,
+        NameDesc,
+        EnabledFirst,
+        DisabledFirst
+    }
 
     private static readonly ProcessStartInfo s_gameStartInfo = new("steam://run/553850") { UseShellExecute = true };
     private static readonly ProcessStartInfo s_reportStartInfo = new("https://github.com/TYHH100/Helldivers2ModManager/issues") { UseShellExecute = true };
@@ -56,6 +69,26 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     private ImageSource? _previewImageSource;
     [ObservableProperty]
     private bool _initialized = false;
+
+    [ObservableProperty]
+    private SortMode _currentSortMode = SortMode.Default;
+
+    /// <summary>
+    /// 是否有选中的 Mod（用于控制批量操作按钮的可见性）
+    /// </summary>
+    public bool HasSelection => _mods is not null && _mods.Any(static vm => vm.IsSelected);
+
+    /// <summary>
+    /// 选中数量文本（如 "已选 2 项"）
+    /// </summary>
+    public string SelectionCountText => _mods is null ? "" : $"已选 {_mods.Count(static vm => vm.IsSelected)} 项";
+
+    /// <summary>
+    /// 排序功能是否在设置中启用
+    /// </summary>
+    public bool IsSortingEnabled => _settingsService.Initialized && _settingsService.EnableSorting;
+
+    public IEnumerable<SortMode> SortModes { get; } = [SortMode.Default, SortMode.NameAsc, SortMode.NameDesc, SortMode.EnabledFirst, SortMode.DisabledFirst];
     private object? _selectedGroupItem = "无";
     public object? SelectedGroupItem
     {
@@ -178,6 +211,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
                 });
             }
 
+            // 保存前将当前显示顺序告诉 ProfileService，确保其以正确的顺序写入 SQLite
+            _profileService.SetLastSavedOrder(_mods.Select(static vm => vm.Guid));
             await _profileService.SaveAsync(_settingsService, _mods.Select(static vm => vm.Data));
 
             if (showProgress)
@@ -218,13 +253,44 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
                     return vm.Name.Contains(searchText, StringComparison.InvariantCultureIgnoreCase);
                 });
             }
-            Mods = filteredMods.ToArray();
         }
-        else
+
+        // 排序 —— 仅当设置中启用了排序功能才生效
+        bool hasActiveSort = false;
+        if (_settingsService.Initialized && _settingsService.EnableSorting)
+        {
+            hasActiveSort = CurrentSortMode != SortMode.Default;
+            if (hasActiveSort)
+            {
+                filteredMods = CurrentSortMode switch
+                {
+                    SortMode.NameAsc => filteredMods.OrderBy(static vm => vm.Name),
+                    SortMode.NameDesc => filteredMods.OrderByDescending(static vm => vm.Name),
+                    SortMode.EnabledFirst => filteredMods.OrderByDescending(static vm => vm.Enabled),
+                    SortMode.DisabledFirst => filteredMods.OrderBy(static vm => vm.Enabled),
+                    _ => filteredMods,
+                };
+            }
+        }
+
+        // 无任何筛选/排序时直接使用原始 ObservableCollection，保证拖拽功能可用
+        if (SelectedGroup is null && IsSearchEmpty && !hasActiveSort)
         {
             Mods = _mods;
         }
+        else
+        {
+            Mods = filteredMods.ToArray();
+        }
         OnPropertyChanged(nameof(Mods));
+    }
+
+    /// <summary>
+    /// 排序方式变更时刷新列表
+    /// </summary>
+    partial void OnCurrentSortModeChanged(SortMode value)
+    {
+        UpdateView();
     }
 
     private async Task Init()
@@ -327,8 +393,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         foreach (var vm in modViewModels)
         {
             vm.OptionsChanged += ModViewModel_OptionsChanged;
+            vm.PropertyChanged += ModViewModel_PropertyChanged;
         }
         _mods = new(modViewModels);
+        _mods.CollectionChanged += Mods_CollectionChanged;
+        _profileService.SetLastSavedOrder(_mods.Select(static vm => vm.Guid));
         UpdateView();
 
         if (problems.Length > 0)
@@ -420,6 +489,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     {
         var vm = new ModViewModel(mod, _logger, _settingsService, _nexusModsService);
         vm.OptionsChanged += ModViewModel_OptionsChanged;
+        vm.PropertyChanged += ModViewModel_PropertyChanged;
         _mods.Add(vm);
         SearchText = string.Empty;
         UpdateView();
@@ -431,6 +501,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         if (vm is not null)
         {
             vm.OptionsChanged -= ModViewModel_OptionsChanged;
+            vm.PropertyChanged -= ModViewModel_PropertyChanged;
             _mods.Remove(vm);
             UpdateView();
         }
@@ -442,6 +513,80 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         {
             _isSavePending = true;
             _saveTimer?.Change(300, Timeout.Infinite);
+        }
+    }
+
+    /// <summary>
+    /// 监听集合变动，当用户拖拽排序后触发自动保存（Move 操作不触发 OptionsChanged）
+    /// </summary>
+    private void Mods_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Move)
+        {
+            lock (_saveLock)
+            {
+                _isSavePending = true;
+                _saveTimer?.Change(300, Timeout.Infinite);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 拖拽悬停 —— 委托给默认处理器以显示拖拽位置指示线
+    /// </summary>
+    void IDropTarget.DragOver(IDropInfo dropInfo)
+    {
+        new DefaultDropHandler().DragOver(dropInfo);
+    }
+
+    /// <summary>
+    /// 拖拽放下 —— 当有多个选中项时一并移动，否则按默认单项目行为
+    /// </summary>
+    void IDropTarget.Drop(IDropInfo dropInfo)
+    {
+        if (dropInfo?.Data is not ModViewModel sourceVm)
+        {
+            new DefaultDropHandler().Drop(dropInfo);
+            return;
+        }
+
+        // 获取选中项（含当前拖拽项），按原始位置排序
+        var selected = _mods.Where(vm => vm.IsSelected).ToList();
+        if (selected.Contains(sourceVm) && selected.Count > 1)
+        {
+            var sortedSelected = selected.OrderBy(vm => _mods.IndexOf(vm)).ToList();
+            var targetIdx = dropInfo.InsertIndex;
+
+            // 从集合中移除所有选中项（倒序删除以保持索引正确）
+            foreach (var vm in sortedSelected.AsEnumerable().Reverse())
+                _mods.Remove(vm);
+
+            // 如果目标索引位于删除区域之后，需修正插入位置
+            var firstRemovedIdx = _mods.IndexOf(sortedSelected[0]);
+            if (firstRemovedIdx == -1) // 所有项都在目标之前被删除了
+            {
+                // 计算目标在删除后的新位置
+                var beforeCount = sortedSelected.Count(vm => _mods.IndexOf(vm) < targetIdx);
+                targetIdx -= beforeCount;
+            }
+
+            targetIdx = Math.Clamp(targetIdx, 0, _mods.Count);
+
+            // 按原始顺序插入
+            for (int i = 0; i < sortedSelected.Count; i++)
+                _mods.Insert(targetIdx + i, sortedSelected[i]);
+
+            // 多选重排完成后触发自动保存（Remove/Insert 不会触发 CollectionChanged Move）
+            lock (_saveLock)
+            {
+                _isSavePending = true;
+                _saveTimer?.Change(300, Timeout.Infinite);
+            }
+        }
+        else
+        {
+            // 单项目拖拽 —— 使用默认处理器
+            new DefaultDropHandler().Drop(dropInfo);
         }
     }
 
@@ -458,6 +603,112 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
         {
             await SaveEnabled(false);
         }
+    }
+
+    /// <summary>
+    /// 监听 ModViewModel 属性变更，捕获 IsSelected 变化以刷新批量操作 UI
+    /// </summary>
+    private void ModViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ModViewModel.IsSelected))
+        {
+            OnPropertyChanged(nameof(HasSelection));
+            OnPropertyChanged(nameof(SelectionCountText));
+        }
+    }
+
+    /// <summary>
+    /// 当 Mod 的 IsSelected 变更时，更新批量操作按钮的可见性和选中计数
+    /// </summary>
+    private void ModViewModel_IsSelectedChanged()
+    {
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectionCountText));
+    }
+
+    [RelayCommand]
+    void SelectAll()
+    {
+        foreach (var vm in _mods)
+            vm.IsSelected = true;
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectionCountText));
+    }
+
+    [RelayCommand]
+    void DeselectAll()
+    {
+        foreach (var vm in _mods)
+            vm.IsSelected = false;
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectionCountText));
+    }
+
+    [RelayCommand]
+    void ToggleModSelection(ModViewModel vm)
+    {
+        vm.IsSelected = !vm.IsSelected;
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    async Task BatchDelete()
+    {
+        var selected = _mods.Where(static vm => vm.IsSelected).ToArray();
+        if (selected.Length == 0)
+            return;
+
+        var deleteMessage = _settingsService.DeleteToRecycleBin
+            ? "模组文件将被移动到回收站。"
+            : "模组文件将被永久删除，此操作不可恢复！";
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+        {
+            Title = "批量删除",
+            Message = $"确定要删除选中的 {selected.Length} 个模组吗？\n{deleteMessage}",
+            Confirm = async () =>
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
+                {
+                    Title = "批量删除中",
+                    Message = "请民主官耐心等待."
+                });
+
+                try
+                {
+                    foreach (var vm in selected)
+                    {
+                        vm.IsSelected = false;
+                        await _modService.RemoveAsync(vm.Data);
+                    }
+                    WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "批量删除模组失败");
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+                    {
+                        Message = $"批量删除失败: {ex.Message}"
+                    });
+                }
+
+                OnPropertyChanged(nameof(HasSelection));
+                OnPropertyChanged(nameof(SelectionCountText));
+            }
+        });
+    }
+
+    [RelayCommand]
+    void BatchEnable()
+    {
+        foreach (var vm in _mods.Where(static vm => vm.IsSelected))
+            vm.Enabled = true;
+    }
+
+    [RelayCommand]
+    void BatchDisable()
+    {
+        foreach (var vm in _mods.Where(static vm => vm.IsSelected))
+            vm.Enabled = false;
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
@@ -1077,7 +1328,37 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase
     {
         _modService.ModAdded -= ModService_ModAdded;
         _modService.ModRemoved -= ModService_ModRemoved;
-        _saveTimer?.Dispose();
-        _mods.Clear();
+
+        if (_mods is not null)
+        {
+            _mods.CollectionChanged -= Mods_CollectionChanged;
+            _mods.Clear();
+        }
+
+        // 在页面退出前刷新待保存的更改，否则定时器销毁后未触发的保存会丢失
+        if (_saveTimer is not null)
+        {
+            bool shouldSave;
+            lock (_saveLock)
+            {
+                shouldSave = _isSavePending;
+                _isSavePending = false;
+            }
+            _saveTimer.Dispose();
+
+            if (shouldSave)
+            {
+                try
+                {
+                    SaveEnabled(false).GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "退出页面时保存配置失败");
+                }
+            }
+        }
+
+        _saveTimer = null;
     }
 }

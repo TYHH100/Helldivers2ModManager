@@ -11,6 +11,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -76,6 +77,12 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             OnPropertyChanged();
         }
     }
+
+    /// <summary>
+    /// 多选状态 —— 在 Dashboard 列表中标记选中，用于批量操作
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSelected;
 
     public IEnumerable<ModTag> Tags
     {

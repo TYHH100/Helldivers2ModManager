@@ -99,6 +99,17 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	public bool EnableSorting
+	{
+		get => _settingsService.Initialized ? _settingsService.EnableSorting : false;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.EnableSorting = value;
+			OnPropertyChanged();
+		}
+	}
+
 	public bool DeleteToRecycleBin
 	{
 		get => _settingsService.Initialized ? _settingsService.DeleteToRecycleBin : true;
@@ -313,6 +324,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(SkipList));
 		OnPropertyChanged(nameof(CaseSensitiveSearch));
 		OnPropertyChanged(nameof(UseSymbolicLinks));
+		OnPropertyChanged(nameof(EnableSorting));
 		OnPropertyChanged(nameof(DeleteToRecycleBin));
 		OnPropertyChanged(nameof(AutoRemoveMissingMods));
 		OnPropertyChanged(nameof(ExtensionHost));

@@ -237,3 +237,31 @@ internal sealed class ProgressWidthConverter : IMultiValueConverter
         throw new NotImplementedException();
     }
 }
+
+/// <summary>
+/// 将 SortMode 枚举值转换为本地化显示文本
+/// </summary>
+internal sealed class SortModeConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is ViewModels.DashboardPageViewModel.SortMode mode)
+        {
+            return mode switch
+            {
+                ViewModels.DashboardPageViewModel.SortMode.Default => "默认顺序",
+                ViewModels.DashboardPageViewModel.SortMode.NameAsc => "名称 A-Z",
+                ViewModels.DashboardPageViewModel.SortMode.NameDesc => "名称 Z-A",
+                ViewModels.DashboardPageViewModel.SortMode.EnabledFirst => "已启用优先",
+                ViewModels.DashboardPageViewModel.SortMode.DisabledFirst => "已禁用优先",
+                _ => "默认顺序",
+            };
+        }
+        return "默认顺序";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}

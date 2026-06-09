@@ -104,8 +104,49 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
     public void ApplyData(in EnabledData data)
     {
         Enabled = data.Enabled;
-        EnabledOptions = data.Toggled;
-		SelectedOptions = data.Selected;
+
+        // 获取当前清单期望的选项数量，用于适配保存数据的数组长度
+        int expectedOptionCount = Manifest.Version switch
+        {
+            ManifestVersion.Legacy => 0,
+            ManifestVersion.V1 => ((V1ModManifest)Manifest).Options?.Count ?? 0,
+            _ => throw new NotImplementedException()
+        };
+
+        // 适配 Toggled 数组长度：若保存的数据长度与当前清单不匹配（如从无Options升级到有Options），
+        // 则自动截断或填充默认值（true=启用），确保运行时数组长度始终与清单一致
+        if (data.Toggled.Length == expectedOptionCount)
+        {
+            EnabledOptions = data.Toggled;
+        }
+        else
+        {
+            var toggled = new bool[expectedOptionCount];
+            for (int i = 0; i < expectedOptionCount; i++)
+                toggled[i] = i < data.Toggled.Length ? data.Toggled[i] : true;
+            EnabledOptions = toggled;
+        }
+
+        // 适配 Selected 数组长度：新位置默认选中第一个子选项（索引0）
+        // 注意：Legacy 特殊处理，其 Selected 数组始终为长度 1（供 LegacySelectedOption 访问索引0）
+        int expectedSelectedCount = Manifest.Version switch
+        {
+            ManifestVersion.Legacy => 1,
+            ManifestVersion.V1 => expectedOptionCount,
+            _ => throw new NotImplementedException()
+        };
+        if (data.Selected.Length == expectedSelectedCount)
+        {
+            SelectedOptions = data.Selected;
+        }
+        else
+        {
+            var selected = new int[expectedSelectedCount];
+            for (int i = 0; i < expectedSelectedCount; i++)
+                selected[i] = i < data.Selected.Length ? data.Selected[i] : 0;
+            SelectedOptions = selected;
+        }
+
         GroupId = data.GroupId;
         TagIds = data.TagIds?.ToList() ?? [];
     }

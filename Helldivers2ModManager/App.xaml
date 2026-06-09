@@ -21,6 +21,7 @@
 			<local:DownloadStatusToVisibilityConverter x:Key="DownloadStatusToVisibilityConverter"/>
 			<local:NullToVisibilityConverter x:Key="StringToVisibilityConverter"/>
 			<local:ProgressWidthConverter x:Key="ProgressWidthConverter"/>
+			<local:SortModeConverter x:Key="SortModeConverter"/>
 
 			<!-- ============================================ -->
 			<!-- Legacy Style Mappings (Backward Compatibility) -->

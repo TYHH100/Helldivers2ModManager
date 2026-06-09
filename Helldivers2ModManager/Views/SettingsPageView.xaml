@@ -300,6 +300,34 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Sort Settings -->
+                <Border Style="{StaticResource FluentSettingsCard}">
+                    <StackPanel>
+                        <TextBlock Text="排序"
+                                   Style="{StaticResource FluentSubSectionHeader}"
+                                   Margin="0"/>
+                        <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
+                            <Run Text="启用后可在模组列表顶部选择排序方式"/>
+                        </TextBlock>
+                        <Grid Margin="0 8 0 0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0"
+                                      Width="24"
+                                      Height="24"
+                                      IsChecked="{Binding EnableSorting}"
+                                      Margin="0 0 12 0"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="启用排序"
+                                       FontSize="14"
+                                       Foreground="{StaticResource NeutralForegroundBrush}"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- Developer Options Section -->
 				<Border Style="{StaticResource FluentSettingsCard}">
 					<StackPanel>

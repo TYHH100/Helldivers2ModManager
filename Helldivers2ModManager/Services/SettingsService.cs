@@ -177,6 +177,22 @@ internal sealed class SettingsService
 		}
 	}
 
+	public bool EnableSorting
+	{
+		get
+		{
+			GuardInitialized();
+			return _enableSorting;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_enableSorting = value;
+		}
+	}
+
 	public ObservableCollection<ModGroup> Groups
 	{
 		get
@@ -264,6 +280,7 @@ internal sealed class SettingsService
 	private bool _useSymbolicLinks;
 	private bool _deleteToRecycleBin = true;
 	private bool _autoRemoveMissingMods;
+	private bool _enableSorting;
 	private ObservableCollection<ModGroup> _groups = null!;
 	private ObservableCollection<ModTag> _tags = null!;
 	private string? _encryptedNexusApiKey;
@@ -380,6 +397,7 @@ internal sealed class SettingsService
 			writer.WriteBoolean(nameof(UseSymbolicLinks), _useSymbolicLinks);
 			writer.WriteBoolean(nameof(DeleteToRecycleBin), _deleteToRecycleBin);
 			writer.WriteBoolean(nameof(AutoRemoveMissingMods), _autoRemoveMissingMods);
+			writer.WriteBoolean(nameof(EnableSorting), _enableSorting);
 			writer.WriteString(nameof(ExtensionHost), _extensionHost);
 			writer.WriteNumber(nameof(ExtensionPort), _extensionPort);
 			writer.WriteStartArray(nameof(Groups));
@@ -537,6 +555,8 @@ internal sealed class SettingsService
 			_deleteToRecycleBin = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(AutoRemoveMissingMods), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_autoRemoveMissingMods = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(EnableSorting), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_enableSorting = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(ExtensionHost), JsonValueKind.String, out prop))
 			_extensionHost = prop.GetString()!;
 		if (root.TryGetProperty(nameof(ExtensionPort), JsonValueKind.Number, out prop))
@@ -603,7 +623,10 @@ internal sealed class SettingsService
 		_skipList = [];
 		_caseSensitiveSearch = false;
 		_useSymbolicLinks = false;
-		_extensionHost = "localhost";
+    _autoRemoveMissingMods = false;
+    _deleteToRecycleBin = true;
+    _enableSorting = false;
+    _extensionHost = "localhost";
 		_extensionPort = 7456;
 		_groups = [];
 		_tags = [];

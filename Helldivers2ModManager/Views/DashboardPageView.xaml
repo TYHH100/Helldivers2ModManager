@@ -213,12 +213,41 @@
 							ToolTip="重命名分组">
 						<TextBlock Text="&#xE8AC;" FontFamily="Segoe Fluent Icons"/>
 					</Button>
+					<!-- Sort Dropdown -->
+					<StackPanel Orientation="Horizontal"
+								Visibility="{Binding IsSortingEnabled, Converter={StaticResource BoolToVisibilityConverter}}">
+						<Border Style="{StaticResource FluentDivider}" Margin="8 0"/>
+						<TextBlock Text="&#xE8CB;"
+								   FontFamily="Segoe Fluent Icons"
+								   FontSize="16"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   VerticalAlignment="Center"
+								   Margin="0 0 8 0"/>
+						<ComboBox Width="120"
+								  ItemsSource="{Binding SortModes}"
+								  SelectedItem="{Binding CurrentSortMode, Mode=TwoWay}">
+							<ComboBox.ItemTemplate>
+								<DataTemplate>
+									<TextBlock Foreground="{StaticResource NeutralForegroundBrush}">
+										<TextBlock.Text>
+											<Binding FallbackValue="默认顺序">
+												<Binding.Converter>
+													<local:SortModeConverter/>
+												</Binding.Converter>
+											</Binding>
+										</TextBlock.Text>
+									</TextBlock>
+								</DataTemplate>
+							</ComboBox.ItemTemplate>
+						</ComboBox>
+					</StackPanel>
 				</StackPanel>
 			</Grid>
 		</Border>
 
 		<!-- Mod List -->
-		<ScrollViewer Grid.Row="1"
+		<ScrollViewer x:Name="ModListScrollViewer"
+					  Grid.Row="1"
 					  Grid.Column="1"
 					  Margin="0 0 0 16"
 					  Background="Transparent"
@@ -226,13 +255,26 @@
 					  HorizontalScrollBarVisibility="Disabled"
 					  VerticalScrollBarVisibility="Auto">
 			<ItemsControl ItemsSource="{Binding Mods}"
-					  dd:DragDrop.IsDragSource="{Binding IsSearchEmpty}">
+					  dd:DragDrop.IsDragSource="{Binding IsSearchEmpty}"
+					  dd:DragDrop.IsDropTarget="True"
+					  dd:DragDrop.DropHandler="{Binding}">
 				<ItemsControl.ItemTemplate>
 					<DataTemplate DataType="vms:ModViewModel">
-						<Border Style="{StaticResource FluentModCard}"
-										Grid.Row="0"
+						<Border Grid.Row="0"
 										Grid.RowSpan="2"
-										Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}">
+										Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
+										MouseLeftButtonDown="ModCard_MouseLeftButtonDown">
+							<Border.Style>
+								<Style TargetType="Border" BasedOn="{StaticResource FluentModCard}">
+									<Setter Property="BorderBrush" Value="Transparent"/>
+									<Setter Property="BorderThickness" Value="2"/>
+									<Style.Triggers>
+										<DataTrigger Binding="{Binding IsSelected}" Value="True">
+											<Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+										</DataTrigger>
+									</Style.Triggers>
+								</Style>
+							</Border.Style>
 							<Border.ContextMenu>
 								<ContextMenu>
 									<MenuItem Header="打开文件位置"
@@ -243,6 +285,9 @@
 											  CommandParameter="{Binding}"/>
 									<MenuItem Header="编辑描述"
 											  Command="{Binding PlacementTarget.Tag.EditDescriptionCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+											  CommandParameter="{Binding}"/>
+									<MenuItem Header="更新图片"
+											  Command="{Binding PlacementTarget.Tag.EditImageCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 											  CommandParameter="{Binding}"/>
 									<Separator/>
 									<!--<MenuItem Header="在 Nexus 上查看"
@@ -456,6 +501,37 @@
 				<!-- Action Buttons -->
 				<StackPanel Grid.Column="1"
 							Orientation="Horizontal">
+					<!-- Batch Action Buttons (visible when items selected) -->
+					<StackPanel Orientation="Horizontal"
+								Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
+						<TextBlock Text="{Binding SelectionCountText}"
+								   FontSize="13"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   VerticalAlignment="Center"
+								   Margin="0 0 8 0"/>
+						<Button Style="{StaticResource FluentSecondaryButton}"
+								Content="全选"
+								Command="{Binding SelectAllCommand}"
+								Padding="12 6"/>
+						<Button Style="{StaticResource FluentSecondaryButton}"
+								Content="取消"
+								Command="{Binding DeselectAllCommand}"
+								Padding="12 6"/>
+						<Button Style="{StaticResource FluentSecondaryButton}"
+								Content="启用"
+								Command="{Binding BatchEnableCommand}"
+								Padding="12 6"/>
+						<Button Style="{StaticResource FluentSecondaryButton}"
+								Content="禁用"
+								Command="{Binding BatchDisableCommand}"
+								Padding="12 6"/>
+						<Button Style="{StaticResource FluentDangerButton}"
+								Content="删除"
+								Command="{Binding BatchDeleteCommand}"
+								Padding="12 6"/>
+						<Border Style="{StaticResource FluentDivider}" Margin="8 0"/>
+					</StackPanel>
+
 					<Button Style="{StaticResource FluentDangerButton}"
 							Content="清理模组"
 							Command="{Binding PurgeCommand}"
