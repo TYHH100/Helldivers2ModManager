@@ -90,7 +90,7 @@ internal sealed class EnabledDataRepository
 				}
 
 				transaction.Commit();
-				_logger.LogInformation("已保存 {Count} 条 Mod 配置到数据库", enabledDataList.Count());
+				_logger.LogInformation("Saved {Count} mod configs to database", enabledDataList.Count());
 			}
 			catch
 			{
@@ -186,7 +186,7 @@ internal sealed class EnabledDataRepository
 			}
 		}
 
-		_logger.LogDebug("从数据库加载了 {Count} 条 Mod 配置", results.Count);
+		_logger.LogDebug("Loaded {Count} mod configs from database", results.Count);
 		return results;
 	}
 
@@ -216,7 +216,7 @@ internal sealed class EnabledDataRepository
 				}
 
 				transaction.Commit();
-				_logger.LogInformation("从数据库删除了 {Count} 条 Mod 配置", guids.Count());
+				_logger.LogInformation("Deleted {Count} mod configs from database", guids.Count());
 			}
 			catch
 			{

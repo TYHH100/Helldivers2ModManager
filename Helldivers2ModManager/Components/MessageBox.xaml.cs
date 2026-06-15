@@ -30,6 +30,26 @@ internal sealed class MessageBoxProgressMessage
 	public required string Message { get; init; }
 }
 
+/// <summary>
+/// 导出进度初始显示消息（带确定进度条 + 信息面板）
+/// </summary>
+internal sealed class MessageBoxExportProgressMessage
+{
+	public required string Title { get; init; }
+}
+
+/// <summary>
+/// 导出进度更新消息（实时更新进度/速度/压缩率）
+/// </summary>
+internal sealed class MessageBoxExportProgressUpdateMessage
+{
+	public double Progress { get; init; }               // 0.0 ~ 1.0
+	public string? CurrentFile { get; init; }            // 当前正在压缩的文件
+	public string? SpeedText { get; init; }              // e.g. "速度: 15.2 MB/s"
+	public string? RatioText { get; init; }              // e.g. "压缩率: 65%"
+	public bool IsCompleted { get; init; }               // 是否已完成
+}
+
 internal sealed class MessageBoxHideMessage { }
 
 internal sealed class MessageBoxInputMessage
@@ -89,7 +109,7 @@ internal sealed class MessageBoxColorPickerMessage
 	public required Action<string> Confirm { get; init; }
 }
 
-internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxColorPickerMessage>
+internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxExportProgressMessage>, IRecipient<MessageBoxExportProgressUpdateMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxColorPickerMessage>
 {
 	public static bool IsRegistered { get; private set; }
 
@@ -111,6 +131,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		WeakReferenceMessenger.Default.Register<MessageBoxWarningMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxErrorMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxProgressMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxExportProgressMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxExportProgressUpdateMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxHideMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxInputMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxConfirmMessage>(this);
@@ -170,6 +192,50 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 
 		progress.Visibility = Visibility.Visible;
 		Visibility = Visibility.Visible;
+	}
+
+	public void Receive(MessageBoxExportProgressMessage message)
+	{
+		Reset();
+
+		title.Text = message.Title;
+		brush.Color = Colors.White;
+		this.message.Text = "正在压缩...";
+
+		// Switch progress bar to determinate mode
+		progress.IsIndeterminate = false;
+		progress.Value = 0;
+		progress.Visibility = Visibility.Visible;
+
+		// Show export info panel with all elements visible
+		exportProgressPanel.Visibility = Visibility.Visible;
+		exportCurrentFile.Visibility = Visibility.Visible;
+		exportSpeedText.Visibility = Visibility.Visible;
+		exportCurrentFile.Text = "";
+		exportSpeedText.Text = "";
+		exportRatioText.Text = "";
+
+		Visibility = Visibility.Visible;
+	}
+
+	public void Receive(MessageBoxExportProgressUpdateMessage message)
+	{
+		if (message.IsCompleted)
+		{
+			// 完成状态：隐藏进度条/当前文件/速度，保留压缩率，显示确认按钮
+			progress.Visibility = Visibility.Hidden;
+			exportCurrentFile.Visibility = Visibility.Collapsed;
+			exportSpeedText.Visibility = Visibility.Collapsed;
+			this.message.Text = "导出完成";
+			okButton.Visibility = Visibility.Visible;
+		}
+		else
+		{
+			progress.Value = Math.Clamp(message.Progress * 100, 0, 100);
+			exportCurrentFile.Text = message.CurrentFile ?? "";
+			exportSpeedText.Text = message.SpeedText ?? "";
+			exportRatioText.Text = message.RatioText ?? "";
+		}
 	}
 
 	public void Receive(MessageBoxHideMessage message)
@@ -295,7 +361,14 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		cancelButton.Visibility = Visibility.Hidden;
 		okButton.Visibility = Visibility.Hidden;
 		yesNoStack.Visibility = Visibility.Hidden;
+		progress.IsIndeterminate = true;
 		progress.Visibility = Visibility.Hidden;
+		exportProgressPanel.Visibility = Visibility.Collapsed;
+		exportCurrentFile.Visibility = Visibility.Visible;
+		exportSpeedText.Visibility = Visibility.Visible;
+		exportCurrentFile.Text = "";
+		exportSpeedText.Text = "";
+		exportRatioText.Text = "";
 	}
 
 	private void OkButton_Click(object sender, RoutedEventArgs e)

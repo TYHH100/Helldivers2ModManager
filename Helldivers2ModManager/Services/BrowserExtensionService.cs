@@ -6,6 +6,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Helldivers2ModManager.Services;
 
@@ -18,6 +19,13 @@ internal sealed class BrowserExtensionService : IDisposable
     private readonly SettingsService _settingsService;
     private Task? _listenerTask;
     private CancellationTokenSource? _cts;
+
+    private readonly Dictionary<string, CancellationTokenSource> _downloadCancellations = new();
+
+    /// <summary>
+    /// 下载任务持久化文件路径
+    /// </summary>
+    private string DownloadTasksFilePath => Path.Combine(_settingsService.StorageDirectory, "download_tasks.json");
 
     public bool IsListening { get; private set; }
 
@@ -36,6 +44,9 @@ internal sealed class BrowserExtensionService : IDisposable
         _modService = modService;
         _settingsService = settingsService;
         _httpListener = new HttpListener();
+
+        // 加载持久化的下载任务
+        LoadDownloadTasks();
     }
 
     public void Start()
@@ -219,6 +230,7 @@ internal sealed class BrowserExtensionService : IDisposable
 
             DownloadTasks.Add(downloadTask);
             DownloadStarted?.Invoke(downloadTask);
+            SaveDownloadTasks();
 
             await SendJsonResponse(response, new { success = true, taskId = downloadTask.Id }, HttpStatusCode.OK);
 
@@ -233,13 +245,18 @@ internal sealed class BrowserExtensionService : IDisposable
 
     private async Task ProcessDownloadAsync(DownloadTask task, CancellationToken cancellationToken)
     {
+        // 为每个下载任务创建独立的取消令牌，关联到服务级别的取消令牌
+        using var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _downloadCancellations[task.Id] = downloadCts;
+
         try
         {
             task.Status = DownloadStatus.Downloading;
+            task.MarkDownloadStarted();
             
             var tempPath = Path.Combine(_settingsService.TempDirectory, task.Filename);
             
-            await DownloadFileWithProgressAsync(task.Url, tempPath, task, cancellationToken);
+            await DownloadFileWithProgressAsync(task.Url, tempPath, task, downloadCts.Token);
             
             var fileInfo = new FileInfo(tempPath);
             var problems = await _modService.TryAddModFromArchiveAsync(fileInfo);
@@ -249,6 +266,8 @@ internal sealed class BrowserExtensionService : IDisposable
             if (problems.Length == 0 || hasOnlyNoManifestIssue)
             {
                 task.Status = DownloadStatus.Completed;
+                task.Speed = 0; // 下载完成后清零速度
+                task.EstimatedTimeRemaining = TimeSpan.Zero;
                 
                 if (hasOnlyNoManifestIssue)
                 {
@@ -267,16 +286,36 @@ internal sealed class BrowserExtensionService : IDisposable
                 var errorMessages = problems.Select(p => p.Kind.ToString()).ToArray();
                 task.ErrorMessage = string.Join(", ", errorMessages);
                 task.Status = DownloadStatus.Failed;
+                task.Speed = 0;
+                task.EstimatedTimeRemaining = TimeSpan.Zero;
                 _logger.LogWarning("Mod import completed with issues: {Errors}", string.Join(", ", errorMessages));
                 DownloadFailed?.Invoke(task);
             }
+
+            SaveDownloadTasks();
+        }
+        catch (OperationCanceledException)
+        {
+            task.Status = DownloadStatus.Cancelled;
+            task.ErrorMessage = "下载已取消";
+            task.Speed = 0;
+            task.EstimatedTimeRemaining = TimeSpan.Zero;
+            _logger.LogInformation("Download cancelled: {Filename}", task.Filename);
+            SaveDownloadTasks();
         }
         catch (Exception ex)
         {
             task.Status = DownloadStatus.Failed;
             task.ErrorMessage = ex.Message;
+            task.Speed = 0;
+            task.EstimatedTimeRemaining = TimeSpan.Zero;
             _logger.LogError(ex, "Failed to download or import mod");
             DownloadFailed?.Invoke(task);
+            SaveDownloadTasks();
+        }
+        finally
+        {
+            _downloadCancellations.Remove(task.Id);
         }
     }
 
@@ -322,6 +361,7 @@ internal sealed class BrowserExtensionService : IDisposable
             await fileStream.WriteAsync(buffer, 0, read, cancellationToken);
             bytesRead += read;
             task.UpdateProgress(bytesRead, totalBytes);
+            task.UpdateSpeed(bytesRead, totalBytes);
             DownloadProgressChanged?.Invoke(task);
         }
     }
@@ -350,8 +390,168 @@ internal sealed class BrowserExtensionService : IDisposable
     public void Dispose()
     {
         Stop();
+        // 取消所有正在进行的下载
+        foreach (var cts in _downloadCancellations.Values)
+        {
+            cts.Cancel();
+        }
+        _downloadCancellations.Clear();
         (_httpListener as IDisposable)?.Dispose();
         _cts?.Dispose();
+    }
+
+    /// <summary>
+    /// 取消指定下载任务
+    /// </summary>
+    public bool CancelDownload(string taskId)
+    {
+        if (_downloadCancellations.TryGetValue(taskId, out var cts))
+        {
+            cts.Cancel();
+            _logger.LogInformation("Cancelling download task: {TaskId}", taskId);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 重试失败的下载任务
+    /// </summary>
+    public async Task RetryDownloadAsync(DownloadTask task, CancellationToken cancellationToken = default)
+    {
+        if (task.Status != DownloadStatus.Failed && task.Status != DownloadStatus.Cancelled)
+            return;
+
+        // 移除旧任务
+        DownloadTasks.Remove(task);
+
+        // 创建新任务重新下载
+        var newTask = new DownloadTask
+        {
+            Filename = task.Filename,
+            Url = task.Url,
+            Status = DownloadStatus.Pending
+        };
+
+        DownloadTasks.Add(newTask);
+        DownloadStarted?.Invoke(newTask);
+
+        await ProcessDownloadAsync(newTask, cancellationToken);
+    }
+
+    /// <summary>
+    /// 移除指定的下载任务（仅限非下载中的任务）
+    /// </summary>
+    public bool RemoveDownloadTask(DownloadTask task)
+    {
+        if (task.Status == DownloadStatus.Downloading)
+            return false;
+
+        var removed = DownloadTasks.Remove(task);
+        if (removed)
+            SaveDownloadTasks();
+        return removed;
+    }
+
+    /// <summary>
+    /// 清除所有已完成、失败或取消的下载任务
+    /// </summary>
+    public void ClearCompletedTasks()
+    {
+        var completedTasks = DownloadTasks
+            .Where(t => t.Status == DownloadStatus.Completed ||
+                        t.Status == DownloadStatus.Failed ||
+                        t.Status == DownloadStatus.Cancelled)
+            .ToList();
+
+        foreach (var task in completedTasks)
+        {
+            DownloadTasks.Remove(task);
+        }
+
+        SaveDownloadTasks();
+    }
+
+    /// <summary>
+    /// 将下载任务保存到 JSON 文件，实现持久化
+    /// </summary>
+    private void SaveDownloadTasks()
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(DownloadTasksFilePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var data = DownloadTasks.Select(t => new DownloadTaskData
+            {
+                Id = t.Id,
+                Filename = t.Filename,
+                Url = t.Url,
+                Status = t.Status,
+                BytesDownloaded = t.BytesDownloaded,
+                TotalBytes = t.TotalBytes,
+                Progress = t.Progress,
+                ErrorMessage = t.ErrorMessage
+            }).ToList();
+
+            var json = JsonSerializer.Serialize(data, s_jsonOptions);
+            File.WriteAllText(DownloadTasksFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save download tasks");
+        }
+    }
+
+    /// <summary>
+    /// 从 JSON 文件加载下载任务
+    /// </summary>
+    private void LoadDownloadTasks()
+    {
+        try
+        {
+            if (!File.Exists(DownloadTasksFilePath))
+                return;
+
+            var json = File.ReadAllText(DownloadTasksFilePath);
+            var data = JsonSerializer.Deserialize<List<DownloadTaskData>>(json, s_jsonOptions);
+
+            if (data == null)
+                return;
+
+            foreach (var item in data)
+            {
+                // 重新打开时，之前正在下载/等待的任务标记为取消（无法恢复中断的下载）
+                var status = item.Status;
+                if (status == DownloadStatus.Downloading || status == DownloadStatus.Pending)
+                {
+                    status = DownloadStatus.Cancelled;
+                }
+
+                var task = new DownloadTask
+                {
+                    Id = item.Id,
+                    Filename = item.Filename,
+                    Url = item.Url,
+                    Status = status,
+                    BytesDownloaded = item.BytesDownloaded,
+                    TotalBytes = item.TotalBytes,
+                    Progress = item.Progress,
+                    ErrorMessage = status == DownloadStatus.Cancelled ? "应用重启，下载已中断" : item.ErrorMessage
+                };
+
+                DownloadTasks.Add(task);
+            }
+
+            _logger.LogInformation("Loaded {Count} download tasks from storage", DownloadTasks.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load download tasks");
+        }
     }
 
     private sealed class DownloadRequest
@@ -362,5 +562,28 @@ internal sealed class BrowserExtensionService : IDisposable
         public string Filename { get; set; } = string.Empty;
         [System.Text.Json.Serialization.JsonPropertyName("timestamp")]
         public long Timestamp { get; set; }
+    }
+
+    /// <summary>
+    /// 下载任务持久化数据模型，用于 JSON 序列化/反序列化
+    /// </summary>
+    private sealed class DownloadTaskData
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+        [JsonPropertyName("filename")]
+        public string Filename { get; set; } = string.Empty;
+        [JsonPropertyName("url")]
+        public string Url { get; set; } = string.Empty;
+        [JsonPropertyName("status")]
+        public DownloadStatus Status { get; set; }
+        [JsonPropertyName("bytesDownloaded")]
+        public long BytesDownloaded { get; set; }
+        [JsonPropertyName("totalBytes")]
+        public long TotalBytes { get; set; }
+        [JsonPropertyName("progress")]
+        public double Progress { get; set; }
+        [JsonPropertyName("errorMessage")]
+        public string? ErrorMessage { get; set; }
     }
 }

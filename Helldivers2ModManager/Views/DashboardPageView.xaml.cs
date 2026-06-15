@@ -70,10 +70,25 @@ internal partial class DashboardPageView : Page
 		}
 	}
 
-	private void ImagePreviewOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	private void ImagePreviewOverlay_KeyDown(object sender, KeyEventArgs e)
 	{
-		var viewModel = DataContext as DashboardPageViewModel;
-		viewModel?.HideImagePreviewCommand.Execute(null);
+		// 按 ESC 键关闭图片预览
+		if (e.Key == Key.Escape)
+		{
+			var viewModel = DataContext as DashboardPageViewModel;
+			viewModel?.HideImagePreviewCommand.Execute(null);
+			e.Handled = true;
+		}
+	}
+
+	private void ImagePreviewOverlay_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+	{
+		// 预览变为可见时，让 overlay 获得焦点以接收 ESC 按键事件
+		if (e.NewValue is true && sender is Border border)
+		{
+			border.Focusable = true;
+			_ = border.Focus();
+		}
 	}
 
 	private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -87,6 +102,18 @@ internal partial class DashboardPageView : Page
 		{
 			button.ContextMenu.DataContext = DataContext;
 			button.ContextMenu.IsOpen = true;
+		}
+	}
+
+	/// <summary>
+	/// 点击版本状态指示器，显示详细的版本兼容性信息
+	/// </summary>
+	private void VersionStatusIndicator_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		if (sender is Border border && border.DataContext is ModViewModel vm)
+		{
+			vm.ShowVersionDetailCommand.Execute(null);
+			e.Handled = true;
 		}
 	}
 }

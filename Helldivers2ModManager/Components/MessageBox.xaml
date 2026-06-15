@@ -10,12 +10,14 @@
 			 d:DesignWidth="800"
 			 Background="#80000000"
 			 Visibility="Hidden"
-			 d:Visibility="Visible">
+			 d:Visibility="Visible"
+			 UseLayoutRounding="True"
+			 RenderOptions.BitmapScalingMode="HighQuality">
 	<Border Style="{StaticResource FluentMessageDialog}"
 			VerticalAlignment="Center"
 			HorizontalAlignment="Center"
 			MinWidth="320"
-			MaxWidth="480">
+			MaxWidth="640">
 		<Grid>
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto"/>
@@ -50,7 +52,7 @@
 							  Padding="0"
 							  VerticalScrollBarVisibility="Auto"
 							  HorizontalScrollBarVisibility="Auto"
-							  MaxHeight="100">
+							  MaxHeight="360">
 					<TextBlock x:Name="message"
 							   FontSize="14"
 							   FontFamily="Segoe UI Variable Text"
@@ -72,6 +74,32 @@
 						  Margin="0 0 0 16"
 						  FontSize="14"
 						  Visibility="Collapsed"/>
+
+				<!-- Export Progress Info (速度/压缩率) -->
+				<StackPanel Grid.Row="3"
+							x:Name="exportProgressPanel"
+							Margin="0 -8 0 16"
+							Visibility="Collapsed">
+					<TextBlock x:Name="exportCurrentFile"
+							   FontSize="12"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   TextTrimming="CharacterEllipsis"
+							   Margin="0 0 0 4"/>
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="Auto"/>
+						</Grid.ColumnDefinitions>
+						<TextBlock x:Name="exportSpeedText"
+								   Grid.Column="0"
+								   FontSize="12"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+						<TextBlock x:Name="exportRatioText"
+								   Grid.Column="1"
+								   FontSize="12"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+					</Grid>
+				</StackPanel>
 
 				<!-- Tag Selection List -->
 				<ListBox x:Name="tagSelectionList"

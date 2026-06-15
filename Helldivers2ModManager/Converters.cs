@@ -192,6 +192,7 @@ internal sealed class DownloadStatusToStringConverter : IValueConverter
                 Models.DownloadStatus.Downloading => "下载中",
                 Models.DownloadStatus.Completed => "已完成",
                 Models.DownloadStatus.Failed => "失败",
+                Models.DownloadStatus.Cancelled => "已取消",
                 _ => "未知"
             };
         }
@@ -233,6 +234,92 @@ internal sealed class ProgressWidthConverter : IMultiValueConverter
     }
 
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// 将下载速度（字节/秒）转换为可读文本（如 "1.5 MB/s"）
+/// </summary>
+internal sealed class SpeedToReadableConverter : IValueConverter
+{
+    private static readonly string[] SpeedSuffixes = { "B/s", "KB/s", "MB/s", "GB/s" };
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is double speed && speed > 0)
+        {
+            int i = 0;
+            double readableSpeed = speed;
+            while (readableSpeed >= 1024 && i < SpeedSuffixes.Length - 1)
+            {
+                i++;
+                readableSpeed /= 1024;
+            }
+            return $"{readableSpeed:0.##} {SpeedSuffixes[i]}";
+        }
+        return string.Empty;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// 将 ModVersionStatus 枚举值转换为对应的颜色画刷
+/// 兼容(绿色) / 不兼容(红色) / 未知(灰色) / 检查中(蓝色) / 错误(橙色)
+/// </summary>
+internal sealed class VersionStatusToColorConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is Models.ModVersionStatus status)
+        {
+            return status switch
+            {
+                Models.ModVersionStatus.Compatible => new SolidColorBrush(Color.FromRgb(76, 175, 80)),    // 绿色
+                Models.ModVersionStatus.Incompatible => new SolidColorBrush(Color.FromRgb(244, 67, 54)), // 红色
+                Models.ModVersionStatus.Unknown => new SolidColorBrush(Color.FromRgb(255, 193, 7)),     // 黄色（无法确认）
+                Models.ModVersionStatus.Checking => new SolidColorBrush(Color.FromRgb(33, 150, 243)),    // 蓝色
+                Models.ModVersionStatus.Error => new SolidColorBrush(Color.FromRgb(255, 152, 0)),        // 橙色
+                _ => new SolidColorBrush(Color.FromRgb(158, 158, 158))
+            };
+        }
+        return new SolidColorBrush(Color.FromRgb(158, 158, 158));
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// 将 ModVersionStatus 枚举值转换为本地化显示文本
+/// </summary>
+internal sealed class VersionStatusToTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is Models.ModVersionStatus status)
+        {
+            return status switch
+            {
+                Models.ModVersionStatus.Compatible => "兼容",
+                Models.ModVersionStatus.Incompatible => "不兼容",
+                Models.ModVersionStatus.Unknown => "无法确认",
+                Models.ModVersionStatus.Checking => "检查中",
+                Models.ModVersionStatus.Error => "检查失败",
+                _ => "未知"
+            };
+        }
+        return "未知";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
         throw new NotImplementedException();
     }

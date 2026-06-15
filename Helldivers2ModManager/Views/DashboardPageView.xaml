@@ -34,7 +34,7 @@
 				CornerRadius="8">
 			<DockPanel LastChildFill="False">
 				<!-- App Logo/Header -->
-				<Border Background="{StaticResource SystemAccentBrush}"
+				<!-- <Border Background="{StaticResource SystemAccentBrush}"
 						CornerRadius="4"
 						Padding="12"
 						Margin="0 0 0 16"
@@ -52,7 +52,7 @@
 								   HorizontalAlignment="Center"
 								   Margin="0 4 0 0"/>
 					</StackPanel>
-				</Border>
+				</Border> -->
 
 				<!-- Navigation Buttons -->
 				<StackPanel DockPanel.Dock="Top">
@@ -65,13 +65,21 @@
 						</StackPanel>
 					</Button>
 					<Button Style="{StaticResource FluentNavigationButton}"
+							Command="{Binding CreateCommand}"
+							IsEnabled="{Binding Initialized}">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xE7AC;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+							<TextBlock Text="创建模组" Margin="12 0 0 0" VerticalAlignment="Center"/>
+						</StackPanel>
+					</Button>
+					<!-- <Button Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding DownloadFromNexusCommand}"
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
                         <TextBlock Text="从 Nexus 下载" ToolTip="试验性, 未经测试(我没有n网会员所以这个就鸽了)" Margin="12 0 0 0" VerticalAlignment="Center"/>
 					</StackPanel>
-				</Button>
+				</Button> -->
 					<Button Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding ShowDownloadProgressCommand}"
 						IsEnabled="{Binding Initialized}">
@@ -277,10 +285,17 @@
 							</Border.Style>
 							<Border.ContextMenu>
 								<ContextMenu>
+									<MenuItem Header="编辑 manifest"
+											  Command="{Binding PlacementTarget.Tag.EditManifestCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+											  CommandParameter="{Binding}"/>
+									<MenuItem Header="打包并导出"
+											  Command="{Binding PlacementTarget.Tag.ExportModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+											  CommandParameter="{Binding}"/>
+									<Separator/>
 									<MenuItem Header="打开文件位置"
 											  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 											  CommandParameter="{Binding}"/>
-									<MenuItem Header="编辑名字"
+									<!-- <MenuItem Header="编辑名字"
 											  Command="{Binding PlacementTarget.Tag.EditNameCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 											  CommandParameter="{Binding}"/>
 									<MenuItem Header="编辑描述"
@@ -288,7 +303,7 @@
 											  CommandParameter="{Binding}"/>
 									<MenuItem Header="更新图片"
 											  Command="{Binding PlacementTarget.Tag.EditImageCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/>
+											  CommandParameter="{Binding}"/> -->
 									<Separator/>
 									<!--<MenuItem Header="在 Nexus 上查看"
 											  Command="{Binding OpenNexusPageCommand}"
@@ -475,6 +490,62 @@
 											   FontSize="16"
 											   Foreground="{StaticResource DangerBrush}"/>
 								</Button>
+
+								<!-- 版本状态指示器（卡片左上角覆盖层） -->
+								<Border Grid.Column="0"
+										Grid.Row="0"
+										Width="14"
+										Height="14"
+										CornerRadius="7"
+										HorizontalAlignment="Left"
+										VerticalAlignment="Top"
+										Margin="-7,-7,0,0"
+										Cursor="Hand"
+										Background="{Binding VersionStatus, Converter={StaticResource VersionStatusToColorConverter}}"
+										MouseLeftButtonDown="VersionStatusIndicator_MouseLeftButtonDown">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Visibility" Value="Visible"/>
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding IsCheckingVersion}" Value="True">
+													<Setter Property="Visibility" Value="Collapsed"/>
+												</DataTrigger>
+												<DataTrigger Binding="{Binding VersionStatus}" Value="Unknown">
+													<Setter Property="Visibility" Value="Collapsed"/>
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+									<Border.ToolTip>
+										<ToolTip>
+											<StackPanel>
+												<TextBlock FontWeight="SemiBold" Margin="0 0 0 4">
+													<Run Text="版本兼容性: "/>
+													<Run Text="{Binding VersionStatus, Converter={StaticResource VersionStatusToTextConverter}}"/>
+												</TextBlock>
+												<TextBlock Text="{Binding LastVersionCheck, StringFormat='最后检查: {0:yyyy-MM-dd HH:mm}'}"
+														   FontSize="11"
+														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+												<TextBlock Text="点击查看详情"
+														   FontSize="11"
+														   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+														   Margin="0 4 0 0"/>
+											</StackPanel>
+										</ToolTip>
+									</Border.ToolTip>
+								</Border>
+								<!-- 检查中加载指示器（卡片左上角覆盖层） -->
+								<Border Grid.Column="0"
+										Grid.Row="0"
+										Width="14"
+										Height="14"
+										CornerRadius="7"
+										HorizontalAlignment="Left"
+										VerticalAlignment="Top"
+										Margin="-7,-7,0,0"
+										Background="{StaticResource SystemAccentBrush}"
+										Visibility="{Binding IsCheckingVersion, Converter={StaticResource BoolToVisibilityConverter}}"
+										ToolTip="正在检查版本兼容性..."/>
 							</Grid>
 						</Border>
 					</DataTemplate>
@@ -498,7 +569,44 @@
 					<ColumnDefinition Width="Auto"/>
 				</Grid.ColumnDefinitions>
 
-				<!-- Action Buttons -->
+				<!-- Version Check Status & Button (左侧) -->
+				<StackPanel Grid.Column="0"
+							Orientation="Horizontal"
+							VerticalAlignment="Center">
+					<StackPanel.Style>
+						<Style TargetType="StackPanel">
+							<Setter Property="Visibility" Value="Visible"/>
+							<Style.Triggers>
+								<DataTrigger Binding="{Binding HasSelection}" Value="True">
+									<Setter Property="Visibility" Value="Collapsed"/>
+								</DataTrigger>
+							</Style.Triggers>
+						</Style>
+					</StackPanel.Style>
+					<Button Style="{StaticResource FluentSecondaryButton}"
+							Content="检查版本兼容性"
+							Command="{Binding CheckVersionCompatibilityCommand}"
+							IsEnabled="{Binding Initialized}"
+							Padding="12 6">
+						<Button.ToolTip>
+							<ToolTip Content="扫描所有模组的补丁文件，以多数版本为参考检测可能不兼容的模组"/>
+						</Button.ToolTip>
+					</Button>
+					<Border Width="12"
+							Height="12"
+							CornerRadius="6"
+							Margin="8 0 0 0"
+							Background="{StaticResource SystemAccentBrush}"
+							Visibility="{Binding IsCheckingVersion, Converter={StaticResource BoolToVisibilityConverter}}"/>
+					<TextBlock Text="{Binding VersionCheckSummary}"
+							   FontSize="12"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   VerticalAlignment="Center"
+							   Margin="8 0 0 0"
+							   Visibility="{Binding HasVersionCheckResult, Converter={StaticResource BoolToVisibilityConverter}}"/>
+				</StackPanel>
+
+				<!-- Action Buttons (右侧) -->
 				<StackPanel Grid.Column="1"
 							Orientation="Horizontal">
 					<!-- Batch Action Buttons (visible when items selected) -->
@@ -572,7 +680,9 @@
 				Padding="60 80"
 				Visibility="{Binding ImagePreviewVisibility}"
 				d:Visibility="Hidden"
-				MouseLeftButtonDown="ImagePreviewOverlay_MouseLeftButtonDown">
+				Focusable="True"
+				KeyDown="ImagePreviewOverlay_KeyDown"
+				IsVisibleChanged="ImagePreviewOverlay_IsVisibleChanged">
 			<Border Style="{StaticResource FluentMessageDialog}"
 					MaxWidth="800"
 					MaxHeight="600"

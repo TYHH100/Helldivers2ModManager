@@ -56,11 +56,7 @@ internal sealed class FileLogger(string name, StreamWriter stream, object lockOb
 
 	public bool IsEnabled(LogLevel logLevel)
 	{
-#if DEBUG
-		return true;
-#else
 		return logLevel != LogLevel.None && logLevel >= App.Current.LogLevel;
-#endif
 	}
 
 	public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)

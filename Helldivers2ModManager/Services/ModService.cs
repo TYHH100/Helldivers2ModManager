@@ -5,11 +5,7 @@ using Helldivers2ModManager.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualBasic.FileIO;
-using SharpCompress;
-using SharpCompress.Archives;
-using SharpCompress.Archives.SevenZip;
-using SharpCompress.Common;
-using SharpCompress.Readers;
+using SharpSevenZip;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -158,6 +154,114 @@ internal sealed partial class ModService
 		return problems.ToArray();
 	}
 	
+	/// <summary>
+	/// 从源目录创建并添加模组。将源目录内容复制到存储目录，
+	/// 根据目录结构自动推断清单格式，并使用用户指定的名称和描述。
+	/// </summary>
+	/// <param name="sourceDir">源目录，包含模组文件</param>
+	/// <param name="modName">模组显示名称</param>
+	/// <param name="modDescription">模组描述</param>
+	/// <param name="customOptions">用户自定义的选项列表（可选，为 null 时自动推断）</param>
+	/// <param name="iconPath">模组图标路径（可选，仅文件名部分会写入清单）</param>
+	/// <returns>遇到的问题列表</returns>
+	public async Task<ModProblem[]> TryAddModFromDirectoryAsync(
+		DirectoryInfo sourceDir, string modName, string modDescription,
+		List<ModOption>? customOptions = null, string? iconPath = null)
+	{
+		GuardInitialized();
+
+		var problems = new List<ModProblem>();
+
+		_logger.LogInformation("Attempting to add mod from directory \"{}\"", sourceDir.FullName);
+
+		if (!sourceDir.Exists)
+		{
+			problems.Add(new ModProblem
+			{
+				Directory = sourceDir,
+				Kind = ModProblemKind.InvalidPath,
+			});
+			return problems.ToArray();
+		}
+
+		// 根据源目录结构推断清单
+		var manifest = ModManifest.InferFromDirectory(sourceDir, _logger);
+
+		// 使用用户输入的名称和描述覆盖推断值
+		var finalName = !string.IsNullOrWhiteSpace(modName) ? modName : manifest.Name;
+		var finalDescription = !string.IsNullOrWhiteSpace(modDescription) ? modDescription : manifest.Description;
+
+		// 确定图标路径：优先使用用户指定的图标，否则使用推断的图标
+		var finalIconPath = !string.IsNullOrWhiteSpace(iconPath)
+			? Path.GetFileName(iconPath)
+			: manifest.IconPath;
+
+		// 构建目标目录路径
+		var modDir = new DirectoryInfo(Path.Combine(_settingsService.StorageDirectory, "Mods", finalName));
+		if (modDir.Exists)
+		{
+			_logger.LogWarning("Mod directory already exists: {}", modDir.FullName);
+			problems.Add(new ModProblem
+			{
+				Directory = modDir,
+				Kind = ModProblemKind.Duplicate,
+			});
+			return problems.ToArray();
+		}
+
+		// 复制源目录内容到存储目录
+		modDir.Parent?.Create();
+		await Task.Run(() => sourceDir.CopyTo(modDir.FullName));
+
+		// 创建清单文件：如果用户提供了自定义选项，则使用 V1 格式；否则根据推断结果决定
+		IModManifest finalManifest;
+		if (customOptions is { Count: > 0 })
+		{
+			// 用户自定义了选项，使用 V1 格式清单
+			finalManifest = new V1ModManifest
+			{
+				Guid = manifest.Guid,
+				Name = finalName,
+				Description = finalDescription,
+				IconPath = finalIconPath,
+				Options = customOptions,
+			};
+		}
+		else
+		{
+			// 没有自定义选项，根据推断结果决定清单格式
+			finalManifest = manifest.Version switch
+			{
+				ManifestVersion.V1 => new V1ModManifest
+				{
+					Guid = manifest.Guid,
+					Name = finalName,
+					Description = finalDescription,
+					IconPath = finalIconPath,
+					Options = (manifest as V1ModManifest)?.Options,
+				},
+				_ => new LegacyModManifest
+				{
+					Guid = manifest.Guid,
+					Name = finalName,
+					Description = finalDescription,
+					IconPath = finalIconPath,
+					Options = (manifest as LegacyModManifest)?.Options,
+				},
+			};
+		}
+
+		ModManifest.SaveToFile(finalManifest, modDir);
+
+		_logger.LogInformation("Adding mod");
+		var mod = new ModData(modDir, finalManifest);
+		_mods.Add(mod);
+		ModAdded?.Invoke(mod);
+
+		_logger.LogInformation("Mod created successfully: {}", finalName);
+		return problems.ToArray();
+	}
+
 	public async Task<ModProblem[]> TryAddModFromArchiveAsync(FileInfo file)
 	{
 		GuardInitialized();
@@ -172,38 +276,16 @@ internal sealed partial class ModService
 			tmpDir.Delete(true);
 		tmpDir.Create();
 
-		_logger.LogInformation("Extracting archive");
+		_logger.LogInformation("Extracting archive using SharpSevenZip");
 		try
 		{
 			await Task.Run(() =>
 			{
-				if (file.Extension.Equals(".7z", StringComparison.OrdinalIgnoreCase))
-					{
-						using var archive = ArchiveFactory.OpenArchive(file.FullName);
-						archive.WriteToDirectory(tmpDir.FullName, new ExtractionOptions
-						{
-							ExtractFullPath = true,
-							Overwrite = true
-						});
-					}
-				else
-				{
-					using (var stream = file.OpenRead())
-					using (var reader = ReaderFactory.OpenReader(stream))
-					{
-						while (reader.MoveToNextEntry())
-						{
-							if (!reader.Entry.IsDirectory)
-							{
-								reader.WriteEntryToDirectory(tmpDir.FullName, new ExtractionOptions
-								{
-									ExtractFullPath = true,
-									Overwrite = true
-								});
-							}
-						}
-					}
-				}
+				// SharpSevenZip 通过原生 7z.dll 支持所有压缩格式（7z/zip/rar/tar 等）
+				// 自动通过文件签名检测归档格式，无需手动区分扩展名
+				// 原生 7z.dll 支持大字典 LZMA，解决 SharpCompress 纯托管实现的兼容性问题
+				using var extractor = new SharpSevenZipExtractor(file.FullName);
+				extractor.ExtractArchive(tmpDir.FullName);
 			});
 		}
 		catch (Exception ex)

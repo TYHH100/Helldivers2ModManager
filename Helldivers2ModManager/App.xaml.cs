@@ -1,5 +1,6 @@
 // Ignore Spelling: App
 
+using System.IO;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -13,7 +14,7 @@ namespace Helldivers2ModManager;
 
 internal partial class App : Application
 {
-	public static readonly Version Version = new(1, 4, 0, 2);
+	public static readonly Version Version = new(1, 4, 1, 0);
 
 	public static readonly string? VersionAddition = "";
 
@@ -58,6 +59,9 @@ internal partial class App : Application
 	{
 		base.OnStartup(e);
 
+		// 初始化 SharpSevenZip：提取嵌入式 7z.dll 并设置库路径
+		InitializeSharpSevenZip();
+
 		MainWindow = Host.Services.GetRequiredService<MainWindow>();
 		MainWindow.Show();
 
@@ -78,6 +82,61 @@ internal partial class App : Application
 				}
 			});
 		});
+	}
+
+	protected override void OnExit(ExitEventArgs e)
+	{
+		base.OnExit(e);
+
+		// 清理测试运行时残留的 hd2mm_* 临时目录
+		try
+		{
+			var tempPath = Path.GetTempPath();
+			var dirs = Directory.GetDirectories(tempPath, "hd2mm_*");
+			foreach (var dir in dirs)
+			{
+				try
+				{
+					Directory.Delete(dir, true);
+				}
+				catch (Exception ex)
+				{
+					_logger?.LogWarning(ex, "清理临时目录失败: {Dir}", dir);
+				}
+			}
+			if (dirs.Length > 0)
+			{
+				_logger?.LogInformation("已清理 {Count} 个测试临时目录", dirs.Length);
+			}
+		}
+		catch (Exception ex)
+		{
+			_logger?.LogWarning(ex, "清理测试临时目录时发生异常");
+		}
+	}
+
+	/// <summary>
+	/// 初始化 SharpSevenZip：设置 7z.dll 库路径。
+	/// 7z.dll 随程序分发（Content CopyToOutputDirectory），与应用在同一目录。
+	/// </summary>
+	private void InitializeSharpSevenZip()
+	{
+		try
+		{
+			var dllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "7z.dll");
+			if (!File.Exists(dllPath))
+			{
+				_logger?.LogWarning("7z.dll 不存在于应用目录: {Path}", dllPath);
+				return;
+			}
+
+			SharpSevenZip.SharpSevenZipBase.SetLibraryPath(dllPath);
+			_logger?.LogInformation("SharpSevenZip 初始化完成，7z.dll 路径: {Path}", dllPath);
+		}
+		catch (Exception ex)
+		{
+			_logger?.LogWarning(ex, "SharpSevenZip 初始化失败");
+		}
 	}
 
 	private static void AddServices(IServiceCollection services)

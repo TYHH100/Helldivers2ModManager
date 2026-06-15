@@ -1,0 +1,455 @@
+using System.Collections.ObjectModel;
+using System.Text;
+
+namespace Helldivers2ModManager.Models;
+
+/// <summary>
+/// 模组版本兼容性状态枚举
+/// </summary>
+internal enum ModVersionStatus
+{
+    /// <summary>
+    /// 未检查
+    /// </summary>
+    Unknown,
+    /// <summary>
+    /// 兼容 - 模组的 Unit 版本与游戏当前版本匹配
+    /// </summary>
+    Compatible,
+    /// <summary>
+    /// 不兼容 - 模组的 Unit 版本与游戏当前版本不匹配，可能存在兼容性问题
+    /// </summary>
+    Incompatible,
+    /// <summary>
+    /// 检查中
+    /// </summary>
+    Checking,
+    /// <summary>
+    /// 检查失败（文件无法读取/解析）
+    /// </summary>
+    Error
+}
+
+/// <summary>
+/// 单个补丁文件中提取的 Unit 版本信息
+/// </summary>
+internal sealed class PatchUnitInfo
+{
+    /// <summary>
+    /// 补丁文件名
+    /// </summary>
+    public string FileName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Unit 资源 ID
+    /// </summary>
+    public long FileId { get; init; }
+
+    /// <summary>
+    /// Unit 版本号（从二进制数据偏移 0x2C 处读取的 4 字节 uint32）
+    /// </summary>
+    public uint Version { get; init; }
+    
+    /// <summary>
+    /// Unit 资源数据大小（字节）
+    /// </summary>
+    public int DataSize { get; init; }
+}
+
+/// <summary>
+/// 补丁文件健康状态
+/// </summary>
+internal enum PatchHealthStatus
+{
+    /// <summary>
+    /// 健康 - 文件结构完整，数据正常
+    /// </summary>
+    Healthy,
+    /// <summary>
+    /// 警告 - 文件结构基本正常，但存在潜在问题
+    /// </summary>
+    Warning,
+    /// <summary>
+    /// 损坏 - 文件结构异常，可能无法正常使用
+    /// </summary>
+    Corrupted,
+    /// <summary>
+    /// 无 Unit 资源 - 文件不包含可检查的 Unit 资源
+    /// </summary>
+    NoUnitResources
+}
+
+/// <summary>
+/// Unit 资源深度检查结果
+/// 参考 hd2-repatcher 的 update_patch_file() 实现：
+/// - 验证 Unit 内部结构（LOD Group、Joint List）
+/// - 检查 Layout Format 格式（version &lt; 0xA4CD36 时检查布局偏移）
+/// </summary>
+internal sealed class UnitResourceDetail
+{
+    /// <summary>
+    /// 所在补丁文件名
+    /// </summary>
+    public string FileName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Unit 资源 ID
+    /// </summary>
+    public long FileId { get; set; }
+
+    /// <summary>
+    /// Unit 版本号
+    /// </summary>
+    public uint Version { get; set; }
+
+    /// <summary>
+    /// Unit 数据大小（字节）
+    /// </summary>
+    public int DataSize { get; set; }
+
+    /// <summary>
+    /// LOD Group 偏移量（从 Unit 数据起始的偏移）
+    /// </summary>
+    public int LODGroupOffset { get; set; }
+
+    /// <summary>
+    /// Joint List 偏移量（从 Unit 数据起始的偏移）
+    /// </summary>
+    public int JointListOffset { get; set; }
+
+    /// <summary>
+    /// LOD Group 数据大小（字节），由 joint_list_offset - lod_group_offset 计算得出
+    /// </summary>
+    public int LODGroupSize { get; set; }
+
+    /// <summary>
+    /// LOD Group 数据是否在有效边界内
+    /// </summary>
+    public bool LODGroupInBounds { get; set; }
+
+    /// <summary>
+    /// Unit 数据是否在文件数据的有效边界内
+    /// </summary>
+    public bool UnitDataInBounds { get; set; }
+
+    /// <summary>
+    /// 是否执行了 Layout Format 检查（version &lt; 0xA4CD36 时执行）
+    /// </summary>
+    public bool LayoutFormatChecked { get; set; }
+
+    /// <summary>
+    /// Layout Format 检查是否通过
+    /// </summary>
+    public bool LayoutFormatValid { get; set; }
+
+    /// <summary>
+    /// Layout 中的 item_format 异常数量（format &gt; 16 的条目数）
+    /// </summary>
+    public int LayoutFormatIssueCount { get; set; }
+
+    /// <summary>
+    /// 针对该 Unit 的警告信息
+    /// </summary>
+    public string? Warning { get; set; }
+}
+
+/// <summary>
+/// 补丁文件详细分析结果
+/// 参考 hd2-repatcher 的 update_patch_file() 实现：
+/// - 验证文件头结构（魔数、类型数、文件数）
+/// - 分析文件条目偏移边界
+/// - 检查伴生文件（.gpu_resources / .stream）是否存在
+/// </summary>
+internal sealed class PatchFileAnalysis
+{
+    /// <summary>
+    /// 补丁文件名
+    /// </summary>
+    public string FileName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 文件大小（字节）
+    /// </summary>
+    public long FileSize { get; set; }
+
+    /// <summary>
+    /// 健康状态
+    /// </summary>
+    public PatchHealthStatus HealthStatus { get; set; }
+
+    /// <summary>
+    /// 文件头中的类型数
+    /// </summary>
+    public int NumTypes { get; set; }
+
+    /// <summary>
+    /// 文件头中的资源文件数
+    /// </summary>
+    public int NumFiles { get; set; }
+
+    /// <summary>
+    /// 类型条目总数（来自类型条目的统计）
+    /// </summary>
+    public int TotalResources { get; set; }
+
+    /// <summary>
+    /// 文件头结构是否有效
+    /// </summary>
+    public bool HeaderValid { get; set; }
+
+    /// <summary>
+    /// 文件条目偏移是否在有效边界内
+    /// </summary>
+    public bool FileEntriesInBounds { get; set; }
+
+    /// <summary>
+    /// 对应的 .gpu_resources 文件是否存在
+    /// </summary>
+    public bool HasGpuResources { get; set; }
+
+    /// <summary>
+    /// 对应的 .stream 文件是否存在
+    /// </summary>
+    public bool HasStream { get; set; }
+
+    /// <summary>
+    /// 该文件中 Unit 资源的深度检查结果
+    /// </summary>
+    public List<UnitResourceDetail> UnitDetails { get; set; } = [];
+
+    /// <summary>
+    /// 错误/警告信息
+    /// </summary>
+    public string? Message { get; set; }
+}
+
+/// <summary>
+/// 资源类型分布信息
+/// </summary>
+internal sealed class ResourceTypeDistribution
+{
+    /// <summary>
+    /// 资源类型 ID
+    /// </summary>
+    public long TypeId { get; set; }
+
+    /// <summary>
+    /// 该类型的资源数量
+    /// </summary>
+    public int ResourceCount { get; set; }
+}
+
+/// <summary>
+/// 模组详细分析结果容器
+/// </summary>
+internal sealed class ModDetailedAnalysis
+{
+    /// <summary>
+    /// 每个补丁文件的详细分析
+    /// </summary>
+    public List<PatchFileAnalysis> PatchFiles { get; set; } = [];
+
+    /// <summary>
+    /// 资源类型分布
+    /// </summary>
+    public List<ResourceTypeDistribution> ResourceTypes { get; set; } = [];
+
+    /// <summary>
+    /// 是否存在结构性问题
+    /// </summary>
+    public bool HasStructuralIssues { get; set; }
+
+    /// <summary>
+    /// 是否存在伴生文件缺失
+    /// </summary>
+    public bool HasCompanionFileIssues { get; set; }
+
+    /// <summary>
+    /// 是否存在 Unit 内部结构问题
+    /// </summary>
+    public bool HasUnitStructuralIssues { get; set; }
+
+    /// <summary>
+    /// 补丁文件总数
+    /// </summary>
+    public int TotalPatchFiles { get; set; }
+
+    /// <summary>
+    /// 含 Unit 资源的文件数
+    /// </summary>
+    public int FilesWithUnits { get; set; }
+
+    /// <summary>
+    /// 健康文件数
+    /// </summary>
+    public int HealthyFileCount { get; set; }
+
+    /// <summary>
+    /// 警告文件数
+    /// </summary>
+    public int WarningFileCount { get; set; }
+
+    /// <summary>
+    /// 损坏文件数
+    /// </summary>
+    public int CorruptedFileCount { get; set; }
+}
+
+/// <summary>
+/// 模组版本检测结果
+/// </summary>
+internal sealed class ModVersionCheckResult
+{
+    /// <summary>
+    /// 兼容性状态
+    /// </summary>
+    public ModVersionStatus Status { get; set; } = ModVersionStatus.Unknown;
+
+    /// <summary>
+    /// 游戏当前 Unit 版本号
+    /// </summary>
+    public uint GameVersion { get; set; }
+
+    /// <summary>
+    /// 最后检查时间
+    /// </summary>
+    public DateTime LastChecked { get; set; }
+
+    /// <summary>
+    /// 该模组中包含的 Unit 版本信息列表
+    /// </summary>
+    public ObservableCollection<PatchUnitInfo> PatchUnits { get; set; } = [];
+
+    /// <summary>
+    /// 错误信息（当 Status 为 Error 时）
+    /// </summary>
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// 模组详细分析结果（文件结构、Unit 内部结构、伴生文件等深度检查）
+    /// </summary>
+    public ModDetailedAnalysis? DetailedAnalysis { get; set; }
+}
+
+/// <summary>
+/// 用于在 UI 中显示版本兼容性检查信息的简单数据类
+/// </summary>
+internal sealed class CompatibleCheckInfo
+{
+    public ModVersionStatus VersionStatus { get; set; }
+    public uint GameUnitVersion { get; set; }
+    public DateTime LastChecked { get; set; }
+    public List<PatchUnitInfo> PatchUnits { get; set; } = [];
+    public string ModName { get; set; } = string.Empty;
+    public string? ErrorMessage { get; set; }
+    public ModDetailedAnalysis? DetailedAnalysis { get; set; }
+
+    public override string ToString()
+    {
+        var statusText = VersionStatus switch
+        {
+            ModVersionStatus.Compatible => "Compatible",
+            ModVersionStatus.Incompatible => "Incompatible",
+            ModVersionStatus.Unknown => "Unconfirmed",
+            ModVersionStatus.Checking => "Checking",
+            ModVersionStatus.Error => "Error",
+            _ => "Unknown"
+        };
+
+        var sb = new StringBuilder();
+        sb.AppendLine(string.Format("Mod: {0}", ModName));
+        sb.AppendLine(string.Format("Status: {0}", statusText));
+        sb.AppendLine(string.Format("Game Unit Version: 0x{0:X8} ({0})", GameUnitVersion));
+        sb.AppendLine(string.Format("Last Checked: {0}", LastChecked.ToString("yyyy-MM-dd HH:mm:ss")));
+        sb.AppendLine();
+
+        if (PatchUnits.Count > 0)
+        {
+            sb.AppendLine("Patch Unit Versions:");
+            var distinctVersions = PatchUnits.Select(p => p.Version).Distinct().ToList();
+            foreach (var version in distinctVersions)
+            {
+                var count = PatchUnits.Count(p => p.Version == version);
+                var match = version == GameUnitVersion ? "(OK)" : "(MISMATCH)";
+                sb.AppendLine(string.Format("  {0} 0x{1:X8} ({1}) - {2} file(s)", match, version, count));
+            }
+            sb.AppendLine();
+            sb.AppendLine("Details (FileId - Version):");
+            foreach (var unit in PatchUnits)
+            {
+                var match = unit.Version == GameUnitVersion ? "(OK)" : "(MISMATCH)";
+                sb.AppendLine(string.Format("  {0} {1}  0x{2:X16}  0x{3:X8}", match, unit.FileName, unit.FileId, unit.Version));
+            }
+        }
+        else
+        {
+            sb.AppendLine("No detectable unit resources in this mod.");
+        }
+
+        // ---- Detailed Analysis Section ----
+        if (DetailedAnalysis is { } analysis)
+        {
+            sb.AppendLine();
+            sb.AppendLine("=== Deep Analysis ===");
+            sb.AppendLine(string.Format("Patch Files: {0} total, {1} with Unit resources", analysis.TotalPatchFiles, analysis.FilesWithUnits));
+            sb.AppendLine(string.Format("File Health: {0} healthy, {1} warnings, {2} corrupted",
+                analysis.HealthyFileCount, analysis.WarningFileCount, analysis.CorruptedFileCount));
+
+            if (analysis.HasStructuralIssues)
+                sb.AppendLine("! WARNING: Structural issues detected in some files");
+
+            if (analysis.HasCompanionFileIssues)
+                sb.AppendLine("! WARNING: Some companion files (.gpu_resources / .stream) are missing");
+
+            if (analysis.HasUnitStructuralIssues)
+                sb.AppendLine("! WARNING: Unit internal structure issues detected");
+
+            // Per-file details
+            foreach (var pf in analysis.PatchFiles)
+            {
+                sb.AppendLine();
+                sb.AppendLine(string.Format("--- {0} ---", pf.FileName));
+                sb.AppendLine(string.Format("  Size: {0} bytes | Health: {1}", pf.FileSize, pf.HealthStatus));
+                sb.AppendLine(string.Format("  Header: {0} | Entries in bounds: {1}",
+                    pf.HeaderValid ? "Valid" : "INVALID",
+                    pf.FileEntriesInBounds ? "Yes" : "NO"));
+                sb.AppendLine(string.Format("  Types: {0} | Files: {1} | Total Resources: {2}",
+                    pf.NumTypes, pf.NumFiles, pf.TotalResources));
+                sb.AppendLine(string.Format("  GPU Resources: {0} | Stream: {1}",
+                    pf.HasGpuResources ? "Present" : "Missing",
+                    pf.HasStream ? "Present" : "Missing"));
+
+                if (pf.UnitDetails.Count > 0)
+                {
+                    sb.AppendLine("  Unit Internal Structure:");
+                    foreach (var unit in pf.UnitDetails)
+                    {
+                        sb.AppendLine(string.Format("    [0x{0:X16}] v{1:X8} size={2}",
+                            unit.FileId, unit.Version, unit.DataSize));
+                        sb.AppendLine(string.Format("      LOD: offset={0} size={1} in_bounds={2}",
+                            unit.LODGroupOffset, unit.LODGroupSize, unit.LODGroupInBounds ? "Yes" : "NO"));
+                        if (unit.LayoutFormatChecked)
+                        {
+                            sb.AppendLine(string.Format("      Layout: checked={0} valid={1} issues={2}",
+                                unit.LayoutFormatChecked, unit.LayoutFormatValid ? "Yes" : "NO",
+                                unit.LayoutFormatIssueCount));
+                        }
+                        if (!string.IsNullOrEmpty(unit.Warning))
+                            sb.AppendLine(string.Format("      Warning: {0}", unit.Warning));
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(pf.Message))
+                    sb.AppendLine(string.Format("  Note: {0}", pf.Message));
+            }
+        }
+
+        if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            sb.AppendLine();
+            sb.AppendLine(string.Format("Error: {0}", ErrorMessage));
+        }
+
+        return sb.ToString();
+    }
+}

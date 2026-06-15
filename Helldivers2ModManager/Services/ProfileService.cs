@@ -2,6 +2,7 @@ using Helldivers2ModManager.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.Json;
 
@@ -41,7 +42,7 @@ internal sealed class ProfileService
 		// 检查是否需要从 JSON 迁移数据（HasData 内部会触发数据库初始化）
 		if (File.Exists(enabledJsonPath) && !_repository.HasData(storageDir))
 		{
-			_logger.LogInformation("检测到旧版 enabled.json 文件，开始迁移数据到 SQLite...");
+			_logger.LogInformation("Detected legacy enabled.json file, starting migration to SQLite...");
 			try
 			{
 				await MigrateFromJsonAsync(enabledJsonPath, storageDir);
@@ -68,23 +69,23 @@ internal sealed class ProfileService
 
 		if (enabledDataList.Count == 0)
 		{
-			_logger.LogInformation("数据库中无 Mod 配置记录，终止初始化");
+			_logger.LogInformation("No mod config records in database, aborting initialization");
 			return null;
 		}
 
-		_logger.LogInformation("从数据库加载了 {Count} 条配置记录", enabledDataList.Count);
+		_logger.LogInformation("Loaded {Count} config records from database", enabledDataList.Count);
 
 		var mods = new List<ModData>(modService.Mods.Count);
 		var missingGuids = new List<Guid>();
 
 		foreach (var data in enabledDataList)
 		{
-			_logger.LogDebug("处理 {}", data);
+			_logger.LogDebug("Processing {}", data);
 
 			var mod = modService.GetModByGuid(data.Guid);
 			if (mod is null)
 			{
-				_logger.LogWarning("{} 没有对应的 Mod，跳过", data.Guid);
+				_logger.LogWarning("{} has no corresponding mod, skipping", data.Guid);
 				missingGuids.Add(data.Guid);
 				continue;
 			}
@@ -95,14 +96,14 @@ internal sealed class ProfileService
 
 		if (settingsService.AutoRemoveMissingMods && missingGuids.Count > 0)
 		{
-			_logger.LogInformation("自动移除 {Count} 条丢失的 Mod 记录", missingGuids.Count);
+			_logger.LogInformation("Auto-removed {Count} missing mod records", missingGuids.Count);
 			await _repository.DeleteByGuidsAsync(storageDir, missingGuids);
 		}
 
 		var remainder = modService.Mods.Count - enabledDataList.Count;
 		if (remainder > 0)
 		{
-			_logger.LogInformation("{Count} 个 Mod 未被记录，以默认配置添加", remainder);
+			_logger.LogInformation("{Count} mods were not recorded, added with default config", remainder);
 			foreach (var elm in modService.Mods)
 				if (!mods.Contains(elm))
 					mods.Add(elm);
@@ -117,7 +118,7 @@ internal sealed class ProfileService
 	private async Task<IReadOnlyList<ModData>?> LoadFromJsonFallbackAsync(
 		string enabledJsonPath, ModService modService, SettingsService settingsService)
 	{
-		_logger.LogWarning("使用 JSON 回退方式加载配置");
+		_logger.LogWarning("Using JSON fallback to load config");
 
 		using var stream = File.Open(enabledJsonPath, FileMode.Open, FileAccess.Read, FileShare.Read);
 		var doc = await JsonDocument.ParseAsync(stream);
@@ -207,7 +208,7 @@ internal sealed class ProfileService
 	/// </summary>
 	private async Task MigrateFromJsonAsync(string enabledJsonPath, string storageDir)
 	{
-		_logger.LogInformation("开始从 {JsonPath} 迁移数据到 SQLite", enabledJsonPath);
+		_logger.LogInformation("Starting migration from {JsonPath} to SQLite", enabledJsonPath);
 
 		// 1. 读取 JSON 文件中的所有条目
 		List<EnabledData> enabledDataList;
@@ -230,7 +231,7 @@ internal sealed class ProfileService
 			}
 		}
 
-		_logger.LogInformation("从 JSON 文件读取了 {Count} 条记录", enabledDataList.Count);
+		_logger.LogInformation("Read {Count} records from JSON file", enabledDataList.Count);
 
 		// 2. 写入 SQLite 数据库
 		await _repository.SaveAllAsync(storageDir, enabledDataList);
@@ -248,14 +249,14 @@ internal sealed class ProfileService
 		try
 		{
 			File.Move(enabledJsonPath, backupPath);
-			_logger.LogInformation("原 enabled.json 已备份为 enabled.json.bak");
+			_logger.LogInformation("Original enabled.json backed up as enabled.json.bak");
 		}
 		catch (Exception ex)
 		{
 			_logger.LogWarning(ex, "备份原 JSON 文件失败，但数据已成功迁移");
 		}
 
-		_logger.LogInformation("数据迁移完成：{Count} 条记录已从 JSON 迁移到 SQLite", enabledDataList.Count);
+		_logger.LogInformation("Migration complete: {Count} records migrated from JSON to SQLite", enabledDataList.Count);
 	}
 
 	public IReadOnlyList<ModData> InitDefault(ModService modService)
@@ -302,12 +303,45 @@ internal sealed class ProfileService
 		{
 			await _repository.SaveAllAsync(settingsService.StorageDirectory, dataList);
 			_lastSavedOrder = modsList.Select(static m => m.Manifest.Guid).ToList();
-			_logger.LogInformation("Profile saved to SQLite（{Count} 条记录）", dataList.Count);
+			_logger.LogInformation("Profile saved to SQLite ({Count} records)", dataList.Count);
 		}
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "保存 Mod 配置到 SQLite 失败");
 			throw;
+		}
+	}
+
+	/// <summary>
+	/// 删除数据库中的单条 Mod 配置记录。
+	/// </summary>
+	public async Task DeleteEnabledDataAsync(string storageDirectory, Guid guid)
+	{
+		try
+		{
+			await _repository.DeleteByGuidsAsync(storageDirectory, [guid]);
+			_logger.LogInformation("Deleted mod config {Guid} from database", guid);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Failed to delete mod config from database");
+		}
+	}
+
+	/// <summary>
+	/// 删除数据库中的多条 Mod 配置记录。
+	/// </summary>
+	public async Task DeleteEnabledDataAsync(string storageDirectory, IEnumerable<Guid> guids)
+	{
+		try
+		{
+			var list = guids.ToList();
+			await _repository.DeleteByGuidsAsync(storageDirectory, list);
+			_logger.LogInformation("Deleted {Count} mod configs from database", list.Count);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Failed to delete mod configs from database");
 		}
 	}
 }

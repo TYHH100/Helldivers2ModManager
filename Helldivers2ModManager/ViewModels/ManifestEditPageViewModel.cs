@@ -1,0 +1,345 @@
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Services;
+using Helldivers2ModManager.Stores;
+using Helldivers2ModManager.ViewModels.Create;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Helldivers2ModManager.ViewModels;
+
+/// <summary>
+/// 清单编辑页面的视图模型（右键菜单"编辑模组"打开）。
+/// 支持编辑模组基本信息（名称、描述、图标）和管理选项（添加/删除/编辑选项和子选项）。
+/// </summary>
+[RegisterService(ServiceLifetime.Transient)]
+internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
+{
+	public override string Title => "编辑模组";
+
+	/// <summary>当前编辑的模组 ViewModel</summary>
+	public ModViewModel? EditMod => _editModStore.CurrentMod;
+
+	/// <summary>是否为 V1 格式清单</summary>
+	public bool IsV1Manifest => EditMod?.Data.Manifest.Version == ManifestVersion.V1;
+
+	/// <summary>是否为 Legacy 格式清单（旧版，无 Version 字段）</summary>
+	public bool IsLegacyManifest => EditMod?.Data.Manifest.Version == ManifestVersion.Legacy;
+
+	/// <summary>
+	/// 是否显示选项编辑区域。
+	/// V1 直接显示；Legacy 也显示（添加选项后会自动升级为 V1 格式）。
+	/// </summary>
+	public bool ShowOptionEditing => IsV1Manifest || IsLegacyManifest;
+
+	/// <summary>模组名称（可编辑）</summary>
+	[ObservableProperty]
+	private string _modName = string.Empty;
+
+	/// <summary>模组描述（可编辑）</summary>
+	[ObservableProperty]
+	private string _modDescription = string.Empty;
+
+	/// <summary>模组图标路径（可编辑）</summary>
+	[ObservableProperty]
+	private string _iconPath = string.Empty;
+
+	/// <summary>图标预览</summary>
+	public ImageSource? IconPreview
+	{
+		get
+		{
+			// 优先显示新选择的图标（绝对路径）
+			if (!string.IsNullOrWhiteSpace(IconPath) && Path.IsPathRooted(IconPath) && File.Exists(IconPath))
+			{
+				try
+				{
+					var bmp = new BitmapImage();
+					bmp.BeginInit();
+					bmp.UriSource = new Uri(IconPath);
+					bmp.CacheOption = BitmapCacheOption.None;
+					bmp.EndInit();
+					return bmp;
+				}
+				catch { }
+			}
+
+			// 否则显示当前模组图标
+			return EditMod?.Icon;
+		}
+	}
+
+	/// <summary>模组选项集合（可编辑）</summary>
+	public ObservableCollection<CreateModOptionViewModel> EditOptions { get; } = [];
+
+	/// <summary>图片预览覆盖层</summary>
+	[ObservableProperty]
+	private ImageSource? _previewImageSource;
+
+	/// <summary>图片预览可见性</summary>
+	[ObservableProperty]
+	private Visibility _imagePreviewVisibility = Visibility.Collapsed;
+
+	private readonly NavigationStore _navStore;
+	private readonly EditModStore _editModStore;
+	private readonly ProfileService _profileService;
+	private readonly SettingsService _settingsService;
+	private readonly ModService _modService;
+
+	public ManifestEditPageViewModel(NavigationStore navStore, EditModStore editModStore,
+		ProfileService profileService, SettingsService settingsService, ModService modService)
+	{
+		_navStore = navStore;
+		_editModStore = editModStore;
+		_profileService = profileService;
+		_settingsService = settingsService;
+		_modService = modService;
+	}
+
+	/// <summary>初始化编辑页面，从当前模组加载信息</summary>
+	public void InitializeFromMod()
+	{
+		if (EditMod is null)
+			return;
+
+		ModName = EditMod.Name;
+		ModDescription = EditMod.Description;
+
+		// 图标路径：如果有相对路径则转为绝对路径，便于预览和比较
+		var manifestIconPath = EditMod.Data.Manifest.IconPath;
+		if (!string.IsNullOrWhiteSpace(manifestIconPath))
+		{
+			var fullPath = Path.Combine(EditMod.Data.Directory.FullName, manifestIconPath);
+			IconPath = File.Exists(fullPath) ? fullPath : manifestIconPath;
+		}
+		else
+		{
+			IconPath = string.Empty;
+		}
+
+		// 加载已有选项
+		EditOptions.Clear();
+		if (IsV1Manifest && EditMod.Options is not null)
+		{
+			var manifest = (V1ModManifest)EditMod.Data.Manifest;
+			var sourceDir = EditMod.Data.Directory.FullName;
+
+			foreach (var opt in manifest.Options ?? [])
+			{
+				var optVm = new CreateModOptionViewModel
+				{
+					Name = opt.Name,
+					Description = opt.Description,
+					IncludePaths = opt.Include is not null ? string.Join(";", opt.Include) : string.Empty,
+					ImagePath = opt.Image is not null ? Path.Combine(sourceDir, opt.Image) : string.Empty,
+					SourceDirectory = sourceDir,
+				};
+
+				foreach (var sub in opt.SubOptions ?? [])
+				{
+					var subVm = new CreateModSubOptionViewModel
+					{
+						Name = sub.Name,
+						Description = sub.Description,
+						IncludePaths = string.Join(";", sub.Include),
+						ImagePath = sub.Image is not null ? Path.Combine(sourceDir, sub.Image) : string.Empty,
+						SourceDirectory = sourceDir,
+						ParentIncludePaths = optVm.IncludePaths,
+					};
+					optVm.SubOptions.Add(subVm);
+				}
+
+				EditOptions.Add(optVm);
+			}
+		}
+		else if (IsLegacyManifest)
+		{
+			// Legacy 格式的选项只是简单的字符串数组，作为选项名称导入
+			var legacyOptions = EditMod.LegacyOptions;
+			if (legacyOptions is not null)
+			{
+				foreach (var optName in legacyOptions)
+				{
+					EditOptions.Add(new CreateModOptionViewModel
+					{
+						Name = optName,
+						SourceDirectory = EditMod.Data.Directory.FullName,
+					});
+				}
+			}
+		}
+
+		OnPropertyChanged(nameof(IconPreview));
+		OnPropertyChanged(nameof(IsV1Manifest));
+		OnPropertyChanged(nameof(IsLegacyManifest));
+		OnPropertyChanged(nameof(ShowOptionEditing));
+	}
+
+	/// <summary>保存并返回仪表板</summary>
+	[RelayCommand]
+	async Task Done()
+	{
+		if (EditMod is not null)
+		{
+			// 保存基本信息
+			if (ModName != EditMod.Name)
+				EditMod.Data.UpdateManifestName(ModName);
+			if (ModDescription != EditMod.Description)
+				EditMod.Data.UpdateManifestDescription(ModDescription);
+
+			// 保存图标（处理逻辑与选项图片一致）
+			var currentIconPath = EditMod.Data.Manifest.IconPath;
+			var currentIconFullPath = !string.IsNullOrWhiteSpace(currentIconPath)
+				? Path.Combine(EditMod.Data.Directory.FullName, currentIconPath)
+				: string.Empty;
+
+			if (IconPath != currentIconFullPath && IconPath != (currentIconPath ?? string.Empty))
+			{
+				if (!string.IsNullOrWhiteSpace(IconPath) && File.Exists(IconPath))
+				{
+					var modDir = EditMod.Data.Directory.FullName;
+					CopyImageIfNeeded(IconPath, modDir);
+					EditMod.Data.UpdateManifestIconPath(Path.GetFileName(IconPath));
+				}
+				else
+				{
+					EditMod.Data.UpdateManifestIconPath(null);
+				}
+			}
+
+			// 保存选项
+			// V1 直接更新；Legacy 升级为 V1（写入 Version 字段）
+			if (IsV1Manifest || IsLegacyManifest)
+			{
+				var newOptions = EditOptions.Select(o => o.ToModOption()).ToList();
+				var modDir = EditMod.Data.Directory.FullName;
+
+				// 复制新图片文件到模组目录（仅复制不在模组目录中的文件）
+				foreach (var opt in EditOptions)
+				{
+					CopyImageIfNeeded(opt.ImagePath, modDir);
+					foreach (var sub in opt.SubOptions)
+						CopyImageIfNeeded(sub.ImagePath, modDir);
+				}
+
+				// 构建新清单（Legacy 升级为 V1）
+				var newManifest = new V1ModManifest
+				{
+					Guid = EditMod.Data.Manifest.Guid,
+					Name = ModName,
+					Description = ModDescription,
+					IconPath = EditMod.Data.Manifest.IconPath,
+					Options = newOptions.Count > 0 ? newOptions : null,
+				};
+				EditMod.Data.Manifest = newManifest;
+				ModManifest.SaveToFile(EditMod.Data.Manifest, EditMod.Data.Directory);
+				OnPropertyChanged(nameof(IsV1Manifest));
+				OnPropertyChanged(nameof(IsLegacyManifest));
+			}
+		}
+
+		// 保存配置
+		if (!_settingsService.IsReadonly)
+		{
+			try
+			{
+				await _profileService.SaveAsync(_settingsService, _modService.Mods);
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"保存 Mod 配置失败: {ex.Message}");
+			}
+		}
+
+		_editModStore.CurrentMod = null;
+		_navStore.Navigate<DashboardPageViewModel>();
+	}
+
+	/// <summary>取消编辑，返回仪表板</summary>
+	[RelayCommand]
+	void Cancel()
+	{
+		_editModStore.CurrentMod = null;
+		_navStore.Navigate<DashboardPageViewModel>();
+	}
+
+	/// <summary>显示图片预览</summary>
+	[RelayCommand]
+	void ShowImagePreview(ImageSource imageSource)
+	{
+		PreviewImageSource = imageSource;
+		ImagePreviewVisibility = Visibility.Visible;
+	}
+
+	/// <summary>隐藏图片预览</summary>
+	[RelayCommand]
+	void HideImagePreview()
+	{
+		ImagePreviewVisibility = Visibility.Hidden;
+		PreviewImageSource = null;
+	}
+
+	/// <summary>浏览选择模组图标</summary>
+	[RelayCommand]
+	void BrowseIcon()
+	{
+		var dialog = new Microsoft.Win32.OpenFileDialog
+		{
+			Title = "选择模组图标",
+			Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
+		};
+
+		if (dialog.ShowDialog() == true)
+		{
+			IconPath = dialog.FileName;
+			OnPropertyChanged(nameof(IconPreview));
+		}
+	}
+
+	/// <summary>添加新选项</summary>
+	[RelayCommand]
+	void AddOption()
+	{
+		var sourceDir = EditMod?.Data.Directory.FullName ?? string.Empty;
+		EditOptions.Add(new CreateModOptionViewModel { SourceDirectory = sourceDir });
+	}
+
+	/// <summary>删除指定的选项</summary>
+	[RelayCommand]
+	void RemoveOption(CreateModOptionViewModel option)
+	{
+		EditOptions.Remove(option);
+	}
+
+	/// <summary>
+	/// 将图片文件复制到模组目录（仅当图片不在模组目录中时才复制）。
+	/// 处理逻辑与图标一致：如果图片已在模组目录中则跳过，否则复制过去。
+	/// </summary>
+	private static void CopyImageIfNeeded(string? imagePath, string modDir)
+	{
+		if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+			return;
+
+		// 如果图片已经在模组目录中，无需复制
+		var fullPath = Path.GetFullPath(imagePath);
+		var fullModDir = Path.GetFullPath(modDir);
+		if (fullPath.StartsWith(fullModDir, StringComparison.OrdinalIgnoreCase))
+			return;
+
+		// 复制到模组目录
+		var fileName = Path.GetFileName(imagePath);
+		var destPath = Path.Combine(modDir, fileName);
+		if (!File.Exists(destPath))
+			File.Copy(imagePath, destPath);
+	}
+
+	partial void OnIconPathChanged(string value)
+	{
+		OnPropertyChanged(nameof(IconPreview));
+	}
+}

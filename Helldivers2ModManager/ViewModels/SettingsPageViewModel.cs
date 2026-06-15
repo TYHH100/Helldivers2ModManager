@@ -132,6 +132,39 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	public bool AutoCheckVersionOnStartup
+	{
+		get => _settingsService.Initialized ? _settingsService.AutoCheckVersionOnStartup : false;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.AutoCheckVersionOnStartup = value;
+			OnPropertyChanged();
+		}
+	}
+
+	public bool AutoCleanLogs
+	{
+		get => _settingsService.Initialized ? _settingsService.AutoCleanLogs : true;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.AutoCleanLogs = value;
+			OnPropertyChanged();
+		}
+	}
+
+	public int LogRetentionDays
+	{
+		get => _settingsService.Initialized ? _settingsService.LogRetentionDays : 7;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.LogRetentionDays = value;
+			OnPropertyChanged();
+		}
+	}
+
 	public string ExtensionHost
 	{
 		get => _settingsService.Initialized ? _settingsService.ExtensionHost : "localhost";
@@ -327,6 +360,9 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(EnableSorting));
 		OnPropertyChanged(nameof(DeleteToRecycleBin));
 		OnPropertyChanged(nameof(AutoRemoveMissingMods));
+		OnPropertyChanged(nameof(AutoCheckVersionOnStartup));
+		OnPropertyChanged(nameof(AutoCleanLogs));
+		OnPropertyChanged(nameof(LogRetentionDays));
 		OnPropertyChanged(nameof(ExtensionHost));
 		OnPropertyChanged(nameof(ExtensionPort));
 		OnPropertyChanged(nameof(NexusApiKey));
@@ -360,6 +396,12 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		try
 		{
 			await _settingsService.SaveAsync();
+
+			// 保存设置后立即更新运行时日志级别过滤
+			App.Current.LogLevel = _settingsService.LogLevel;
+
+			// 保存后执行日志清理
+			_settingsService.CleanOldLogs();
 		}
 		catch (Exception ex)
 		{

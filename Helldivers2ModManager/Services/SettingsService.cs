@@ -193,6 +193,63 @@ internal sealed class SettingsService
 		}
 	}
 
+	/// <summary>
+	/// 启动时自动检查模组版本兼容性
+	/// </summary>
+	public bool AutoCheckVersionOnStartup
+	{
+		get
+		{
+			GuardInitialized();
+			return _autoCheckVersionOnStartup;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_autoCheckVersionOnStartup = value;
+		}
+	}
+
+	/// <summary>
+	/// 是否启用自动清理过期日志
+	/// </summary>
+	public bool AutoCleanLogs
+	{
+		get
+		{
+			GuardInitialized();
+			return _autoCleanLogs;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_autoCleanLogs = value;
+		}
+	}
+
+	/// <summary>
+	/// 日志保留天数（超过此天数的日志将被清理）
+	/// </summary>
+	public int LogRetentionDays
+	{
+		get
+		{
+			GuardInitialized();
+			return _logRetentionDays;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_logRetentionDays = Math.Max(1, value);
+		}
+	}
+
 	public ObservableCollection<ModGroup> Groups
 	{
 		get
@@ -281,6 +338,9 @@ internal sealed class SettingsService
 	private bool _deleteToRecycleBin = true;
 	private bool _autoRemoveMissingMods;
 	private bool _enableSorting;
+	private bool _autoCheckVersionOnStartup;
+	private bool _autoCleanLogs = true;
+	private int _logRetentionDays = 7;
 	private ObservableCollection<ModGroup> _groups = null!;
 	private ObservableCollection<ModTag> _tags = null!;
 	private string? _encryptedNexusApiKey;
@@ -350,6 +410,10 @@ internal sealed class SettingsService
 		IsReadonly = @readonly;
 		Initialized = true;
 		_logger.LogInformation("Settings service initialization complete");
+
+		// 启动时自动清理过期日志
+		CleanOldLogs();
+
 		return true;
 	}
 
@@ -398,6 +462,9 @@ internal sealed class SettingsService
 			writer.WriteBoolean(nameof(DeleteToRecycleBin), _deleteToRecycleBin);
 			writer.WriteBoolean(nameof(AutoRemoveMissingMods), _autoRemoveMissingMods);
 			writer.WriteBoolean(nameof(EnableSorting), _enableSorting);
+			writer.WriteBoolean(nameof(AutoCheckVersionOnStartup), _autoCheckVersionOnStartup);
+			writer.WriteBoolean(nameof(AutoCleanLogs), _autoCleanLogs);
+			writer.WriteNumber(nameof(LogRetentionDays), _logRetentionDays);
 			writer.WriteString(nameof(ExtensionHost), _extensionHost);
 			writer.WriteNumber(nameof(ExtensionPort), _extensionPort);
 			writer.WriteStartArray(nameof(Groups));
@@ -557,6 +624,12 @@ internal sealed class SettingsService
 			_autoRemoveMissingMods = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(EnableSorting), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_enableSorting = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(AutoCheckVersionOnStartup), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_autoCheckVersionOnStartup = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(AutoCleanLogs), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_autoCleanLogs = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(LogRetentionDays), JsonValueKind.Number, out prop))
+			_logRetentionDays = Math.Max(1, prop.GetInt32());
 		if (root.TryGetProperty(nameof(ExtensionHost), JsonValueKind.String, out prop))
 			_extensionHost = prop.GetString()!;
 		if (root.TryGetProperty(nameof(ExtensionPort), JsonValueKind.Number, out prop))
@@ -612,6 +685,49 @@ internal sealed class SettingsService
 		await stream.DisposeAsync();
 	}
 
+	/// <summary>
+	/// 清理过期日志文件。
+	/// 根据 LogRetentionDays 删除 logs 目录中超过指定天数的日志文件。
+	/// </summary>
+	public void CleanOldLogs()
+	{
+		if (!_autoCleanLogs)
+			return;
+
+		try
+		{
+			var logDir = new DirectoryInfo("logs");
+			if (!logDir.Exists)
+				return;
+
+			var cutoff = DateTime.UtcNow.AddDays(-_logRetentionDays);
+			int deleted = 0;
+
+			foreach (var file in logDir.EnumerateFiles("*.log"))
+			{
+				if (file.LastWriteTimeUtc < cutoff)
+				{
+					try
+					{
+						file.Delete();
+						deleted++;
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Failed to delete old log file: {File}", file.Name);
+					}
+				}
+			}
+
+			if (deleted > 0)
+				_logger.LogInformation("Cleaned {Count} old log files (retention: {Days} days)", deleted, _logRetentionDays);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to clean old log files");
+		}
+	}
+
 	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_groups), nameof(_tags))]
 	private void ResetInternal()
 	{
@@ -626,6 +742,7 @@ internal sealed class SettingsService
     _autoRemoveMissingMods = false;
     _deleteToRecycleBin = true;
     _enableSorting = false;
+    _autoCheckVersionOnStartup = false;
     _extensionHost = "localhost";
 		_extensionPort = 7456;
 		_groups = [];

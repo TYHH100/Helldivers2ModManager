@@ -30,6 +30,12 @@
 		<DataTemplate DataType="{x:Type vms:EditPageViewModel}">
 			<views:EditPageView/>
 		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:ManifestEditPageViewModel}">
+			<views:ManifestEditPageView/>
+		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:CreatePageViewModel}">
+			<views:CreatePageView/>
+		</DataTemplate>
 		<DataTemplate DataType="{x:Type vms:TagManagementPageViewModel}">
 			<views:TagManagementPageView/>
 		</DataTemplate>

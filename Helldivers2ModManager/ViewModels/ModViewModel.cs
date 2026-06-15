@@ -53,6 +53,38 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isCheckingUpdate;
 
+    // ===== 版本兼容性检测属性 =====
+
+    /// <summary>
+    /// 版本兼容性状态
+    /// </summary>
+    [ObservableProperty]
+    private ModVersionStatus _versionStatus = ModVersionStatus.Unknown;
+
+    /// <summary>
+    /// 游戏当前 Unit 版本号
+    /// </summary>
+    [ObservableProperty]
+    private uint _gameUnitVersion;
+
+    /// <summary>
+    /// 最后检查时间
+    /// </summary>
+    [ObservableProperty]
+    private DateTime _lastVersionCheck;
+
+    /// <summary>
+    /// 是否正在检查版本兼容性
+    /// </summary>
+    [ObservableProperty]
+    private bool _isCheckingVersion;
+
+    /// <summary>
+    /// 版本检测详细信息（用于弹窗显示）
+    /// </summary>
+    [ObservableProperty]
+    private ModVersionCheckResult? _versionCheckResult;
+
     public ModData Data => _mod;
 
     public event Action? OptionsChanged;
@@ -309,6 +341,39 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
                 Message = $"无法打开 Nexus 页面: {ex.Message}"
             });
         }
+    }
+
+    /// <summary>
+    /// 显示版本兼容性详细信息
+    /// </summary>
+    [RelayCommand]
+    public void ShowVersionDetail()
+    {
+        var result = VersionCheckResult;
+        if (result == null)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+            {
+                Message = "Please run version check first from the bottom toolbar."
+            });
+            return;
+        }
+
+        CompatibleCheckInfo info = new()
+        {
+            VersionStatus = result.Status,
+            GameUnitVersion = result.GameVersion,
+            LastChecked = result.LastChecked,
+            PatchUnits = result.PatchUnits.ToList(),
+            ModName = Name,
+            ErrorMessage = result.ErrorMessage,
+            DetailedAnalysis = result.DetailedAnalysis
+        };
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+        {
+            Message = info.ToString()
+        });
     }
 
     public bool HasNexusData => GetNexusData() != null && GetNexusData()!.ModId != 0;

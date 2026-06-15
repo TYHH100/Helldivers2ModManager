@@ -101,7 +101,7 @@ internal sealed class DatabaseService : IDisposable
 				if (!Directory.Exists(storageDirectory))
 					Directory.CreateDirectory(storageDirectory);
 
-				_logger.LogInformation("正在初始化 SQLite 数据库: {DbPath}", dbPath);
+				_logger.LogInformation("Initializing SQLite database: {DbPath}", dbPath);
 
 				var csb = new SqliteConnectionStringBuilder
 				{
@@ -147,12 +147,12 @@ internal sealed class DatabaseService : IDisposable
 						using var alterCmd = initConnection.CreateCommand();
 						alterCmd.CommandText = AddSortOrderColumnSql;
 						alterCmd.ExecuteNonQuery();
-						_logger.LogInformation("已为旧数据库添加 SortOrder 列");
+						_logger.LogInformation("Added SortOrder column to legacy database");
 					}
 				}
 
 				_initialized = true;
-				_logger.LogInformation("SQLite 数据库初始化完成 (WAL 模式，每个操作独立连接)");
+				_logger.LogInformation("SQLite database initialization complete (WAL mode, one connection per operation)");
 			}
 			catch (Exception ex)
 			{
@@ -186,7 +186,7 @@ internal sealed class DatabaseService : IDisposable
 
 			_connectionString = null;
 			_initialized = false;
-			_logger.LogInformation("SQLite 数据库连接已释放");
+			_logger.LogInformation("SQLite database connection released");
 		}
 	}
 }

@@ -12,15 +12,18 @@ Helldivers2ModManager 是一个用于 Helldivers 2 游戏的模组管理器，�
 
 ### 1.2 技术栈
 - **框架**: .NET 8.0 Windows (WPF)
-- **依赖注入**: Microsoft.Extensions.DependencyInjection
+- **依赖注入**: Microsoft.Extensions.DependencyInjection / Microsoft.Extensions.Hosting
 - **MVVM**: CommunityToolkit.Mvvm
 - **日志**: Microsoft.Extensions.Logging
-- **压缩**: SharpCompress
+- **压缩**: SharpSevenZip（基于原生 7z.dll，支持大字典 LZMA）
 - **拖拽**: gong-wpf-dragdrop
 - **Markdown**: MdXaml
+- **数据库**: Microsoft.Data.Sqlite
+- **缓存**: Microsoft.Extensions.Caching.Memory
+- **通用工具**: CommunityToolkit.Common
 
 ### 1.3 当前版本
-- 版本: 1.4.0.2
+- 版本: 1.4.1.0
 
 ---
 
@@ -35,7 +38,10 @@ Helldivers2ModManager/
 │   │   └── MessageBox.xaml.cs
 │   ├── Exceptions/                 # 自定义异常
 │   │   ├── EndOfLifeException.cs
-│   │   └── UnknownManifestVersionException.cs
+│   │   ├── UnknownManifestVersionException.cs
+│   │   └── Nexus/                  # Nexus Mods API异常
+│   │       ├── NexusApiException.cs
+│   │       └── NexusPremiumRequiredException.cs
 │   ├── Extensions/                 # 扩展方法
 │   │   ├── IOExtensions.cs
 │   │   ├── JsonElementExtensions.cs
@@ -55,15 +61,35 @@ Helldivers2ModManager/
 │   │   ├── ModSubOption.cs
 │   │   ├── ModTag.cs               # Mod标签类
 │   │   ├── TagSelectionItem.cs     # 标签选择项
-│   │   └── V1ModManifest.cs
+│   │   ├── V1ModManifest.cs
+│   │   ├── DownloadTask.cs         # 下载任务模型
+│   │   ├── VersionCheckStatus.cs   # 版本检测相关模型
+│   │   └── Nexus/                  # Nexus Mods数据模型
+│   │       ├── Mod.cs
+│   │       ├── ModFile.cs
+│   │       ├── ModFileUpdateGroup.cs
+│   │       ├── HelperModels.cs
+│   │       └── NexusEnums.cs
 │   ├── Resources/                  # 资源文件
 │   │   ├── Fonts/
 │   │   ├── Images/
+│   │   ├── Native/                 # 原生库（7z.dll，Content 复制到输出目录）
 │   │   └── Styles/
 │   ├── Services/                   # 业务服务
 │   │   ├── ModService.cs
 │   │   ├── ProfileService.cs
-│   │   └── SettingsService.cs      # Singleton生命周期
+│   │   ├── SettingsService.cs      # Singleton生命周期
+│   │   ├── VersionCheckService.cs  # 版本兼容性检测服务
+│   │   ├── BrowserExtensionService.cs  # 浏览器扩展通信服务
+│   │   ├── DatabaseService.cs      # SQLite数据库服务
+│   │   ├── EnabledDataRepository.cs    # EnabledData仓储
+│   │   └── Nexus/                  # Nexus Mods服务
+│   │       ├── INexusHttpClient.cs
+│   │       ├── NexusHttpClient.cs
+│   │       ├── INexusModsService.cs
+│   │       ├── NexusModsService.cs
+│   │       ├── INexusCacheService.cs
+│   │       └── NexusCacheService.cs
 │   ├── Stores/                     # 状态存储
 │   │   ├── EditModStore.cs
 │   │   └── NavigationStore.cs
@@ -73,12 +99,14 @@ Helldivers2ModManager/
 │   │   │   └── IntroPageViewModel.cs
 │   │   ├── CreatePageViewModel.cs
 │   │   ├── DashboardPageViewModel.cs
+│   │   ├── DownloadProgressViewModel.cs  # 下载进度页ViewModel
 │   │   ├── EditPageViewModel.cs
 │   │   ├── HelpPageViewModel.cs
 │   │   ├── MainViewModel.cs
 │   │   ├── ModOptionViewModel.cs
 │   │   ├── ModSubOptionViewModel.cs
 │   │   ├── ModViewModel.cs
+│   │   ├── NexusDownloadPageViewModel.cs # Nexus下载页ViewModel
 │   │   ├── PageViewModelBase.cs
 │   │   ├── SettingsPageViewModel.cs
 │   │   ├── TagManagementPageViewModel.cs
@@ -93,10 +121,14 @@ Helldivers2ModManager/
 │   │   ├── CreatePageView.xaml.cs
 │   │   ├── DashboardPageView.xaml
 │   │   ├── DashboardPageView.xaml.cs
+│   │   ├── DownloadProgressView.xaml      # 下载进度页
+│   │   ├── DownloadProgressView.xaml.cs
 │   │   ├── EditPageView.xaml
 │   │   ├── EditPageView.xaml.cs
 │   │   ├── HelpPageView.xaml
 │   │   ├── HelpPageView.xaml.cs
+│   │   ├── NexusDownloadPageView.xaml     # Nexus下载页
+│   │   ├── NexusDownloadPageView.xaml.cs
 │   │   ├── SettingsPageView.xaml
 │   │   ├── SettingsPageView.xaml.cs
 │   │   ├── TagManagementPageView.xaml
@@ -109,6 +141,8 @@ Helldivers2ModManager/
 │   ├── FileLogger.cs
 │   ├── GroupItemConverter.cs
 │   ├── RegisterServiceAttribute.cs
+│   ├── MainWindow.xaml             # 主窗口
+│   ├── MainWindow.xaml.cs
 │   ├── app.manifest
 │   └── Helldivers2ModManager.csproj
 ├── Purger/                         # Purger工具
@@ -156,6 +190,19 @@ internal sealed class MyService
 - `Transient`: 每次请求创建新实例（如 ViewModel）
 - `Scoped`: 作用域内共享（本项目较少使用）
 
+**Contract 属性**（v1.4.0+）:
+支持通过 `Contract` 参数将接口和实现类同时注册为同一单例：
+
+```csharp
+[RegisterService(ServiceLifetime.Singleton, Contract = typeof(INexusModsService))]
+internal sealed class NexusModsService : INexusModsService
+{
+    // 实现...
+}
+```
+
+使用时可通过接口或实现类两种方式注入，`App.xaml.cs` 中的注册逻辑会自动识别 `Contract` 属性。
+
 ### 3.2.1 ViewModel 与视图绑定规范 ⚠️
 
 **重要**: 使用 `[RegisterService]` 注册 ViewModel 后，还需要在 `MainWindow.xaml` 的 `Window.Resources` 中添加对应的 `DataTemplate`，否则 WPF 无法正确渲染该页面。
@@ -168,6 +215,8 @@ internal sealed class MyService
     </DataTemplate>
 </Window.Resources>
 ```
+
+当前已注册的页面 DataTemplate 包括：DashboardPageView、CreatePageView、EditPageView、SettingsPageView、HelpPageView、TagManagementPageView、DownloadProgressView、NexusDownloadPageView。
 
 **常见错误**: 如果只添加了 `[RegisterService]` 但没有在 XAML 中添加 DataTemplate，导航到该页面时会显示空白或错误。
 
@@ -208,6 +257,20 @@ internal sealed class MyService
 | `StringToColorBrushConverter` | 字符串转颜色画刷 | 支持十六进制颜色格式（如 `#FF6200EE`） |
 | `BoolToVisibilityConverter` | 布尔值转可见性 | `true` → `Visible`, `false` → `Collapsed` |
 | `TagsToStringConverter` | 标签集合转字符串 | 将多个标签用逗号分隔 |
+| `ContainsConverter` | 字符串包含检测 | 参数为子串时返回 `true`/`false` |
+| `NullToVisibilityConverter` | 非 null → Visible | null → Collapsed |
+| `InverseNullToVisibilityConverter` | null → Visible | 非 null → Collapsed |
+| `NullToBoolConverter` | 非 null → true | null → false |
+| `InverseBoolConverter` | 布尔值取反 | — |
+| `StringToVisibilityConverter` | 非空字符串 → Visible | 空字符串 → Collapsed |
+| `BytesToSizeConverter` | 字节数转可读大小 | B/KB/MB/GB 自动换算 |
+| `DownloadStatusToStringConverter` | 下载状态枚举转中文文本 | 等待中/下载中/已完成/失败/已取消 |
+| `DownloadStatusToVisibilityConverter` | 下载中 → Visible | 其他状态 → Collapsed |
+| `ProgressWidthConverter` | 进度百分比 × 可用宽度 | `IMultiValueConverter`，需进度值和最大宽度 |
+| `SpeedToReadableConverter` | 下载速度转可读文本 | 如 `1.5 MB/s` |
+| `VersionStatusToColorConverter` | 版本状态转颜色画刷 | 兼容(绿)/不兼容(红)/未知(黄)/检查中(蓝)/错误(橙) |
+| `VersionStatusToTextConverter` | 版本状态转中文文本 | 兼容/不兼容/无法确认/检查中/检查失败 |
+| `SortModeConverter` | 排序模式转中文文本 | 默认顺序/名称 A-Z/名称 Z-A/已启用优先/已禁用优先 |
 
 ### 3.8 Mod标签系统
 
@@ -336,6 +399,11 @@ public sealed class ModTag
 | `UseSymbolicLinks` | `bool` | `false` | 是否使用符号链接部署 |
 | `DeleteToRecycleBin` | `bool` | `true` | 删除Mod时移动到回收站 |
 | `AutoRemoveMissingMods` | `bool` | `false` | 自动删除不存在的模组条目 |
+| `EnableSorting` | `bool` | `false` | 是否启用排序功能 |
+| `AutoCheckVersionOnStartup` | `bool` | `false` | 启动时自动检查模组版本兼容性 |
+| `ExtensionHost` | `string` | `"localhost"` | 浏览器扩展监听主机 |
+| `ExtensionPort` | `int` | `7456` | 浏览器扩展监听端口 |
+| `NexusApiKey` | `string?` | `null` | Nexus Mods API Key（使用 `ProtectedData` 加密存储） |
 | `Groups` | `ObservableCollection<ModGroup>` | `[]` | Mod分组列表 |
 | `Tags` | `ObservableCollection<ModTag>` | `[]` | 标签列表 |
 
@@ -346,6 +414,9 @@ public sealed class ModTag
 - `TempDirectory`: 不存在时自动创建
 - `Opacity`: 自动限制在 0.4-1.0 范围内
 - `SkipList`: 元素必须为16字符长度
+- `ExtensionHost`: 不能为空或空白字符串
+- `ExtensionPort`: 必须在 1-65535 范围内
+- `NexusApiKey`: 使用 `System.Security.Cryptography.ProtectedData` 加密存储
 
 ---
 
@@ -373,7 +444,7 @@ dotnet publish Purger.csproj --configuration Release -r win-x64 --self-contained
 ### 6.3 CI/CD流程
 
 GitHub Actions 工作流 (`.github/workflows/main.yml`)：
-- 触发条件: 推送到 `zh-cn_Translations` 分支或创建PR
+- 触发条件: 推送匹配 `v*` 的 tag，或通过 `workflow_dispatch` 手动触发
 - 构建产物:
   - `Helldivers2ModManager.zip` - 主程序
   - `Purger.zip` - Purger工具
@@ -416,7 +487,7 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 ## 8. 维护要点
 
 ### 8.1 版本管理
-- 当前版本: 1.3.0.1 (EOL)
+- 当前版本: 1.4.1.0（`.csproj`）/ 1.4.0.2（`App.xaml.cs`）
 - 版本号位置:
   - `App.xaml.cs` - `App.Version`
   - `Helldivers2ModManager.csproj` - `ProductVersion`, `AssemblyVersion`, `FileVersion`
@@ -482,6 +553,67 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 
 ## 11. 变更记录
 
+### v1.4.1.0 更新内容
+
+#### 新增文件和目录
+
+**新目录**:
+- `Exceptions/Nexus/` - Nexus Mods API 异常类
+- `Models/Nexus/` - Nexus Mods 数据模型
+- `Services/Nexus/` - Nexus Mods 服务层
+
+**新文件**:
+- `Models/DownloadTask.cs` - 下载任务模型（进度跟踪、速度计算、持久化）
+- `Models/VersionCheckStatus.cs` - 版本兼容性检测相关模型（`ModVersionStatus` 枚举、`ModVersionCheckResult` 等）
+- `Exceptions/Nexus/NexusApiException.cs` - Nexus API 异常（含 4 个子类：Not Found、API Key Invalid、Rate Limit、Validation）
+- `Exceptions/Nexus/NexusPremiumRequiredException.cs` - 需要 Nexus Premium 会员权限异常
+- `Services/VersionCheckService.cs` - 版本兼容性检测服务（解析补丁文件二进制头部，提取 Unit 资源版本号）
+- `Services/BrowserExtensionService.cs` - 浏览器扩展通信服务（HttpListener 接收下载请求，管理下载队列）
+- `Services/DatabaseService.cs` - SQLite 数据库服务（WAL 模式，自动迁移）
+- `Services/EnabledDataRepository.cs` - EnabledData 的 SQLite 仓储
+- `Services/Nexus/INexusHttpClient.cs` / `NexusHttpClient.cs` - Nexus Mods API HTTP 客户端
+- `Services/Nexus/INexusModsService.cs` / `NexusModsService.cs` - Nexus Mods 高层服务
+- `Services/Nexus/INexusCacheService.cs` / `NexusCacheService.cs` - Nexus API 缓存服务
+- `ViewModels/DownloadProgressViewModel.cs` - 下载进度页 ViewModel
+- `ViewModels/NexusDownloadPageViewModel.cs` - Nexus 下载页 ViewModel
+- `Views/DownloadProgressView.xaml` / `.xaml.cs` - 下载进度页面
+- `Views/NexusDownloadPageView.xaml` / `.xaml.cs` - Nexus 下载页面
+- `MainWindow.xaml` / `MainWindow.xaml.cs` - 主窗口
+
+#### 新增功能
+
+1. **Nexus Mods 集成**: 支持从 Nexus Mods 下载并导入 Mod，包括 Mod 信息浏览、文件选择、下载进度显示
+2. **浏览器扩展支持**: 通过 `BrowserExtensionService` 接收浏览器扩展的下载请求
+3. **版本兼容性检测**: 扫描 Mod 补丁文件的二进制头部，对比游戏版本，自动标记兼容/不兼容状态
+4. **Dashboard 排序功能**: 支持按名称（A-Z/Z-A）、启用状态（已启用优先/已禁用优先）排序
+5. **批量操作**: 支持全选/取消全选、批量删除、批量启用/禁用
+6. **原位编辑**: 支持在 Dashboard 中直接编辑 Mod 名称、描述、图片
+7. **标签编辑**: 支持在 Dashboard 中为 Mod 添加/移除标签
+8. **SQLite 数据库**: 引入 `DatabaseService` 和 `EnabledDataRepository`，将 EnabledData 持久化到 SQLite
+9. **自动版本检查**: 启动时可自动检查所有 Mod 的版本兼容性（每会话仅执行一次）
+10. **Nexus API Key 加密存储**: 使用 `ProtectedData` 加密存储 API Key
+11. **游戏路径自动检测**: 设置页面支持通过注册表和 `libraryfolders.vdf` 自动检测 Steam 游戏路径
+12. **退出时清理**: 应用退出时自动清理 `hd2mm_*` 临时目录
+
+#### 设置更新
+- 新增 `EnableSorting` 设置项（排序功能开关）
+- 新增 `AutoCheckVersionOnStartup` 设置项（启动自动版本检查）
+- 新增 `ExtensionHost` / `ExtensionPort` 设置项（浏览器扩展地址配置）
+- 新增 `NexusApiKey` 设置项（Nexus API Key，加密存储）
+
+#### 框架更新
+- 新增 NuGet 包：`Microsoft.Data.Sqlite`、`Microsoft.Extensions.Caching.Memory`、`CommunityToolkit.Common`、`SharpSevenZip` 2.0.77
+- **压缩库替换**: 移除 `SharpCompress` 0.48.1，替换为 `SharpSevenZip` 2.0.77
+  - `SharpSevenZip` 基于原生 7z.dll，完整支持所有 LZMA/LZMA2 字典大小
+  - 解决 SharpCompress 纯托管实现对**大字典 LZMA 压缩文件**的兼容性问题
+  - `Resources/Native/7z.dll` 作为 `Content`（`CopyToOutputDirectory`）随程序分发
+  - `App.xaml.cs` 在 `OnStartup` 中通过 `SetLibraryPath()` 初始化路径
+  - 支持所有格式（7z/zip/rar/tar 等），按归档签名自动检测格式
+- `RegisterServiceAttribute` 新增 `Contract` 属性，支持接口/实现类同时注册
+- `HostApplicationBuilder` 模式替代直接创建 `Host`
+- 注册 `IMemoryCache` 缓存服务
+- `App.xaml.cs` 启动后延迟 1 秒启动 `BrowserExtensionService`
+
 ### v1.3.0.1 更新内容
 
 #### 新增文件
@@ -510,5 +642,5 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 
 ---
 
-*文档版本: 1.2.0*
-*最后更新: 2026-04-30*
+*文档版本: 1.3.0*
+*最后更新: 2026-06-10*

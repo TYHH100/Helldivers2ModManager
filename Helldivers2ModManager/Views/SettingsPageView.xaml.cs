@@ -18,7 +18,7 @@ namespace Helldivers2ModManager.Views
             if (DataContext is ViewModels.SettingsPageViewModel vm && vm.NexusApiKey != null)
             {
                 _isUpdatingPassword = true;
-                NexusApiKeyPasswordBox.Password = vm.NexusApiKey;
+                //NexusApiKeyPasswordBox.Password = vm.NexusApiKey;
                 _isUpdatingPassword = false;
             }
         }
@@ -33,15 +33,15 @@ namespace Helldivers2ModManager.Views
 
         }
 
-        private void NexusApiKeyPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
-        {
-            if (_isUpdatingPassword)
-                return;
+        //private void NexusApiKeyPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+        //{
+        //    if (_isUpdatingPassword)
+        //        return;
 
-            if (DataContext is ViewModels.SettingsPageViewModel vm)
-            {
-                vm.NexusApiKey = NexusApiKeyPasswordBox.Password;
-            }
-        }
+        //    if (DataContext is ViewModels.SettingsPageViewModel vm)
+        //    {
+        //        vm.NexusApiKey = NexusApiKeyPasswordBox.Password;
+        //    }
+        //}
     }
 }

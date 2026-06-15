@@ -300,6 +300,40 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Log auto cleanup -->
+                <Border Style="{StaticResource FluentSettingsCard}">
+                    <StackPanel>
+                        <TextBlock Text="日志自动清理"
+                                   Style="{StaticResource FluentSubSectionHeader}"
+                                   Margin="0"/>
+                        <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
+                            <Run Text="自动删除超过指定天数的日志文件，避免占用过多磁盘空间"/>
+                        </TextBlock>
+                        <Grid Margin="0 8 0 0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0"
+                                      Width="24"
+                                      Height="24"
+                                      IsChecked="{Binding AutoCleanLogs}"
+                                      Margin="0 0 12 0"/>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding LogRetentionDays, UpdateSourceTrigger=PropertyChanged}"
+                                     Width="60"
+                                     VerticalAlignment="Center"
+                                     Margin="0 0 8 0"/>
+                            <TextBlock Grid.Column="2"
+                                       Text="天后自动删除"
+                                       FontSize="14"
+                                       Foreground="{StaticResource NeutralForegroundBrush}"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- Sort Settings -->
                 <Border Style="{StaticResource FluentSettingsCard}">
                     <StackPanel>
@@ -321,6 +355,34 @@
                                       Margin="0 0 12 0"/>
                             <TextBlock Grid.Column="1"
                                        Text="启用排序"
+                                       FontSize="14"
+                                       Foreground="{StaticResource NeutralForegroundBrush}"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Version Check Settings -->
+                <Border Style="{StaticResource FluentSettingsCard}">
+                    <StackPanel>
+                        <TextBlock Text="版本兼容性检查"
+                                   Style="{StaticResource FluentSubSectionHeader}"
+                                   Margin="0"/>
+                        <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
+                            <Run Text="启动时自动检查模组的版本兼容性，以多数模组的 Unit 版本为参考标记可能存在兼容性问题的模组"/>
+                        </TextBlock>
+                        <Grid Margin="0 8 0 0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox Grid.Column="0"
+                                      Width="24"
+                                      Height="24"
+                                      IsChecked="{Binding AutoCheckVersionOnStartup}"
+                                      Margin="0 0 12 0"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="启动时自动检查"
                                        FontSize="14"
                                        Foreground="{StaticResource NeutralForegroundBrush}"
                                        VerticalAlignment="Center"/>
@@ -433,7 +495,7 @@
 				</Border>
 
 				<!-- Nexus Mods API Section -->
-				<Border Style="{StaticResource FluentSettingsCard}">
+				<!-- <Border Style="{StaticResource FluentSettingsCard}">
 					<StackPanel>
 						<TextBlock Text="Nexus Mods API"
 								   Style="{StaticResource FluentSubSectionHeader}"
@@ -480,7 +542,7 @@
 							</TextBlock.Style>
 						</TextBlock>
 					</StackPanel>
-				</Border>
+				</Border> -->
 
 				<!-- Reset Section -->
 				<Border Style="{StaticResource FluentSettingsCard}">

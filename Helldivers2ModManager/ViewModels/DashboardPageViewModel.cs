@@ -10,11 +10,13 @@ using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
+using SharpSevenZip;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using System.Threading;
 using System.Windows;
@@ -56,10 +58,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly SettingsService _settingsService;
     private readonly ProfileService _profileService;
     private readonly INexusModsService _nexusModsService;
+    private readonly VersionCheckService _versionCheckService;
     private ObservableCollection<ModViewModel> _mods;
     private Timer? _saveTimer;
     private volatile bool _isSavePending;
     private readonly object _saveLock = new();
+    /// <summary>
+    /// 跟踪已知模组 GUID → 目录最后写入时间，用于检测新增或变动的模组
+    /// </summary>
+    private static readonly Dictionary<Guid, DateTime> s_knownModTimestamps = [];
     
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -87,6 +94,42 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// 排序功能是否在设置中启用
     /// </summary>
     public bool IsSortingEnabled => _settingsService.Initialized && _settingsService.EnableSorting;
+
+    // ===== 版本兼容性检测属性 =====
+
+    /// <summary>
+    /// 是否正在检查版本兼容性
+    /// </summary>
+    [ObservableProperty]
+    private bool _isCheckingVersion;
+
+    /// <summary>
+    /// 版本检查摘要文本
+    /// </summary>
+    [ObservableProperty]
+    private string _versionCheckSummary = string.Empty;
+
+    /// <summary>
+    /// 兼容模组数量
+    /// </summary>
+    [ObservableProperty]
+    private int _compatibleModCount;
+
+    /// <summary>
+    /// 不兼容模组数量
+    /// </summary>
+    [ObservableProperty]
+    private int _incompatibleModCount;
+
+    /// <summary>
+    /// 上次版本检查是否有不兼容的模组
+    /// </summary>
+    public bool HasIncompatibleMods => IncompatibleModCount > 0;
+
+    /// <summary>
+    /// 是否已完成版本检查
+    /// </summary>
+    public bool HasVersionCheckResult => !string.IsNullOrEmpty(VersionCheckSummary);
 
     public IEnumerable<SortMode> SortModes { get; } = [SortMode.Default, SortMode.NameAsc, SortMode.NameDesc, SortMode.EnabledFirst, SortMode.DisabledFirst];
     private object? _selectedGroupItem = "无";
@@ -162,7 +205,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
     }
 
-    public DashboardPageViewModel(ILogger<DashboardPageViewModel> logger, IServiceProvider provider, SettingsService settingsService, ModService modService, ProfileService profileService, EditModStore editModStore, INexusModsService nexusModsService)
+    public DashboardPageViewModel(ILogger<DashboardPageViewModel> logger, IServiceProvider provider, SettingsService settingsService, ModService modService, ProfileService profileService, EditModStore editModStore, INexusModsService nexusModsService, VersionCheckService versionCheckService)
     {
         _logger = logger;
         _navStore = new(provider.GetRequiredService<NavigationStore>);
@@ -171,6 +214,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _modService = modService;
         _profileService = profileService;
         _nexusModsService = nexusModsService;
+        _versionCheckService = versionCheckService;
         _mods = [];
         _saveTimer = new Timer(OnSaveTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
@@ -322,6 +366,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _logger.LogInformation("Settings loaded successfully");
         WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
 
+        // 将用户设置的日志级别同步到 App.Current，FileLogger 依赖此值进行过滤
+        App.Current.LogLevel = _settingsService.LogLevel;
+
         _logger.LogInformation("Validating settings");
         if (!_settingsService.Validate())
         {
@@ -357,6 +404,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             return;
         }
         _modService.ModAdded += ModService_ModAdded;
+        _modService.ModAdded += OnModAdded;
         _modService.ModRemoved += ModService_ModRemoved;
         if (problems.Length != 0)
             _logger.LogWarning("Loaded mods with {} problems", problems.Length);
@@ -404,6 +452,20 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             ShowProblems(problems, "加载模组时出现问题:", false, true);
         Initialized = true;
         _logger.LogInformation("Initialization successful");
+
+        // 检测新增或变动的模组，自动触发版本兼容性检查
+        if (_settingsService.AutoCheckVersionOnStartup && _mods.Count > 0)
+        {
+            var changedMods = GetNewOrChangedMods().ToList();
+            if (changedMods.Count > 0)
+            {
+                _logger.LogInformation("检测到 {Count} 个新增/变动的模组，自动检查版本兼容性...", changedMods.Count);
+                _ = CheckVersionCompatibility();
+            }
+        }
+
+        // 更新模组跟踪快照
+        UpdateModTimestampTracking();
 
 #if DEBUG && FALSE
 		ShowProblems(Enum.GetValues<ModProblemKind>().Select(static k => new ModProblem { Directory = new DirectoryInfo(@"C:\ModStorage\Test"), Kind = k }), "Problem test:", true);
@@ -493,6 +555,33 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _mods.Add(vm);
         SearchText = string.Empty;
         UpdateView();
+    }
+
+    private async void OnModAdded(ModData mod)
+    {
+        // 新模组添加后，如果启用了自动检查，仅扫描该新增模组（使用缓存的参考版本）
+        if (_settingsService.AutoCheckVersionOnStartup)
+        {
+            _logger.LogInformation("New mod \"{Name}\", checking version compatibility...", mod.Manifest.Name);
+            var result = await _versionCheckService.CheckSingleModAsync(mod);
+            if (result is not null)
+            {
+                var vm = _mods.FirstOrDefault(v => v.Guid == mod.Manifest.Guid);
+                if (vm is not null)
+                {
+                    vm.GameUnitVersion = result.GameVersion;
+                    vm.LastVersionCheck = result.LastChecked;
+                    vm.VersionStatus = result.Status;
+                    vm.VersionCheckResult = result;
+                }
+
+                if (result.Status == ModVersionStatus.Incompatible)
+                    VersionCheckSummary = $"发现不兼容的新增模组: {mod.Manifest.Name}";
+                else
+                    VersionCheckSummary = $"新增模组 \"{mod.Manifest.Name}\" 版本检测完成";
+                OnPropertyChanged(nameof(HasVersionCheckResult));
+            }
+        }
     }
 
     private void ModService_ModRemoved(ModData mod)
@@ -680,6 +769,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         vm.IsSelected = false;
                         await _modService.RemoveAsync(vm.Data);
                     }
+
+                    // 批量删除后同步更新数据库：直接删除这些模组对应的记录
+                    if (!_settingsService.IsReadonly)
+                    {
+                        var guids = selected.Select(static vm => vm.Guid).ToList();
+                        await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, guids);
+                    }
+
                     WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
                 }
                 catch (Exception ex)
@@ -763,11 +860,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             }
         }
 
-    [RelayCommand]
-    void Browse()
-    {
-        throw new NotImplementedException();
-    }
+    // void Browse()
+    // {
+    //     throw new NotImplementedException();
+    // }
 
     [RelayCommand]
     void Create()
@@ -910,6 +1006,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         try
         {
             await _modService.RemoveAsync(modVm.Data);
+
+            // 删除后同步更新数据库：直接删除该模组对应的记录
+            if (!_settingsService.IsReadonly)
+            {
+                await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, modVm.Guid);
+            }
+
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
         }
         catch (Exception ex)
@@ -948,6 +1051,110 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     void Discord()
     {
         Process.Start(s_discordStartInfo);
+    }
+
+    // ===== 版本兼容性检查命令 =====
+
+    /// <summary>
+    /// 检查所有模组的版本兼容性
+    /// 采用"模组间横向对比"策略: 取多数模组的 Unit 版本作为参考，标记偏离的模组
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    async Task CheckVersionCompatibility()
+    {
+        IsCheckingVersion = true;
+        VersionCheckSummary = "正在扫描模组补丁文件...";
+
+        try
+        {
+            // 扫描所有模组的补丁文件，以多数版本为参考进行横向对比
+            var results = await _versionCheckService.CheckAllModsAsync(_modService.Mods);
+
+            // 将检测结果同步到每个 ModViewModel
+            int compatible = 0, incompatible = 0;
+            foreach (var vm in _mods)
+            {
+                if (results.TryGetValue(vm.Guid, out var result))
+                {
+                    vm.GameUnitVersion = result.GameVersion;
+                    vm.LastVersionCheck = result.LastChecked;
+                    vm.VersionStatus = result.Status;
+                    vm.VersionCheckResult = result;
+
+                    if (result.Status == Models.ModVersionStatus.Compatible)
+                        compatible++;
+                    else if (result.Status == Models.ModVersionStatus.Incompatible)
+                        incompatible++;
+                }
+            }
+
+            CompatibleModCount = compatible;
+            IncompatibleModCount = incompatible;
+
+            if (incompatible > 0)
+            {
+                VersionCheckSummary = $"发现 {incompatible} 个可能不兼容的模组";
+                OnPropertyChanged(nameof(HasIncompatibleMods));
+            }
+            else if (compatible > 0)
+            {
+                VersionCheckSummary = $"{compatible} 个模组均兼容";
+            }
+            else
+            {
+                VersionCheckSummary = "未发现可检查的模组";
+            }
+
+            OnPropertyChanged(nameof(HasVersionCheckResult));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "版本兼容性检查失败");
+            VersionCheckSummary = "检查失败";
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = $"版本兼容性检查失败:\n\n{ex.Message}"
+            });
+        }
+        finally
+        {
+            IsCheckingVersion = false;
+        }
+    }
+
+    /// <summary>
+    /// 获取本次新增或文件变动的模组（与上次跟踪快照对比）
+    /// </summary>
+    private IEnumerable<ModViewModel> GetNewOrChangedMods()
+    {
+        foreach (var vm in _mods)
+        {
+            if (!s_knownModTimestamps.TryGetValue(vm.Guid, out var lastTime))
+            {
+                // GUID 不存在 → 新增模组
+                yield return vm;
+            }
+            else if (vm.Data.Directory.LastWriteTimeUtc != lastTime)
+            {
+                // 目录修改时间变化 → 模组文件变动
+                yield return vm;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 更新模组跟踪快照，记录当前所有模组的 GUID 和目录修改时间
+    /// </summary>
+    private void UpdateModTimestampTracking()
+    {
+        // 清除已不存在的模组
+        var currentGuids = _mods.Select(static vm => vm.Guid).ToHashSet();
+        foreach (var guid in s_knownModTimestamps.Keys.Where(g => !currentGuids.Contains(g)).ToList())
+            s_knownModTimestamps.Remove(guid);
+
+        // 更新当前模组的目录修改时间
+        foreach (var vm in _mods)
+            s_knownModTimestamps[vm.Guid] = vm.Data.Directory.LastWriteTimeUtc;
     }
 
     [RelayCommand]
@@ -1091,6 +1298,297 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     {
         _editModStore.CurrentMod = vm;
         _navStore.Value.Navigate<EditPageViewModel>();
+    }
+
+    [RelayCommand]
+    void EditManifest(ModViewModel vm)
+    {
+        _editModStore.CurrentMod = vm;
+        _navStore.Value.Navigate<ManifestEditPageViewModel>();
+    }
+
+    /// <summary>
+    /// Pack the mod as a zip/7z archive and export to a specified location for distribution.
+    /// Supports 5 gears: ZIP standard / 7z Fast / 7z Normal / 7z High / 7z Ultra.
+    /// Shows memory usage warning for high-compression options on large mods.
+    /// </summary>
+    [RelayCommand]
+    void ExportMod(ModViewModel vm)
+    {
+        var modDir = vm.Data.Directory;
+
+        // Step 1: Show format/compression selection dialog (5 gears)
+        WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
+        {
+            Title = "导出设置",
+            Message = "请选择导出格式和压缩方式：",
+            Options = new List<object>
+            {
+                "ZIP (标准 - 兼容性最好, 内存低)",
+                "7z (快速 LZMA2 - 速度快, 内存低)",
+                "7z (标准 LZMA2 - 平衡, 内存中)",
+                "7z (高压缩 LZMA2 - 体积小, 内存中)",
+                "7z (极限 LZMA2 - 体积最小, 内存高 ⚠)"
+            },
+            Confirm = (selectedOption) =>
+            {
+                var opt = selectedOption.ToString()!;
+                var is7z = opt.StartsWith("7z", StringComparison.OrdinalIgnoreCase);
+
+                // Parse compression level
+                SharpSevenZip.CompressionLevel level;
+                string dictSize;
+                bool isHighMemory;
+                string levelName;
+
+                if (opt.Contains("快速"))    { level = SharpSevenZip.CompressionLevel.Fast;   dictSize = "8m";  isHighMemory = false; levelName = "Fast"; }
+                else if (opt.Contains("高压缩")) { level = SharpSevenZip.CompressionLevel.High;   dictSize = "64m"; isHighMemory = true;  levelName = "High"; }
+                else if (opt.Contains("极限"))   { level = SharpSevenZip.CompressionLevel.Ultra;  dictSize = "128m"; isHighMemory = true;  levelName = "Ultra"; }
+                else                             { level = SharpSevenZip.CompressionLevel.Normal; dictSize = "32m"; isHighMemory = false; levelName = "Normal"; }
+
+                // Step 2: Show save file dialog
+                var dialog = new SaveFileDialog
+                {
+                    Title = "导出模组",
+                    FileName = $"{vm.Name}.{(is7z ? "7z" : "zip")}",
+                    Filter = is7z ? "7z 压缩包|*.7z|所有文件|*.*" : "ZIP 压缩包|*.zip|所有文件|*.*",
+                };
+
+                if (dialog.ShowDialog() != true)
+                    return;
+
+                // Step 3: Calculate total mod size
+                var excludedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"
+                };
+
+                long totalSize = 0;
+                foreach (var f in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
+                {
+                    if (!excludedExtensions.Contains(f.Extension))
+                        totalSize += f.Length;
+                }
+
+                // Step 4: Warn if > 1GB and high-memory compression
+                if (isHighMemory && totalSize > 1024L * 1024 * 1024)
+                {
+                    var sizeText = totalSize >= 1024L * 1024 * 1024 * 1024
+                        ? $"{totalSize / (1024.0 * 1024 * 1024 * 1024):F2} TB"
+                        : $"{totalSize / (1024.0 * 1024 * 1024):F2} GB";
+
+                    var dictDesc = dictSize switch
+                    {
+                        "64m" => "64MB",
+                        "128m" => "128MB",
+                        _ => dictSize
+                    };
+
+                    WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+                    {
+                        Title = "内存占用警告",
+                        Message = $"模组文件总大小 {sizeText}，选择了「{levelName}」级别。\n\n" +
+                                  $"该级别使用 {dictDesc} 字典进行 LZMA2 压缩，\n" +
+                                  $"压缩过程中内存占用较高，且部分旧版解压工具可能无法解压。\n\n" +
+                                  "是否继续导出？",
+                        Confirm = () => DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, excludedExtensions),
+                        Abort = () => { }
+                    });
+                }
+                else
+                {
+                    DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, excludedExtensions);
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Execute the actual export with the chosen format and settings.
+    /// Shows a real-time progress dialog with compression speed and ratio.
+    /// </summary>
+    private void DoExport(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
+        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions)
+    {
+        // Show progress dialog on UI thread
+        WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressMessage
+        {
+            Title = $"导出模组 - {vm.Name}"
+        });
+
+        // Run export on background thread to keep UI responsive
+        Task.Run(() => DoExportAsync(vm, modDir, outputPath, is7z, level, dictSize, levelName, excludedExtensions));
+    }
+
+    /// <summary>
+    /// Background export with real-time progress reporting.
+    /// </summary>
+    private void DoExportAsync(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
+        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long lastUpdateBytes = 0;
+        double lastUpdateSec = 0;
+        double lastUiUpdate = 0;  // 用于节流 UI 更新
+
+        // Calculate total input size for progress tracking
+        long totalInputSize = 0;
+        foreach (var f in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
+            if (!excludedExtensions.Contains(f.Extension))
+                totalInputSize += f.Length;
+
+        // Helper to send progress updates to UI thread (throttled)
+        void ReportProgress(double progress, string? currentFile, long bytesProcessed)
+        {
+            // 节流：最多每 120ms 更新一次 UI，避免高频 Dispatcher.Invoke 卡死 UI 线程
+            var now = sw.Elapsed.TotalSeconds;
+            if (now - lastUiUpdate < 0.12 && progress < 1.0)
+                return;
+            lastUiUpdate = now;
+
+            var elapsed = now;
+            var speed = elapsed > 0 ? bytesProcessed / elapsed : 0;
+
+            // Smooth speed calculation over 1-second intervals
+            var deltaBytes = bytesProcessed - lastUpdateBytes;
+            var deltaSec = elapsed - lastUpdateSec;
+            if (deltaSec >= 1.0 || progress >= 1.0)
+            {
+                lastUpdateBytes = bytesProcessed;
+                lastUpdateSec = elapsed;
+            }
+
+            var speedText = speed >= 1024 * 1024
+                ? $"速度: {speed / (1024.0 * 1024):F1} MB/s"
+                : speed >= 1024
+                    ? $"速度: {speed / 1024.0:F0} KB/s"
+                    : $"速度: {speed:F0} B/s";
+
+            // Read output file size for ratio (if file exists)
+            string ratioText = "";
+            try
+            {
+                var outFile = new FileInfo(outputPath);
+                if (outFile.Exists && outFile.Length > 0 && totalInputSize > 0)
+                {
+                    // 压缩率 = (1 - 输出大小/输入大小) * 100，表示压缩了多少
+                    var saved = (1.0 - (double)outFile.Length / totalInputSize) * 100;
+                    ratioText = $"压缩率: {saved:F1}%";
+                }
+            }
+            catch { }
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressUpdateMessage
+                {
+                    Progress = progress,
+                    CurrentFile = currentFile,
+                    SpeedText = speedText,
+                    RatioText = ratioText,
+                });
+            });
+        }
+
+        try
+        {
+            if (is7z)
+            {
+                // --- 7z export with SharpSevenZipCompressor ---
+                var compressor = new SharpSevenZipCompressor
+                {
+                    ArchiveFormat = OutArchiveFormat.SevenZip,
+                    CompressionMethod = CompressionMethod.Lzma2,
+                    CompressionLevel = level,
+                    DirectoryStructure = true,
+                    PreserveDirectoryRoot = false,
+                };
+
+                // 根据选择的挡位设置字典大小，控制内存占用
+                //   Fast  → 8MB 字典，内存占用低
+                //   Normal → 32MB 字典，平衡
+                //   High  → 64MB 字典，较高压缩率
+                //   Ultra → 128MB 字典，最高压缩率但内存占用高
+                compressor.CustomParameters.Add("d", dictSize);
+
+                var files = modDir.EnumerateFiles("*", SearchOption.AllDirectories)
+                    .Where(f => !excludedExtensions.Contains(f.Extension))
+                    .Select(f => f.FullName)
+                    .ToArray();
+
+                var commonRootLength = modDir.FullName.Length;
+                if (!modDir.FullName.EndsWith(Path.DirectorySeparatorChar))
+                    commonRootLength++;
+
+                // Track current file from event
+                string currentFile = "";
+                compressor.FileCompressionStarted += (_, args) =>
+                {
+                    currentFile = Path.GetFileName(args.FileName);
+                };
+                compressor.Compressing += (_, args) =>
+                {
+                    // args.PercentDone is int 0-100 from 7z native
+                    var pct = Math.Max(0.0, Math.Min(100, (int)args.PercentDone)) / 100.0;
+                    var estimatedBytes = (long)(totalInputSize * pct);
+                    ReportProgress(pct, currentFile, estimatedBytes);
+                };
+
+                // 直接写文件路径而非 Stream，避免内存缓冲整个归档数据
+                compressor.CompressFiles(outputPath, commonRootLength, files);
+                ReportProgress(1.0, "", totalInputSize);
+
+                _logger.LogInformation("Exported mod \"{Name}\" to {Path} (7z LZMA2 {Level}, dict {Dict})",
+                    vm.Name, outputPath, levelName, dictSize);
+            }
+            else
+            {
+                // --- ZIP export with manual byte tracking ---
+                long totalWritten = 0;
+                string currentFile = "";
+
+                using var fileStream = new FileStream(outputPath, FileMode.Create);
+                using var archive = new ZipArchive(fileStream, ZipArchiveMode.Create);
+
+                foreach (var file in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
+                {
+                    if (excludedExtensions.Contains(file.Extension))
+                        continue;
+
+                    currentFile = file.Name;
+                    var relativePath = Path.GetRelativePath(modDir.FullName, file.FullName);
+                    var entry = archive.CreateEntryFromFile(file.FullName, relativePath, System.IO.Compression.CompressionLevel.Optimal);
+                    
+                    // Approximate progress by file count / total input size
+                    totalWritten += file.Length;
+                    var progress = totalInputSize > 0 ? Math.Min((double)totalWritten / totalInputSize, 1.0) : 0;
+                    ReportProgress(progress, currentFile, totalWritten);
+                }
+
+                ReportProgress(1.0, "", totalInputSize);
+
+                _logger.LogInformation("Exported mod \"{Name}\" to {Path} (ZIP standard)", vm.Name, outputPath);
+            }
+
+            // Signal completion - keep final stats visible with OK button
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressUpdateMessage { IsCompleted = true });
+            });
+            // Don't auto-close - user clicks OK to dismiss and see final ratio/speed
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to export mod");
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+                WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
+                {
+                    Message = $"导出模组时出现错误：{ex.Message}"
+                });
+            });
+        }
     }
 
     bool CanClearSearch()

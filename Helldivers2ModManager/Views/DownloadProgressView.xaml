@@ -10,7 +10,89 @@
              d:DesignHeight="450" d:DesignWidth="800">
     <UserControl.Resources>
         <DataTemplate x:Key="DownloadTaskTemplate" DataType="{x:Type models:DownloadTask}">
-            <Border Background="#2a2a4a" CornerRadius="8" Padding="12" Margin="0 0 0 8">
+            <Border Background="#2a2a4a" CornerRadius="8" Padding="12" Margin="0 0 0 8"
+                    Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=UserControl}}">
+                <Border.ContextMenu>
+                    <ContextMenu MinWidth="160">
+                        <!-- 取消下载：仅下载中/等待中显示 -->
+                        <MenuItem Header="取消下载"
+                                  Command="{Binding PlacementTarget.Tag.CancelDownloadCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Style>
+                                <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Downloading}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Pending}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </MenuItem.Style>
+                        </MenuItem>
+                        <!-- 重新下载：仅失败/取消显示 -->
+                        <MenuItem Header="重新下载"
+                                  Command="{Binding PlacementTarget.Tag.RetryDownloadCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Style>
+                                <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Failed}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Cancelled}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </MenuItem.Style>
+                        </MenuItem>
+                        <!-- 打开文件位置：仅已完成显示 -->
+                        <MenuItem Header="打开文件位置"
+                                  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Style>
+                                <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Completed}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </MenuItem.Style>
+                        </MenuItem>
+                        <Separator/>
+                        <!-- 复制下载链接：始终显示 -->
+                        <MenuItem Header="复制下载链接"
+                                  Command="{Binding PlacementTarget.Tag.CopyDownloadUrlCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}"/>
+                        <!-- 移除任务：非下载中显示 -->
+                        <MenuItem Header="移除任务"
+                                  Command="{Binding PlacementTarget.Tag.RemoveTaskCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Style>
+                                <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Completed}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Failed}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Cancelled}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </MenuItem.Style>
+                        </MenuItem>
+                    </ContextMenu>
+                </Border.ContextMenu>
                 <StackPanel>
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -36,6 +118,9 @@
                                             <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Failed}">
                                                 <Setter Property="Source" Value="pack://application:,,,/Resources/Images/error.png" />
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DownloadStatus.Cancelled}">
+                                                <Setter Property="Source" Value="pack://application:,,,/Resources/Images/error.png" />
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Image.Style>
@@ -58,9 +143,17 @@
                             
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding ProgressPercent, StringFormat={}{0:F1}%}" FontSize="12" Foreground="#888" />
-                                <TextBlock Text="{Binding BytesDownloaded, Converter={StaticResource BytesToSizeConverter}}" FontSize="12" Foreground="#888" Margin="12 0 0 0" />
+                                <TextBlock Text="{Binding BytesDownloaded, Converter={StaticResource BytesConverter}}" FontSize="12" Foreground="#888" Margin="12 0 0 0" />
                                 <TextBlock Text="/" FontSize="12" Foreground="#666" Margin="4 0 0 0" />
-                                <TextBlock Text="{Binding TotalBytes, Converter={StaticResource BytesToSizeConverter}}" FontSize="12" Foreground="#888" Margin="4 0 0 0" />
+                                <TextBlock Text="{Binding TotalBytes, Converter={StaticResource BytesConverter}}" FontSize="12" Foreground="#888" Margin="4 0 0 0" />
+                            </StackPanel>
+                            
+                            <!-- 下载速度和预估剩余时间 -->
+                            <StackPanel Orientation="Horizontal" Margin="0 2 0 0"
+                                        Visibility="{Binding Status, Converter={StaticResource DownloadStatusToVisibilityConverter}}">
+                                <TextBlock Text="{Binding Speed, Converter={StaticResource SpeedToReadableConverter}}" FontSize="12" Foreground="#6a9fd8" />
+                                <TextBlock Text="{Binding EstimatedTimeRemainingText, StringFormat=剩余 {0}}" FontSize="12" Foreground="#888" Margin="12 0 0 0"
+                                           Visibility="{Binding EstimatedTimeRemainingText, Converter={StaticResource StringToVisibilityConverter}}" />
                             </StackPanel>
                             
                             <TextBlock 
@@ -91,6 +184,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 
                 <Button Grid.Column="0"
@@ -104,6 +198,16 @@
                 </Button>
                 
                 <TextBlock Grid.Column="1" Text="下载进度" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0 8 0 8" />
+                
+                <!-- 清除已完成按钮 -->
+                <Button Grid.Column="2"
+                        Command="{Binding ClearCompletedCommand}"
+                        IsEnabled="{Binding HasCompletedTasks}"
+                        Style="{StaticResource FluentIconButton}"
+                        Margin="0,3,4,4" HorizontalAlignment="Right"
+                        ToolTip="清除已完成的任务">
+                    <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center"/>
+                </Button>
             </Grid>
         </Border>
         

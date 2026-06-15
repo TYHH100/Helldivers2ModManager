@@ -7,7 +7,6 @@
 	  xmlns:local="clr-namespace:Helldivers2ModManager.Views"
 	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
 	  xmlns:cvms="clr-namespace:Helldivers2ModManager.ViewModels.Create"
-	  xmlns:cviews="clr-namespace:Helldivers2ModManager.Views.Create"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:CreatePageViewModel}"
 	  d:Background="{StaticResource MicaBackgroundBrush}"
@@ -28,22 +27,400 @@
 				   HorizontalAlignment="Center"
 				   Margin="0 0 0 16"/>
 
-		<!-- Content Frame -->
-		<Border Grid.Row="1"
-				Style="{StaticResource FluentCard}"
-				CornerRadius="8">
-			<Frame Content="{Binding CurrentPage}"
-				   NavigationUIVisibility="Hidden">
-				<Frame.Resources>
-					<DataTemplate DataType="{x:Type cvms:IntroPageViewModel}">
-						<cviews:IntroPageView/>
-					</DataTemplate>
-					<DataTemplate DataType="{x:Type cvms:ChoosePageViewModel}">
-						<cviews:ChoosePageView/>
-					</DataTemplate>
-				</Frame.Resources>
-			</Frame>
-		</Border>
+		<!-- Form Content -->
+		<ScrollViewer Grid.Row="1"
+					  HorizontalScrollBarVisibility="Disabled"
+					  VerticalScrollBarVisibility="Auto">
+			<Border Style="{StaticResource FluentCard}"
+					CornerRadius="8"
+					Padding="24">
+				<StackPanel>
+					<!-- 模组名称 -->
+					<TextBlock Text="名称"
+							   FontSize="16"
+							   FontWeight="SemiBold"
+							   Foreground="{StaticResource NeutralForegroundBrush}"/>
+					<TextBlock Text="模组的显示名称。"
+							   FontSize="13"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Margin="0 4 0 8"/>
+					<TextBox Text="{Binding ModName, UpdateSourceTrigger=PropertyChanged}"
+							 FontSize="14"
+							 Padding="8 6"
+							 Margin="0 0 0 16"/>
+
+					<!-- 模组描述 -->
+					<TextBlock Text="描述"
+							   FontSize="16"
+							   FontWeight="SemiBold"
+							   Foreground="{StaticResource NeutralForegroundBrush}"/>
+					<TextBlock Text="模组的简短描述。"
+							   FontSize="13"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Margin="0 4 0 8"/>
+					<TextBox Text="{Binding ModDescription, UpdateSourceTrigger=PropertyChanged}"
+							 FontSize="14"
+							 AcceptsReturn="True"
+							 TextWrapping="Wrap"
+							 MinHeight="60"
+							 Padding="8 6"
+							 Margin="0 0 0 16"/>
+
+					<!-- 模组图标 -->
+					<TextBlock Text="图标"
+							   FontSize="16"
+							   FontWeight="SemiBold"
+							   Foreground="{StaticResource NeutralForegroundBrush}"/>
+					<TextBlock Text="模组的显示图标（可选）。"
+							   FontSize="13"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Margin="0 4 0 8"/>
+					<Grid Margin="0 0 0 16">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="Auto"/>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="Auto"/>
+						</Grid.ColumnDefinitions>
+						<!-- 图标预览 -->
+						<Border Grid.Column="0"
+								Width="48"
+								Height="48"
+								CornerRadius="6"
+								Background="#20FFFFFF"
+								Margin="0 0 12 0"
+								VerticalAlignment="Center">
+							<Image Source="{Binding IconPreview}"
+								   Stretch="Uniform"
+								   VerticalAlignment="Center"
+								   HorizontalAlignment="Center"/>
+						</Border>
+						<TextBox Grid.Column="1"
+								 Text="{Binding IconPath, UpdateSourceTrigger=PropertyChanged}"
+								 IsReadOnly="True"
+								 FontSize="14"
+								 Padding="8 6"
+								 VerticalAlignment="Center"/>
+						<Button Grid.Column="2"
+								Content="浏览..."
+								Style="{StaticResource FluentSecondaryButton}"
+								Command="{Binding BrowseIconCommand}"
+								Margin="8 0 0 0"
+								Padding="16 8"
+								VerticalAlignment="Center"/>
+					</Grid>
+
+					<!-- 源目录 -->
+					<TextBlock Text="源目录"
+							   FontSize="16"
+							   FontWeight="SemiBold"
+							   Foreground="{StaticResource NeutralForegroundBrush}"/>
+					<TextBlock Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   FontSize="13"
+							   Margin="0 4 0 8">
+						<Run Text="选择包含模组文件的目录。"/>
+						<LineBreak/>
+						<Run Text="（点击 &quot;浏览...&quot; 选择目录）"/>
+					</TextBlock>
+					<Grid Margin="0 0 0 24">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="Auto"/>
+						</Grid.ColumnDefinitions>
+						<TextBox Grid.Column="0"
+								 Text="{Binding SourceDirectory, UpdateSourceTrigger=PropertyChanged}"
+								 IsReadOnly="True"
+								 FontSize="14"
+								 Padding="8 6"
+								 VerticalAlignment="Center"/>
+						<Button Grid.Column="1"
+								Content="浏览..."
+								Style="{StaticResource FluentSecondaryButton}"
+								Command="{Binding BrowseSourceCommand}"
+								Margin="8 0 0 0"
+								Padding="16 8"
+								VerticalAlignment="Center"/>
+					</Grid>
+
+					<!-- 选项区域 -->
+					<Grid Margin="0 0 0 4">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="Auto"/>
+						</Grid.ColumnDefinitions>
+						<TextBlock Grid.Column="0"
+								   Text="选项"
+								   FontSize="16"
+								   FontWeight="SemiBold"
+								   Foreground="{StaticResource NeutralForegroundBrush}"/>
+						<Button Grid.Column="1"
+								Content="添加选项"
+								Style="{StaticResource FluentSecondaryButton}"
+								Command="{Binding AddOptionCommand}"
+								Padding="12 6"
+								FontSize="13"/>
+					</Grid>
+					<TextBlock Text="添加模组的可选项（如颜色切换等），每个选项可包含子选项。"
+							   FontSize="13"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Margin="0 0 0 8"/>
+
+					<!-- 选项列表 -->
+					<ItemsControl ItemsSource="{Binding Options}">
+						<ItemsControl.ItemTemplate>
+							<DataTemplate DataType="{x:Type cvms:CreateModOptionViewModel}">
+								<Border Style="{StaticResource FluentSettingsCard}"
+										Margin="0 0 0 8"
+										Padding="16"
+										BorderBrush="{StaticResource NeutralForegroundSecondaryBrush}"
+										BorderThickness="1"
+										CornerRadius="6">
+									<StackPanel>
+										<!-- 选项标题行 + 删除按钮 -->
+										<Grid Margin="0 0 0 8">
+											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="*"/>
+												<ColumnDefinition Width="Auto"/>
+											</Grid.ColumnDefinitions>
+											<TextBlock Grid.Column="0"
+													   Text="选项"
+													   FontSize="14"
+													   FontWeight="SemiBold"
+													   Foreground="{StaticResource NeutralForegroundBrush}"
+													   VerticalAlignment="Center"/>
+											<Button Grid.Column="1"
+													Style="{StaticResource FluentIconButton}"
+													Command="{Binding DataContext.RemoveOptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+													CommandParameter="{Binding}"
+													ToolTip="删除此选项"
+													Padding="6">
+												<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+											</Button>
+										</Grid>
+
+										<!-- 选项图片 + 名称/描述 -->
+										<Grid Margin="0 0 0 8">
+											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="Auto"/>
+												<ColumnDefinition Width="*"/>
+											</Grid.ColumnDefinitions>
+											<!-- 选项图片预览 -->
+											<Border Grid.Column="0"
+													Width="64"
+													Height="64"
+													CornerRadius="4"
+													Background="#20FFFFFF"
+													Margin="0 0 12 0"
+													VerticalAlignment="Top">
+												<Image Source="{Binding ImagePreview}"
+													   Stretch="Uniform"
+													   VerticalAlignment="Center"
+													   HorizontalAlignment="Center"/>
+											</Border>
+											<!-- 选项名称、描述、Include 路径 -->
+											<StackPanel Grid.Column="1">
+												<TextBlock Text="名称" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+												<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+														 FontSize="14"
+														 Padding="4 2"
+														 Margin="0 0 0 6"/>
+												<TextBlock Text="描述" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+												<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+														 FontSize="13"
+														 Padding="4 2"
+														 Margin="0 0 0 6"/>
+												<TextBlock Text="Include 路径（相对于源目录，分号分隔）" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+												<Grid Margin="0 0 0 6">
+													<Grid.ColumnDefinitions>
+														<ColumnDefinition Width="*"/>
+														<ColumnDefinition Width="Auto"/>
+													</Grid.ColumnDefinitions>
+													<TextBox Grid.Column="0"
+															 Text="{Binding IncludePaths, UpdateSourceTrigger=PropertyChanged}"
+															 FontSize="12"
+															 Padding="4 2"
+															 VerticalAlignment="Center"/>
+													<Button Grid.Column="1"
+															Content="浏览"
+															Style="{StaticResource FluentSecondaryButton}"
+															Command="{Binding BrowseIncludeCommand}"
+															Margin="4 0 0 0"
+															Padding="8 4"
+															FontSize="12"/>
+												</Grid>
+											</StackPanel>
+										</Grid>
+
+										<!-- 选项图片选择 -->
+										<Grid Margin="0 0 0 8">
+											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="Auto"/>
+												<ColumnDefinition Width="*"/>
+												<ColumnDefinition Width="Auto"/>
+											</Grid.ColumnDefinitions>
+											<TextBlock Grid.Column="0"
+													   Text="图片"
+													   FontSize="12"
+													   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+													   VerticalAlignment="Center"
+													   Margin="0 0 8 0"/>
+											<TextBox Grid.Column="1"
+													 Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"
+													 IsReadOnly="True"
+													 FontSize="12"
+													 Padding="4 2"
+													 VerticalAlignment="Center"/>
+											<Button Grid.Column="2"
+													Content="选择图片"
+													Style="{StaticResource FluentSecondaryButton}"
+													Command="{Binding BrowseImageCommand}"
+													Margin="4 0 0 0"
+													Padding="8 4"
+													FontSize="12"/>
+										</Grid>
+
+										<!-- 子选项区域 -->
+										<Grid Margin="0 4 0 4">
+											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="*"/>
+												<ColumnDefinition Width="Auto"/>
+											</Grid.ColumnDefinitions>
+											<TextBlock Grid.Column="0"
+													   Text="子选项"
+													   FontSize="13"
+													   FontWeight="SemiBold"
+													   Foreground="{StaticResource NeutralForegroundBrush}"
+													   VerticalAlignment="Center"/>
+											<Button Grid.Column="1"
+													Content="添加子选项"
+													Style="{StaticResource FluentSecondaryButton}"
+													Command="{Binding AddSubOptionCommand}"
+													Padding="8 4"
+													FontSize="12"/>
+										</Grid>
+
+										<!-- 子选项列表 -->
+										<ItemsControl ItemsSource="{Binding SubOptions}"
+													  Margin="0 4 0 0">
+											<ItemsControl.ItemTemplate>
+												<DataTemplate DataType="{x:Type cvms:CreateModSubOptionViewModel}">
+													<Border Background="#15FFFFFF"
+															CornerRadius="4"
+															Padding="12"
+															Margin="0 4 0 0">
+														<StackPanel>
+															<!-- 子选项标题 + 删除按钮 -->
+															<Grid Margin="0 0 0 6">
+																<Grid.ColumnDefinitions>
+																	<ColumnDefinition Width="*"/>
+																	<ColumnDefinition Width="Auto"/>
+																</Grid.ColumnDefinitions>
+																<TextBlock Grid.Column="0"
+																		   Text="子选项"
+																		   FontSize="12"
+																		   FontWeight="SemiBold"
+																		   Foreground="{StaticResource NeutralForegroundBrush}"
+																		   VerticalAlignment="Center"/>
+																<Button Grid.Column="1"
+																		Style="{StaticResource FluentIconButton}"
+																		Command="{Binding DataContext.RemoveSubOptionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+																		CommandParameter="{Binding}"
+																		ToolTip="删除此子选项"
+																		Padding="4">
+																	<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="12"/>
+																</Button>
+															</Grid>
+															<Grid>
+																<Grid.ColumnDefinitions>
+																	<ColumnDefinition Width="Auto"/>
+																	<ColumnDefinition Width="*"/>
+																</Grid.ColumnDefinitions>
+																<!-- 子选项图片预览 -->
+																<Border Grid.Column="0"
+																		Width="40"
+																		Height="40"
+																		CornerRadius="4"
+																		Background="#20FFFFFF"
+																		Margin="0 0 8 0"
+																		VerticalAlignment="Top">
+																	<Image Source="{Binding ImagePreview}"
+																		   Stretch="Uniform"
+																		   VerticalAlignment="Center"
+																		   HorizontalAlignment="Center"/>
+																</Border>
+																<!-- 子选项名称、描述、Include 路径 -->
+																<StackPanel Grid.Column="1">
+																	<TextBlock Text="名称" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																	<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+																			 FontSize="13"
+																			 FontWeight="SemiBold"
+																			 Padding="4 2"
+																			 Margin="0 0 0 4"/>
+																	<TextBlock Text="描述" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																	<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+																			 FontSize="12"
+																			 Padding="4 2"
+																			 Margin="0 0 0 4"/>
+																	<TextBlock Text="Include 路径（相对于源目录，分号分隔）" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																	<Grid>
+																		<Grid.ColumnDefinitions>
+																			<ColumnDefinition Width="*"/>
+																			<ColumnDefinition Width="Auto"/>
+																		</Grid.ColumnDefinitions>
+																		<TextBox Grid.Column="0"
+																				 Text="{Binding IncludePaths, UpdateSourceTrigger=PropertyChanged}"
+																				 FontSize="12"
+																				 Padding="4 2"
+																				 VerticalAlignment="Center"/>
+																		<Button Grid.Column="1"
+																				Content="浏览"
+																				Style="{StaticResource FluentSecondaryButton}"
+																				Command="{Binding BrowseIncludeCommand}"
+																				Margin="4 0 0 0"
+																				Padding="8 4"
+																				FontSize="12"/>
+																	</Grid>
+																</StackPanel>
+															</Grid>
+															<!-- 子选项图片选择 -->
+															<Grid Margin="0 4 0 0">
+																<Grid.ColumnDefinitions>
+																	<ColumnDefinition Width="Auto"/>
+																	<ColumnDefinition Width="*"/>
+																	<ColumnDefinition Width="Auto"/>
+																</Grid.ColumnDefinitions>
+																<TextBlock Grid.Column="0"
+																		   Text="图片"
+																		   FontSize="11"
+																		   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+																		   VerticalAlignment="Center"
+																		   Margin="0 0 8 0"/>
+																<TextBox Grid.Column="1"
+																		 Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"
+																		 IsReadOnly="True"
+																		 FontSize="12"
+																		 Padding="4 2"
+																		 VerticalAlignment="Center"/>
+																<Button Grid.Column="2"
+																		Content="选择图片"
+																		Style="{StaticResource FluentSecondaryButton}"
+																		Command="{Binding BrowseImageCommand}"
+																		Margin="4 0 0 0"
+																		Padding="8 4"
+																		FontSize="12"/>
+															</Grid>
+														</StackPanel>
+													</Border>
+												</DataTemplate>
+											</ItemsControl.ItemTemplate>
+										</ItemsControl>
+									</StackPanel>
+								</Border>
+							</DataTemplate>
+						</ItemsControl.ItemTemplate>
+					</ItemsControl>
+				</StackPanel>
+			</Border>
+		</ScrollViewer>
 
 		<!-- Navigation Buttons -->
 		<Border Grid.Row="2"
@@ -51,23 +428,24 @@
 				CornerRadius="8"
 				Margin="0 16 0 0">
 			<Grid>
-				<Button Content="返回"
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="Auto"/>
+				</Grid.ColumnDefinitions>
+
+				<Button Grid.Column="0"
+						Content="取消"
 						Style="{StaticResource FluentSecondaryButton}"
-						HorizontalAlignment="Left"
 						Command="{Binding CancelCommand}"
-						Padding="16 10"/>
-				<StackPanel Orientation="Horizontal"
-							HorizontalAlignment="Right">
-					<Button Content="上一步"
-							Style="{StaticResource FluentSecondaryButton}"
-							Command="{Binding BackCommand}"
-							Margin="0 0 8 0"
-							Padding="16 10"/>
-					<Button Content="下一步"
-							Style="{StaticResource FluentPrimaryButton}"
-							Command="{Binding NextCommand}"
-							Padding="16 10"/>
-				</StackPanel>
+						HorizontalAlignment="Left"
+						Padding="24 10"/>
+
+				<Button Grid.Column="1"
+						Content="创建"
+						Style="{StaticResource FluentPrimaryButton}"
+						Command="{Binding CreateCommand}"
+						HorizontalAlignment="Right"
+						Padding="24 10"/>
 			</Grid>
 		</Border>
 	</Grid>
