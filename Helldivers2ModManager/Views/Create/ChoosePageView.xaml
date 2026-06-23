@@ -23,7 +23,8 @@
 		<RadioButton GroupName="HasOptions"
 					 IsChecked="{Binding HasOptions}"
 					 Margin="0 0 0 8"
-					 VerticalContentAlignment="Center">
+					 VerticalContentAlignment="Center"
+					 Style="{StaticResource FluentRadioButton}">
 			<StackPanel Orientation="Horizontal">
 				<TextBlock Text="&#xE8FB;"
 						   FontFamily="Segoe Fluent Icons"
@@ -35,7 +36,8 @@
 		</RadioButton>
 		<RadioButton GroupName="HasOptions"
 					 IsChecked="{Binding HasNoOptions}"
-					 VerticalContentAlignment="Center">
+					 VerticalContentAlignment="Center"
+					 Style="{StaticResource FluentRadioButton}">
 			<StackPanel Orientation="Horizontal">
 				<TextBlock Text="&#xE711;"
 						   FontFamily="Segoe Fluent Icons"

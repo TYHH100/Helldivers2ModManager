@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -79,12 +80,6 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isCheckingVersion;
 
-    /// <summary>
-    /// 版本检测详细信息（用于弹窗显示）
-    /// </summary>
-    [ObservableProperty]
-    private ModVersionCheckResult? _versionCheckResult;
-
     public ModData Data => _mod;
 
     public event Action? OptionsChanged;
@@ -94,7 +89,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         OptionsChanged?.Invoke();
     }
 
-    public string[]? LegacyOptions { get; }
+    public string[]? LegacyOptions { get; private set; }
 
     public bool Enabled
     {
@@ -186,7 +181,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         }
     }
 
-    public ModOptionViewModel[]? Options { get; }
+    public ModOptionViewModel[]? Options { get; private set; }
 
     private readonly ModData _mod;
 
@@ -235,6 +230,32 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(OptionsVisible));
             OnPropertyChanged(nameof(EditVisible));
             OnPropertyChanged(nameof(LegacySelectedOption));
+
+            // 当 Manifest 被替换后（如更新模组），重新构建 Options/LegacyOptions
+            switch (_mod.Manifest.Version)
+            {
+                case ManifestVersion.Legacy:
+                    Options = null;
+                    LegacyOptions = ((LegacyModManifest)_mod.Manifest).Options?.ToArray();
+                    break;
+
+                case ManifestVersion.V1:
+                {
+                    var manifest = (V1ModManifest)_mod.Manifest;
+                    if (manifest.Options is null)
+                    {
+                        Options = null;
+                        break;
+                    }
+                    Options = new ModOptionViewModel[manifest.Options.Count];
+                    for (int i = 0; i < manifest.Options.Count; i++)
+                        Options[i] = new ModOptionViewModel(this, i);
+                    break;
+                }
+            }
+            OnPropertyChanged(nameof(Options));
+            OnPropertyChanged(nameof(LegacyOptions));
+
             LoadIcon();
         }
         else if (e.PropertyName == nameof(ModData.TagIds))
@@ -249,18 +270,46 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     public void LoadIcon()
     {
-        var bmp = new BitmapImage();
-        bmp.BeginInit();
-        var path = _mod.Manifest.IconPath;
-        if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
-            bmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
-        else
+        try
         {
-            bmp.UriSource = new Uri(Path.Combine(_mod.Directory.FullName, path));
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            var path = _mod.Manifest.IconPath;
+            if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
+                bmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
+            else
+            {
+                var iconFullPath = Path.Combine(_mod.Directory.FullName, path);
+                if (File.Exists(iconFullPath))
+                {
+                    bmp.UriSource = new Uri(iconFullPath);
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                }
+                else
+                {
+                    _logger.LogWarning("Icon file not found at \"{Path}\", using default icon for mod \"{Name}\"", iconFullPath, _mod.Manifest.Name);
+                    bmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
+                }
+            }
+            bmp.EndInit();
+            Icon = bmp;
         }
-        bmp.EndInit();
-        Icon = bmp;
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load icon for mod \"{Name}\", falling back to default icon", _mod.Manifest.Name);
+            try
+            {
+                var defaultBmp = new BitmapImage();
+                defaultBmp.BeginInit();
+                defaultBmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
+                defaultBmp.EndInit();
+                Icon = defaultBmp;
+            }
+            catch
+            {
+                Icon = null;
+            }
+        }
     }
 
     [RelayCommand]
@@ -349,30 +398,35 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void ShowVersionDetail()
     {
-        var result = VersionCheckResult;
-        if (result == null)
+        // 从未检查过时提示用户
+        if (VersionStatus == ModVersionStatus.Unknown && LastVersionCheck == default)
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
             {
-                Message = "Please run version check first from the bottom toolbar."
+                Message = "尚未进行版本兼容性检查，请点击底部工具栏的「检查版本兼容性」按钮。"
             });
             return;
         }
 
-        CompatibleCheckInfo info = new()
+        var statusText = VersionStatus switch
         {
-            VersionStatus = result.Status,
-            GameUnitVersion = result.GameVersion,
-            LastChecked = result.LastChecked,
-            PatchUnits = result.PatchUnits.ToList(),
-            ModName = Name,
-            ErrorMessage = result.ErrorMessage,
-            DetailedAnalysis = result.DetailedAnalysis
+            ModVersionStatus.Compatible => "兼容",
+            ModVersionStatus.Incompatible => "不兼容",
+            ModVersionStatus.Unknown => "无法确认",
+            ModVersionStatus.Checking => "检查中",
+            ModVersionStatus.Error => "检查失败",
+            _ => "未知"
         };
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"模组: {Name}");
+        sb.AppendLine($"状态: {statusText}");
+        sb.AppendLine($"参考 Unit 版本: 0x{GameUnitVersion:X8} ({GameUnitVersion})");
+        sb.AppendLine($"最后检查时间: {LastVersionCheck:yyyy-MM-dd HH:mm:ss}");
 
         WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
         {
-            Message = info.ToString()
+            Message = sb.ToString()
         });
     }
 

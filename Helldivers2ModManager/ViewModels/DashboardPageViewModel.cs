@@ -34,18 +34,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     public bool IsSearchEmpty => string.IsNullOrEmpty(SearchText);
 
-    /// <summary>
-    /// 排序方式枚举
-    /// </summary>
-    public enum SortMode
-    {
-        Default,
-        NameAsc,
-        NameDesc,
-        EnabledFirst,
-        DisabledFirst
-    }
-
     private static readonly ProcessStartInfo s_gameStartInfo = new("steam://run/553850") { UseShellExecute = true };
     private static readonly ProcessStartInfo s_reportStartInfo = new("https://github.com/TYHH100/Helldivers2ModManager/issues") { UseShellExecute = true };
     private static readonly ProcessStartInfo s_discordStartInfo = new("https://discord.gg/helldiversmodding") { UseShellExecute = true };
@@ -58,15 +46,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly SettingsService _settingsService;
     private readonly ProfileService _profileService;
     private readonly INexusModsService _nexusModsService;
-    private readonly VersionCheckService _versionCheckService;
+    private readonly VersionCheckRepository _versionCheckRepository;
+    private readonly ModHashService _modHashService;
     private ObservableCollection<ModViewModel> _mods;
     private Timer? _saveTimer;
     private volatile bool _isSavePending;
     private readonly object _saveLock = new();
-    /// <summary>
-    /// 跟踪已知模组 GUID → 目录最后写入时间，用于检测新增或变动的模组
-    /// </summary>
-    private static readonly Dictionary<Guid, DateTime> s_knownModTimestamps = [];
+    private readonly SearchFilterService _searchFilterService;
+    private readonly SortService _sortService;
+    private readonly VersionCheckViewModel _versionCheckVm;
     
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -93,119 +81,47 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// <summary>
     /// 排序功能是否在设置中启用
     /// </summary>
-    public bool IsSortingEnabled => _settingsService.Initialized && _settingsService.EnableSorting;
+    public bool IsSortingEnabled => _sortService.IsSortingEnabled;
 
-    // ===== 版本兼容性检测属性 =====
+    // ===== 版本兼容性检测属性（委托给 VersionCheckViewModel） =====
 
-    /// <summary>
-    /// 是否正在检查版本兼容性
-    /// </summary>
-    [ObservableProperty]
-    private bool _isCheckingVersion;
-
-    /// <summary>
-    /// 版本检查摘要文本
-    /// </summary>
-    [ObservableProperty]
-    private string _versionCheckSummary = string.Empty;
-
-    /// <summary>
-    /// 兼容模组数量
-    /// </summary>
-    [ObservableProperty]
-    private int _compatibleModCount;
-
-    /// <summary>
-    /// 不兼容模组数量
-    /// </summary>
-    [ObservableProperty]
-    private int _incompatibleModCount;
+    public bool IsCheckingVersion => _versionCheckVm.IsCheckingVersion;
+    public string VersionCheckSummary => _versionCheckVm.VersionCheckSummary;
+    public int CompatibleModCount => _versionCheckVm.CompatibleModCount;
+    public int IncompatibleModCount => _versionCheckVm.IncompatibleModCount;
 
     /// <summary>
     /// 上次版本检查是否有不兼容的模组
     /// </summary>
-    public bool HasIncompatibleMods => IncompatibleModCount > 0;
+    public bool HasIncompatibleMods => _versionCheckVm.HasIncompatibleMods;
 
     /// <summary>
     /// 是否已完成版本检查
     /// </summary>
-    public bool HasVersionCheckResult => !string.IsNullOrEmpty(VersionCheckSummary);
+    public bool HasVersionCheckResult => _versionCheckVm.HasVersionCheckResult;
+
+    /// <summary>
+    /// 哈希迁移状态文本，显示在底部状态栏中。
+    /// 后台哈希计算（版本升级迁移）进行中时显示进度，完成后显示结果摘要。
+    /// </summary>
+    [ObservableProperty]
+    private string _hashMigrationStatusText = string.Empty;
 
     public IEnumerable<SortMode> SortModes { get; } = [SortMode.Default, SortMode.NameAsc, SortMode.NameDesc, SortMode.EnabledFirst, SortMode.DisabledFirst];
-    private object? _selectedGroupItem = "无";
-    public object? SelectedGroupItem
-    {
-        get
-        {
-            return _selectedGroupItem;
-        }
-        set
-        {
-            if (_selectedGroupItem != value)
-            {
-                _selectedGroupItem = value;
-                OnPropertyChanged(nameof(SelectedGroupItem));
-                OnPropertyChanged(nameof(SelectedGroup));
-                
-                // Enable only mods in the selected group
-                var selectedGroup = SelectedGroup;
-                foreach (var mod in _mods)
-                {
-                    if (selectedGroup == null)
-                    {
-                        // If no group is selected, enable only mods without a group
-                        mod.Enabled = mod.Data.GroupId == null;
-                    }
-                    else
-                    {
-                        // Enable only mods in the selected group
-                        mod.Enabled = mod.Data.GroupId == selectedGroup.Id;
-                    }
-                }
-                
-                UpdateView();
-            }
-        }
-    }
-    public ModGroup? SelectedGroup
-    {
-        get
-        {
-            if (_selectedGroupItem is ModGroup group)
-            {
-                return group;
-            }
-            return null;
-        }
-        set
-        {
-            if (value == null)
-            {
-                SelectedGroupItem = "无";
-            }
-            else
-            {
-                SelectedGroupItem = value;
-            }
-        }
-    }
-    public IReadOnlyList<ModGroup> Groups => _settingsService.Initialized ? _settingsService.Groups : [];
-    public IEnumerable<object> GroupItems
-    {
-        get
-        {
-            yield return "无";
-            if (_settingsService.Initialized)
-            {
-                foreach (var group in _settingsService.Groups)
-                {
-                    yield return group;
-                }
-            }
-        }
-    }
 
-    public DashboardPageViewModel(ILogger<DashboardPageViewModel> logger, IServiceProvider provider, SettingsService settingsService, ModService modService, ProfileService profileService, EditModStore editModStore, INexusModsService nexusModsService, VersionCheckService versionCheckService)
+    public DashboardPageViewModel(
+        ILogger<DashboardPageViewModel> logger,
+        IServiceProvider provider,
+        SettingsService settingsService,
+        ModService modService,
+        ProfileService profileService,
+        EditModStore editModStore,
+        INexusModsService nexusModsService,
+        VersionCheckRepository versionCheckRepository,
+        ModHashService modHashService,
+        SearchFilterService searchFilterService,
+        SortService sortService,
+        VersionCheckViewModel versionCheckVm)
     {
         _logger = logger;
         _navStore = new(provider.GetRequiredService<NavigationStore>);
@@ -214,7 +130,20 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _modService = modService;
         _profileService = profileService;
         _nexusModsService = nexusModsService;
-        _versionCheckService = versionCheckService;
+        _versionCheckRepository = versionCheckRepository;
+        _modHashService = modHashService;
+        _searchFilterService = searchFilterService;
+        _sortService = sortService;
+        _versionCheckVm = versionCheckVm;
+
+        // 订阅哈希迁移进度事件，将后台计算状态同步到 UI
+        _modHashService.MigrationProgressChanged += (progress) =>
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                HashMigrationStatusText = progress.Message ?? string.Empty;
+            });
+        };
         _mods = [];
         _saveTimer = new Timer(OnSaveTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
@@ -232,10 +161,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             OnPropertyChanged(nameof(IsSearchEmpty));
             ClearSearchCommand.NotifyCanExecuteChanged();
-            UpdateView();
-        }
-        else if (e.PropertyName == nameof(SelectedGroup))
-        {
             UpdateView();
         }
 
@@ -270,55 +195,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     {
         IEnumerable<ModViewModel> filteredMods = _mods;
 
-        if (SelectedGroup != null)
-        {
-            filteredMods = filteredMods.Where(vm => vm.Data.GroupId == SelectedGroup.Id);
-        }
+        // 搜索过滤
+        filteredMods = _searchFilterService.ApplySearchFilter(filteredMods, SearchText);
 
-        if (!IsSearchEmpty && _settingsService.Initialized)
-        {
-            var searchText = SearchText.Trim();
-
-            if (searchText.StartsWith("@"))
-            {
-                var tagName = searchText.Substring(1);
-                if (!string.IsNullOrEmpty(tagName))
-                {
-                    filteredMods = filteredMods.Where(vm =>
-                        vm.Tags.Any(t => t.Name.Contains(tagName, StringComparison.InvariantCultureIgnoreCase)));
-                }
-            }
-            else
-            {
-                filteredMods = filteredMods.Where(vm =>
-                {
-                    if (_settingsService.CaseSensitiveSearch)
-                        return vm.Name.Contains(searchText, StringComparison.InvariantCulture);
-                    return vm.Name.Contains(searchText, StringComparison.InvariantCultureIgnoreCase);
-                });
-            }
-        }
-
-        // 排序 —— 仅当设置中启用了排序功能才生效
-        bool hasActiveSort = false;
-        if (_settingsService.Initialized && _settingsService.EnableSorting)
-        {
-            hasActiveSort = CurrentSortMode != SortMode.Default;
-            if (hasActiveSort)
-            {
-                filteredMods = CurrentSortMode switch
-                {
-                    SortMode.NameAsc => filteredMods.OrderBy(static vm => vm.Name),
-                    SortMode.NameDesc => filteredMods.OrderByDescending(static vm => vm.Name),
-                    SortMode.EnabledFirst => filteredMods.OrderByDescending(static vm => vm.Enabled),
-                    SortMode.DisabledFirst => filteredMods.OrderBy(static vm => vm.Enabled),
-                    _ => filteredMods,
-                };
-            }
-        }
+        // 排序
+        bool hasActiveSort = _sortService.IsActiveSort(CurrentSortMode);
+        if (hasActiveSort)
+            filteredMods = _sortService.ApplySort(filteredMods, CurrentSortMode);
 
         // 无任何筛选/排序时直接使用原始 ObservableCollection，保证拖拽功能可用
-        if (SelectedGroup is null && IsSearchEmpty && !hasActiveSort)
+        if (IsSearchEmpty && !hasActiveSort)
         {
             Mods = _mods;
         }
@@ -450,22 +336,19 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         if (problems.Length > 0)
             ShowProblems(problems, "加载模组时出现问题:", false, true);
+
+        // 从数据库加载已缓存的版本检测结果，避免每次启动都需要全量扫描
+        _versionCheckVm.LoadCachedResults(_mods);
+
         Initialized = true;
         _logger.LogInformation("Initialization successful");
 
         // 检测新增或变动的模组，自动触发版本兼容性检查
-        if (_settingsService.AutoCheckVersionOnStartup && _mods.Count > 0)
+        if (_versionCheckVm.ShouldAutoCheck(_mods))
         {
-            var changedMods = GetNewOrChangedMods().ToList();
-            if (changedMods.Count > 0)
-            {
-                _logger.LogInformation("检测到 {Count} 个新增/变动的模组，自动检查版本兼容性...", changedMods.Count);
-                _ = CheckVersionCompatibility();
-            }
+            _logger.LogInformation("检测到新增/变动的模组或游戏 exe 已更新，自动检查版本兼容性...");
+            _ = CheckVersionCompatibility();
         }
-
-        // 更新模组跟踪快照
-        UpdateModTimestampTracking();
 
 #if DEBUG && FALSE
 		ShowProblems(Enum.GetValues<ModProblemKind>().Select(static k => new ModProblem { Directory = new DirectoryInfo(@"C:\ModStorage\Test"), Kind = k }), "Problem test:", true);
@@ -559,34 +442,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private async void OnModAdded(ModData mod)
     {
-        // 新模组添加后，如果启用了自动检查，仅扫描该新增模组（使用缓存的参考版本）
-        if (_settingsService.AutoCheckVersionOnStartup)
-        {
-            _logger.LogInformation("New mod \"{Name}\", checking version compatibility...", mod.Manifest.Name);
-            var result = await _versionCheckService.CheckSingleModAsync(mod);
-            if (result is not null)
-            {
-                var vm = _mods.FirstOrDefault(v => v.Guid == mod.Manifest.Guid);
-                if (vm is not null)
-                {
-                    vm.GameUnitVersion = result.GameVersion;
-                    vm.LastVersionCheck = result.LastChecked;
-                    vm.VersionStatus = result.Status;
-                    vm.VersionCheckResult = result;
-                }
-
-                if (result.Status == ModVersionStatus.Incompatible)
-                    VersionCheckSummary = $"发现不兼容的新增模组: {mod.Manifest.Name}";
-                else
-                    VersionCheckSummary = $"新增模组 \"{mod.Manifest.Name}\" 版本检测完成";
-                OnPropertyChanged(nameof(HasVersionCheckResult));
-            }
-        }
+        await _versionCheckVm.CheckSingleModOnAddAsync(mod, _mods);
+        // 通知 UI 属性变更
+        OnPropertyChanged(nameof(VersionCheckSummary));
+        OnPropertyChanged(nameof(HasVersionCheckResult));
     }
 
     private void ModService_ModRemoved(ModData mod)
     {
-        var vm = _mods.FirstOrDefault((vm) => vm.Data == mod);
+        // 使用 GUID 查找而不是引用相等性，避免因 ModData 引用不匹配导致界面不同步
+        var vm = _mods.FirstOrDefault(vm => vm.Guid == mod.Manifest.Guid);
         if (vm is not null)
         {
             vm.OptionsChanged -= ModViewModel_OptionsChanged;
@@ -690,7 +555,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         
         if (shouldSave)
         {
-            await SaveEnabled(false);
+            try
+            {
+                await SaveEnabled(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving enabled data");
+            }
         }
     }
 
@@ -740,11 +612,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
-    async Task BatchDelete()
+    Task BatchDelete()
     {
         var selected = _mods.Where(static vm => vm.IsSelected).ToArray();
         if (selected.Length == 0)
-            return;
+            return Task.CompletedTask;
 
         var deleteMessage = _settingsService.DeleteToRecycleBin
             ? "模组文件将被移动到回收站。"
@@ -775,6 +647,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     {
                         var guids = selected.Select(static vm => vm.Guid).ToList();
                         await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, guids);
+                        // 同时删除这些模组的版本检测记录
+                        foreach (var guid in guids)
+                            await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, guid);
                     }
 
                     WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
@@ -792,6 +667,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 OnPropertyChanged(nameof(SelectionCountText));
             }
         });
+
+        return Task.CompletedTask;
     }
 
     [RelayCommand]
@@ -808,12 +685,55 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             vm.Enabled = false;
     }
 
+    /// <summary>
+    /// 批量打标签 —— 为所有选中的模组统一设置标签
+    /// </summary>
+    [RelayCommand]
+    void BatchAddTags()
+    {
+        var selected = _mods.Where(static vm => vm.IsSelected).ToArray();
+        if (selected.Length == 0 || !_settingsService.Initialized)
+            return;
+
+        // 使用第一个选中模组的标签作为初始选择状态（方便用户基于现有标签增减）
+        var initialTagIds = selected[0].Data.TagIds.ToList();
+        var selectableTags = _settingsService.Tags.Select(t => new TagSelectionItem(t, initialTagIds.Contains(t.Id))).ToList();
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxTagSelectionMessage
+        {
+            Title = "批量设置标签",
+            Message = $"为选中的 {selected.Length} 个模组设置标签：",
+            Tags = selectableTags,
+            Confirm = (selectedTags) =>
+            {
+                if (_settingsService.IsReadonly)
+                {
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法设置标签，设置处于只读模式" });
+                    return;
+                }
+
+                var newTagIds = selectedTags.Select(static t => t.Tag.Id).ToList();
+                foreach (var vm in selected)
+                {
+                    vm.Data.TagIds = newTagIds;
+                }
+                _ = SaveEnabled();
+                WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = $"已为 {selected.Length} 个模组更新标签" });
+            }
+        });
+    }
+
     [RelayCommand(AllowConcurrentExecutions = false)]
         async Task Add(string? filePath = null)
         {
-            string? selectedFile = filePath;
+            // 支持单文件路径传入（如拖拽场景）或批量文件选择
+            List<string> selectedFiles = [];
 
-            if (selectedFile == null)
+            if (filePath is not null)
+            {
+                selectedFiles.Add(filePath);
+            }
+            else
             {
                 var dialog = new OpenFileDialog
                 {
@@ -821,34 +741,140 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     CheckPathExists = true,
                     InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
                     Filter = "Mod档案|*.rar;*.7z;*.zip;*.tar",
-                    Multiselect = false,
-                    Title = "请选择要添加的模组压缩包..."
+                    Multiselect = true,
+                    Title = "请选择要添加的模组压缩包（可多选）..."
                 };
 
                 if (!(dialog.ShowDialog() ?? false))
                     return;
 
-                selectedFile = dialog.FileName;
+                selectedFiles.AddRange(dialog.FileNames);
             }
 
+            if (selectedFiles.Count == 0)
+                return;
+
+            // 单文件时使用原有提示文案，多文件时显示进度
+            var isBatch = selectedFiles.Count > 1;
+            var totalFiles = selectedFiles.Count;
             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
             {
-                Title = "添加模组中",
-                Message = "请民主官耐心等待."
+                Title = isBatch ? $"批量添加模组中 (0/{totalFiles})" : "添加模组中",
+                Message = isBatch ? $"共 {totalFiles} 个压缩包，请民主官耐心等待..." : "请民主官耐心等待."
             });
+
             try
             {
-                var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(selectedFile));
-                if (problems.Length > 0)
+                var allProblems = new List<ModProblem>();
+                int successCount = 0;
+                int failCount = 0;
+
+                for (int i = 0; i < selectedFiles.Count; i++)
                 {
-                    var error = problems.Any(static p => p.IsError);
-                    var prefix = error
-                        ? "由于出现问题，模组添加失败:"
-                        : "模组已添加, 但有些相关问题:";
-                    ShowProblems(problems, prefix, error);
+                    // 批量模式下更新进度提示（含剩余数量）
+                    if (isBatch)
+                    {
+                        var remainingCount = totalFiles - i - 1;
+                        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
+                        {
+                            Title = $"批量添加模组中 ({i + 1}/{totalFiles})",
+                            Message = remainingCount > 0
+                                ? $"正在处理: {Path.GetFileName(selectedFiles[i])}，剩余 {remainingCount} 个"
+                                : $"正在处理: {Path.GetFileName(selectedFiles[i])}"
+                        });
+                    }
+
+                    // 创建嵌套压缩包处理进度回调，用于在处理嵌套压缩包时更新UI进度显示
+                    var currentBatchIndex = i;
+                    var currentFileName = selectedFiles[i];
+                    Action<int, int, string> nestedProgress = (nestedIndex, nestedTotal, nestedFileName) =>
+                    {
+                        // 根据是否为批量导入模式，组合显示外层批量进度和内层嵌套进度
+                        if (isBatch)
+                        {
+                            // 批量导入 + 嵌套处理：显示双层进度
+                            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
+                            {
+                                Title = $"批量添加模组中 ({currentBatchIndex + 1}/{totalFiles}) ─ 嵌套处理 ({nestedIndex + 1}/{nestedTotal})",
+                                Message = $"正在处理: {nestedFileName}，剩余 {nestedTotal - nestedIndex - 1} 个"
+                            });
+                        }
+                        else
+                        {
+                            // 单文件 + 嵌套处理：显示嵌套进度
+                            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
+                            {
+                                Title = $"嵌套压缩包处理中 ({nestedIndex + 1}/{nestedTotal})",
+                                Message = $"正在处理: {nestedFileName}，剩余 {nestedTotal - nestedIndex - 1} 个"
+                            });
+                        }
+                    };
+
+                    try
+                    {
+                        var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(selectedFiles[i]), nestedProgress);
+                        if (problems.Length > 0)
+                        {
+                            allProblems.AddRange(problems);
+                            if (problems.Any(static p => p.IsError))
+                                failCount++;
+                            else
+                                successCount++;
+                        }
+                        else
+                        {
+                            successCount++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to add mod: {File}", selectedFiles[i]);
+                        // 使用 CantReadArchive 表示读取/解压失败，ExtraData 存储异常信息
+                        allProblems.Add(new ModProblem
+                        {
+                            Directory = new DirectoryInfo(Path.GetDirectoryName(selectedFiles[i]) ?? ""),
+                            Kind = ModProblemKind.CantReadArchive,
+                            ExtraData = $"{Path.GetFileName(selectedFiles[i])}: {ex.Message}"
+                        });
+                        failCount++;
+                    }
+                }
+
+                // 汇总结果
+                if (isBatch)
+                {
+                    if (failCount == 0 && allProblems.Count == 0)
+                    {
+                        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+                        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+                        {
+                            Message = $"成功添加 {successCount} 个模组！"
+                        });
+                    }
+                    else if (allProblems.Count > 0)
+                    {
+                        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+                        var error = allProblems.Any(static p => p.IsError);
+                        var prefix = error
+                            ? $"批量添加完成：{successCount} 成功，{failCount} 失败。问题如下:"
+                            : $"全部 {successCount} 个模组已添加，但有些相关问题:";
+                        ShowProblems([.. allProblems], prefix, error);
+                    }
                 }
                 else
-                    WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+                {
+                    // 单文件模式保持原有行为
+                    if (allProblems.Count > 0)
+                    {
+                        var error = allProblems.Any(static p => p.IsError);
+                        var prefix = error
+                            ? "由于出现问题，模组添加失败:"
+                            : "模组已添加, 但有些相关问题:";
+                        ShowProblems([.. allProblems], prefix, error);
+                    }
+                    else
+                        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+                }
             }
             catch (Exception ex)
             {
@@ -859,6 +885,81 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 });
             }
         }
+
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    async Task UpdateMod(ModViewModel vm)
+    {
+        var dialog = new OpenFileDialog
+        {
+            CheckFileExists = true,
+            CheckPathExists = true,
+            InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
+            Filter = "Mod档案|*.rar;*.7z;*.zip;*.tar",
+            Multiselect = false,
+            Title = $"请选择要更新「{vm.Name}」的模组压缩包..."
+        };
+
+        if (!(dialog.ShowDialog() ?? false))
+            return;
+
+        // 发送初始进度消息，显示更新进度UI
+        WeakReferenceMessenger.Default.Send(new MessageBoxUpdateProgressMessage
+        {
+            Title = "更新模组",
+            ModName = vm.Name
+        });
+
+        try
+        {
+            // 创建进度报告回调，将服务层进度映射为UI消息
+            var progress = new Progress<UpdateProgressInfo>(info =>
+            {
+                if (info.IsCompleted)
+                {
+                    // 更新完成，发送完成消息
+                    WeakReferenceMessenger.Default.Send(new MessageBoxUpdateProgressUpdateMessage
+                    {
+                        IsCompleted = true
+                    });
+
+                    // 显示统计信息
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+                    {
+                        Message = info.Message ?? "模组更新完成"
+                    });
+                }
+                else
+                {
+                    WeakReferenceMessenger.Default.Send(new MessageBoxUpdateProgressUpdateMessage
+                    {
+                        PhaseText = info.Message,
+                        CurrentFile = info.CurrentFile,
+                        ProcessedCount = info.ProcessedCount,
+                        TotalCount = info.TotalCount,
+                        NeedUpdateCount = info.NeedUpdateCount,
+                        CacheHits = info.CacheHits,
+                        Progress = info.TotalCount > 0
+                            ? (double)info.ProcessedCount / info.TotalCount
+                            : 0
+                    });
+                }
+            });
+
+            await _modService.UpdateModFromArchiveAsync(vm.Data, new FileInfo(dialog.FileName), progress);
+
+            // 更新后保存状态到数据库，确保 EnabledOptions/SelectedOptions 与新清单同步
+            await SaveEnabled();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update mod \"{}\"", vm.Name);
+            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = $"模组更新失败: {ex.Message}"
+            });
+        }
+    }
 
     // void Browse()
     // {
@@ -938,6 +1039,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         var mods = _mods.Where(static vm => vm.Enabled).ToArray();
         var guids = mods.Select(static vm => vm.Guid).ToArray();
 
+        // 根据设置决定部署顺序: 从下到上时反转 GUID 数组
+        if (_settingsService.DeployBottomToTop)
+            Array.Reverse(guids);
+
         try
         {
             await SaveEnabled();
@@ -1011,6 +1116,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             if (!_settingsService.IsReadonly)
             {
                 await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, modVm.Guid);
+                // 同时删除该模组的版本检测记录
+                await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, modVm.Guid);
             }
 
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
@@ -1053,108 +1160,22 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         Process.Start(s_discordStartInfo);
     }
 
-    // ===== 版本兼容性检查命令 =====
+    // ===== 版本兼容性检查命令（委托给 VersionCheckViewModel） =====
 
     /// <summary>
     /// 检查所有模组的版本兼容性
-    /// 采用"模组间横向对比"策略: 取多数模组的 Unit 版本作为参考，标记偏离的模组
     /// </summary>
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task CheckVersionCompatibility()
     {
-        IsCheckingVersion = true;
-        VersionCheckSummary = "正在扫描模组补丁文件...";
-
-        try
-        {
-            // 扫描所有模组的补丁文件，以多数版本为参考进行横向对比
-            var results = await _versionCheckService.CheckAllModsAsync(_modService.Mods);
-
-            // 将检测结果同步到每个 ModViewModel
-            int compatible = 0, incompatible = 0;
-            foreach (var vm in _mods)
-            {
-                if (results.TryGetValue(vm.Guid, out var result))
-                {
-                    vm.GameUnitVersion = result.GameVersion;
-                    vm.LastVersionCheck = result.LastChecked;
-                    vm.VersionStatus = result.Status;
-                    vm.VersionCheckResult = result;
-
-                    if (result.Status == Models.ModVersionStatus.Compatible)
-                        compatible++;
-                    else if (result.Status == Models.ModVersionStatus.Incompatible)
-                        incompatible++;
-                }
-            }
-
-            CompatibleModCount = compatible;
-            IncompatibleModCount = incompatible;
-
-            if (incompatible > 0)
-            {
-                VersionCheckSummary = $"发现 {incompatible} 个可能不兼容的模组";
-                OnPropertyChanged(nameof(HasIncompatibleMods));
-            }
-            else if (compatible > 0)
-            {
-                VersionCheckSummary = $"{compatible} 个模组均兼容";
-            }
-            else
-            {
-                VersionCheckSummary = "未发现可检查的模组";
-            }
-
-            OnPropertyChanged(nameof(HasVersionCheckResult));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "版本兼容性检查失败");
-            VersionCheckSummary = "检查失败";
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = $"版本兼容性检查失败:\n\n{ex.Message}"
-            });
-        }
-        finally
-        {
-            IsCheckingVersion = false;
-        }
-    }
-
-    /// <summary>
-    /// 获取本次新增或文件变动的模组（与上次跟踪快照对比）
-    /// </summary>
-    private IEnumerable<ModViewModel> GetNewOrChangedMods()
-    {
-        foreach (var vm in _mods)
-        {
-            if (!s_knownModTimestamps.TryGetValue(vm.Guid, out var lastTime))
-            {
-                // GUID 不存在 → 新增模组
-                yield return vm;
-            }
-            else if (vm.Data.Directory.LastWriteTimeUtc != lastTime)
-            {
-                // 目录修改时间变化 → 模组文件变动
-                yield return vm;
-            }
-        }
-    }
-
-    /// <summary>
-    /// 更新模组跟踪快照，记录当前所有模组的 GUID 和目录修改时间
-    /// </summary>
-    private void UpdateModTimestampTracking()
-    {
-        // 清除已不存在的模组
-        var currentGuids = _mods.Select(static vm => vm.Guid).ToHashSet();
-        foreach (var guid in s_knownModTimestamps.Keys.Where(g => !currentGuids.Contains(g)).ToList())
-            s_knownModTimestamps.Remove(guid);
-
-        // 更新当前模组的目录修改时间
-        foreach (var vm in _mods)
-            s_knownModTimestamps[vm.Guid] = vm.Data.Directory.LastWriteTimeUtc;
+        await _versionCheckVm.CheckVersionCompatibilityAsync(_mods);
+        // 通知 UI 属性变更（XAML 绑定到本类的转发属性）
+        OnPropertyChanged(nameof(IsCheckingVersion));
+        OnPropertyChanged(nameof(VersionCheckSummary));
+        OnPropertyChanged(nameof(CompatibleModCount));
+        OnPropertyChanged(nameof(IncompatibleModCount));
+        OnPropertyChanged(nameof(HasIncompatibleMods));
+        OnPropertyChanged(nameof(HasVersionCheckResult));
     }
 
     [RelayCommand]
@@ -1600,156 +1621,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     void ClearSearch()
     {
         SearchText = string.Empty;
-    }
-
-    [RelayCommand]
-    void CreateGroup()
-    {
-        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
-        {
-            Title = "创建分组",
-            Message = "请输入新分组的名称：",
-            MaxLength = 32,
-            Confirm = (groupName) =>
-            {
-                if (string.IsNullOrWhiteSpace(groupName))
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "分组名称不能为空" });
-                    return;
-                }
-
-                _settingsService.Groups.Add(new ModGroup(groupName));
-                if (!_settingsService.IsReadonly)
-                {
-                    _ = _settingsService.SaveAsync();
-                    OnPropertyChanged(nameof(GroupItems));
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "分组创建成功" });
-                }
-                else
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法创建分组，设置处于只读模式" });
-                }
-            }
-        });
-    }
-
-    [RelayCommand]
-    void DeleteGroup(ModGroup? group)
-    {
-        group ??= SelectedGroup;
-        if (group == null)
-            return;
-
-        var modsInGroup = _mods.Where(vm => vm.Data.GroupId == group.Id).ToArray();
-
-        if (!_settingsService.IsReadonly)
-        {
-            var message = modsInGroup.Length > 0
-                ? $"确定要删除分组 '{group.Name}' 吗？此操作将清除 {modsInGroup.Length} 个模组的分组信息，且不可恢复。"
-                : $"确定要删除分组 '{group.Name}' 吗？此操作不可恢复。";
-
-            WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-            {
-                Title = "确认删除",
-                Message = message,
-                Confirm = () =>
-                {
-                    foreach (var mod in modsInGroup)
-                    {
-                        mod.Data.GroupId = null;
-                    }
-
-                    _settingsService.Groups.Remove(group);
-                    if (SelectedGroup == group)
-                    {
-                        SelectedGroup = null;
-                    }
-                    _ = _settingsService.SaveAsync();
-                    OnPropertyChanged(nameof(GroupItems));
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "分组删除成功" });
-                }
-            });
-        }
-        else
-        {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法删除分组，设置处于只读模式" });
-        }
-    }
-
-    [RelayCommand]
-    void RenameGroup(ModGroup? group)
-    {
-        group ??= SelectedGroup;
-        if (group == null)
-            return;
-
-        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
-        {
-            Title = "重命名分组",
-            Message = "请输入新的分组名称：",
-            MaxLength = 32,
-            InitialText = group.Name,
-            Confirm = (newName) =>
-            {
-                if (string.IsNullOrWhiteSpace(newName))
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "分组名称不能为空" });
-                    return;
-                }
-
-                if (!_settingsService.IsReadonly)
-                {
-                    group.Name = newName;
-                    _ = _settingsService.SaveAsync();
-                    OnPropertyChanged(nameof(GroupItems));
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "分组重命名成功" });
-                }
-                else
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法重命名分组，设置处于只读模式" });
-                }
-            }
-        });
-    }
-
-    [RelayCommand]
-    void SetGroup(ModViewModel modVm)
-    {
-        if (modVm == null || !_settingsService.Initialized)
-            return;
-
-        // Create a list of group options including "None"
-        var groupOptions = new List<object> { "无" };
-        groupOptions.AddRange(_settingsService.Groups);
-
-        // Show a selection dialog
-        WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
-        {
-            Title = "设置分组",
-            Message = "请为模组选择一个分组：",
-            Options = groupOptions,
-            Confirm = (selectedOption) =>
-            {
-                if (!_settingsService.IsReadonly)
-                {
-                    if (selectedOption.ToString() == "无")
-                    {
-                        modVm.Data.GroupId = null;
-                    }
-                    else if (selectedOption is ModGroup selectedGroup)
-                    {
-                        modVm.Data.GroupId = selectedGroup.Id;
-                    }
-
-                    _ = SaveEnabled();
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "模组分组已更新" });
-                }
-                else
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法设置分组，设置处于只读模式" });
-                }
-            }
-        });
     }
 
     [RelayCommand]

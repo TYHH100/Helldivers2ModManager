@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -10,6 +12,7 @@ using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
 using Helldivers2ModManager.ViewModels.Create;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Helldivers2ModManager.ViewModels;
 
@@ -20,7 +23,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 {
-	public override string Title => "编辑模组";
+	public override string Title => "Edit Manifest";
 
 	/// <summary>当前编辑的模组 ViewModel</summary>
 	public ModViewModel? EditMod => _editModStore.CurrentMod;
@@ -45,7 +48,10 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	[ObservableProperty]
 	private string _modDescription = string.Empty;
 
-	/// <summary>模组图标路径（可编辑）</summary>
+	/// <summary>浏览图标时的原始文件路径（用于复制）</summary>
+	private string? _browsedIconSourcePath;
+
+	/// <summary>模组图标路径（可编辑，显示相对路径）</summary>
 	[ObservableProperty]
 	private string _iconPath = string.Empty;
 
@@ -54,25 +60,53 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	{
 		get
 		{
-			// 优先显示新选择的图标（绝对路径）
-			if (!string.IsNullOrWhiteSpace(IconPath) && Path.IsPathRooted(IconPath) && File.Exists(IconPath))
+			if (!string.IsNullOrWhiteSpace(IconPath))
 			{
-				try
+				// 尝试从绝对路径加载（浏览选择的外部文件）
+				if (Path.IsPathRooted(IconPath) && File.Exists(IconPath))
 				{
-					var bmp = new BitmapImage();
-					bmp.BeginInit();
-					bmp.UriSource = new Uri(IconPath);
-					bmp.CacheOption = BitmapCacheOption.None;
-					bmp.EndInit();
-					return bmp;
+					try
+					{
+						var bmp = new BitmapImage();
+						bmp.BeginInit();
+						bmp.UriSource = new Uri(IconPath);
+						bmp.CacheOption = BitmapCacheOption.OnLoad;
+						bmp.EndInit();
+						return bmp;
+					}
+					catch { }
 				}
-				catch { }
+				// 尝试从模组目录解析相对路径
+				else if (EditMod?.Data?.Directory?.FullName is not null)
+				{
+					var fullPath = Path.Combine(EditMod.Data.Directory.FullName, IconPath);
+					if (File.Exists(fullPath))
+					{
+						try
+						{
+							var bmp = new BitmapImage();
+							bmp.BeginInit();
+							bmp.UriSource = new Uri(fullPath);
+							bmp.CacheOption = BitmapCacheOption.OnLoad;
+							bmp.EndInit();
+							return bmp;
+						}
+						catch { }
+					}
+				}
 			}
-
 			// 否则显示当前模组图标
 			return EditMod?.Icon;
 		}
 	}
+
+	/// <summary>是否为直接编辑 JSON 模式</summary>
+	[ObservableProperty]
+	private bool _isJsonMode;
+
+	/// <summary>JSON 编辑器内容（直接编辑模式时使用）</summary>
+	[ObservableProperty]
+	private string _jsonContent = string.Empty;
 
 	/// <summary>模组选项集合（可编辑）</summary>
 	public ObservableCollection<CreateModOptionViewModel> EditOptions { get; } = [];
@@ -85,15 +119,18 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	[ObservableProperty]
 	private Visibility _imagePreviewVisibility = Visibility.Collapsed;
 
+	private readonly ILogger<ManifestEditPageViewModel> _logger;
 	private readonly NavigationStore _navStore;
 	private readonly EditModStore _editModStore;
 	private readonly ProfileService _profileService;
 	private readonly SettingsService _settingsService;
 	private readonly ModService _modService;
 
-	public ManifestEditPageViewModel(NavigationStore navStore, EditModStore editModStore,
+	public ManifestEditPageViewModel(ILogger<ManifestEditPageViewModel> logger,
+		NavigationStore navStore, EditModStore editModStore,
 		ProfileService profileService, SettingsService settingsService, ModService modService)
 	{
+		_logger = logger;
 		_navStore = navStore;
 		_editModStore = editModStore;
 		_profileService = profileService;
@@ -110,17 +147,8 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		ModName = EditMod.Name;
 		ModDescription = EditMod.Description;
 
-		// 图标路径：如果有相对路径则转为绝对路径，便于预览和比较
-		var manifestIconPath = EditMod.Data.Manifest.IconPath;
-		if (!string.IsNullOrWhiteSpace(manifestIconPath))
-		{
-			var fullPath = Path.Combine(EditMod.Data.Directory.FullName, manifestIconPath);
-			IconPath = File.Exists(fullPath) ? fullPath : manifestIconPath;
-		}
-		else
-		{
-			IconPath = string.Empty;
-		}
+		// 图标路径：直接使用清单中的相对路径（如 icon.png）
+		IconPath = EditMod.Data.Manifest.IconPath ?? string.Empty;
 
 		// 加载已有选项
 		EditOptions.Clear();
@@ -136,7 +164,7 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 					Name = opt.Name,
 					Description = opt.Description,
 					IncludePaths = opt.Include is not null ? string.Join(";", opt.Include) : string.Empty,
-					ImagePath = opt.Image is not null ? Path.Combine(sourceDir, opt.Image) : string.Empty,
+					ImagePath = opt.Image ?? string.Empty,
 					SourceDirectory = sourceDir,
 				};
 
@@ -147,9 +175,8 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 						Name = sub.Name,
 						Description = sub.Description,
 						IncludePaths = string.Join(";", sub.Include),
-						ImagePath = sub.Image is not null ? Path.Combine(sourceDir, sub.Image) : string.Empty,
+						ImagePath = sub.Image ?? string.Empty,
 						SourceDirectory = sourceDir,
-						ParentIncludePaths = optVm.IncludePaths,
 					};
 					optVm.SubOptions.Add(subVm);
 				}
@@ -184,63 +211,85 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	[RelayCommand]
 	async Task Done()
 	{
-		if (EditMod is not null)
+		if (EditMod is null)
+			return;
+
+		try
 		{
-			// 保存基本信息
-			if (ModName != EditMod.Name)
-				EditMod.Data.UpdateManifestName(ModName);
-			if (ModDescription != EditMod.Description)
-				EditMod.Data.UpdateManifestDescription(ModDescription);
-
-			// 保存图标（处理逻辑与选项图片一致）
-			var currentIconPath = EditMod.Data.Manifest.IconPath;
-			var currentIconFullPath = !string.IsNullOrWhiteSpace(currentIconPath)
-				? Path.Combine(EditMod.Data.Directory.FullName, currentIconPath)
-				: string.Empty;
-
-			if (IconPath != currentIconFullPath && IconPath != (currentIconPath ?? string.Empty))
+			if (IsJsonMode)
 			{
-				if (!string.IsNullOrWhiteSpace(IconPath) && File.Exists(IconPath))
-				{
-					var modDir = EditMod.Data.Directory.FullName;
-					CopyImageIfNeeded(IconPath, modDir);
-					EditMod.Data.UpdateManifestIconPath(Path.GetFileName(IconPath));
-				}
-				else
-				{
-					EditMod.Data.UpdateManifestIconPath(null);
-				}
-			}
-
-			// 保存选项
-			// V1 直接更新；Legacy 升级为 V1（写入 Version 字段）
-			if (IsV1Manifest || IsLegacyManifest)
-			{
-				var newOptions = EditOptions.Select(o => o.ToModOption()).ToList();
-				var modDir = EditMod.Data.Directory.FullName;
-
-				// 复制新图片文件到模组目录（仅复制不在模组目录中的文件）
-				foreach (var opt in EditOptions)
-				{
-					CopyImageIfNeeded(opt.ImagePath, modDir);
-					foreach (var sub in opt.SubOptions)
-						CopyImageIfNeeded(sub.ImagePath, modDir);
-				}
-
-				// 构建新清单（Legacy 升级为 V1）
-				var newManifest = new V1ModManifest
-				{
-					Guid = EditMod.Data.Manifest.Guid,
-					Name = ModName,
-					Description = ModDescription,
-					IconPath = EditMod.Data.Manifest.IconPath,
-					Options = newOptions.Count > 0 ? newOptions : null,
-				};
-				EditMod.Data.Manifest = newManifest;
+				// JSON 模式：直接解析 JSON 并保存
+				using var doc = JsonDocument.Parse(JsonContent);
+				var manifest = (V1ModManifest)V1ModManifest.Deserialize(doc.RootElement);
+				EditMod.Data.Manifest = manifest;
 				ModManifest.SaveToFile(EditMod.Data.Manifest, EditMod.Data.Directory);
-				OnPropertyChanged(nameof(IsV1Manifest));
-				OnPropertyChanged(nameof(IsLegacyManifest));
 			}
+			else
+			{
+				// 可视化模式：保存基本信息
+				if (ModName != EditMod.Name)
+					EditMod.Data.UpdateManifestName(ModName);
+				if (ModDescription != EditMod.Description)
+					EditMod.Data.UpdateManifestDescription(ModDescription);
+
+				// 保存图标（显示/存储均为相对路径）
+				var currentIconPath = EditMod.Data.Manifest.IconPath ?? string.Empty;
+
+				if (IconPath != currentIconPath)
+				{
+					if (string.IsNullOrWhiteSpace(IconPath))
+					{
+						EditMod.Data.UpdateManifestIconPath(null);
+					}
+					else
+					{
+						var modDir = EditMod.Data.Directory.FullName;
+						// 优先使用浏览选择时的原始路径，否则按相对路径组合
+						var sourcePath = _browsedIconSourcePath ?? (Path.IsPathRooted(IconPath) ? IconPath : Path.Combine(modDir, IconPath));
+						CopyImageIfNeeded(sourcePath, modDir);
+						_browsedIconSourcePath = null;
+						EditMod.Data.UpdateManifestIconPath(IconPath);
+					}
+				}
+
+				// 保存选项
+				// V1 直接更新；Legacy 升级为 V1（写入 Version 字段）
+				if (IsV1Manifest || IsLegacyManifest)
+				{
+					var newOptions = EditOptions.Select(o => o.ToModOption()).ToList();
+					var modDir = EditMod.Data.Directory.FullName;
+
+					// 复制新图片文件到模组目录（仅复制不在模组目录中的文件）
+					foreach (var opt in EditOptions)
+					{
+						CopyImageIfNeeded(opt.ResolveImageSourcePath(), modDir);
+						opt.ResetBrowsedImageSource();
+						foreach (var sub in opt.SubOptions)
+						{
+							CopyImageIfNeeded(sub.ResolveImageSourcePath(), modDir);
+							sub.ResetBrowsedImageSource();
+						}
+					}
+
+					// 构建新清单（Legacy 升级为 V1）
+					var newManifest = new V1ModManifest
+					{
+						Guid = EditMod.Data.Manifest.Guid,
+						Name = ModName,
+						Description = ModDescription,
+						IconPath = EditMod.Data.Manifest.IconPath,
+						Options = newOptions.Count > 0 ? newOptions : null,
+					};
+					EditMod.Data.Manifest = newManifest;
+					ModManifest.SaveToFile(EditMod.Data.Manifest, EditMod.Data.Directory);
+					OnPropertyChanged(nameof(IsV1Manifest));
+					OnPropertyChanged(nameof(IsLegacyManifest));
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "保存模组清单失败");
 		}
 
 		// 保存配置
@@ -252,7 +301,7 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 			}
 			catch (Exception ex)
 			{
-				System.Diagnostics.Debug.WriteLine($"保存 Mod 配置失败: {ex.Message}");
+				_logger.LogError(ex, "保存 Mod 配置失败");
 			}
 		}
 
@@ -292,11 +341,14 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		{
 			Title = "选择模组图标",
 			Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
+			InitialDirectory = EditMod?.Data?.Directory?.FullName,
 		};
 
 		if (dialog.ShowDialog() == true)
 		{
-			IconPath = dialog.FileName;
+			_browsedIconSourcePath = dialog.FileName;
+			// 只存文件名作为相对路径显示
+			IconPath = Path.GetFileName(dialog.FileName);
 			OnPropertyChanged(nameof(IconPreview));
 		}
 	}
@@ -341,5 +393,85 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	partial void OnIconPathChanged(string value)
 	{
 		OnPropertyChanged(nameof(IconPreview));
+	}
+
+	/// <summary>切换编辑模式时，序列化或反序列化 JSON</summary>
+	partial void OnIsJsonModeChanged(bool value)
+	{
+		if (value)
+			SwitchToJsonMode();
+		else
+			SwitchToVisualMode();
+	}
+
+	/// <summary>切换为 JSON 模式：将当前可视状态序列化为 JSON</summary>
+	private void SwitchToJsonMode()
+	{
+		var sourceDir = EditMod?.Data.Directory.FullName ?? string.Empty;
+		var newOptions = EditOptions.Select(o => o.ToModOption()).ToList();
+		var guid = EditMod?.Data.Manifest.Guid ?? Guid.NewGuid();
+		var manifest = new V1ModManifest
+		{
+			Guid = guid,
+			Name = ModName,
+			Description = ModDescription,
+			IconPath = !string.IsNullOrWhiteSpace(IconPath) ? IconPath : null,
+			Options = newOptions.Count > 0 ? newOptions : null,
+		};
+
+		using var stream = new MemoryStream();
+		using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+		{
+			manifest.Serialize(writer);
+		}
+		JsonContent = Encoding.UTF8.GetString(stream.ToArray());
+	}
+
+	/// <summary>切换为可视化模式：解析 JSON 并填充到表单</summary>
+	private void SwitchToVisualMode()
+	{
+		if (string.IsNullOrWhiteSpace(JsonContent))
+			return;
+
+		try
+		{
+			using var doc = JsonDocument.Parse(JsonContent);
+			var manifest = (V1ModManifest)V1ModManifest.Deserialize(doc.RootElement);
+
+			ModName = manifest.Name;
+			ModDescription = manifest.Description;
+			IconPath = manifest.IconPath ?? string.Empty;
+
+			var sourceDir = EditMod?.Data.Directory.FullName ?? string.Empty;
+			EditOptions.Clear();
+			foreach (var opt in manifest.Options ?? [])
+			{
+				var optVm = new CreateModOptionViewModel
+				{
+					Name = opt.Name,
+					Description = opt.Description,
+					IncludePaths = opt.Include is not null ? string.Join(";", opt.Include) : string.Empty,
+					ImagePath = opt.Image ?? string.Empty,
+					SourceDirectory = sourceDir,
+				};
+				foreach (var sub in opt.SubOptions ?? [])
+				{
+					optVm.SubOptions.Add(new CreateModSubOptionViewModel
+					{
+						Name = sub.Name,
+						Description = sub.Description,
+						IncludePaths = string.Join(";", sub.Include),
+						ImagePath = sub.Image ?? string.Empty,
+						SourceDirectory = sourceDir,
+					});
+				}
+				EditOptions.Add(optVm);
+			}
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "JSON 解析失败，切换到可视化编辑模式");
+			// 不阻断切换，保留原有数据
+		}
 	}
 }

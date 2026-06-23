@@ -77,6 +77,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 	public ObservableCollection<string> SkipList => _settingsService.Initialized ? _settingsService.SkipList : [];
 
+	public ObservableCollection<string> OrganizationalFolderNames => _settingsService.Initialized ? _settingsService.OrganizationalFolderNames : [];
+
 	public bool CaseSensitiveSearch
 	{
 		get => _settingsService.Initialized ? _settingsService.CaseSensitiveSearch : false;
@@ -106,6 +108,17 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			OnPropertyChanging();
 			_settingsService.EnableSorting = value;
+			OnPropertyChanged();
+		}
+	}
+
+	public bool DeployBottomToTop
+	{
+		get => _settingsService.Initialized ? _settingsService.DeployBottomToTop : false;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.DeployBottomToTop = value;
 			OnPropertyChanged();
 		}
 	}
@@ -201,21 +214,35 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	[ObservableProperty]
 	private string? _nexusApiKeyValidationResult;
 
+	/// <summary>
+	/// 当前选中的选项卡索引
+	/// 0: 路径, 1: 部署, 2: 模组, 3: 日志, 4: 连接, 5: 工具
+	/// </summary>
+	[ObservableProperty]
+	private int _selectedTabIndex;
+
 	private readonly ILogger<SettingsPageViewModel> _logger;
 	private readonly NavigationStore _navStore;
 	private readonly SettingsService _settingsService;
 	private readonly INexusModsService _nexusModsService;
+	private readonly ModHashService _modHashService;
+	private readonly ModService _modService;
 	[ObservableProperty]
 	private int _selectedSkip = -1;
+	[ObservableProperty]
+	private int _selectedOrgFolder = -1;
 
-	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService)
+	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService, ModHashService modHashService, ModService modService)
 	{
 		_logger = logger;
 		_navStore = navStore;
 		_settingsService = settingsService;
 		_nexusModsService = nexusModsService;
+		_modHashService = modHashService;
+		_modService = modService;
 
 		SkipList.CollectionChanged += SkipList_CollectionChanged;
+		OrganizationalFolderNames.CollectionChanged += OrgFolderNames_CollectionChanged;
 
 		if (MessageBox.IsRegistered)
 			_ = Init();
@@ -231,6 +258,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	protected override void OnDispose()
 	{
 		SkipList.CollectionChanged -= SkipList_CollectionChanged;
+		OrganizationalFolderNames.CollectionChanged -= OrgFolderNames_CollectionChanged;
 		MessageBox.Registered -= OnMessageBoxRegistered;
 	}
 
@@ -278,6 +306,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		if (e.PropertyName == nameof(SelectedSkip))
 			RemoveSkipCommand.NotifyCanExecuteChanged();
+		if (e.PropertyName == nameof(SelectedOrgFolder))
+			RemoveOrgFolderCommand.NotifyCanExecuteChanged();
 
 		base.OnPropertyChanged(e);
 	}
@@ -355,9 +385,11 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(LogLevel));
 		OnPropertyChanged(nameof(Opacity));
 		OnPropertyChanged(nameof(SkipList));
+		OnPropertyChanged(nameof(OrganizationalFolderNames));
 		OnPropertyChanged(nameof(CaseSensitiveSearch));
 		OnPropertyChanged(nameof(UseSymbolicLinks));
 		OnPropertyChanged(nameof(EnableSorting));
+		OnPropertyChanged(nameof(DeployBottomToTop));
 		OnPropertyChanged(nameof(DeleteToRecycleBin));
 		OnPropertyChanged(nameof(AutoRemoveMissingMods));
 		OnPropertyChanged(nameof(AutoCheckVersionOnStartup));
@@ -371,6 +403,11 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	private void SkipList_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
 	{
 		RemoveSkipCommand.NotifyCanExecuteChanged();
+	}
+
+	private void OrgFolderNames_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+	{
+		RemoveOrgFolderCommand.NotifyCanExecuteChanged();
 	}
 
 	[RelayCommand]
@@ -415,6 +452,22 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
 
 		_navStore.Navigate<DashboardPageViewModel>();
+	}
+
+	/// <summary>
+	/// 切换设置选项卡（XAML CommandParameter 传递的是字符串，需要手动解析为 int）
+	/// </summary>
+	[RelayCommand]
+	void SetTab(object parameter)
+	{
+		if (parameter is int index)
+		{
+			SelectedTabIndex = index;
+		}
+		else if (parameter is string str && int.TryParse(str, out var parsedIndex))
+		{
+			SelectedTabIndex = parsedIndex;
+		}
 	}
 
 	[RelayCommand]
@@ -493,19 +546,40 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		_logger.LogInformation("Hard purging patch files");
 		
-		var path = Path.Combine(_settingsService.StorageDirectory, "installed.txt");
-		if (File.Exists(path))
-			File.Delete(path);
-
-		var dataDir = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data"));
-		
-		var files = dataDir.EnumerateFiles("*.patch_*").ToArray();
-		_logger.LogDebug("Found {} patch files", files.Length);
-
-		foreach (var file in files)
+		try
 		{
-			_logger.LogTrace("Deleting \"{}\"", file.Name);
-			file.Delete();
+			var path = Path.Combine(_settingsService.StorageDirectory, "installed.txt");
+			if (File.Exists(path))
+				File.Delete(path);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "删除 installed.txt 失败");
+		}
+
+		try
+		{
+			var dataDir = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data"));
+
+			var files = dataDir.EnumerateFiles("*.patch_*").ToArray();
+			_logger.LogDebug("Found {} patch files", files.Length);
+
+			foreach (var file in files)
+			{
+				try
+				{
+					_logger.LogTrace("Deleting \"{}\"", file.Name);
+					file.Delete();
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "删除补丁文件失败: {File}", file.Name);
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "枚举补丁文件失败");
 		}
 
 		_logger.LogInformation("Hard purge complete");
@@ -544,6 +618,56 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	}
 
 	[RelayCommand]
+	void AddOrgFolder()
+	{
+		WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+		{
+			Title = "归类文件夹名?",
+			Message = "请输入归类文件夹的名称（如 Models），其子目录将被提升为选项。",
+			MaxLength = 100,
+			Confirm = (str) =>
+			{
+				var name = str.Trim();
+				if (string.IsNullOrWhiteSpace(name))
+					return;
+
+				// 检查是否已存在（大小写不敏感）
+				if (OrganizationalFolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+				{
+					WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+					{
+						Message = $"归类文件夹 \"{name}\" 已存在。"
+					});
+					return;
+				}
+
+				OrganizationalFolderNames.Add(name);
+			}
+		});
+	}
+
+	private static readonly HashSet<string> _defaultOrgFolderNames = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"Models", "Model"
+	};
+
+	bool CanRemoveOrgFolder()
+	{
+		if (SelectedOrgFolder == -1)
+			return false;
+		if (SelectedOrgFolder >= OrganizationalFolderNames.Count)
+			return false;
+		var name = OrganizationalFolderNames[SelectedOrgFolder];
+		return !_defaultOrgFolderNames.Contains(name);
+	}
+
+	[RelayCommand(CanExecute = nameof(CanRemoveOrgFolder))]
+	void RemoveOrgFolder()
+	{
+		OrganizationalFolderNames.RemoveAt(SelectedOrgFolder);
+	}
+
+	[RelayCommand]
 	async Task ValidateNexusApiKey()
 	{
 		if (string.IsNullOrWhiteSpace(NexusApiKey))
@@ -574,6 +698,44 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
 		}
+	}
+
+	/// <summary>
+	/// 强制重新计算所有模组的文件哈希值。
+	/// 适用于：用户怀疑哈希缓存数据异常、手动修改过模组文件后需要刷新等情况。
+	/// 后台执行，完成后底部状态栏会显示结果摘要。
+	/// </summary>
+	[RelayCommand]
+	Task RecomputeAllHashes()
+	{
+		var modCount = _modService.Mods.Count;
+		if (modCount == 0)
+		{
+			WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+			{
+				Message = "当前没有已添加的模组，无需计算文件指纹。"
+			});
+			return Task.CompletedTask;
+		}
+
+		WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+		{
+			Title = "重新计算文件指纹",
+			Message = $"将为全部 {modCount} 个模组重新计算 SHA-256 文件指纹。\n" +
+			          "此过程在后台进行，完成后底部状态栏会显示结果。\n" +
+			          "是否继续？",
+			Confirm = () =>
+			{
+				_logger.LogInformation("User requested full hash recomputation for {Count} mods", modCount);
+				_ = _modHashService.ForceRecomputeAllAsync(_modService.Mods);
+				WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+				{
+					Message = "已开始重新计算文件指纹，返回模组列表可查看进度。"
+				});
+			}
+		});
+
+		return Task.CompletedTask;
 	}
 
 	[RelayCommand]

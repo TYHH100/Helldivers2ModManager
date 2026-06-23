@@ -19,7 +19,7 @@ internal sealed class SettingsService
 	
 	public const float OpacityMin = 0.4f;
 	
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames))]
 	public bool Initialized { get; private set; }
 	
 	public bool IsReadonly { get; private set; } = true;
@@ -110,6 +110,15 @@ internal sealed class SettingsService
 		{
 			GuardInitialized();
 			return _skipList;
+		}
+	}
+
+	public ObservableCollection<string> OrganizationalFolderNames
+	{
+		get
+		{
+			GuardInitialized();
+			return _organizationalFolderNames;
 		}
 	}
 
@@ -250,14 +259,6 @@ internal sealed class SettingsService
 		}
 	}
 
-	public ObservableCollection<ModGroup> Groups
-	{
-		get
-		{
-			GuardInitialized();
-			return _groups;
-		}
-	}
 
 	public ObservableCollection<ModTag> Tags
 	{
@@ -265,6 +266,25 @@ internal sealed class SettingsService
 		{
 			GuardInitialized();
 			return _tags;
+		}
+	}
+
+	/// <summary>
+	/// 部署顺序: false = 从上到下（默认），true = 从下到上
+	/// </summary>
+	public bool DeployBottomToTop
+	{
+		get
+		{
+			GuardInitialized();
+			return _deployBottomToTop;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_deployBottomToTop = value;
 		}
 	}
 
@@ -333,15 +353,16 @@ internal sealed class SettingsService
 	private LogLevel _logLevel;
 	private float _opacity;
 	private ObservableCollection<string> _skipList = null!;
+	private ObservableCollection<string> _organizationalFolderNames = null!;
 	private bool _caseSensitiveSearch;
 	private bool _useSymbolicLinks;
 	private bool _deleteToRecycleBin = true;
 	private bool _autoRemoveMissingMods;
 	private bool _enableSorting;
+	private bool _deployBottomToTop;
 	private bool _autoCheckVersionOnStartup;
 	private bool _autoCleanLogs = true;
 	private int _logRetentionDays = 7;
-	private ObservableCollection<ModGroup> _groups = null!;
 	private ObservableCollection<ModTag> _tags = null!;
 	private string? _encryptedNexusApiKey;
 	private string _extensionHost = "localhost";
@@ -352,7 +373,7 @@ internal sealed class SettingsService
 		_logger = logger;
 	}
 
-	private static string? EncryptString(string? plainText)
+	private string? EncryptString(string? plainText)
 	{
 		if (string.IsNullOrEmpty(plainText))
 			return null;
@@ -366,13 +387,14 @@ internal sealed class SettingsService
 				DataProtectionScope.CurrentUser);
 			return Convert.ToBase64String(encryptedBytes);
 		}
-		catch
+		catch (Exception ex)
 		{
+			_logger.LogWarning(ex, "Failed to encrypt sensitive data");
 			return null;
 		}
 	}
 
-	private static string? DecryptString(string? encryptedText)
+	private string? DecryptString(string? encryptedText)
 	{
 		if (string.IsNullOrEmpty(encryptedText))
 			return null;
@@ -386,8 +408,9 @@ internal sealed class SettingsService
 				DataProtectionScope.CurrentUser);
 			return Encoding.UTF8.GetString(decryptedBytes);
 		}
-		catch
+		catch (Exception ex)
 		{
+			_logger.LogWarning(ex, "Failed to decrypt sensitive data");
 			return null;
 		}
 	}
@@ -431,7 +454,7 @@ internal sealed class SettingsService
 		_logger.LogInformation("Settings service initialization complete");
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_groups))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_tags))]
 	public void Reset()
 	{
 		GuardInitialized();
@@ -457,25 +480,21 @@ internal sealed class SettingsService
 			foreach (var elm in _skipList)
 				writer.WriteStringValue(elm);
 			writer.WriteEndArray();
+			writer.WriteStartArray(nameof(OrganizationalFolderNames));
+			foreach (var elm in _organizationalFolderNames)
+				writer.WriteStringValue(elm);
+			writer.WriteEndArray();
 			writer.WriteBoolean(nameof(CaseSensitiveSearch), _caseSensitiveSearch);
 			writer.WriteBoolean(nameof(UseSymbolicLinks), _useSymbolicLinks);
 			writer.WriteBoolean(nameof(DeleteToRecycleBin), _deleteToRecycleBin);
 			writer.WriteBoolean(nameof(AutoRemoveMissingMods), _autoRemoveMissingMods);
 			writer.WriteBoolean(nameof(EnableSorting), _enableSorting);
+			writer.WriteBoolean(nameof(DeployBottomToTop), _deployBottomToTop);
 			writer.WriteBoolean(nameof(AutoCheckVersionOnStartup), _autoCheckVersionOnStartup);
 			writer.WriteBoolean(nameof(AutoCleanLogs), _autoCleanLogs);
 			writer.WriteNumber(nameof(LogRetentionDays), _logRetentionDays);
 			writer.WriteString(nameof(ExtensionHost), _extensionHost);
 			writer.WriteNumber(nameof(ExtensionPort), _extensionPort);
-			writer.WriteStartArray(nameof(Groups));
-			foreach (var group in _groups)
-			{
-				writer.WriteStartObject();
-				writer.WriteString("id", group.Id.ToString());
-				writer.WriteString("name", group.Name);
-				writer.WriteEndObject();
-			}
-			writer.WriteEndArray();
 			writer.WriteStartArray(nameof(Tags));
 			foreach (var tag in _tags)
 			{
@@ -503,8 +522,9 @@ internal sealed class SettingsService
 			{
 				Directory.CreateDirectory(_gameDirectory);
 			}
-			catch
+			catch (Exception ex)
 			{
+				_logger.LogWarning(ex, "Failed to create game directory: {Path}", _gameDirectory);
 				return false;
 			}
 		
@@ -513,8 +533,9 @@ internal sealed class SettingsService
 			{
 				Directory.CreateDirectory(_storageDirectory);
 			}
-			catch
+			catch (Exception ex)
 			{
+				_logger.LogWarning(ex, "Failed to create storage directory: {Path}", _storageDirectory);
 				return false;
 			}
 
@@ -523,8 +544,9 @@ internal sealed class SettingsService
 			{
 				Directory.CreateDirectory(_tempDirectory);
 			}
-			catch
+			catch (Exception ex)
 			{
+				_logger.LogWarning(ex, "Failed to create temp directory: {Path}", _tempDirectory);
 				return false;
 			}
 
@@ -575,7 +597,7 @@ internal sealed class SettingsService
 			throw new InvalidOperationException("Object is readonly!");
 	}
 	
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames))]
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void GuardInitialized()
 	{
@@ -614,6 +636,20 @@ internal sealed class SettingsService
 
 			_skipList = new ObservableCollection<string>(list);
 		}
+		if (root.TryGetProperty(nameof(OrganizationalFolderNames), JsonValueKind.Array, out arr))
+		{
+			var orgList = new List<string>(arr.GetArrayLength());
+			
+			foreach (var elm in arr.EnumerateArray())
+				if (elm.ValueKind == JsonValueKind.String)
+				{
+					var value = elm.GetString();
+					if (value is not null)
+						orgList.Add(value);
+				}
+
+			_organizationalFolderNames = new ObservableCollection<string>(orgList);
+		}
 		if (root.TryGetProperty(nameof(CaseSensitiveSearch), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_caseSensitiveSearch = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(UseSymbolicLinks), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -624,6 +660,8 @@ internal sealed class SettingsService
 			_autoRemoveMissingMods = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(EnableSorting), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_enableSorting = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(DeployBottomToTop), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_deployBottomToTop = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(AutoCheckVersionOnStartup), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_autoCheckVersionOnStartup = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(AutoCleanLogs), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -635,27 +673,6 @@ internal sealed class SettingsService
 		if (root.TryGetProperty(nameof(ExtensionPort), JsonValueKind.Number, out prop))
 			if (prop.TryGetInt32(out var portValue))
 				_extensionPort = portValue;
-		if (root.TryGetProperty(nameof(Groups), JsonValueKind.Array, out var groupsArr))
-		{
-			var groupsList = new List<ModGroup>();
-			foreach (var groupElm in groupsArr.EnumerateArray())
-			{
-				if (groupElm.ValueKind == JsonValueKind.Object)
-				{
-					try
-					{
-						var id = Guid.Parse(groupElm.GetProperty("id").GetString()!);
-						var name = groupElm.GetProperty("name").GetString()!;
-						groupsList.Add(new ModGroup(id, name));
-					}
-					catch (Exception ex)
-					{
-						_logger.LogWarning(ex, "Failed to parse group, skipping");
-					}
-				}
-			}
-			_groups = new ObservableCollection<ModGroup>(groupsList);
-		}
 		if (root.TryGetProperty(nameof(Tags), JsonValueKind.Array, out var tagsArr))
 		{
 			var tagsList = new List<ModTag>();
@@ -728,7 +745,7 @@ internal sealed class SettingsService
 		}
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_groups), nameof(_tags))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_tags))]
 	private void ResetInternal()
 	{
 		_gameDirectory = string.Empty;
@@ -745,8 +762,8 @@ internal sealed class SettingsService
     _autoCheckVersionOnStartup = false;
     _extensionHost = "localhost";
 		_extensionPort = 7456;
-		_groups = [];
 		_tags = [];
+		_organizationalFolderNames = ["Models", "Model"];
 		_encryptedNexusApiKey = null;
 	}
 }

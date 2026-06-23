@@ -40,11 +40,12 @@
 			<!-- Content Area -->
 			<Grid Grid.Row="1">
 				<Grid.RowDefinitions>
-					<RowDefinition Height="Auto"/>
-					<RowDefinition Height="Auto"/>
-					<RowDefinition Height="Auto"/>
-					<RowDefinition Height="Auto"/>
-				</Grid.RowDefinitions>
+				<RowDefinition Height="Auto"/>
+				<RowDefinition Height="Auto"/>
+				<RowDefinition Height="Auto"/>
+				<RowDefinition Height="Auto"/>
+				<RowDefinition Height="Auto"/>
+			</Grid.RowDefinitions>
 
 				<!-- Message -->
 				<ScrollViewer Grid.Row="0"
@@ -98,6 +99,38 @@
 								   Grid.Column="1"
 								   FontSize="12"
 								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+					</Grid>
+				</StackPanel>
+
+				<!-- Update Progress Info (哈希检查/文件更新进度) -->
+				<StackPanel Grid.Row="4"
+							x:Name="updateProgressPanel"
+							Margin="0 -8 0 16"
+							Visibility="Collapsed">
+					<TextBlock x:Name="updatePhaseText"
+							   FontSize="13"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Margin="0 0 0 6"
+							   TextTrimming="CharacterEllipsis"/>
+					<TextBlock x:Name="updateCurrentFile"
+							   FontSize="12"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   TextTrimming="CharacterEllipsis"
+							   Margin="0 0 0 4"/>
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*"/>
+							<ColumnDefinition Width="Auto"/>
+						</Grid.ColumnDefinitions>
+						<TextBlock x:Name="updateFileCount"
+								   Grid.Column="0"
+								   FontSize="12"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+						<TextBlock x:Name="updateNeedUpdateCount"
+								   Grid.Column="1"
+								   FontSize="12"
+								   Foreground="{StaticResource SystemAccentBrush}"
+								   FontWeight="SemiBold"/>
 					</Grid>
 				</StackPanel>
 

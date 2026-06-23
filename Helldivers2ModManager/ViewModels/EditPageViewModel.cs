@@ -15,7 +15,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class EditPageViewModel : PageViewModelBase
 {
-	public override string Title => "模组选项";
+	public override string Title => "Mod Options";
 
 	public ModViewModel? EditMod => _editModStore.CurrentMod;
 

@@ -4,7 +4,9 @@
 	  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	  xmlns:dd="urn:gong-wpf-dragdrop"
 	  xmlns:local="clr-namespace:Helldivers2ModManager.Views"
+	  xmlns:bhv="clr-namespace:Helldivers2ModManager"
 	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
 	  xmlns:cvms="clr-namespace:Helldivers2ModManager.ViewModels.Create"
 	  mc:Ignorable="d"
@@ -15,6 +17,7 @@
 	  Title="{Binding Title}">
 	<Grid Margin="16">
 		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="*"/>
 			<RowDefinition Height="Auto"/>
@@ -27,10 +30,47 @@
 				   HorizontalAlignment="Center"
 				   Margin="0 0 0 16"/>
 
+		<!-- 编辑模式切换 -->
+		<Border Grid.Row="1"
+				Background="{StaticResource NeutralBackgroundFillBrush}"
+				CornerRadius="6"
+				Padding="8 6"
+				Margin="0 0 0 12"
+				HorizontalAlignment="Center">
+			<StackPanel Orientation="Horizontal">
+				<RadioButton GroupName="EditMode"
+							 IsChecked="{Binding IsJsonMode, Converter={StaticResource InverseBoolConverter}}"
+							 Content="可视化编辑"
+							 Margin="0,0,12,0"
+							 Padding="12 4"
+							 Style="{StaticResource FluentRadioButton}"/>
+				<RadioButton GroupName="EditMode"
+							 IsChecked="{Binding IsJsonMode}"
+							 Content="直接编辑 JSON"
+							 Padding="12 4"
+							 Style="{StaticResource FluentRadioButton}"/>
+			</StackPanel>
+		</Border>
+
 		<!-- Form Content -->
-		<ScrollViewer Grid.Row="1"
+		<ScrollViewer Grid.Row="2"
 					  HorizontalScrollBarVisibility="Disabled"
 					  VerticalScrollBarVisibility="Auto">
+
+			<StackPanel>
+			<!-- 可视化编辑模式 -->
+			<StackPanel>
+				<StackPanel.Style>
+					<Style TargetType="StackPanel">
+						<Setter Property="Visibility" Value="Visible"/>
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding IsJsonMode}" Value="True">
+								<Setter Property="Visibility" Value="Collapsed"/>
+							</DataTrigger>
+						</Style.Triggers>
+					</Style>
+				</StackPanel.Style>
+
 			<Border Style="{StaticResource FluentCard}"
 					CornerRadius="8"
 					Padding="24">
@@ -96,7 +136,6 @@
 						</Border>
 						<TextBox Grid.Column="1"
 								 Text="{Binding IconPath, UpdateSourceTrigger=PropertyChanged}"
-								 IsReadOnly="True"
 								 FontSize="14"
 								 Padding="8 6"
 								 VerticalAlignment="Center"/>
@@ -128,7 +167,6 @@
 						</Grid.ColumnDefinitions>
 						<TextBox Grid.Column="0"
 								 Text="{Binding SourceDirectory, UpdateSourceTrigger=PropertyChanged}"
-								 IsReadOnly="True"
 								 FontSize="14"
 								 Padding="8 6"
 								 VerticalAlignment="Center"/>
@@ -142,30 +180,32 @@
 					</Grid>
 
 					<!-- 选项区域 -->
-					<Grid Margin="0 0 0 4">
-						<Grid.ColumnDefinitions>
-							<ColumnDefinition Width="*"/>
-							<ColumnDefinition Width="Auto"/>
-						</Grid.ColumnDefinitions>
-						<TextBlock Grid.Column="0"
-								   Text="选项"
-								   FontSize="16"
-								   FontWeight="SemiBold"
-								   Foreground="{StaticResource NeutralForegroundBrush}"/>
-						<Button Grid.Column="1"
-								Content="添加选项"
-								Style="{StaticResource FluentSecondaryButton}"
-								Command="{Binding AddOptionCommand}"
-								Padding="12 6"
-								FontSize="13"/>
-					</Grid>
+					<TextBlock Text="选项"
+							   FontSize="16"
+							   FontWeight="SemiBold"
+							   Foreground="{StaticResource NeutralForegroundBrush}"
+							   Margin="0 0 0 4"/>
 					<TextBlock Text="添加模组的可选项（如颜色切换等），每个选项可包含子选项。"
 							   FontSize="13"
 							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   Margin="0 0 0 8"/>
+							   Margin="0 0 0 4"/>
 
-					<!-- 选项列表 -->
-					<ItemsControl ItemsSource="{Binding Options}">
+					<!-- 拖拽排序提示 -->
+					<Border Background="{StaticResource NeutralBackgroundFillBrush}"
+							CornerRadius="4"
+							Padding="8 4"
+							Margin="0 0 0 8">
+						<TextBlock Text="提示：选项和子选项均可拖拽排序"
+								   FontSize="12"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   HorizontalAlignment="Center"/>
+					</Border>
+
+					<!-- 选项列表（支持拖拽排序） -->
+					<ItemsControl ItemsSource="{Binding Options}"
+								  dd:DragDrop.IsDragSource="True"
+								  dd:DragDrop.IsDropTarget="True"
+								  bhv:DragDropAutoScrollBehavior.IsEnabled="True">
 						<ItemsControl.ItemTemplate>
 							<DataTemplate DataType="{x:Type cvms:CreateModOptionViewModel}">
 								<Border Style="{StaticResource FluentSettingsCard}"
@@ -247,60 +287,46 @@
 															Padding="8 4"
 															FontSize="12"/>
 												</Grid>
+												<!-- 选项图标选择 -->
+												<TextBlock Text="图标"
+														   FontSize="12"
+														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+														   Margin="0 0 2 2"/>
+												<Grid Margin="0 0 0 6">
+													<Grid.ColumnDefinitions>
+														<ColumnDefinition Width="*"/>
+														<ColumnDefinition Width="Auto"/>
+													</Grid.ColumnDefinitions>
+													<TextBox Grid.Column="0"
+															 Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"
+															 FontSize="12"
+															 Padding="4 2"
+															 VerticalAlignment="Center"/>
+													<Button Grid.Column="1"
+															Content="选择图标"
+															Style="{StaticResource FluentSecondaryButton}"
+															Command="{Binding BrowseImageCommand}"
+															Margin="4 0 0 0"
+															Padding="8 4"
+															FontSize="12"/>
+												</Grid>
 											</StackPanel>
 										</Grid>
 
-										<!-- 选项图片选择 -->
-										<Grid Margin="0 0 0 8">
-											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="Auto"/>
-												<ColumnDefinition Width="*"/>
-												<ColumnDefinition Width="Auto"/>
-											</Grid.ColumnDefinitions>
-											<TextBlock Grid.Column="0"
-													   Text="图片"
-													   FontSize="12"
-													   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-													   VerticalAlignment="Center"
-													   Margin="0 0 8 0"/>
-											<TextBox Grid.Column="1"
-													 Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"
-													 IsReadOnly="True"
-													 FontSize="12"
-													 Padding="4 2"
-													 VerticalAlignment="Center"/>
-											<Button Grid.Column="2"
-													Content="选择图片"
-													Style="{StaticResource FluentSecondaryButton}"
-													Command="{Binding BrowseImageCommand}"
-													Margin="4 0 0 0"
-													Padding="8 4"
-													FontSize="12"/>
-										</Grid>
-
 										<!-- 子选项区域 -->
-										<Grid Margin="0 4 0 4">
-											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="*"/>
-												<ColumnDefinition Width="Auto"/>
-											</Grid.ColumnDefinitions>
-											<TextBlock Grid.Column="0"
-													   Text="子选项"
-													   FontSize="13"
-													   FontWeight="SemiBold"
-													   Foreground="{StaticResource NeutralForegroundBrush}"
-													   VerticalAlignment="Center"/>
-											<Button Grid.Column="1"
-													Content="添加子选项"
-													Style="{StaticResource FluentSecondaryButton}"
-													Command="{Binding AddSubOptionCommand}"
-													Padding="8 4"
-													FontSize="12"/>
-										</Grid>
+										<TextBlock Text="子选项"
+												   FontSize="13"
+												   FontWeight="SemiBold"
+												   Foreground="{StaticResource NeutralForegroundBrush}"
+												   VerticalAlignment="Center"
+												   Margin="0 4 0 4"/>
 
-										<!-- 子选项列表 -->
+										<!-- 子选项列表（支持拖拽排序） -->
 										<ItemsControl ItemsSource="{Binding SubOptions}"
-													  Margin="0 4 0 0">
+													  Margin="0 4 0 0"
+													  dd:DragDrop.IsDragSource="True"
+													  dd:DragDrop.IsDropTarget="True"
+													  bhv:DragDropAutoScrollBehavior.IsEnabled="True">
 											<ItemsControl.ItemTemplate>
 												<DataTemplate DataType="{x:Type cvms:CreateModSubOptionViewModel}">
 													<Border Background="#15FFFFFF"
@@ -379,51 +405,87 @@
 																				Padding="8 4"
 																				FontSize="12"/>
 																	</Grid>
+																	<!-- 子选项图标选择 -->
+																	<TextBlock Text="图标"
+																			   FontSize="11"
+																			   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+																			   Margin="0 0 2 2"/>
+																	<Grid Margin="0 0 0 4">
+																		<Grid.ColumnDefinitions>
+																			<ColumnDefinition Width="*"/>
+																			<ColumnDefinition Width="Auto"/>
+																		</Grid.ColumnDefinitions>
+																		<TextBox Grid.Column="0"
+																				 Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"
+																				 FontSize="12"
+																				 Padding="4 2"
+																				 VerticalAlignment="Center"/>
+																		<Button Grid.Column="1"
+																				Content="选择图标"
+																				Style="{StaticResource FluentSecondaryButton}"
+																				Command="{Binding BrowseImageCommand}"
+																				Margin="4 0 0 0"
+																				Padding="8 4"
+																				FontSize="12"/>
+																	</Grid>
 																</StackPanel>
-															</Grid>
-															<!-- 子选项图片选择 -->
-															<Grid Margin="0 4 0 0">
-																<Grid.ColumnDefinitions>
-																	<ColumnDefinition Width="Auto"/>
-																	<ColumnDefinition Width="*"/>
-																	<ColumnDefinition Width="Auto"/>
-																</Grid.ColumnDefinitions>
-																<TextBlock Grid.Column="0"
-																		   Text="图片"
-																		   FontSize="11"
-																		   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-																		   VerticalAlignment="Center"
-																		   Margin="0 0 8 0"/>
-																<TextBox Grid.Column="1"
-																		 Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"
-																		 IsReadOnly="True"
-																		 FontSize="12"
-																		 Padding="4 2"
-																		 VerticalAlignment="Center"/>
-																<Button Grid.Column="2"
-																		Content="选择图片"
-																		Style="{StaticResource FluentSecondaryButton}"
-																		Command="{Binding BrowseImageCommand}"
-																		Margin="4 0 0 0"
-																		Padding="8 4"
-																		FontSize="12"/>
 															</Grid>
 														</StackPanel>
 													</Border>
 												</DataTemplate>
 											</ItemsControl.ItemTemplate>
 										</ItemsControl>
+										<!-- 底部添加子选项按钮，避免添加后需重新滑到顶部 -->
+										<Button Content="添加子选项"
+												Style="{StaticResource FluentSecondaryButton}"
+												Command="{Binding AddSubOptionCommand}"
+												HorizontalAlignment="Center"
+												Margin="0 8 0 0"
+												Padding="12 6"
+												FontSize="12"/>
 									</StackPanel>
 								</Border>
 							</DataTemplate>
 						</ItemsControl.ItemTemplate>
 					</ItemsControl>
+					<Button Content="添加选项"
+							Style="{StaticResource FluentSecondaryButton}"
+							Command="{Binding AddOptionCommand}"
+							HorizontalAlignment="Center"
+							Margin="0 8 0 0"
+							Padding="20 8"
+							FontSize="13"/>
 				</StackPanel>
 			</Border>
+			</StackPanel>
+
+			<!-- 直接编辑 JSON 模式 -->
+			<TextBox Text="{Binding JsonContent, UpdateSourceTrigger=PropertyChanged}"
+					 FontFamily="Consolas"
+					 FontSize="12"
+					 AcceptsReturn="True"
+					 AcceptsTab="True"
+					 TextWrapping="NoWrap"
+					 VerticalScrollBarVisibility="Auto"
+					 HorizontalScrollBarVisibility="Auto"
+					 Padding="8"
+					 MinHeight="400">
+				<TextBox.Style>
+					<Style TargetType="TextBox">
+						<Setter Property="Visibility" Value="Collapsed"/>
+						<Style.Triggers>
+							<DataTrigger Binding="{Binding IsJsonMode}" Value="True">
+								<Setter Property="Visibility" Value="Visible"/>
+							</DataTrigger>
+						</Style.Triggers>
+					</Style>
+				</TextBox.Style>
+			</TextBox>
+			</StackPanel>
 		</ScrollViewer>
 
 		<!-- Navigation Buttons -->
-		<Border Grid.Row="2"
+		<Border Grid.Row="3"
 				Style="{StaticResource FluentCard}"
 				CornerRadius="8"
 				Margin="0 16 0 0">

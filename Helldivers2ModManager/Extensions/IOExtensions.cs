@@ -1,4 +1,5 @@
-﻿using System.IO;
+using System.IO;
+using System.Net;
 
 namespace Helldivers2ModManager.Extensions;
 
@@ -18,5 +19,13 @@ internal static class IOExtensions
 
 			File.Copy(file.FullName, targetFileName);
 		}
+	}
+
+	/// <summary>
+	/// 检查 IP 地址是否为本地地址（localhost/127.0.0.1/::1）
+	/// </summary>
+	public static bool IsLocalAddress(this IPAddress address)
+	{
+		return IPAddress.IsLoopback(address);
 	}
 }

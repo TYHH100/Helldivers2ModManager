@@ -52,6 +52,38 @@ internal sealed class MessageBoxExportProgressUpdateMessage
 
 internal sealed class MessageBoxHideMessage { }
 
+/// <summary>
+/// 模组更新进度消息 - 初始化更新进度显示
+/// </summary>
+internal sealed class MessageBoxUpdateProgressMessage
+{
+    public required string Title { get; init; }
+    public required string ModName { get; init; }
+}
+
+/// <summary>
+/// 模组更新进度更新消息 - 实时更新哈希计算和文件更新进度
+/// </summary>
+internal sealed class MessageBoxUpdateProgressUpdateMessage
+{
+    /// <summary>当前阶段描述文本</summary>
+    public string? PhaseText { get; init; }
+    /// <summary>进度 0.0 ~ 1.0</summary>
+    public double Progress { get; init; }
+    /// <summary>当前正在处理的文件相对路径</summary>
+    public string? CurrentFile { get; init; }
+    /// <summary>已检查/已更新的文件数</summary>
+    public int ProcessedCount { get; init; }
+    /// <summary>总文件数</summary>
+    public int TotalCount { get; init; }
+    /// <summary>需要更新的文件总数</summary>
+    public int NeedUpdateCount { get; init; }
+    /// <summary>缓存命中的文件数（跳过SHA-256计算的文件）</summary>
+    public int CacheHits { get; init; }
+    /// <summary>是否已完成所有操作</summary>
+    public bool IsCompleted { get; init; }
+}
+
 internal sealed class MessageBoxInputMessage
 {
 	public required string Title { get; init; }
@@ -109,7 +141,7 @@ internal sealed class MessageBoxColorPickerMessage
 	public required Action<string> Confirm { get; init; }
 }
 
-internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxExportProgressMessage>, IRecipient<MessageBoxExportProgressUpdateMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxColorPickerMessage>
+internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxExportProgressMessage>, IRecipient<MessageBoxExportProgressUpdateMessage>, IRecipient<MessageBoxUpdateProgressMessage>, IRecipient<MessageBoxUpdateProgressUpdateMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxColorPickerMessage>
 {
 	public static bool IsRegistered { get; private set; }
 
@@ -133,6 +165,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		WeakReferenceMessenger.Default.Register<MessageBoxProgressMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxExportProgressMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxExportProgressUpdateMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxUpdateProgressMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxUpdateProgressUpdateMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxHideMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxInputMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxConfirmMessage>(this);
@@ -235,6 +269,62 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 			exportCurrentFile.Text = message.CurrentFile ?? "";
 			exportSpeedText.Text = message.SpeedText ?? "";
 			exportRatioText.Text = message.RatioText ?? "";
+		}
+	}
+
+	public void Receive(MessageBoxUpdateProgressMessage message)
+	{
+		Reset();
+
+		title.Text = message.Title;
+		brush.Color = Colors.White;
+		this.message.Text = $"正在更新模组「{message.ModName}」...";
+
+		// 切换到确定进度条模式，显示更新进度面板
+		progress.IsIndeterminate = false;
+		progress.Value = 0;
+		progress.Visibility = Visibility.Visible;
+
+		// 显示更新进度信息面板
+		updateProgressPanel.Visibility = Visibility.Visible;
+		updatePhaseText.Text = "正在计算文件哈希...";
+		updateCurrentFile.Text = "";
+		updateFileCount.Text = "";
+		updateNeedUpdateCount.Text = "";
+
+		Visibility = Visibility.Visible;
+	}
+
+	public void Receive(MessageBoxUpdateProgressUpdateMessage message)
+	{
+		if (message.IsCompleted)
+		{
+			// 完成状态：隐藏进度条和信息面板，显示完成消息
+			progress.Visibility = Visibility.Hidden;
+			updateProgressPanel.Visibility = Visibility.Collapsed;
+			this.message.Text = "模组更新完成";
+			okButton.Visibility = Visibility.Visible;
+		}
+		else
+		{
+			progress.Value = Math.Clamp(message.Progress * 100, 0, 100);
+
+			if (!string.IsNullOrEmpty(message.PhaseText))
+				updatePhaseText.Text = message.PhaseText;
+
+			if (!string.IsNullOrEmpty(message.CurrentFile))
+				updateCurrentFile.Text = message.CurrentFile;
+			else
+				updateCurrentFile.Text = "";
+
+			updateFileCount.Text = message.CacheHits > 0
+				? $"已处理: {message.ProcessedCount} / {message.TotalCount} 个文件 (缓存命中 {message.CacheHits})"
+				: $"已处理: {message.ProcessedCount} / {message.TotalCount} 个文件";
+
+			if (message.NeedUpdateCount > 0)
+				updateNeedUpdateCount.Text = $"需要更新: {message.NeedUpdateCount} 个文件";
+			else
+				updateNeedUpdateCount.Text = "";
 		}
 	}
 
@@ -369,6 +459,11 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		exportCurrentFile.Text = "";
 		exportSpeedText.Text = "";
 		exportRatioText.Text = "";
+		updateProgressPanel.Visibility = Visibility.Collapsed;
+		updatePhaseText.Text = "";
+		updateCurrentFile.Text = "";
+		updateFileCount.Text = "";
+		updateNeedUpdateCount.Text = "";
 	}
 
 	private void OkButton_Click(object sender, RoutedEventArgs e)

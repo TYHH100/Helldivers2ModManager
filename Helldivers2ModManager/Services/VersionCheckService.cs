@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Helldivers2ModManager.Services;
 
@@ -40,6 +41,11 @@ internal sealed partial class VersionCheckService
     private static int s_cachedModCount;
     private static int s_cachedUnitCount;
 
+    /// <summary>
+    /// 是否有缓存的参考版本号（增量检查时需要以此判断是否需要全量扫描）
+    /// </summary>
+    public static bool HasCachedReference => s_cachedReferenceVersion.HasValue;
+
     private readonly ILogger<VersionCheckService> _logger;
 
     public VersionCheckService(ILogger<VersionCheckService> logger, SettingsService settingsService)
@@ -71,41 +77,53 @@ internal sealed partial class VersionCheckService
         var allModVersions = new ConcurrentDictionary<Guid, (List<uint> Versions, List<PatchUnitInfo> Infos)>();
         var allModAnalyses = new ConcurrentDictionary<Guid, ModDetailedAnalysis>();
 
+        // 用 SemaphoreSlim 限制并发数，避免所有模组的补丁文件同时读到内存中
+        // 补丁文件可能每个几十 MB，全部模组并行读取会导致内存飙升至 1GB+
+        using var semaphore = new SemaphoreSlim(2, 2);
+
         var scanTasks = modList.Select(async mod =>
         {
-            // 只扫描主补丁文件，排除 .gpu_resources 和 .stream 等附属文件（格式不同）
-            var patchFiles = mod.Directory.GetFiles("*", SearchOption.AllDirectories)
-                .Where(f =>
-                {
-                    var name = f.Name;
-                    return name.Contains(".patch_") &&
-                           !name.EndsWith(".gpu_resources", StringComparison.OrdinalIgnoreCase) &&
-                           !name.EndsWith(".stream", StringComparison.OrdinalIgnoreCase);
-                })
-                .ToArray();
-
-            if (patchFiles.Length == 0)
-                return; // 无补丁文件，跳过
-
-            var versions = new List<uint>();
-            var infos = new List<PatchUnitInfo>();
-
-            foreach (var pf in patchFiles)
+            await semaphore.WaitAsync();
+            try
             {
-                var unitInfos = await ExtractUnitVersionsFromPatchFileAsync(pf);
-                foreach (var info in unitInfos)
+                // 只扫描主补丁文件，排除 .gpu_resources 和 .stream 等附属文件（格式不同）
+                var patchFiles = mod.Directory.GetFiles("*", SearchOption.AllDirectories)
+                    .Where(f =>
+                    {
+                        var name = f.Name;
+                        return name.Contains(".patch_") &&
+                               !name.EndsWith(".gpu_resources", StringComparison.OrdinalIgnoreCase) &&
+                               !name.EndsWith(".stream", StringComparison.OrdinalIgnoreCase);
+                    })
+                    .ToArray();
+
+                if (patchFiles.Length == 0)
+                    return; // 无补丁文件，跳过
+
+                var versions = new List<uint>();
+                var infos = new List<PatchUnitInfo>();
+
+                foreach (var pf in patchFiles)
                 {
-                    infos.Add(info);
-                    versions.Add(info.Version);
+                    var unitInfos = await ExtractUnitVersionsFromPatchFileAsync(pf);
+                    foreach (var info in unitInfos)
+                    {
+                        infos.Add(info);
+                        versions.Add(info.Version);
+                    }
                 }
+
+                if (versions.Count > 0)
+                    allModVersions[mod.Manifest.Guid] = (versions, infos);
+
+                // 执行深度分析（结构完整性、Unit 内部结构、伴生文件）
+                var deepAnalysis = await AnalyzeModPatchFilesAsync(mod.Directory);
+                allModAnalyses[mod.Manifest.Guid] = deepAnalysis;
             }
-
-            if (versions.Count > 0)
-                allModVersions[mod.Manifest.Guid] = (versions, infos);
-
-            // 执行深度分析（结构完整性、Unit 内部结构、伴生文件）
-            var deepAnalysis = await AnalyzeModPatchFilesAsync(mod.Directory);
-            allModAnalyses[mod.Manifest.Guid] = deepAnalysis;
+            finally
+            {
+                semaphore.Release();
+            }
         });
 
         await Task.WhenAll(scanTasks);

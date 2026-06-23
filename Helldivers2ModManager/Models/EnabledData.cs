@@ -14,8 +14,6 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 
 	public required int[] Selected { get; init; }
 
-	public Guid? GroupId { get; init; }
-
 	public List<Guid>? TagIds { get; init; }
 
 	public static EnabledData Deserialize(JsonElement root, ILogger? logger = null)
@@ -39,19 +37,6 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 		arr = prop.EnumerateArray().ToArray();
 		for (int i = 0; i < arr.Length; i++)
 			selected[i] = arr[i].GetInt32();
-
-		Guid? groupId = null;
-		if (root.TryGetProperty(nameof(GroupId), out var groupIdProp) && groupIdProp.ValueKind != JsonValueKind.Null)
-		{
-			try
-			{
-				groupId = Guid.Parse(groupIdProp.GetString()!);
-			}
-			catch (Exception ex)
-			{
-				logger?.LogWarning(ex, "Failed to parse GroupId, defaulting to null");
-			}
-		}
 
 		List<Guid>? tagIds = null;
 		if (root.TryGetProperty(nameof(TagIds), out var tagIdsProp) && tagIdsProp.ValueKind == JsonValueKind.Array)
@@ -79,7 +64,6 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 			Enabled = enabled,
 			Toggled = toggled,
 			Selected = selected,
-			GroupId = groupId,
 			TagIds = tagIds,
 		};
 	}
@@ -97,10 +81,6 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 		foreach (var elm in Selected)
 			writer.WriteNumberValue(elm);
 		writer.WriteEndArray();
-		if (GroupId.HasValue)
-		{
-			writer.WriteString(nameof(GroupId), GroupId.Value.ToString());
-		}
 		if (TagIds != null && TagIds.Count > 0)
 		{
 			writer.WriteStartArray(nameof(TagIds));
@@ -113,6 +93,6 @@ internal readonly struct EnabledData : IJsonSerializable<EnabledData>
 
 	public override string ToString()
 	{
-		return $"{{ {nameof(Guid)} = \"{{{Guid}}}\", {nameof(Enabled)} = {Enabled}, {nameof(Toggled)} = {string.Join(", ", Toggled)}, {nameof(Selected)} = {string.Join(", ", Selected)}, {nameof(GroupId)} = {(GroupId.HasValue ? $"\"{{{GroupId.Value}}}\"" : "null")} }}";
+		return $"{{ {nameof(Guid)} = \"{{{Guid}}}\", {nameof(Enabled)} = {Enabled}, {nameof(Toggled)} = {string.Join(", ", Toggled)}, {nameof(Selected)} = {string.Join(", ", Selected)} }}";
 	}
 }

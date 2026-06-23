@@ -1,4 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using System.Windows;
+using System.Windows.Threading;
 
 namespace Helldivers2ModManager.Models;
 
@@ -88,10 +90,24 @@ public sealed partial class DownloadTask : ObservableObject
 
     public void UpdateProgress(long bytesDownloaded, long totalBytes)
     {
-        BytesDownloaded = bytesDownloaded;
-        TotalBytes = totalBytes;
-        Progress = totalBytes > 0 ? (double)bytesDownloaded / totalBytes : 0;
-        OnPropertyChanged(nameof(ProgressPercent));
+        // 确保在 UI 线程更新属性，避免跨线程异常
+        if (Application.Current?.Dispatcher?.CheckAccess() == true)
+        {
+            BytesDownloaded = bytesDownloaded;
+            TotalBytes = totalBytes;
+            Progress = totalBytes > 0 ? (double)bytesDownloaded / totalBytes : 0;
+            OnPropertyChanged(nameof(ProgressPercent));
+        }
+        else
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                BytesDownloaded = bytesDownloaded;
+                TotalBytes = totalBytes;
+                Progress = totalBytes > 0 ? (double)bytesDownloaded / totalBytes : 0;
+                OnPropertyChanged(nameof(ProgressPercent));
+            });
+        }
     }
 
     /// <summary>
@@ -102,8 +118,11 @@ public sealed partial class DownloadTask : ObservableObject
         _downloadStartTime = DateTime.Now;
         _lastSampleTime = DateTime.Now;
         _lastSampleBytes = 0;
-        Speed = 0;
-        EstimatedTimeRemaining = TimeSpan.Zero;
+        RunOnUIThread(() =>
+        {
+            Speed = 0;
+            EstimatedTimeRemaining = TimeSpan.Zero;
+        });
     }
 
     /// <summary>
@@ -124,24 +143,40 @@ public sealed partial class DownloadTask : ObservableObject
             {
                 // 使用移动平均平滑速度
                 var instantSpeed = bytesDiff / secondsElapsed;
-                Speed = Speed > 0 ? Speed * 0.7 + instantSpeed * 0.3 : instantSpeed;
+                var newSpeed = Speed > 0 ? Speed * 0.7 + instantSpeed * 0.3 : instantSpeed;
 
                 // 计算预估剩余时间
-                if (Speed > 0 && totalBytes > 0)
+                TimeSpan newEstimatedTime;
+                if (newSpeed > 0 && totalBytes > 0)
                 {
                     var remainingBytes = totalBytes - bytesDownloaded;
-                    var remainingSeconds = remainingBytes / Speed;
+                    var remainingSeconds = remainingBytes / newSpeed;
                     if (remainingSeconds > 0 && remainingSeconds < 86400) // 不超过24小时
-                        EstimatedTimeRemaining = TimeSpan.FromSeconds(remainingSeconds);
+                        newEstimatedTime = TimeSpan.FromSeconds(remainingSeconds);
                     else
-                        EstimatedTimeRemaining = TimeSpan.Zero;
+                        newEstimatedTime = TimeSpan.Zero;
                 }
                 else
                 {
-                    EstimatedTimeRemaining = TimeSpan.Zero;
+                    newEstimatedTime = TimeSpan.Zero;
                 }
 
-                OnPropertyChanged(nameof(EstimatedTimeRemainingText));
+                // 确保在 UI 线程更新属性
+                if (Application.Current?.Dispatcher?.CheckAccess() == true)
+                {
+                    Speed = newSpeed;
+                    EstimatedTimeRemaining = newEstimatedTime;
+                    OnPropertyChanged(nameof(EstimatedTimeRemainingText));
+                }
+                else
+                {
+                    Application.Current?.Dispatcher?.Invoke(() =>
+                    {
+                        Speed = newSpeed;
+                        EstimatedTimeRemaining = newEstimatedTime;
+                        OnPropertyChanged(nameof(EstimatedTimeRemainingText));
+                    });
+                }
             }
 
             _lastSampleTime = now;
@@ -154,10 +189,28 @@ public sealed partial class DownloadTask : ObservableObject
     /// </summary>
     public void ResetSpeed()
     {
-        Speed = 0;
-        EstimatedTimeRemaining = TimeSpan.Zero;
         _lastSampleBytes = 0;
         _lastSampleTime = DateTime.Now;
-        OnPropertyChanged(nameof(EstimatedTimeRemainingText));
+        RunOnUIThread(() =>
+        {
+            Speed = 0;
+            EstimatedTimeRemaining = TimeSpan.Zero;
+            OnPropertyChanged(nameof(EstimatedTimeRemainingText));
+        });
+    }
+
+    /// <summary>
+    /// 在 UI 线程执行操作，避免跨线程异常
+    /// </summary>
+    private void RunOnUIThread(Action action)
+    {
+        if (Application.Current?.Dispatcher?.CheckAccess() == true)
+        {
+            action();
+        }
+        else
+        {
+            Application.Current?.Dispatcher?.Invoke(action);
+        }
     }
 }

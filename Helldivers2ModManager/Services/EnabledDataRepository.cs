@@ -60,15 +60,14 @@ internal sealed class EnabledDataRepository
 				using (var insertCmd = connection.CreateCommand())
 				{
 					insertCmd.CommandText = @"
-						INSERT INTO enabled_mods (Guid, Enabled, Toggled, Selected, GroupId, TagIds, SortOrder)
-						VALUES (@Guid, @Enabled, @Toggled, @Selected, @GroupId, @TagIds, @SortOrder);
+						INSERT INTO enabled_mods (Guid, Enabled, Toggled, Selected, TagIds, SortOrder)
+						VALUES (@Guid, @Enabled, @Toggled, @Selected, @TagIds, @SortOrder);
 					";
 
 					var guidParam = insertCmd.Parameters.Add("@Guid", SqliteType.Text);
 					var enabledParam = insertCmd.Parameters.Add("@Enabled", SqliteType.Integer);
 					var toggledParam = insertCmd.Parameters.Add("@Toggled", SqliteType.Text);
 					var selectedParam = insertCmd.Parameters.Add("@Selected", SqliteType.Text);
-					var groupIdParam = insertCmd.Parameters.Add("@GroupId", SqliteType.Text);
 					var tagIdsParam = insertCmd.Parameters.Add("@TagIds", SqliteType.Text);
 					var sortOrderParam = insertCmd.Parameters.Add("@SortOrder", SqliteType.Integer);
 
@@ -79,7 +78,6 @@ internal sealed class EnabledDataRepository
 						enabledParam.Value = data.Enabled ? 1 : 0;
 						toggledParam.Value = JsonSerializer.Serialize(data.Toggled, s_jsonOptions);
 						selectedParam.Value = JsonSerializer.Serialize(data.Selected, s_jsonOptions);
-						groupIdParam.Value = data.GroupId.HasValue ? data.GroupId.Value.ToString() : DBNull.Value;
 						tagIdsParam.Value = data.TagIds is { Count: > 0 }
 							? JsonSerializer.Serialize(data.TagIds.Select(id => id.ToString()), s_jsonOptions)
 							: DBNull.Value;
@@ -92,8 +90,9 @@ internal sealed class EnabledDataRepository
 				transaction.Commit();
 				_logger.LogInformation("Saved {Count} mod configs to database", enabledDataList.Count());
 			}
-			catch
+			catch (Exception ex)
 			{
+				_logger.LogError(ex, "Failed to save enabled data, transaction rolled back");
 				transaction.Rollback();
 				throw;
 			}
@@ -115,7 +114,7 @@ internal sealed class EnabledDataRepository
 		var results = new List<EnabledData>();
 
 		using var cmd = connection.CreateCommand();
-		cmd.CommandText = "SELECT Guid, Enabled, Toggled, Selected, GroupId, TagIds FROM enabled_mods ORDER BY SortOrder ASC;";
+		cmd.CommandText = "SELECT Guid, Enabled, Toggled, Selected, TagIds FROM enabled_mods ORDER BY SortOrder ASC;";
 
 		using var reader = cmd.ExecuteReader();
 		while (reader.Read())
@@ -129,25 +128,12 @@ internal sealed class EnabledDataRepository
 				var selected = JsonSerializer.Deserialize<int[]>(reader.GetString(3), s_jsonOptions)
 					?? [];
 
-				Guid? groupId = null;
+				List<Guid>? tagIds = null;
 				if (!reader.IsDBNull(4))
 				{
 					try
 					{
-						groupId = Guid.Parse(reader.GetString(4));
-					}
-					catch (Exception ex)
-					{
-						_logger.LogWarning(ex, "解析 GroupId 失败，默认设为 null");
-					}
-				}
-
-				List<Guid>? tagIds = null;
-				if (!reader.IsDBNull(5))
-				{
-					try
-					{
-						var tagIdStrings = JsonSerializer.Deserialize<List<string>>(reader.GetString(5), s_jsonOptions);
+						var tagIdStrings = JsonSerializer.Deserialize<List<string>>(reader.GetString(4), s_jsonOptions);
 						if (tagIdStrings is { Count: > 0 })
 						{
 							tagIds = [];
@@ -176,7 +162,6 @@ internal sealed class EnabledDataRepository
 					Enabled = enabled,
 					Toggled = toggled,
 					Selected = selected,
-					GroupId = groupId,
 					TagIds = tagIds,
 				});
 			}
@@ -218,8 +203,9 @@ internal sealed class EnabledDataRepository
 				transaction.Commit();
 				_logger.LogInformation("Deleted {Count} mod configs from database", guids.Count());
 			}
-			catch
+			catch (Exception ex)
 			{
+				_logger.LogError(ex, "Failed to delete mod configs, transaction rolled back");
 				transaction.Rollback();
 				throw;
 			}

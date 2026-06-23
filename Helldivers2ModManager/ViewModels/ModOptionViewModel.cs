@@ -37,12 +37,22 @@ internal sealed class ModOptionViewModel(ModViewModel vm, int idx) : ObservableO
 			var path = ((V1ModManifest)_vm.Data.Manifest).Options![_idx].Image;
 			if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
 				return null;
-			var bmp = new BitmapImage();
-			bmp.BeginInit();
-			bmp.UriSource = new Uri(Path.Combine(_vm.Data.Directory.FullName, path));
-			bmp.CacheOption = BitmapCacheOption.None;
-			bmp.EndInit();
-			return bmp;
+			try
+			{
+				var fullPath = Path.Combine(_vm.Data.Directory.FullName, path);
+				if (!File.Exists(fullPath))
+					return null;
+				var bmp = new BitmapImage();
+				bmp.BeginInit();
+				bmp.UriSource = new Uri(fullPath);
+				bmp.CacheOption = BitmapCacheOption.OnLoad;
+				bmp.EndInit();
+				return bmp;
+			}
+			catch
+			{
+				return null;
+			}
 		}
 	}
 

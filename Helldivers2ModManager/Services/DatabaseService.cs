@@ -42,6 +42,54 @@ internal sealed class DatabaseService : IDisposable
 	/// </summary>
 	private const string CheckSortOrderColumnSql = "SELECT COUNT(*) FROM pragma_table_info('enabled_mods') WHERE name='SortOrder';";
 
+	/// <summary>
+	/// 数据库表创建 SQL —— 存储文件哈希缓存，用于模组增量更新时的快速比对
+	/// </summary>
+	private const string CreateFileHashesTableSql = @"
+		CREATE TABLE IF NOT EXISTS file_hashes (
+			ModGuid TEXT NOT NULL,
+			FilePath TEXT NOT NULL,
+			FileHash TEXT NOT NULL,
+			FileSize INTEGER NOT NULL,
+			LastModified TEXT NOT NULL,
+			PRIMARY KEY (ModGuid, FilePath)
+		);
+	";
+
+	/// <summary>
+	/// file_hashes 表索引 —— 加速按 ModGuid 查询
+	/// </summary>
+	private const string CreateFileHashesIndexSql = "CREATE INDEX IF NOT EXISTS idx_file_hashes_modguid ON file_hashes (ModGuid);";
+
+	/// <summary>
+	/// 数据库表创建 SQL —— 存储版本兼容性检查结果
+	/// </summary>
+	private const string CreateVersionCheckResultsTableSql = @"
+		CREATE TABLE IF NOT EXISTS version_check_results (
+			ModGuid TEXT PRIMARY KEY NOT NULL,
+			Status INTEGER NOT NULL DEFAULT 0,
+			GameVersion INTEGER NOT NULL DEFAULT 0,
+			LastChecked TEXT NOT NULL DEFAULT ''
+		);
+	";
+
+	/// <summary>
+	/// 数据库表创建 SQL —— 存储游戏 exe 最后写入时间，用于检测游戏版本变化
+	/// </summary>
+	private const string CreateGameCheckTrackerTableSql = @"
+		CREATE TABLE IF NOT EXISTS game_check_tracker (
+			Id INTEGER PRIMARY KEY CHECK (Id = 1),
+			ExeLastWriteTimeUtc TEXT NOT NULL DEFAULT ''
+		);
+	";
+
+	/// <summary>
+	/// 插入默认行（仅当表为空时），确保始终有一条记录
+	/// </summary>
+	private const string InsertGameCheckTrackerDefaultSql = @"
+		INSERT OR IGNORE INTO game_check_tracker (Id, ExeLastWriteTimeUtc) VALUES (1, '');
+	";
+
 	private readonly ILogger<DatabaseService> _logger;
 	private string? _connectionString;
 	private bool _initialized;
@@ -149,6 +197,39 @@ internal sealed class DatabaseService : IDisposable
 						alterCmd.ExecuteNonQuery();
 						_logger.LogInformation("Added SortOrder column to legacy database");
 					}
+				}
+
+				// 创建文件哈希缓存表
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateFileHashesTableSql;
+					cmd.ExecuteNonQuery();
+				}
+
+				// 创建文件哈希表索引
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateFileHashesIndexSql;
+					cmd.ExecuteNonQuery();
+				}
+
+				// 创建版本检测结果表
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateVersionCheckResultsTableSql;
+					cmd.ExecuteNonQuery();
+				}
+
+				// 创建游戏版本跟踪表 + 默认行
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateGameCheckTrackerTableSql;
+					cmd.ExecuteNonQuery();
+				}
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = InsertGameCheckTrackerDefaultSql;
+					cmd.ExecuteNonQuery();
 				}
 
 				_initialized = true;

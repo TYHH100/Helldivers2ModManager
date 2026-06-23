@@ -15,7 +15,6 @@
 			<local:StringToColorBrushConverter x:Key="StringToColorBrushConverter"/>
 			<local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
 			<local:TagsToStringConverter x:Key="TagsToStringConverter"/>
-			<local:GroupItemConverter x:Key="GroupItemConverter"/>
 			<local:BytesToSizeConverter x:Key="BytesConverter"/>
 			<local:DownloadStatusToStringConverter x:Key="DownloadStatusToStringConverter"/>
 			<local:DownloadStatusToVisibilityConverter x:Key="DownloadStatusToVisibilityConverter"/>

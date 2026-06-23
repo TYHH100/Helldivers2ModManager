@@ -19,7 +19,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
 {
-    public override string Title => "从 Nexus 下载模组";
+    public override string Title => "Download Nexus Mods";
 
     [ObservableProperty]
     private string _nexusUrl = string.Empty;
@@ -158,6 +158,7 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
 
             IsDownloading = true;
             StatusMessage = "正在下载模组...";
+            string? downloadedPath = null;
 
             try
             {
@@ -172,7 +173,7 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
                     throw new InvalidOperationException("无法解析 URL");
                 }
                 
-                var downloadedPath = await _nexusModsService.DownloadModFileAsync(
+                downloadedPath = await _nexusModsService.DownloadModFileAsync(
                     parsed.Value.GameDomain,
                     SelectedMod.GameScopedId,
                     SelectedFile.GameScopedId,
@@ -211,6 +212,18 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
             }
             finally
             {
+                if (!string.IsNullOrEmpty(downloadedPath) && File.Exists(downloadedPath))
+                {
+                    try
+                    {
+                        File.Delete(downloadedPath);
+                        _logger.LogInformation("Cleaned up temporary download file: {Path}", downloadedPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete temporary download file: {Path}", downloadedPath);
+                    }
+                }
                 IsDownloading = false;
             }
         }

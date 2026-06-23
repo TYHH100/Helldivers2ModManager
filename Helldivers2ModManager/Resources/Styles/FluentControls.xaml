@@ -372,6 +372,14 @@
                         <ScrollViewer x:Name="PART_ContentHost"
                                        Margin="{TemplateBinding Padding}"
                                        VerticalAlignment="Center"/>
+                        <!-- 占位提示文字，Text为空且Tag非空时显示 -->
+                        <TextBlock x:Name="PlaceholderText"
+                                   Text="{TemplateBinding Tag}"
+                                   Foreground="{StaticResource NeutralForegroundDisabledBrush}"
+                                   Margin="{TemplateBinding Padding}"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   Visibility="Collapsed"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -384,6 +392,13 @@
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
                             <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
+                        </Trigger>
+                        <!-- Text为空时显示占位文字 -->
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="PlaceholderText" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="Text" Value="{x:Null}">
+                            <Setter TargetName="PlaceholderText" Property="Visibility" Value="Visible"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -502,6 +517,73 @@
                             <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
                             <Setter TargetName="CheckBorder" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
                             <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================ -->
+    <!-- RadioButton Style (Fluent)                  -->
+    <!-- ============================================ -->
+
+    <Style x:Key="FluentRadioButton" TargetType="RadioButton">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderStrongBrush}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="RadioBorder"
+                                Width="22"
+                                Height="22"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4">
+                            <Grid>
+                                <Rectangle x:Name="RadioMark"
+                                           Width="10"
+                                           Height="10"
+                                           Fill="White"
+                                           RadiusX="2"
+                                           RadiusY="2"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
+                        <ContentPresenter Grid.Column="1"
+                                          Margin="8 0 0 0"
+                                          VerticalAlignment="Center"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="RadioBorder" Property="Background" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="RadioMark" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="RadioBorder" Property="Background" Value="{StaticResource SystemAccentDark1Brush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
+                            <Setter TargetName="RadioBorder" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
+                            <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

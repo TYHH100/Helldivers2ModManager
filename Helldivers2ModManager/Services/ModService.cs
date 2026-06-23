@@ -39,11 +39,15 @@ internal sealed partial class ModService
 	private readonly ILogger<ModService> _logger;
 	private readonly List<ModData> _mods;
 	private readonly ConcurrentDictionary<Guid, ModViewModel> _modViewModelCache = new();
+	private readonly FileHashRepository _fileHashRepository;
+	private readonly ModHashService _modHashService;
 	private SettingsService? _settingsService;
 
-	public ModService(ILogger<ModService> logger)
+	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService)
 	{
 		_logger = logger;
+		_fileHashRepository = fileHashRepository;
+		_modHashService = modHashService;
 		_mods = new();
 	}
 	
@@ -151,6 +155,11 @@ internal sealed partial class ModService
 		Initialized = true;
 		_logger.LogInformation("Loaded {} mods", _mods.Count);
 		_logger.LogInformation("Mod service initialization complete");
+
+		// 初始化哈希管理服务并触发版本迁移（为新版用户自动计算所有现有模组的文件哈希值）
+		_modHashService.Init(_settingsService);
+		_ = _modHashService.MigrateExistingModsAsync(_mods);
+
 		return problems.ToArray();
 	}
 	
@@ -196,8 +205,37 @@ internal sealed partial class ModService
 			? Path.GetFileName(iconPath)
 			: manifest.IconPath;
 
-		// 构建目标目录路径
-		var modDir = new DirectoryInfo(Path.Combine(_settingsService.StorageDirectory, "Mods", finalName));
+		// 构建目标目录路径（安全校验：防止路径遍历）
+		var safeName = Path.GetFileName(finalName);
+		if (string.IsNullOrWhiteSpace(safeName))
+		{
+			_logger.LogError("Invalid mod name after sanitization: {Name}", finalName);
+			problems.Add(new ModProblem
+			{
+				Directory = sourceDir,
+				Kind = ModProblemKind.InvalidPath,
+				ExtraData = "Invalid mod name",
+			});
+			return problems.ToArray();
+		}
+		
+		var modsBasePath = Path.GetFullPath(Path.Combine(_settingsService.StorageDirectory, "Mods"));
+		var modDir = new DirectoryInfo(Path.Combine(modsBasePath, safeName));
+		
+		// 验证最终路径是否在 Mods 目录内
+		if (!modDir.FullName.StartsWith(modsBasePath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+			&& modDir.FullName != modsBasePath)
+		{
+			_logger.LogError("Path traversal attempt detected: {Path}", modDir.FullName);
+			problems.Add(new ModProblem
+			{
+				Directory = sourceDir,
+				Kind = ModProblemKind.InvalidPath,
+				ExtraData = "Path traversal not allowed",
+			});
+			return problems.ToArray();
+		}
+		
 		if (modDir.Exists)
 		{
 			_logger.LogWarning("Mod directory already exists: {}", modDir.FullName);
@@ -262,7 +300,12 @@ internal sealed partial class ModService
 		return problems.ToArray();
 	}
 
-	public async Task<ModProblem[]> TryAddModFromArchiveAsync(FileInfo file)
+	/// <summary>
+	/// 尝试从压缩包添加模组
+	/// </summary>
+	/// <param name="file">压缩包文件</param>
+	/// <param name="nestedProgress">嵌套压缩包处理进度回调：(当前序号(0-based), 总数, 当前文件名)，仅在检测到嵌套压缩包时调用</param>
+	public async Task<ModProblem[]> TryAddModFromArchiveAsync(FileInfo file, Action<int, int, string>? nestedProgress = null)
 	{
 		GuardInitialized();
 
@@ -270,7 +313,10 @@ internal sealed partial class ModService
 
 		_logger.LogInformation("Attempting to add mod from \"{}\"", file.Name);
 
-		var tmpDir = new DirectoryInfo(Path.Combine(_settingsService.TempDirectory, file.Name[..^file.Extension.Length]));
+		// 使用文件名 + 短GUID 作为临时目录名，避免嵌套压缩包与外层同名时发生路径冲突
+		// 例如：外层压缩包和嵌套压缩包都叫 "mod.zip" 时，两级的临时目录名会不同
+		var tmpDirName = $"{file.Name[..^file.Extension.Length]}_{Guid.NewGuid():N}"[..^24];
+		var tmpDir = new DirectoryInfo(Path.Combine(_settingsService.TempDirectory, tmpDirName));
 		_logger.LogInformation("Creating clean temporary directory \"{}\"", tmpDir.FullName);
 		if (tmpDir.Exists)
 			tmpDir.Delete(true);
@@ -315,7 +361,58 @@ internal sealed partial class ModService
 			_logger.LogDebug("Root folder flattened successfully");
 		}
 
+		// 检测嵌套压缩包场景：一级压缩包中未直接包含模组清单文件，但包含其他压缩包（文件夹嵌套结构）
+		// 此时应以嵌套压缩包作为主要导入对象，支持批量导入所有符合条件的嵌套压缩包
 		var manifestFile = new FileInfo(Path.Combine(tmpDir.FullName, "manifest.json"));
+		var nestedArchiveExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+			{ ".zip", ".7z", ".rar", ".tar" };
+
+		if (!manifestFile.Exists)
+		{
+			// 递归搜索所有嵌套压缩包（支持文件夹嵌套结构中的压缩包）
+			var nestedArchives = tmpDir.GetFiles("*", System.IO.SearchOption.AllDirectories)
+				.Where(f => nestedArchiveExtensions.Contains(f.Extension))
+				.ToArray();
+
+			if (nestedArchives.Length > 0)
+			{
+				_logger.LogInformation("一级压缩包中未发现 manifest.json，但检测到 {Count} 个嵌套压缩包，将以嵌套压缩包作为导入对象进行批量导入", nestedArchives.Length);
+
+				var allNestedProblems = new List<ModProblem>();
+
+				for (int i = 0; i < nestedArchives.Length; i++)
+				{
+					var nestedArchive = nestedArchives[i];
+					
+					// 向调用方汇报嵌套导入进度（当前序号, 总数, 当前文件名）
+					nestedProgress?.Invoke(i, nestedArchives.Length, nestedArchive.Name);
+
+					_logger.LogInformation("开始处理嵌套压缩包 ({Current}/{Total}): {Name}", i + 1, nestedArchives.Length, nestedArchive.Name);
+					try
+					{
+						// 递归处理嵌套压缩包，传递同一进度回调以支持多层嵌套的进度上报
+						var nestedProblems = await TryAddModFromArchiveAsync(nestedArchive, nestedProgress);
+						allNestedProblems.AddRange(nestedProblems);
+					}
+					catch (Exception ex)
+					{
+						_logger.LogError(ex, "处理嵌套压缩包失败: {Name}", nestedArchive.Name);
+						allNestedProblems.Add(new ModProblem
+						{
+							Directory = tmpDir,
+							Kind = ModProblemKind.CantReadArchive,
+							ExtraData = $"{nestedArchive.Name}: {ex.Message}",
+						});
+					}
+				}
+
+				// 清理包装压缩包的临时目录（嵌套压缩包已被递归提取到各自临时目录并完成导入）
+				tmpDir.Delete(true);
+				_logger.LogInformation("嵌套压缩包批量导入完成，共处理 {Count} 个", nestedArchives.Length);
+
+				return allNestedProblems.ToArray();
+			}
+		}
 
 		IModManifest manifest;
 		if (manifestFile.Exists)
@@ -349,7 +446,40 @@ internal sealed partial class ModService
 		}
 
 		_logger.LogInformation("Moving mod to storage");
-		var modDir = new DirectoryInfo(Path.Combine(_settingsService.StorageDirectory, "Mods", manifest.Name));
+		
+		// 安全校验：防止路径遍历
+		var safeModName = Path.GetFileName(manifest.Name);
+		if (string.IsNullOrWhiteSpace(safeModName))
+		{
+			_logger.LogError("Invalid mod name after sanitization: {Name}", manifest.Name);
+			tmpDir.Delete(true);
+			problems.Add(new ModProblem
+			{
+				Directory = tmpDir,
+				Kind = ModProblemKind.InvalidPath,
+				ExtraData = "Invalid mod name",
+			});
+			return problems.ToArray();
+		}
+		
+		var modsBasePath = Path.GetFullPath(Path.Combine(_settingsService.StorageDirectory, "Mods"));
+		var modDir = new DirectoryInfo(Path.Combine(modsBasePath, safeModName));
+		
+		// 验证最终路径是否在 Mods 目录内
+		if (!modDir.FullName.StartsWith(modsBasePath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+			&& modDir.FullName != modsBasePath)
+		{
+			_logger.LogError("Path traversal attempt detected: {Path}", modDir.FullName);
+			tmpDir.Delete(true);
+			problems.Add(new ModProblem
+			{
+				Directory = tmpDir,
+				Kind = ModProblemKind.InvalidPath,
+				ExtraData = "Path traversal not allowed",
+			});
+			return problems.ToArray();
+		}
+		
 		if (modDir.Exists)
 		{
 			_logger.LogInformation("Mod directory already exists, comparing files");
@@ -384,6 +514,9 @@ internal sealed partial class ModService
 		_mods.Add(mod);
 		ModAdded?.Invoke(mod);
 
+		// 后台异步计算并存储新模组的文件哈希值（fire-and-forget，不阻塞导入流程）
+		_modHashService.ComputeAndStoreForModAsync(mod);
+
 		tmpDir.Delete(true);
 		return problems.ToArray();
 	}
@@ -394,18 +527,342 @@ internal sealed partial class ModService
 
 		_logger.LogInformation("Attempting to remove {}", mod.Manifest.Guid);
 
-		if (!_mods.Remove(mod))
+		// 使用 GUID 查找而不是引用相等性，避免因 ModData 引用不匹配导致删除失败
+		var index = _mods.FindIndex(m => m.Manifest.Guid == mod.Manifest.Guid);
+		if (index < 0)
 		{
 			_logger.LogInformation("Removal unsuccessful");
 			return;
 		}
+		var removedMod = _mods[index];
+		_mods.RemoveAt(index);
 
-		ModRemoved?.Invoke(mod);
+		ModRemoved?.Invoke(removedMod);
+
+		// 清理数据库中的文件哈希缓存
+		try
+		{
+			await _modHashService.DeleteForModAsync(removedMod);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to delete file hash cache for mod \"{Name}\"", removedMod.Manifest.Name);
+		}
 
 		var recycleOption = _settingsService.DeleteToRecycleBin ? RecycleOption.SendToRecycleBin : RecycleOption.DeletePermanently;
-		await Task.Run(() => FileSystem.DeleteDirectory(mod.Directory.FullName, UIOption.OnlyErrorDialogs, recycleOption));
+		await Task.Run(() => FileSystem.DeleteDirectory(removedMod.Directory.FullName, UIOption.OnlyErrorDialogs, recycleOption));
 
-		_logger.LogInformation("Mod {} removed", mod.Manifest.Name);
+		_logger.LogInformation("Mod {} removed", removedMod.Manifest.Name);
+	}
+
+	public async Task UpdateModFromArchiveAsync(ModData mod, FileInfo archive, IProgress<UpdateProgressInfo>? progress = null)
+	{
+		GuardInitialized();
+
+		_logger.LogInformation("Attempting to update mod \"{}\" from archive \"{}\" with hash-based incremental update", mod.Manifest.Name, archive.Name);
+
+		// 阶段1: 计算当前mod目录中所有文件的SHA-256哈希值（优先使用数据库缓存）
+		progress?.Report(new UpdateProgressInfo
+		{
+			Phase = UpdatePhase.HashingCurrent,
+			Message = "正在计算当前模组文件哈希（使用缓存加速）..."
+		});
+		_logger.LogDebug("Computing SHA-256 hashes for current mod files (with cache)");
+
+		var hashingProgress = new Progress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>(p =>
+		{
+			progress?.Report(new UpdateProgressInfo
+			{
+				Phase = UpdatePhase.HashingCurrent,
+				CurrentFile = p.currentFile,
+				ProcessedCount = p.checkedCount,
+				TotalCount = p.totalCount,
+				CacheHits = p.cacheHits,
+				Message = p.cacheHits > 0
+					? $"正在计算当前模组文件哈希 ({p.checkedCount}/{p.totalCount}, 缓存命中 {p.cacheHits})..."
+					: $"正在计算当前模组文件哈希 ({p.checkedCount}/{p.totalCount})..."
+			});
+		});
+
+		Dictionary<string, string> currentHashes;
+		try
+		{
+			currentHashes = await FileHashUtils.ComputeDirectoryHashesReadCacheAsync(
+				mod.Directory,
+				mod.Manifest.Guid,
+				_fileHashRepository,
+				_settingsService.StorageDirectory,
+				hashingProgress);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Failed to compute hashes for current mod \"{}\"", mod.Manifest.Name);
+			throw new IOException($"无法计算当前模组文件的哈希值: {ex.Message}", ex);
+		}
+		_logger.LogInformation("Computed hashes for {Count} current files", currentHashes.Count);
+
+		// 解压到临时目录
+		var tmpDir = new DirectoryInfo(Path.Combine(_settingsService.TempDirectory, $"update_{mod.Manifest.Guid:N}"));
+		_logger.LogInformation("Creating clean temporary directory \"{}\"", tmpDir.FullName);
+		if (tmpDir.Exists)
+			tmpDir.Delete(true);
+		tmpDir.Create();
+
+		try
+		{
+			await Task.Run(() =>
+			{
+				using var extractor = new SharpSevenZipExtractor(archive.FullName);
+				extractor.ExtractArchive(tmpDir.FullName);
+			});
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Failed to extract archive \"{}\"", archive.Name);
+			tmpDir.Delete(true);
+			throw;
+		}
+
+		// 展平根文件夹
+		var rootFolders = tmpDir.GetDirectories();
+		var rootFiles = tmpDir.GetFiles();
+		if (rootFolders.Length == 1 && rootFiles.Length == 0)
+		{
+			var rootFolder = rootFolders[0];
+			_logger.LogInformation("Detected root folder \"{}\", flattening structure", rootFolder.Name);
+			await MoveDirectoryContentsAsync(rootFolder, tmpDir);
+			rootFolder.Delete(true);
+		}
+
+		// 查找或推断清单（必须在阶段2哈希计算之前，确保manifest.json参与比较）
+		var manifestFile = new FileInfo(Path.Combine(tmpDir.FullName, "manifest.json"));
+		IModManifest manifest;
+		if (manifestFile.Exists)
+		{
+			manifest = ModManifest.DeserializeFromFile(manifestFile);
+		}
+		else
+		{
+			_logger.LogInformation("No manifest.json found in archive, inferring from directory structure");
+			manifest = ModManifest.InferFromDirectory(tmpDir);
+			using var stream = manifestFile.Open(FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+			using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
+			{
+				IndentCharacter = '\t',
+				Indented = true,
+				IndentSize = 1,
+			});
+			manifest.Serialize(writer);
+			await writer.DisposeAsync();
+		}
+
+		// 保留原有名称、描述、图标路径和 Guid，避免被压缩包中的清单覆盖
+		// 注意: 必须保留原 Guid，否则旧文件哈希记录将无法被清理（哈希表以 Guid 为键）
+		manifest = manifest.Version switch
+		{
+			ManifestVersion.Legacy => new LegacyModManifest
+			{
+				Guid = mod.Manifest.Guid,
+				Name = mod.Manifest.Name,
+				Description = mod.Manifest.Description,
+				IconPath = mod.Manifest.IconPath,
+				Options = ((LegacyModManifest)manifest).Options,
+			},
+			ManifestVersion.V1 => new V1ModManifest
+			{
+				Guid = mod.Manifest.Guid,
+				Name = mod.Manifest.Name,
+				Description = mod.Manifest.Description,
+				IconPath = mod.Manifest.IconPath,
+				Options = ((V1ModManifest)manifest).Options,
+				NexusData = ((V1ModManifest)manifest).NexusData,
+			},
+			_ => throw new NotSupportedException($"Unsupported manifest version: {manifest.Version}")
+		};
+
+		// 保存旧的状态（启用状态、分组、标签等）
+		var oldState = mod.ToEnabledData();
+
+		// 阶段2: 计算新版本文件的SHA-256哈希值（manifest.json 此时已存在）
+		progress?.Report(new UpdateProgressInfo
+		{
+			Phase = UpdatePhase.HashingNew,
+			Message = "正在计算新版本文件哈希..."
+		});
+		_logger.LogDebug("Computing SHA-256 hashes for new version files");
+
+		var newHashingProgress = new Progress<(int checkedCount, int totalCount, string currentFile)>(p =>
+		{
+			progress?.Report(new UpdateProgressInfo
+			{
+				Phase = UpdatePhase.HashingNew,
+				CurrentFile = p.currentFile,
+				ProcessedCount = p.checkedCount,
+				TotalCount = p.totalCount,
+				Message = $"正在计算新版本文件哈希 ({p.checkedCount}/{p.totalCount})..."
+			});
+		});
+
+		Dictionary<string, string> newHashes;
+		try
+		{
+			newHashes = await FileHashUtils.ComputeDirectoryHashesAsync(tmpDir, newHashingProgress);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Failed to compute hashes for new version");
+			tmpDir.Delete(true);
+			throw new IOException($"无法计算新版本文件的哈希值: {ex.Message}", ex);
+		}
+		_logger.LogInformation("Computed hashes for {Count} new files", newHashes.Count);
+
+		// 阶段3: 比对两组哈希值，识别变更/新增/删除的文件
+		progress?.Report(new UpdateProgressInfo
+		{
+			Phase = UpdatePhase.Comparing,
+			Message = "正在比对文件差异..."
+		});
+		var compareResult = FileHashUtils.CompareHashes(currentHashes, newHashes);
+
+		_logger.LogInformation(
+			"Hash comparison: {Changed} changed/new, {Deleted} deleted, {Unchanged} unchanged (total: current={CurCount}, new={NewCount})",
+			compareResult.ChangedFiles.Count,
+			compareResult.DeletedFiles.Count,
+			compareResult.UnchangedCount,
+			compareResult.TotalCurrentFiles,
+			compareResult.TotalNewFiles);
+
+		if (!compareResult.HasChanges)
+		{
+			// 哈希完全一致，无需更新文件，但仍然更新清单（清单内容可能变化）
+			_logger.LogInformation("All files identical by hash, no file-level update needed");
+			tmpDir.Delete(true);
+
+			mod.Manifest = manifest;
+			ModManifest.SaveToFile(manifest, mod.Directory);
+			mod.ApplyData(oldState);
+
+			progress?.Report(new UpdateProgressInfo
+			{
+				Phase = UpdatePhase.Completed,
+				IsCompleted = true,
+				Message = "所有文件已是最新，无需更新"
+			});
+			_logger.LogInformation("Mod \"{}\" manifest updated (no file changes needed)", mod.Manifest.Name);
+			return;
+		}
+
+		// 阶段4: 执行增量更新
+		// 4.1 删除新版本中不存在的旧文件（基于目录枚举直接对比，避免路径规范化差异导致遗漏）
+		// 先构建新版本文件的路径集合（统一使用'/'分隔符）
+		var newFileSet = new HashSet<string>(newHashes.Keys, StringComparer.OrdinalIgnoreCase);
+
+		// 枚举当前mod目录中所有文件，删除不在新版本中的文件
+		var currentFiles = mod.Directory.GetFiles("*", System.IO.SearchOption.AllDirectories);
+		var deletedCount = 0;
+		foreach (var file in currentFiles)
+		{
+			var relativePath = file.FullName
+				.Substring(mod.Directory.FullName.Length)
+				.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+				.Replace('\\', '/');
+
+			if (!newFileSet.Contains(relativePath))
+			{
+				try
+				{
+					file.Delete();
+					deletedCount++;
+					_logger.LogDebug("Deleted obsolete file \"{Path}\"", relativePath);
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "Failed to delete obsolete file \"{Path}\"", relativePath);
+				}
+			}
+		}
+
+		if (deletedCount > 0)
+		{
+			_logger.LogInformation("Deleted {Count} obsolete files from mod \"{Name}\"", deletedCount, mod.Manifest.Name);
+		}
+
+		// 清理因文件删除而产生的空目录
+		try
+		{
+			CleanEmptyDirectories(mod.Directory);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to clean empty directories for mod \"{Name}\"", mod.Manifest.Name);
+		}
+
+		// 4.2 复制变更/新增的文件（仅更新哈希不同的文件，实现增量更新）
+		var filesToUpdate = compareResult.ChangedFiles;
+		_logger.LogInformation("Updating {Count} changed/new files incrementally", filesToUpdate.Count);
+
+		for (int i = 0; i < filesToUpdate.Count; i++)
+		{
+			var relativePath = filesToUpdate[i];
+			var normalizedPath = relativePath.Replace('/', Path.DirectorySeparatorChar);
+			var sourcePath = Path.Combine(tmpDir.FullName, normalizedPath);
+			var destPath = Path.Combine(mod.Directory.FullName, normalizedPath);
+
+			// 确保目标目录存在
+			var destDir = Path.GetDirectoryName(destPath);
+			if (!string.IsNullOrEmpty(destDir) && !Directory.Exists(destDir))
+				Directory.CreateDirectory(destDir);
+
+			try
+			{
+				await Task.Run(() => File.Copy(sourcePath, destPath, true));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Failed to copy file \"{Path}\"", relativePath);
+				tmpDir.Delete(true);
+				throw new IOException($"无法更新文件「{relativePath}」: {ex.Message}", ex);
+			}
+
+			// 报告更新进度
+			progress?.Report(new UpdateProgressInfo
+			{
+				Phase = UpdatePhase.Updating,
+				CurrentFile = relativePath,
+				ProcessedCount = i + 1,
+				TotalCount = filesToUpdate.Count,
+				NeedUpdateCount = filesToUpdate.Count,
+				Message = $"正在更新文件 ({i + 1}/{filesToUpdate.Count})..."
+			});
+		}
+
+		// 清理临时目录
+		tmpDir.Delete(true);
+
+		// 更新清单并保存
+		mod.Manifest = manifest;
+		ModManifest.SaveToFile(manifest, mod.Directory);
+
+		// 恢复状态，并根据新清单重新适配选项数组
+		mod.ApplyData(oldState);
+
+		// 报告完成
+		progress?.Report(new UpdateProgressInfo
+		{
+			Phase = UpdatePhase.Completed,
+			IsCompleted = true,
+			UnchangedCount = compareResult.UnchangedCount,
+			NeedUpdateCount = filesToUpdate.Count,
+			DeletedCount = deletedCount,
+			Message = $"更新完成: {filesToUpdate.Count} 个文件已更新, {compareResult.UnchangedCount} 个文件未变化, {deletedCount} 个文件已删除"
+		});
+
+		_logger.LogInformation(
+			"Mod \"{}\" updated successfully: {Updated} updated, {Unchanged} unchanged, {Deleted} deleted",
+			mod.Manifest.Name, filesToUpdate.Count, compareResult.UnchangedCount, deletedCount);
+
+		// 更新完成后重新计算并替换该模组的文件哈希记录（删除旧缓存，存储新哈希值）
+		await _modHashService.RecomputeForUpdatedModAsync(mod);
 	}
 
 	public async Task DeployAsync(Guid[] modGuids)
@@ -432,6 +889,11 @@ internal sealed partial class ModService
 
 		void AddFilesFromDir(DirectoryInfo dir)
 		{
+			if (!dir.Exists)
+			{
+				_logger.LogWarning("Directory \"{}\" does not exist, skipping", dir.FullName);
+				return;
+			}
 			var files = dir.GetFiles().Where(static f => GetPatchFileRegex().IsMatch(f.Name)).ToArray();
 
 			foreach (var file in files)
@@ -712,6 +1174,7 @@ internal sealed partial class ModService
 						Directory = dir,
 						Kind = ModProblemKind.EmptyOptions,
 					});
+					error = true;
 				}
 
 				if (man.IconPath is not null)
@@ -725,6 +1188,7 @@ internal sealed partial class ModService
 							Kind = ModProblemKind.EmptyImagePath,
 							ExtraData = man.IconPath,
 						});
+						// 图标路径为空不阻止导入，模组功能不受影响
 					}
 					else if (!File.Exists(Path.Combine(dir.FullName, man.IconPath)))
 					{
@@ -735,20 +1199,21 @@ internal sealed partial class ModService
 							Kind = ModProblemKind.InvalidImagePath,
 							ExtraData = man.IconPath,
 						});
+						// 图标文件缺失不阻止导入，模组功能不受影响
 					}
 				}
 
 				foreach (var opt in opts)
 					if (!Directory.Exists(Path.Combine(dir.FullName, opt)))
 					{
-						error = true;
-						_logger.LogError("Manifest \"{}\" contains invalid path \"{}\"", manifestFile.FullName, opt);
+						_logger.LogWarning("Manifest \"{}\" contains invalid option directory \"{}\", skipping", manifestFile.FullName, opt);
 						problems.Add(new ModProblem
 						{
 							Directory = dir,
 							Kind = ModProblemKind.InvalidPath,
 							ExtraData = opt,
 						});
+						error = true;
 					}
 				break;
 			}
@@ -763,6 +1228,7 @@ internal sealed partial class ModService
 						Directory = dir,
 						Kind = ModProblemKind.EmptyOptions,
 					});
+					error = true;
 				}
 
 				if (opts.Any(static opt => opt.SubOptions is { Count: 0 }))
@@ -773,6 +1239,7 @@ internal sealed partial class ModService
 						Directory = dir,
 						Kind = ModProblemKind.EmptySubOptions,
 					});
+					error = true;
 				}
 
 				if (opts.Any(static opt => opt.SubOptions?.Any(static sub => sub.Include.Count == 0) ?? false))
@@ -783,6 +1250,7 @@ internal sealed partial class ModService
 						Directory = dir,
 						Kind = ModProblemKind.EmptyIncludes,
 					});
+					error = true;
 				}
 
 				if (man.IconPath is not null)
@@ -796,6 +1264,7 @@ internal sealed partial class ModService
 							Kind = ModProblemKind.EmptyImagePath,
 							ExtraData = man.IconPath,
 						});
+						// 图标路径为空不阻止导入
 					}
 					else if (!File.Exists(Path.Combine(dir.FullName, man.IconPath)))
 					{
@@ -806,6 +1275,7 @@ internal sealed partial class ModService
 							Kind = ModProblemKind.InvalidImagePath,
 							ExtraData = man.IconPath,
 						});
+						// 图标文件缺失不阻止导入
 					}
 				}
 
@@ -815,22 +1285,24 @@ internal sealed partial class ModService
 					{
 						if (string.IsNullOrEmpty(opt.Image) || string.IsNullOrWhiteSpace(opt.Image))
 						{
-							_logger.LogWarning("Manifest \"{}\" contains empty image path", manifestFile.FullName);
+							_logger.LogWarning("Manifest \"{}\" contains empty option image path", manifestFile.FullName);
 							problems.Add(new ModProblem
 							{
 								Directory = dir,
 								Kind = ModProblemKind.EmptyImagePath,
 							});
+							// 选项图片路径为空不阻止导入
 						}
 						else if (!File.Exists(Path.Combine(dir.FullName, opt.Image)))
 						{
-							_logger.LogWarning("Manifest \"{}\" contains invalid image path \"{}\"", manifestFile.FullName, opt.Image);
+							_logger.LogWarning("Manifest \"{}\" contains invalid option image path \"{}\"", manifestFile.FullName, opt.Image);
 							problems.Add(new ModProblem
 							{
 								Directory = dir,
 								Kind = ModProblemKind.InvalidImagePath,
 								ExtraData = opt.Image,
 							});
+							// 选项图片文件缺失不阻止导入
 						}
 					}
 
@@ -838,14 +1310,14 @@ internal sealed partial class ModService
 						foreach (var inc in opt.Include)
 							if (!Directory.Exists(Path.Combine(dir.FullName, inc)))
 							{
-								error = true;
-								_logger.LogError("Manifest \"{}\" contains invalid path \"{}\"", manifestFile.FullName, inc);
+								_logger.LogWarning("Manifest \"{}\" contains invalid include path \"{}\", skipping", manifestFile.FullName, inc);
 								problems.Add(new ModProblem
 								{
 									Directory = dir,
 									Kind = ModProblemKind.InvalidPath,
 									ExtraData = inc,
 								});
+								error = true;
 							}
 
 					if (opt.SubOptions is not null)
@@ -855,36 +1327,38 @@ internal sealed partial class ModService
 							{
 								if (string.IsNullOrEmpty(sub.Image) || string.IsNullOrWhiteSpace(sub.Image))
 								{
-									_logger.LogWarning("Manifest \"{}\" contains empty image path", manifestFile.FullName);
+									_logger.LogWarning("Manifest \"{}\" contains empty sub-option image path", manifestFile.FullName);
 									problems.Add(new ModProblem
 									{
 										Directory = dir,
 										Kind = ModProblemKind.EmptyImagePath,
 									});
+									// 子选项图片路径为空不阻止导入
 								}
 								else if (!File.Exists(Path.Combine(dir.FullName, sub.Image)))
 								{
-									_logger.LogWarning("Manifest \"{}\" contains invalid image path \"{}\"", manifestFile.FullName, sub.Image);
+									_logger.LogWarning("Manifest \"{}\" contains invalid sub-option image path \"{}\"", manifestFile.FullName, sub.Image);
 									problems.Add(new ModProblem
 									{
 										Directory = dir,
 										Kind = ModProblemKind.InvalidImagePath,
 										ExtraData = sub.Image,
 									});
+									// 子选项图片文件缺失不阻止导入
 								}
 							}
 
 							foreach (var inc in sub.Include)
 								if (!Directory.Exists(Path.Combine(dir.FullName, inc)))
 								{
-									error = true;
-									_logger.LogError("Manifest \"{}\" contains invalid path \"{}\"", manifestFile.FullName, inc);
+									_logger.LogWarning("Manifest \"{}\" contains invalid sub-option include path \"{}\", skipping", manifestFile.FullName, inc);
 									problems.Add(new ModProblem
 									{
 										Directory = dir,
 										Kind = ModProblemKind.InvalidPath,
 										ExtraData = inc,
 									});
+									error = true;
 								}
 						}
 				}
@@ -958,4 +1432,75 @@ internal sealed partial class ModService
 
 		return hash1.SequenceEqual(hash2);
 	}
+
+	/// <summary>
+	/// 清理目录中所有空子目录（自底向上递归遍历，只删除不含任何文件和子目录的空目录）
+	/// </summary>
+	private static void CleanEmptyDirectories(DirectoryInfo directory)
+	{
+		foreach (var subDir in directory.GetDirectories())
+		{
+			// 递归处理子目录
+			CleanEmptyDirectories(subDir);
+
+			// 如果子目录处理后为空，删除它
+			if (subDir.GetFileSystemInfos().Length == 0)
+			{
+				subDir.Delete();
+			}
+		}
+	}
+}
+
+/// <summary>
+/// 模组更新的阶段枚举，用于进度报告
+/// </summary>
+internal enum UpdatePhase
+{
+	/// <summary>正在计算当前模组文件的哈希值</summary>
+	HashingCurrent,
+	/// <summary>正在计算新版本文件的哈希值</summary>
+	HashingNew,
+	/// <summary>正在比对文件差异</summary>
+	Comparing,
+	/// <summary>正在执行增量文件更新</summary>
+	Updating,
+	/// <summary>更新已完成</summary>
+	Completed,
+}
+
+/// <summary>
+/// 模组更新的进度信息，通过 IProgress 回调传递给调用方
+/// </summary>
+internal sealed class UpdateProgressInfo
+{
+	/// <summary>当前更新阶段</summary>
+	public UpdatePhase Phase { get; init; }
+
+	/// <summary>当前正在处理的文件相对路径</summary>
+	public string? CurrentFile { get; init; }
+
+	/// <summary>已处理的文件数量</summary>
+	public int ProcessedCount { get; init; }
+
+	/// <summary>缓存命中的文件数量（未变化文件跳过SHA-256计算）</summary>
+	public int CacheHits { get; init; }
+
+	/// <summary>当前阶段需要处理的文件总数</summary>
+	public int TotalCount { get; init; }
+
+	/// <summary>需要更新的文件总数（仅在 Updating 和 Completed 阶段有效）</summary>
+	public int NeedUpdateCount { get; init; }
+
+	/// <summary>未变化的文件数量（仅在 Completed 阶段有效）</summary>
+	public int UnchangedCount { get; init; }
+
+	/// <summary>已删除的文件数量（仅在 Completed 阶段有效）</summary>
+	public int DeletedCount { get; init; }
+
+	/// <summary>可读的进度消息文本</summary>
+	public string? Message { get; init; }
+
+	/// <summary>是否已完成所有操作</summary>
+	public bool IsCompleted { get; init; }
 }

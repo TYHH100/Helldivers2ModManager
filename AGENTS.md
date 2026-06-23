@@ -12,15 +12,15 @@ Helldivers2ModManager 是一个用于 Helldivers 2 游戏的模组管理器，�
 
 ### 1.2 技术栈
 - **框架**: .NET 8.0 Windows (WPF)
-- **依赖注入**: Microsoft.Extensions.DependencyInjection / Microsoft.Extensions.Hosting
-- **MVVM**: CommunityToolkit.Mvvm
+- **依赖注入**: Microsoft.Extensions.Hosting 10.0.8 / Microsoft.Extensions.DependencyInjection
+- **MVVM**: CommunityToolkit.Mvvm 8.4.2
 - **日志**: Microsoft.Extensions.Logging
-- **压缩**: SharpSevenZip（基于原生 7z.dll，支持大字典 LZMA）
-- **拖拽**: gong-wpf-dragdrop
-- **Markdown**: MdXaml
-- **数据库**: Microsoft.Data.Sqlite
-- **缓存**: Microsoft.Extensions.Caching.Memory
-- **通用工具**: CommunityToolkit.Common
+- **压缩**: SharpSevenZip 2.0.77（基于原生 7z.dll，支持大字典 LZMA）
+- **拖拽**: gong-wpf-dragdrop 4.0.0
+- **Markdown**: MdXaml 1.27.0
+- **数据库**: Microsoft.Data.Sqlite 9.0.8
+- **缓存**: Microsoft.Extensions.Caching.Memory 10.0.8
+- **通用工具**: CommunityToolkit.Common 8.4.2
 
 ### 1.3 当前版本
 - 版本: 1.4.1.0
@@ -32,6 +32,22 @@ Helldivers2ModManager 是一个用于 Helldivers 2 游戏的模组管理器，�
 ### 2.1 目录结构
 ```
 Helldivers2ModManager/
+├── .github/                        # GitHub Actions
+│   └── workflows/main.yml
+├── hd2mmt_nexus-download-interceptor/  # 浏览器扩展
+│   ├── _locales/zh/messages.json
+│   ├── icons/
+│   │   ├── icon16.png
+│   │   ├── icon32.png
+│   │   ├── icon48.png
+│   │   └── icon128.png
+│   ├── background.js
+│   ├── generate-icons.js
+│   ├── manifest.json
+│   ├── popup.html
+│   ├── popup.js
+│   ├── LICENSE
+│   └── README.md
 ├── Helldivers2ModManager/          # 主应用程序
 │   ├── Components/                 # UI组件
 │   │   ├── MessageBox.xaml
@@ -47,9 +63,10 @@ Helldivers2ModManager/
 │   │   ├── JsonElementExtensions.cs
 │   │   └── TypeExtension.cs
 │   ├── Models/                     # 数据模型
+│   │   ├── DownloadTask.cs         # 下载任务模型
 │   │   ├── EnabledData.cs
-│   │   ├── IJsonSerializable.cs
 │   │   ├── IJsonInplaceSerializable.cs
+│   │   ├── IJsonSerializable.cs
 │   │   ├── IModManifest.cs
 │   │   ├── LegacyModManifest.cs
 │   │   ├── ManifestVersion.cs
@@ -62,40 +79,62 @@ Helldivers2ModManager/
 │   │   ├── ModTag.cs               # Mod标签类
 │   │   ├── TagSelectionItem.cs     # 标签选择项
 │   │   ├── V1ModManifest.cs
-│   │   ├── DownloadTask.cs         # 下载任务模型
 │   │   ├── VersionCheckStatus.cs   # 版本检测相关模型
 │   │   └── Nexus/                  # Nexus Mods数据模型
+│   │       ├── HelperModels.cs
 │   │       ├── Mod.cs
 │   │       ├── ModFile.cs
 │   │       ├── ModFileUpdateGroup.cs
-│   │       ├── HelperModels.cs
 │   │       └── NexusEnums.cs
 │   ├── Resources/                  # 资源文件
 │   │   ├── Fonts/
+│   │   │   ├── Blockletter.otf
+│   │   │   ├── FS Sinclair Bold.otf
+│   │   │   ├── FS Sinclair Medium.otf
+│   │   │   └── FS Sinclair Regular.otf
 │   │   ├── Images/
+│   │   │   ├── check.png
+│   │   │   ├── discord_icon.png
+│   │   │   ├── download.png
+│   │   │   ├── error.png
+│   │   │   ├── github_icon.png
+│   │   │   ├── icon.ico
+│   │   │   ├── icon.png
+│   │   │   ├── loading.png
+│   │   │   ├── logo.png
+│   │   │   ├── logo_icon.png
+│   │   │   ├── logo_splash.png
+│   │   │   └── remove.png
 │   │   ├── Native/                 # 原生库（7z.dll，Content 复制到输出目录）
+│   │   │   └── 7z.dll
 │   │   └── Styles/
+│   │       ├── FluentAnimations.xaml
+│   │       ├── FluentControls.xaml
+│   │       ├── FluentDesignTokens.xaml
+│   │       └── FluentWindows.xaml
 │   ├── Services/                   # 业务服务
+│   │   ├── BrowserExtensionService.cs  # 浏览器扩展通信服务
+│   │   ├── DatabaseService.cs      # SQLite数据库服务
+│   │   ├── EnabledDataRepository.cs    # EnabledData仓储
 │   │   ├── ModService.cs
 │   │   ├── ProfileService.cs
 │   │   ├── SettingsService.cs      # Singleton生命周期
 │   │   ├── VersionCheckService.cs  # 版本兼容性检测服务
-│   │   ├── BrowserExtensionService.cs  # 浏览器扩展通信服务
-│   │   ├── DatabaseService.cs      # SQLite数据库服务
-│   │   ├── EnabledDataRepository.cs    # EnabledData仓储
 │   │   └── Nexus/                  # Nexus Mods服务
-│   │       ├── INexusHttpClient.cs
-│   │       ├── NexusHttpClient.cs
-│   │       ├── INexusModsService.cs
-│   │       ├── NexusModsService.cs
 │   │       ├── INexusCacheService.cs
-│   │       └── NexusCacheService.cs
+│   │       ├── INexusHttpClient.cs
+│   │       ├── INexusModsService.cs
+│   │       ├── NexusCacheService.cs
+│   │       ├── NexusHttpClient.cs
+│   │       └── NexusModsService.cs
 │   ├── Stores/                     # 状态存储
 │   │   ├── EditModStore.cs
 │   │   └── NavigationStore.cs
 │   ├── ViewModels/                 # 视图模型
 │   │   ├── Create/
 │   │   │   ├── ChoosePageViewModel.cs
+│   │   │   ├── CreateModOptionViewModel.cs
+│   │   │   ├── CreateModSubOptionViewModel.cs
 │   │   │   └── IntroPageViewModel.cs
 │   │   ├── CreatePageViewModel.cs
 │   │   ├── DashboardPageViewModel.cs
@@ -103,6 +142,7 @@ Helldivers2ModManager/
 │   │   ├── EditPageViewModel.cs
 │   │   ├── HelpPageViewModel.cs
 │   │   ├── MainViewModel.cs
+│   │   ├── ManifestEditPageViewModel.cs
 │   │   ├── ModOptionViewModel.cs
 │   │   ├── ModSubOptionViewModel.cs
 │   │   ├── ModViewModel.cs
@@ -115,6 +155,8 @@ Helldivers2ModManager/
 │   │   ├── Create/
 │   │   │   ├── ChoosePageView.xaml
 │   │   │   ├── ChoosePageView.xaml.cs
+│   │   │   ├── IncludeDirectoryPicker.xaml
+│   │   │   ├── IncludeDirectoryPicker.xaml.cs
 │   │   │   ├── IntroPageView.xaml
 │   │   │   └── IntroPageView.xaml.cs
 │   │   ├── CreatePageView.xaml
@@ -127,6 +169,8 @@ Helldivers2ModManager/
 │   │   ├── EditPageView.xaml.cs
 │   │   ├── HelpPageView.xaml
 │   │   ├── HelpPageView.xaml.cs
+│   │   ├── ManifestEditPageView.xaml
+│   │   ├── ManifestEditPageView.xaml.cs
 │   │   ├── NexusDownloadPageView.xaml     # Nexus下载页
 │   │   ├── NexusDownloadPageView.xaml.cs
 │   │   ├── SettingsPageView.xaml
@@ -151,17 +195,18 @@ Helldivers2ModManager/
 │   ├── MainForm.resx
 │   ├── Program.cs
 │   └── Purger.csproj
-├── .github/workflows/main.yml      # GitHub Actions工作流
-├── mod_manifest_v1-schema.json     # Mod清单JSON Schema
-├── AGENTS.md
+├── .gitattributes
+├── .gitignore
+├── AGENTS.md                       # 开发和维护指南
+├── Helldivers2ModManager.sln
+├── LICENSE.txt
 ├── README.md
-└── Helldivers2ModManager.sln
+└── mod_manifest_v1-schema.json     # Mod清单JSON Schema
 ```
 
 ### 2.2 架构模式
 - **MVVM**: 分离UI和业务逻辑
 - **依赖注入**: 通过 `RegisterServiceAttribute` 自动注册服务
-- **服务定位器**: 从 `App.Host.Services` 获取服务
 
 ---
 
@@ -216,7 +261,7 @@ internal sealed class NexusModsService : INexusModsService
 </Window.Resources>
 ```
 
-当前已注册的页面 DataTemplate 包括：DashboardPageView、CreatePageView、EditPageView、SettingsPageView、HelpPageView、TagManagementPageView、DownloadProgressView、NexusDownloadPageView。
+当前已注册的页面 DataTemplate 包括：DashboardPageView、SettingsPageView、EditPageView、ManifestEditPageView、CreatePageView、TagManagementPageView、NexusDownloadPageView、DownloadProgressView。
 
 **常见错误**: 如果只添加了 `[RegisterService]` 但没有在 XAML 中添加 DataTemplate，导航到该页面时会显示空白或错误。
 
@@ -263,7 +308,7 @@ internal sealed class NexusModsService : INexusModsService
 | `NullToBoolConverter` | 非 null → true | null → false |
 | `InverseBoolConverter` | 布尔值取反 | — |
 | `StringToVisibilityConverter` | 非空字符串 → Visible | 空字符串 → Collapsed |
-| `BytesToSizeConverter` | 字节数转可读大小 | B/KB/MB/GB 自动换算 |
+| `BytesToSizeConverter` | 字节数转可读大小 | B/KB/MB/GB/TB 自动换算 |
 | `DownloadStatusToStringConverter` | 下载状态枚举转中文文本 | 等待中/下载中/已完成/失败/已取消 |
 | `DownloadStatusToVisibilityConverter` | 下载中 → Visible | 其他状态 → Collapsed |
 | `ProgressWidthConverter` | 进度百分比 × 可用宽度 | `IMultiValueConverter`，需进度值和最大宽度 |
@@ -287,6 +332,35 @@ public sealed class ModTag
 **标签搜索语法**:
 - 使用 `@标签名` 在Dashboard中筛选带有特定标签的Mod
 - 示例: `@Graphics` 将显示所有带有 "Graphics" 标签的Mod
+
+### 3.9 拖拽自动滚动行为
+
+`DragDropAutoScrollBehavior` 是一个附加行为（Attached Behavior），为支持拖拽的 `ItemsControl` 提供边界自动滚动能力。当拖拽到列表上下边缘区域时，自动滚动父级 `ScrollViewer`，提升大量项拖拽排序的体验。
+
+**文件位置**: `Helldivers2ModManager/DragDropAutoScrollBehavior.cs`
+
+**使用方式** — 在 `ItemsControl` 上附加属性即可启用：
+
+```xml
+xmlns:local="clr-namespace:Helldivers2ModManager"
+
+<ItemsControl local:DragDropAutoScrollBehavior.IsEnabled="True"
+              dd:DragDrop.IsDragSource="True"
+              dd:DragDrop.IsDropTarget="True">
+    ...
+</ItemsControl>
+```
+
+**行为说明**:
+- 自动从可视化树向上查找第一个 `ScrollViewer` 作为滚动目标，无需额外配置
+- 上下边缘各 40px 为触发区域，检测到拖拽悬停时自动滚动
+- 滚动速度为 12px/次（约 60fps）
+- `DragLeave` 或 `Drop` 时自动停止滚动
+- `ItemsControl` 卸载时自动清理计时器资源
+
+**当前使用页面**:
+- `DashboardPageView` — Mod 列表拖拽排序（通过 `xmlns:local` 引用）
+- `CreatePageView` — 选项列表、子选项列表拖拽排序（通过 `xmlns:bhv` 引用）
 
 ---
 
@@ -401,6 +475,8 @@ public sealed class ModTag
 | `AutoRemoveMissingMods` | `bool` | `false` | 自动删除不存在的模组条目 |
 | `EnableSorting` | `bool` | `false` | 是否启用排序功能 |
 | `AutoCheckVersionOnStartup` | `bool` | `false` | 启动时自动检查模组版本兼容性 |
+| `AutoCleanLogs` | `bool` | `true` | 是否启用自动清理过期日志 |
+| `LogRetentionDays` | `int` | `7` | 日志保留天数 |
 | `ExtensionHost` | `string` | `"localhost"` | 浏览器扩展监听主机 |
 | `ExtensionPort` | `int` | `7456` | 浏览器扩展监听端口 |
 | `NexusApiKey` | `string?` | `null` | Nexus Mods API Key（使用 `ProtectedData` 加密存储） |
@@ -487,7 +563,7 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 ## 8. 维护要点
 
 ### 8.1 版本管理
-- 当前版本: 1.4.1.0（`.csproj`）/ 1.4.0.2（`App.xaml.cs`）
+- 当前版本: 1.4.1.0（`.csproj` 和 `App.xaml.cs` 一致）
 - 版本号位置:
   - `App.xaml.cs` - `App.Version`
   - `Helldivers2ModManager.csproj` - `ProductVersion`, `AssemblyVersion`, `FileVersion`
@@ -544,7 +620,6 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 ## 10. 相关文件参考
 
 - **AGENTS.md**: 本文件，开发和维护指南
-- **CLAUDE.md**: AI编码指南
 - **README.md**: 项目简介
 - **mod_manifest_v1-schema.json**: Mod清单JSON Schema
 - **.github/workflows/main.yml**: CI/CD工作流
@@ -576,8 +651,13 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 - `Services/Nexus/INexusCacheService.cs` / `NexusCacheService.cs` - Nexus API 缓存服务
 - `ViewModels/DownloadProgressViewModel.cs` - 下载进度页 ViewModel
 - `ViewModels/NexusDownloadPageViewModel.cs` - Nexus 下载页 ViewModel
+- `ViewModels/ManifestEditPageViewModel.cs` - 清单编辑页 ViewModel（右键菜单"编辑模组"）
+- `ViewModels/Create/CreateModOptionViewModel.cs` - 创建页面选项编辑 ViewModel
+- `ViewModels/Create/CreateModSubOptionViewModel.cs` - 创建页面子选项编辑 ViewModel
 - `Views/DownloadProgressView.xaml` / `.xaml.cs` - 下载进度页面
 - `Views/NexusDownloadPageView.xaml` / `.xaml.cs` - Nexus 下载页面
+- `Views/ManifestEditPageView.xaml` / `.xaml.cs` - 清单编辑页面
+- `Views/Create/IncludeDirectoryPicker.xaml` / `.xaml.cs` - 包含目录选择器组件
 - `MainWindow.xaml` / `MainWindow.xaml.cs` - 主窗口
 
 #### 新增功能
@@ -594,10 +674,13 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 10. **Nexus API Key 加密存储**: 使用 `ProtectedData` 加密存储 API Key
 11. **游戏路径自动检测**: 设置页面支持通过注册表和 `libraryfolders.vdf` 自动检测 Steam 游戏路径
 12. **退出时清理**: 应用退出时自动清理 `hd2mm_*` 临时目录
+13. **清单编辑页**: 支持通过右键菜单"编辑模组"打开清单编辑页面，直接编辑 Mod 基本信息及选项/子选项
 
 #### 设置更新
 - 新增 `EnableSorting` 设置项（排序功能开关）
 - 新增 `AutoCheckVersionOnStartup` 设置项（启动自动版本检查）
+- 新增 `AutoCleanLogs` 设置项（自动清理过期日志）
+- 新增 `LogRetentionDays` 设置项（日志保留天数）
 - 新增 `ExtensionHost` / `ExtensionPort` 设置项（浏览器扩展地址配置）
 - 新增 `NexusApiKey` 设置项（Nexus API Key，加密存储）
 
@@ -642,5 +725,5 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 
 ---
 
-*文档版本: 1.3.0*
-*最后更新: 2026-06-10*
+*文档版本: 1.4.1*
+*最后更新: 2026-06-17*

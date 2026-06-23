@@ -1,3 +1,4 @@
+using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -21,6 +22,7 @@ internal sealed class BrowserExtensionService : IDisposable
     private CancellationTokenSource? _cts;
 
     private readonly Dictionary<string, CancellationTokenSource> _downloadCancellations = new();
+    private readonly SemaphoreSlim _requestSemaphore = new(10, 10); // 限制最大并发请求数为10
 
     /// <summary>
     /// 下载任务持久化文件路径
@@ -28,8 +30,6 @@ internal sealed class BrowserExtensionService : IDisposable
     private string DownloadTasksFilePath => Path.Combine(_settingsService.StorageDirectory, "download_tasks.json");
 
     public bool IsListening { get; private set; }
-
-    public event Action<ModData>? ModDownloaded;
 
     public event Action<DownloadTask>? DownloadStarted;
     public event Action<DownloadTask>? DownloadProgressChanged;
@@ -121,7 +121,19 @@ internal sealed class BrowserExtensionService : IDisposable
             try
             {
                 var context = await _httpListener.GetContextAsync();
-                _ = ProcessRequestAsync(context, cancellationToken);
+                
+                // 使用信号量限制并发请求数
+                await _requestSemaphore.WaitAsync(cancellationToken);
+                
+                _ = ProcessRequestAsync(context, cancellationToken)
+                    .ContinueWith(t =>
+                    {
+                        _requestSemaphore.Release();
+                        if (t.IsFaulted && t.Exception != null)
+                        {
+                            _logger.LogError(t.Exception, "Unhandled exception in ProcessRequestAsync");
+                        }
+                    });
             }
             catch (HttpListenerException ex)
             {
@@ -204,6 +216,19 @@ internal sealed class BrowserExtensionService : IDisposable
 
         try
         {
+            // 安全校验：验证请求来源（仅允许本地请求）
+            var origin = request.Headers["Origin"];
+            var referer = request.Headers["Referer"];
+            var remoteEndPoint = request.RemoteEndPoint?.Address;
+            
+            // 检查是否为本地请求（localhost/127.0.0.1/::1）
+            if (remoteEndPoint != null && !remoteEndPoint.IsLocalAddress())
+            {
+                _logger.LogWarning("Rejected non-local download request from {RemoteEndPoint}", remoteEndPoint);
+                await SendJsonResponse(response, new { error = "Access denied" }, HttpStatusCode.Forbidden);
+                return;
+            }
+
             using var reader = new StreamReader(request.InputStream);
             var body = await reader.ReadToEndAsync();
             
@@ -216,6 +241,30 @@ internal sealed class BrowserExtensionService : IDisposable
                 _logger.LogWarning("Invalid download request: null={IsNull}, url='{Url}'", 
                     downloadRequest == null, downloadRequest?.Url ?? "null");
                 await SendJsonResponse(response, new { error = "Invalid request" }, HttpStatusCode.BadRequest);
+                return;
+            }
+
+            // 安全校验：验证下载 URL 协议和域名
+            if (!Uri.TryCreate(downloadRequest.Url, UriKind.Absolute, out var uri))
+            {
+                _logger.LogWarning("Invalid download URL format: {Url}", downloadRequest.Url);
+                await SendJsonResponse(response, new { error = "Invalid URL format" }, HttpStatusCode.BadRequest);
+                return;
+            }
+
+            if (!uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Rejected non-HTTPS download URL: {Url}", downloadRequest.Url);
+                await SendJsonResponse(response, new { error = "Only HTTPS URLs are allowed" }, HttpStatusCode.BadRequest);
+                return;
+            }
+
+            // 限制域名为 Nexus Mods 相关域名
+            var allowedHosts = new[] { "nexusmods.com", "www.nexusmods.com", "delivery.nexusmods.com" };
+            if (!allowedHosts.Any(host => uri.Host.EndsWith(host, StringComparison.OrdinalIgnoreCase)))
+            {
+                _logger.LogWarning("Rejected download URL from non-allowed host: {Host}", uri.Host);
+                await SendJsonResponse(response, new { error = "Only Nexus Mods URLs are allowed" }, HttpStatusCode.BadRequest);
                 return;
             }
 
@@ -234,7 +283,24 @@ internal sealed class BrowserExtensionService : IDisposable
 
             await SendJsonResponse(response, new { success = true, taskId = downloadTask.Id }, HttpStatusCode.OK);
 
-            _ = ProcessDownloadAsync(downloadTask, cancellationToken);
+            // 启动下载任务，并记录未处理的异常
+            _ = ProcessDownloadAsync(downloadTask, cancellationToken)
+                .ContinueWith(t =>
+                {
+                    if (t.IsFaulted && t.Exception != null)
+                    {
+                        _logger.LogError(t.Exception, "Unhandled exception in ProcessDownloadAsync for task {TaskId}", downloadTask.Id);
+                        if (downloadTask.Status != DownloadStatus.Failed)
+                        {
+                            downloadTask.Status = DownloadStatus.Failed;
+                            downloadTask.ErrorMessage = "下载过程中发生未预期的错误";
+                            downloadTask.Speed = 0;
+                            downloadTask.EstimatedTimeRemaining = TimeSpan.Zero;
+                            DownloadFailed?.Invoke(downloadTask);
+                            SaveDownloadTasks();
+                        }
+                    }
+                });
         }
         catch (JsonException ex)
         {
@@ -254,19 +320,46 @@ internal sealed class BrowserExtensionService : IDisposable
             task.Status = DownloadStatus.Downloading;
             task.MarkDownloadStarted();
             
-            var tempPath = Path.Combine(_settingsService.TempDirectory, task.Filename);
+            // 安全校验：防止路径遍历
+            var safeFilename = Path.GetFileName(task.Filename);
+            if (string.IsNullOrWhiteSpace(safeFilename))
+            {
+                _logger.LogError("Invalid filename after sanitization: {Filename}", task.Filename);
+                task.Status = DownloadStatus.Failed;
+                task.ErrorMessage = "Invalid filename";
+                DownloadFailed?.Invoke(task);
+                return;
+            }
+            
+            var tempPath = Path.Combine(_settingsService.TempDirectory, safeFilename);
+            
+            // 验证最终路径是否在临时目录内
+            var tempBasePath = Path.GetFullPath(_settingsService.TempDirectory);
+            var tempFilePath = Path.GetFullPath(tempPath);
+            if (!tempFilePath.StartsWith(tempBasePath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                && tempFilePath != tempBasePath)
+            {
+                _logger.LogError("Path traversal attempt detected in filename: {Filename}", task.Filename);
+                task.Status = DownloadStatus.Failed;
+                task.ErrorMessage = "Path traversal not allowed";
+                DownloadFailed?.Invoke(task);
+                return;
+            }
             
             await DownloadFileWithProgressAsync(task.Url, tempPath, task, downloadCts.Token);
             
             var fileInfo = new FileInfo(tempPath);
             var problems = await _modService.TryAddModFromArchiveAsync(fileInfo);
             
+            // 清理临时下载文件
+            CleanupTempFile(tempPath);
+            
             var hasOnlyNoManifestIssue = problems.Length == 1 && problems[0].Kind == ModProblemKind.NoManifestFound;
             
             if (problems.Length == 0 || hasOnlyNoManifestIssue)
             {
                 task.Status = DownloadStatus.Completed;
-                task.Speed = 0; // 下载完成后清零速度
+                task.Speed = 0;
                 task.EstimatedTimeRemaining = TimeSpan.Zero;
                 
                 if (hasOnlyNoManifestIssue)
@@ -316,6 +409,22 @@ internal sealed class BrowserExtensionService : IDisposable
         finally
         {
             _downloadCancellations.Remove(task.Id);
+        }
+    }
+
+    private void CleanupTempFile(string tempPath)
+    {
+        if (!string.IsNullOrEmpty(tempPath) && File.Exists(tempPath))
+        {
+            try
+            {
+                File.Delete(tempPath);
+                _logger.LogInformation("Cleaned up temporary download file: {Path}", tempPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete temporary download file: {Path}", tempPath);
+            }
         }
     }
 

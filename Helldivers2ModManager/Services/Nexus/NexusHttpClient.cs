@@ -299,7 +299,16 @@ namespace Helldivers2ModManager.Services.Nexus
 
         private T Deserialize<T>(string json)
         {
-            _logger.LogDebug("Attempting to deserialize JSON to {TypeName}\n{Json}", typeof(T).Name, json);
+            if (string.IsNullOrEmpty(json))
+            {
+                throw new JsonException($"Cannot deserialize null or empty JSON to {typeof(T).Name}");
+            }
+
+            // 避免在日志中输出完整 JSON，防止敏感信息泄露
+            var jsonLength = json.Length;
+            var truncatedJson = jsonLength > 200 ? json[..200] + "..." : json;
+            _logger.LogDebug("Attempting to deserialize JSON to {TypeName} (length: {Length})", typeof(T).Name, jsonLength);
+            _logger.LogTrace("JSON content preview: {JsonPreview}", truncatedJson);
             try
             {
                 var result = JsonSerializer.Deserialize<T>(json, new JsonSerializerOptions
@@ -322,7 +331,9 @@ namespace Helldivers2ModManager.Services.Nexus
             }
             catch (JsonException ex)
             {
-                _logger.LogError(ex, "JSON deserialization failed for {TypeName} with content: {Json}", typeof(T).Name, json);
+                // 错误日志中也截断 JSON 内容
+                _logger.LogError(ex, "JSON deserialization failed for {TypeName} (length: {Length}). Content preview: {JsonPreview}", 
+                    typeof(T).Name, jsonLength, truncatedJson);
                 throw;
             }
         }

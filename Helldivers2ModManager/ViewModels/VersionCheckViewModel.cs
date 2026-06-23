@@ -1,0 +1,385 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Services;
+using Helldivers2ModManager.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Collections.ObjectModel;
+using System.IO;
+
+namespace Helldivers2ModManager.ViewModels;
+
+/// <summary>
+/// 版本检查视图模型 —— 封装版本兼容性检查的所有逻辑和状态
+/// 从 DashboardPageViewModel 中拆分出来，独立管理版本检测相关的 UI 状态和业务逻辑
+/// </summary>
+[RegisterService(ServiceLifetime.Transient)]
+internal sealed partial class VersionCheckViewModel : ObservableObject
+{
+    private static readonly Dictionary<Guid, DateTime> s_knownModTimestamps = [];
+
+    private readonly ILogger<VersionCheckViewModel> _logger;
+    private readonly VersionCheckService _versionCheckService;
+    private readonly VersionCheckRepository _versionCheckRepository;
+    private readonly ModService _modService;
+    private readonly SettingsService _settingsService;
+
+    [ObservableProperty]
+    private bool _isCheckingVersion;
+
+    [ObservableProperty]
+    private string _versionCheckSummary = string.Empty;
+
+    [ObservableProperty]
+    private int _compatibleModCount;
+
+    [ObservableProperty]
+    private int _incompatibleModCount;
+
+    /// <summary>
+    /// 上次版本检查是否有不兼容的模组
+    /// </summary>
+    public bool HasIncompatibleMods => IncompatibleModCount > 0;
+
+    /// <summary>
+    /// 是否已完成版本检查
+    /// </summary>
+    public bool HasVersionCheckResult => !string.IsNullOrEmpty(VersionCheckSummary);
+
+    public VersionCheckViewModel(
+        ILogger<VersionCheckViewModel> logger,
+        VersionCheckService versionCheckService,
+        VersionCheckRepository versionCheckRepository,
+        ModService modService,
+        SettingsService settingsService)
+    {
+        _logger = logger;
+        _versionCheckService = versionCheckService;
+        _versionCheckRepository = versionCheckRepository;
+        _modService = modService;
+        _settingsService = settingsService;
+    }
+
+    /// <summary>
+    /// 检查所有模组的版本兼容性。
+    /// 首次点击时执行全量扫描建立参考版本，后续只检查新增/变动的模组。
+    /// 检查结果仅提取关键状态字段，不保留 DetailedAnalysis/PatchUnits 等大对象以节省内存。
+    /// </summary>
+    public async Task CheckVersionCompatibilityAsync(ObservableCollection<ModViewModel> mods)
+    {
+        IsCheckingVersion = true;
+        VersionCheckSummary = "正在扫描模组补丁文件...";
+
+        try
+        {
+            bool needsFullScan = !VersionCheckService.HasCachedReference;
+
+            // 检测游戏 exe 是否已更新：若 exe 文件时间变化，说明游戏已更新，必须全量重新扫描
+            if (!needsFullScan)
+            {
+                var gameExePath = GetGameExePath();
+                if (File.Exists(gameExePath))
+                {
+                    var currentExeTime = new FileInfo(gameExePath).LastWriteTimeUtc;
+                    var lastExeTime = _versionCheckRepository.GetGameExeLastWriteTime(_settingsService.StorageDirectory);
+                    if (lastExeTime != DateTime.MinValue && currentExeTime != lastExeTime)
+                    {
+                        _logger.LogInformation("检测到游戏 exe 已更新 (上次: {Last}, 当前: {Current})，强制全量扫描",
+                            lastExeTime, currentExeTime);
+                        needsFullScan = true;
+                    }
+                }
+            }
+
+            if (!needsFullScan)
+            {
+                var changedMods = GetNewOrChangedMods(mods).ToList();
+                needsFullScan = changedMods.Count == mods.Count;
+            }
+
+            if (needsFullScan)
+            {
+                await FullScanAsync(mods);
+            }
+            else
+            {
+                await IncrementalCheckAsync(mods);
+            }
+
+            UpdateStatistics(mods);
+
+            UpdateModTimestampTracking(mods);
+
+            _ = SaveVersionCheckResultsToDatabaseAsync(mods);
+
+            if (needsFullScan)
+                _ = UpdateGameExeTimestampAsync();
+
+            UpdateSummaryText();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "版本兼容性检查失败");
+            VersionCheckSummary = "检查失败";
+        }
+        finally
+        {
+            IsCheckingVersion = false;
+        }
+    }
+
+    /// <summary>
+    /// 新模组添加后，如果启用了自动检查，仅扫描该新增模组（使用缓存的参考版本）
+    /// </summary>
+    public async Task CheckSingleModOnAddAsync(ModData mod, ObservableCollection<ModViewModel> mods)
+    {
+        try
+        {
+            if (!_settingsService.AutoCheckVersionOnStartup)
+                return;
+
+            _logger.LogInformation("New mod \"{Name}\", checking version compatibility...", mod.Manifest.Name);
+            var result = await _versionCheckService.CheckSingleModAsync(mod);
+            if (result is not null)
+            {
+                var vm = mods.FirstOrDefault(v => v.Guid == mod.Manifest.Guid);
+                if (vm is not null)
+                {
+                    vm.GameUnitVersion = result.GameVersion;
+                    vm.LastVersionCheck = result.LastChecked;
+                    vm.VersionStatus = result.Status;
+                }
+
+                VersionCheckSummary = result.Status == ModVersionStatus.Incompatible
+                    ? $"发现不兼容的新增模组: {mod.Manifest.Name}"
+                    : $"新增模组 \"{mod.Manifest.Name}\" 版本检测完成";
+                OnPropertyChanged(nameof(HasVersionCheckResult));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing newly added mod \"{Name}\"", mod.Manifest.Name);
+        }
+    }
+
+    /// <summary>
+    /// 从数据库加载已缓存的版本检测结果并应用到每个 ModViewModel
+    /// </summary>
+    public void LoadCachedResults(ObservableCollection<ModViewModel> mods)
+    {
+        try
+        {
+            if (!_settingsService.Initialized || string.IsNullOrEmpty(_settingsService.StorageDirectory))
+                return;
+
+            var cached = _versionCheckRepository.LoadAll(_settingsService.StorageDirectory);
+            foreach (var vm in mods)
+            {
+                if (cached.TryGetValue(vm.Guid, out var entry))
+                {
+                    vm.VersionStatus = entry.Status;
+                    vm.GameUnitVersion = entry.GameVersion;
+                    vm.LastVersionCheck = entry.LastChecked;
+                }
+            }
+
+            UpdateStatistics(mods);
+
+            if (cached.Count > 0)
+            {
+                VersionCheckSummary = IncompatibleModCount > 0
+                    ? $"发现 {IncompatibleModCount} 个可能不兼容的模组（来自缓存）"
+                    : $"{CompatibleModCount} 个模组均兼容（来自缓存）";
+                OnPropertyChanged(nameof(HasVersionCheckResult));
+            }
+
+            _logger.LogInformation("Loaded {Count} version check results from database", cached.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "从数据库加载版本检测结果失败");
+        }
+    }
+
+    /// <summary>
+    /// 判断是否需要自动触发版本检查（启动时检测新增/变动模组或游戏 exe 更新）
+    /// </summary>
+    public bool ShouldAutoCheck(ObservableCollection<ModViewModel> mods)
+    {
+        if (!_settingsService.AutoCheckVersionOnStartup || mods.Count == 0)
+            return false;
+
+        var changedMods = GetNewOrChangedMods(mods).ToList();
+        if (changedMods.Count > 0)
+            return true;
+
+        // 检测游戏 exe 是否已更新
+        var gameExePath = GetGameExePath();
+        if (File.Exists(gameExePath))
+        {
+            var currentExeTime = new FileInfo(gameExePath).LastWriteTimeUtc;
+            var lastExeTime = _versionCheckRepository.GetGameExeLastWriteTime(_settingsService.StorageDirectory);
+            return lastExeTime != DateTime.MinValue && currentExeTime != lastExeTime;
+        }
+
+        return false;
+    }
+
+    #region Private Methods
+
+    private async Task FullScanAsync(ObservableCollection<ModViewModel> mods)
+    {
+        var results = await _versionCheckService.CheckAllModsAsync(_modService.Mods);
+
+        foreach (var vm in mods)
+        {
+            if (results.TryGetValue(vm.Guid, out var result))
+            {
+                vm.GameUnitVersion = result.GameVersion;
+                vm.LastVersionCheck = result.LastChecked;
+                vm.VersionStatus = result.Status;
+            }
+        }
+    }
+
+    private async Task IncrementalCheckAsync(ObservableCollection<ModViewModel> mods)
+    {
+        var changedMods = GetNewOrChangedMods(mods).ToList();
+        if (changedMods.Count > 0)
+        {
+            VersionCheckSummary = $"检查 {changedMods.Count} 个有变动的模组...";
+            foreach (var vm in changedMods)
+            {
+                var result = await _versionCheckService.CheckSingleModAsync(vm.Data);
+                if (result is not null)
+                {
+                    vm.GameUnitVersion = result.GameVersion;
+                    vm.LastVersionCheck = result.LastChecked;
+                    vm.VersionStatus = result.Status;
+                }
+            }
+        }
+    }
+
+    private void UpdateStatistics(ObservableCollection<ModViewModel> mods)
+    {
+        int compatible = 0, incompatible = 0;
+        foreach (var vm in mods)
+        {
+            if (vm.VersionStatus == Models.ModVersionStatus.Compatible)
+                compatible++;
+            else if (vm.VersionStatus == Models.ModVersionStatus.Incompatible)
+                incompatible++;
+        }
+
+        CompatibleModCount = compatible;
+        IncompatibleModCount = incompatible;
+        OnPropertyChanged(nameof(HasIncompatibleMods));
+    }
+
+    private void UpdateSummaryText()
+    {
+        if (IncompatibleModCount > 0)
+        {
+            VersionCheckSummary = $"发现 {IncompatibleModCount} 个可能不兼容的模组";
+        }
+        else if (CompatibleModCount > 0)
+        {
+            VersionCheckSummary = $"{CompatibleModCount} 个模组均兼容";
+        }
+        else
+        {
+            VersionCheckSummary = "未发现可检查的模组";
+        }
+
+        OnPropertyChanged(nameof(HasVersionCheckResult));
+    }
+
+    /// <summary>
+    /// 获取本次新增或文件变动的模组（与上次跟踪快照对比）
+    /// </summary>
+    private IEnumerable<ModViewModel> GetNewOrChangedMods(ObservableCollection<ModViewModel> mods)
+    {
+        foreach (var vm in mods)
+        {
+            if (!s_knownModTimestamps.TryGetValue(vm.Guid, out var lastTime))
+            {
+                yield return vm;
+            }
+            else if (vm.Data.Directory.LastWriteTimeUtc != lastTime)
+            {
+                yield return vm;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 更新模组跟踪快照，记录当前所有模组的 GUID 和目录修改时间
+    /// </summary>
+    private void UpdateModTimestampTracking(ObservableCollection<ModViewModel> mods)
+    {
+        var currentGuids = mods.Select(static vm => vm.Guid).ToHashSet();
+        foreach (var guid in s_knownModTimestamps.Keys.Where(g => !currentGuids.Contains(g)).ToList())
+            s_knownModTimestamps.Remove(guid);
+
+        foreach (var vm in mods)
+            s_knownModTimestamps[vm.Guid] = vm.Data.Directory.LastWriteTimeUtc;
+    }
+
+    /// <summary>
+    /// 将当前所有 ModViewModel 的版本检测状态持久化到数据库
+    /// </summary>
+    private async Task SaveVersionCheckResultsToDatabaseAsync(ObservableCollection<ModViewModel> mods)
+    {
+        try
+        {
+            if (!_settingsService.Initialized || string.IsNullOrEmpty(_settingsService.StorageDirectory))
+                return;
+
+            var results = new Dictionary<Guid, (ModVersionStatus Status, uint GameVersion, DateTime LastChecked)>();
+            foreach (var vm in mods)
+            {
+                if (vm.VersionStatus != ModVersionStatus.Unknown || vm.LastVersionCheck != default)
+                {
+                    results[vm.Guid] = (vm.VersionStatus, vm.GameUnitVersion, vm.LastVersionCheck);
+                }
+            }
+
+            await _versionCheckRepository.SaveAllAsync(_settingsService.StorageDirectory, results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "保存版本检测结果到数据库失败");
+        }
+    }
+
+    /// <summary>
+    /// 获取 Helldivers 2 游戏可执行文件的完整路径
+    /// </summary>
+    private string GetGameExePath()
+    {
+        return Path.Combine(_settingsService.GameDirectory, "bin", "helldivers2.exe");
+    }
+
+    /// <summary>
+    /// 更新数据库中游戏 exe 的最后写入时间，用于检测游戏版本变化
+    /// </summary>
+    private async Task UpdateGameExeTimestampAsync()
+    {
+        try
+        {
+            var exePath = GetGameExePath();
+            if (File.Exists(exePath))
+            {
+                var lastWrite = new FileInfo(exePath).LastWriteTimeUtc;
+                await _versionCheckRepository.UpdateGameExeLastWriteTimeAsync(_settingsService.StorageDirectory, lastWrite);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "更新游戏 exe 时间戳失败");
+        }
+    }
+
+    #endregion
+}

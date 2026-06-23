@@ -2,7 +2,6 @@ using Helldivers2ModManager.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 
 namespace Helldivers2ModManager.Views;
 
@@ -31,7 +30,7 @@ internal partial class DashboardPageView : Page
 		}
 	}
 
-	private void DashboardPageView_Unloaded(object? sender, RoutedEventArgs e)
+	private void DashboardPageView_Unloaded(object sender, RoutedEventArgs e)
 	{
 		// 离开页面时保存当前滚动位置
 		if (ModListScrollViewer is not null)
@@ -116,4 +115,5 @@ internal partial class DashboardPageView : Page
 			e.Handled = true;
 		}
 	}
+
 }

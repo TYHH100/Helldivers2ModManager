@@ -272,6 +272,53 @@
     </Style>
 
     <!-- ============================================ -->
+    <!-- Fluent Settings Tab Button                   -->
+    <!-- ============================================ -->
+
+    <Style x:Key="FluentSettingsTabButton" TargetType="Button">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundSecondaryBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="16 12"/>
+        <Setter Property="Margin" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <!-- 选项卡背景层，通过 TemplateBinding 响应 Background 属性变化 -->
+                        <Border x:Name="BackgroundLayer"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4 4 0 0"/>
+                        <!-- 底部激活指示条，通过 TemplateBinding 响应 BorderBrush 属性变化 -->
+                        <Border x:Name="IndicatorBar"
+                                Height="3"
+                                Background="{TemplateBinding BorderBrush}"
+                                CornerRadius="2 2 0 0"
+                                VerticalAlignment="Bottom"
+                                Margin="8 0"/>
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================ -->
     <!-- Fluent Settings Card                        -->
     <!-- ============================================ -->
 

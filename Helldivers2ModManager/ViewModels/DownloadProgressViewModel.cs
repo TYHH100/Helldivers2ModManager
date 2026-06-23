@@ -20,7 +20,7 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
     private readonly SettingsService _settingsService;
     private readonly Lazy<NavigationStore> _navStore;
 
-    public override string Title => "下载进度";
+    public override string Title => "Download Progress";
 
     public ObservableCollection<DownloadTask> DownloadTasks => _browserExtensionService.DownloadTasks;
 

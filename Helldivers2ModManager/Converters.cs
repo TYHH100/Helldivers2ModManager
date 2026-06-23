@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using Helldivers2ModManager.Services;
 
 namespace Helldivers2ModManager;
 
@@ -26,7 +27,11 @@ internal sealed class StringToColorBrushConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        throw new NotImplementedException();
+        if (value is bool boolValue)
+        {
+            return !boolValue;
+        }
+        return false;
     }
 }
 
@@ -43,7 +48,11 @@ internal sealed class BoolToVisibilityConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        throw new NotImplementedException();
+        if (value is bool boolValue)
+        {
+            return !boolValue;
+        }
+        return false;
     }
 }
 
@@ -133,7 +142,11 @@ internal sealed class InverseBoolConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        throw new NotImplementedException();
+        if (value is bool boolValue)
+        {
+            return !boolValue;
+        }
+        return false;
     }
 }
 
@@ -332,15 +345,15 @@ internal sealed class SortModeConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is ViewModels.DashboardPageViewModel.SortMode mode)
+        if (value is SortMode mode)
         {
             return mode switch
             {
-                ViewModels.DashboardPageViewModel.SortMode.Default => "默认顺序",
-                ViewModels.DashboardPageViewModel.SortMode.NameAsc => "名称 A-Z",
-                ViewModels.DashboardPageViewModel.SortMode.NameDesc => "名称 Z-A",
-                ViewModels.DashboardPageViewModel.SortMode.EnabledFirst => "已启用优先",
-                ViewModels.DashboardPageViewModel.SortMode.DisabledFirst => "已禁用优先",
+                SortMode.Default => "默认顺序",
+                SortMode.NameAsc => "名称 A-Z",
+                SortMode.NameDesc => "名称 Z-A",
+                SortMode.EnabledFirst => "已启用优先",
+                SortMode.DisabledFirst => "已禁用优先",
                 _ => "默认顺序",
             };
         }

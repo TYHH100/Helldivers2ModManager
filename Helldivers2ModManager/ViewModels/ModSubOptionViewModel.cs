@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -22,12 +22,22 @@ internal sealed class ModSubOptionViewModel(ModViewModel vm, int idx, int subIdx
 			var path = ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Image;
 			if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
 				return null;
-			var bmp = new BitmapImage();
-			bmp.BeginInit();
-			bmp.UriSource = new Uri(Path.Combine(_vm.Data.Directory.FullName, path));
-			bmp.CacheOption = BitmapCacheOption.None;
-			bmp.EndInit();
-			return bmp;
+			try
+			{
+				var fullPath = Path.Combine(_vm.Data.Directory.FullName, path);
+				if (!File.Exists(fullPath))
+					return null;
+				var bmp = new BitmapImage();
+				bmp.BeginInit();
+				bmp.UriSource = new Uri(fullPath);
+				bmp.CacheOption = BitmapCacheOption.OnLoad;
+				bmp.EndInit();
+				return bmp;
+			}
+			catch
+			{
+				return null;
+			}
 		}
 	}
 

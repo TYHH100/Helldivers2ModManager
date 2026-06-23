@@ -142,6 +142,18 @@
 						</Button>
 					</Grid>
 				</StackPanel>
+
+				<!-- Version Check Button - Dock to Bottom -->
+				<StackPanel DockPanel.Dock="Bottom">
+					<Button Style="{StaticResource FluentNavigationButton}"
+							Command="{Binding CheckVersionCompatibilityCommand}"
+							IsEnabled="{Binding Initialized}">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xE897;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+							<TextBlock Text="检查版本兼容性" Margin="12 0 0 0" VerticalAlignment="Center" ToolTip="仅供参考" />
+						</StackPanel>
+					</Button>
+				</StackPanel>
 			</DockPanel>
 		</Border>
 
@@ -152,23 +164,28 @@
 				CornerRadius="8"
 				Margin="0 0 0 16">
 			<Grid>
+				<Grid.RowDefinitions>
+					<RowDefinition Height="Auto"/>
+					<RowDefinition Height="Auto"/>
+				</Grid.RowDefinitions>
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*"/>
 					<ColumnDefinition Width="Auto"/>
 				</Grid.ColumnDefinitions>
 
 				<!-- Search Box -->
-				<Grid Grid.Column="0">
+				<Grid Grid.Row="0" Grid.Column="0">
 					<Grid.ColumnDefinitions>
 						<ColumnDefinition Width="*"/>
 						<ColumnDefinition Width="Auto"/>
 					</Grid.ColumnDefinitions>
 					<TextBox Grid.Column="0"
-							 x:Name="SearchBox"
-							 Style="{StaticResource FluentTextBox}"
-							 Margin="0 0 8 0"
-							 VerticalAlignment="Center"
-							 Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+						 x:Name="SearchBox"
+						 Style="{StaticResource FluentTextBox}"
+						 Margin="0 0 8 0"
+						 VerticalAlignment="Center"
+						 Tag="搜索 Mod 名称，使用 @标签名 搜索标签"
+						 Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 					<Button Grid.Column="1"
 							Style="{StaticResource FluentIconButton}"
 							Command="{Binding ClearSearchCommand}"
@@ -179,25 +196,27 @@
 					</Button>
 				</Grid>
 
-				<!-- Group Filter -->
-				<StackPanel Grid.Column="1"
-							Orientation="Horizontal">
-                    <TextBlock Text="&#xE8FD;"
+				<!-- Sort Dropdown -->
+				<StackPanel Grid.Row="0" Grid.Column="1"
+							Orientation="Horizontal"
+							Visibility="{Binding IsSortingEnabled, Converter={StaticResource BoolToVisibilityConverter}}">
+					<Border Style="{StaticResource FluentDivider}" Margin="8 0"/>
+					<TextBlock Text="&#xE8CB;"
 							   FontFamily="Segoe Fluent Icons"
 							   FontSize="16"
 							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 							   VerticalAlignment="Center"
 							   Margin="0 0 8 0"/>
-					<ComboBox Width="150"
-							  ItemsSource="{Binding GroupItems}"
-							  SelectedItem="{Binding SelectedGroupItem, Mode=TwoWay}">
+					<ComboBox Width="120"
+							  ItemsSource="{Binding SortModes}"
+							  SelectedItem="{Binding CurrentSortMode, Mode=TwoWay}">
 						<ComboBox.ItemTemplate>
 							<DataTemplate>
 								<TextBlock Foreground="{StaticResource NeutralForegroundBrush}">
 									<TextBlock.Text>
-										<Binding Path=".">
+										<Binding FallbackValue="默认顺序">
 											<Binding.Converter>
-												<local:GroupItemConverter/>
+												<local:SortModeConverter/>
 											</Binding.Converter>
 										</Binding>
 									</TextBlock.Text>
@@ -205,50 +224,48 @@
 							</DataTemplate>
 						</ComboBox.ItemTemplate>
 					</ComboBox>
-					<Button Style="{StaticResource FluentIconButton}"
-							Command="{Binding CreateGroupCommand}"
-							ToolTip="创建分组">
-						<TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons"/>
+				</StackPanel>
+
+				<!-- Batch Action Buttons (第2行，有选中项时显示) -->
+				<StackPanel Grid.Row="1"
+							Grid.Column="0"
+							Grid.ColumnSpan="2"
+							Orientation="Horizontal"
+							Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibilityConverter}}"
+							Margin="0 8 0 0">
+					<TextBlock Text="{Binding SelectionCountText}"
+							   FontSize="13"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   VerticalAlignment="Center"
+							   Margin="0 0 8 0"/>
+					<Button Style="{StaticResource FluentSecondaryButton}"
+							Content="全选"
+							Command="{Binding SelectAllCommand}"
+							Padding="12 6"/>
+					<Button Style="{StaticResource FluentSecondaryButton}"
+							Content="取消"
+							Command="{Binding DeselectAllCommand}"
+							Padding="12 6"/>
+					<Button Style="{StaticResource FluentSecondaryButton}"
+							Content="启用"
+							Command="{Binding BatchEnableCommand}"
+							Padding="12 6"/>
+					<Button Style="{StaticResource FluentSecondaryButton}"
+							Content="禁用"
+							Command="{Binding BatchDisableCommand}"
+							Padding="12 6"/>
+					<Button Style="{StaticResource FluentSecondaryButton}"
+							Content="标签"
+							Command="{Binding BatchAddTagsCommand}"
+							Padding="12 6">
+						<Button.ToolTip>
+							<ToolTip Content="为所有选中的模组统一设置标签"/>
+						</Button.ToolTip>
 					</Button>
-					<Button Style="{StaticResource FluentIconButton}"
-							Command="{Binding DeleteGroupCommand}"
-							ToolTip="删除分组">
-						<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons"
-                                   Foreground="{StaticResource DangerBrush}"/>
-					</Button>
-					<Button Style="{StaticResource FluentIconButton}"
-							Command="{Binding RenameGroupCommand}"
-							ToolTip="重命名分组">
-						<TextBlock Text="&#xE8AC;" FontFamily="Segoe Fluent Icons"/>
-					</Button>
-					<!-- Sort Dropdown -->
-					<StackPanel Orientation="Horizontal"
-								Visibility="{Binding IsSortingEnabled, Converter={StaticResource BoolToVisibilityConverter}}">
-						<Border Style="{StaticResource FluentDivider}" Margin="8 0"/>
-						<TextBlock Text="&#xE8CB;"
-								   FontFamily="Segoe Fluent Icons"
-								   FontSize="16"
-								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-								   VerticalAlignment="Center"
-								   Margin="0 0 8 0"/>
-						<ComboBox Width="120"
-								  ItemsSource="{Binding SortModes}"
-								  SelectedItem="{Binding CurrentSortMode, Mode=TwoWay}">
-							<ComboBox.ItemTemplate>
-								<DataTemplate>
-									<TextBlock Foreground="{StaticResource NeutralForegroundBrush}">
-										<TextBlock.Text>
-											<Binding FallbackValue="默认顺序">
-												<Binding.Converter>
-													<local:SortModeConverter/>
-												</Binding.Converter>
-											</Binding>
-										</TextBlock.Text>
-									</TextBlock>
-								</DataTemplate>
-							</ComboBox.ItemTemplate>
-						</ComboBox>
-					</StackPanel>
+					<Button Style="{StaticResource FluentDangerButton}"
+							Content="删除"
+							Command="{Binding BatchDeleteCommand}"
+							Padding="12 6"/>
 				</StackPanel>
 			</Grid>
 		</Border>
@@ -265,7 +282,8 @@
 			<ItemsControl ItemsSource="{Binding Mods}"
 					  dd:DragDrop.IsDragSource="{Binding IsSearchEmpty}"
 					  dd:DragDrop.IsDropTarget="True"
-					  dd:DragDrop.DropHandler="{Binding}">
+					  dd:DragDrop.DropHandler="{Binding}"
+					  local:DragDropAutoScrollBehavior.IsEnabled="True">
 				<ItemsControl.ItemTemplate>
 					<DataTemplate DataType="vms:ModViewModel">
 						<Border Grid.Row="0"
@@ -285,11 +303,14 @@
 							</Border.Style>
 							<Border.ContextMenu>
 								<ContextMenu>
-									<MenuItem Header="编辑 manifest"
+									<MenuItem Header="编辑 Manifest"
 											  Command="{Binding PlacementTarget.Tag.EditManifestCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 											  CommandParameter="{Binding}"/>
 									<MenuItem Header="打包并导出"
 											  Command="{Binding PlacementTarget.Tag.ExportModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+											  CommandParameter="{Binding}"/>
+									<MenuItem Header="更新模组"
+											  Command="{Binding PlacementTarget.Tag.UpdateModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 											  CommandParameter="{Binding}"/>
 									<Separator/>
 									<MenuItem Header="打开文件位置"
@@ -311,10 +332,7 @@
 									<MenuItem Header="检查 Nexus 更新"
 											  Command="{Binding CheckForUpdatesCommand}"
 											  IsEnabled="{Binding HasNexusData}"/>
-									<Separator/>-->
-									<MenuItem Header="设置分组"
-											  Command="{Binding PlacementTarget.Tag.SetGroupCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/>
+									<Separator/> -->
 									<MenuItem Header="设置标签"
 											  Command="{Binding PlacementTarget.Tag.EditModTagsCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 											  CommandParameter="{Binding}"/>
@@ -569,77 +587,42 @@
 					<ColumnDefinition Width="Auto"/>
 				</Grid.ColumnDefinitions>
 
-				<!-- Version Check Status & Button (左侧) -->
-				<StackPanel Grid.Column="0"
-							Orientation="Horizontal"
-							VerticalAlignment="Center">
-					<StackPanel.Style>
-						<Style TargetType="StackPanel">
-							<Setter Property="Visibility" Value="Visible"/>
-							<Style.Triggers>
-								<DataTrigger Binding="{Binding HasSelection}" Value="True">
-									<Setter Property="Visibility" Value="Collapsed"/>
-								</DataTrigger>
-							</Style.Triggers>
-						</Style>
-					</StackPanel.Style>
-					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="检查版本兼容性"
-							Command="{Binding CheckVersionCompatibilityCommand}"
-							IsEnabled="{Binding Initialized}"
-							Padding="12 6">
-						<Button.ToolTip>
-							<ToolTip Content="扫描所有模组的补丁文件，以多数版本为参考检测可能不兼容的模组"/>
-						</Button.ToolTip>
-					</Button>
-					<Border Width="12"
+				<!-- Version Check Status & Hash Migration (左侧) -->
+				<!-- 使用 Grid 替代 StackPanel，使 * 列能正确约束 TextBlock 宽度，避免长文本溢出覆盖右侧按钮 -->
+				<Grid Grid.Column="0"
+					  VerticalAlignment="Center">
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="Auto"/>
+						<ColumnDefinition Width="*"/>
+					</Grid.ColumnDefinitions>
+					<Border Grid.Column="0"
+							Width="12"
 							Height="12"
 							CornerRadius="6"
-							Margin="8 0 0 0"
 							Background="{StaticResource SystemAccentBrush}"
 							Visibility="{Binding IsCheckingVersion, Converter={StaticResource BoolToVisibilityConverter}}"/>
-					<TextBlock Text="{Binding VersionCheckSummary}"
+					<TextBlock Grid.Column="1"
+							   Text="{Binding VersionCheckSummary}"
 							   FontSize="12"
 							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 							   VerticalAlignment="Center"
 							   Margin="8 0 0 0"
+							   TextTrimming="CharacterEllipsis"
 							   Visibility="{Binding HasVersionCheckResult, Converter={StaticResource BoolToVisibilityConverter}}"/>
-				</StackPanel>
+					<!-- 哈希迁移状态（版本升级后后台计算文件指纹的进度提示） -->
+					<TextBlock Grid.Column="1"
+							   Text="{Binding HashMigrationStatusText}"
+							   FontSize="12"
+							   Foreground="{StaticResource SystemAccentBrush}"
+							   VerticalAlignment="Center"
+							   Margin="8 0 0 0"
+							   TextTrimming="CharacterEllipsis"
+							   Visibility="{Binding HashMigrationStatusText, Converter={StaticResource StringToVisibilityConverter}}"/>
+				</Grid>
 
 				<!-- Action Buttons (右侧) -->
 				<StackPanel Grid.Column="1"
 							Orientation="Horizontal">
-					<!-- Batch Action Buttons (visible when items selected) -->
-					<StackPanel Orientation="Horizontal"
-								Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
-						<TextBlock Text="{Binding SelectionCountText}"
-								   FontSize="13"
-								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-								   VerticalAlignment="Center"
-								   Margin="0 0 8 0"/>
-						<Button Style="{StaticResource FluentSecondaryButton}"
-								Content="全选"
-								Command="{Binding SelectAllCommand}"
-								Padding="12 6"/>
-						<Button Style="{StaticResource FluentSecondaryButton}"
-								Content="取消"
-								Command="{Binding DeselectAllCommand}"
-								Padding="12 6"/>
-						<Button Style="{StaticResource FluentSecondaryButton}"
-								Content="启用"
-								Command="{Binding BatchEnableCommand}"
-								Padding="12 6"/>
-						<Button Style="{StaticResource FluentSecondaryButton}"
-								Content="禁用"
-								Command="{Binding BatchDisableCommand}"
-								Padding="12 6"/>
-						<Button Style="{StaticResource FluentDangerButton}"
-								Content="删除"
-								Command="{Binding BatchDeleteCommand}"
-								Padding="12 6"/>
-						<Border Style="{StaticResource FluentDivider}" Margin="8 0"/>
-					</StackPanel>
-
 					<Button Style="{StaticResource FluentDangerButton}"
 							Content="清理模组"
 							Command="{Binding PurgeCommand}"

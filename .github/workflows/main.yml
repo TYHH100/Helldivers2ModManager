@@ -42,8 +42,8 @@ jobs:
                 token: ${{ secrets.GITHUB_TOKEN }}
                 tag_name: ${{github.ref_name}}
                 name: Releases ${{github.ref_name}}
-                draft: true
-                #prerelease: false
+                # draft: true
+                # prerelease: false
                 files: Helldivers2ModManager.zip
 
     Purger-build:
@@ -81,6 +81,6 @@ jobs:
               token: ${{ secrets.GITHUB_TOKEN }}
               tag_name: ${{github.ref_name}}
               name: Releases ${{github.ref_name}}
-              draft: true
-              #prerelease: false
+              # draft: true
+              # prerelease: false
               files: Purger.zip

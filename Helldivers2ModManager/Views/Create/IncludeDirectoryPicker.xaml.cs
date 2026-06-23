@@ -186,6 +186,10 @@ internal sealed partial class IncludeDirectoryPicker : Window
 		{
 			// 无权限访问的目录跳过
 		}
+		catch (Exception ex) when (ex is IOException or PathTooLongException)
+		{
+			// 其他 IO 异常静默跳过，不影响目录树展示
+		}
 	}
 
 	/// <summary>判断指定相对路径的节点是否需要自动展开</summary>
