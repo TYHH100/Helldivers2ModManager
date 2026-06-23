@@ -1,0 +1,65 @@
+name: Build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  HD2MM-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build HD2MM
+        run: |
+          cd Helldivers2ModManager
+          dotnet publish Helldivers2ModManager.csproj --configuration Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o HD2MM-Complete
+
+      - name: Zip HD2MM
+        uses: vimtor/action-zip@v1.2
+        with:
+          files: Helldivers2ModManager/HD2MM-Complete
+          dest: Helldivers2ModManager.zip
+
+      - name: Upload HD2MM zip to Release
+        uses: softprops/action-gh-release@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          upload_url: ${{ github.event.release.upload_url }}
+          files: Helldivers2ModManager.zip
+
+  Purger-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build Purger
+        run: |
+          cd Purger
+          dotnet publish Purger.csproj --configuration Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o Purger-Complete
+
+      - name: Zip Purger
+        uses: vimtor/action-zip@v1.2
+        with:
+          files: Purger/Purger-Complete
+          dest: Purger.zip
+
+      - name: Upload Purger zip to Release
+        uses: softprops/action-gh-release@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          upload_url: ${{ github.event.release.upload_url }}
+          files: Purger.zip
