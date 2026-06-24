@@ -2,11 +2,12 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Text;
 using System.Text.Json;
-using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
@@ -110,14 +111,6 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 
 	/// <summary>模组选项集合（可编辑）</summary>
 	public ObservableCollection<CreateModOptionViewModel> EditOptions { get; } = [];
-
-	/// <summary>图片预览覆盖层</summary>
-	[ObservableProperty]
-	private ImageSource? _previewImageSource;
-
-	/// <summary>图片预览可见性</summary>
-	[ObservableProperty]
-	private Visibility _imagePreviewVisibility = Visibility.Collapsed;
 
 	private readonly ILogger<ManifestEditPageViewModel> _logger;
 	private readonly NavigationStore _navStore;
@@ -321,16 +314,14 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	[RelayCommand]
 	void ShowImagePreview(ImageSource imageSource)
 	{
-		PreviewImageSource = imageSource;
-		ImagePreviewVisibility = Visibility.Visible;
+		WeakReferenceMessenger.Default.Send(new ImagePreviewShowMessage { ImageSource = imageSource });
 	}
 
 	/// <summary>隐藏图片预览</summary>
 	[RelayCommand]
 	void HideImagePreview()
 	{
-		ImagePreviewVisibility = Visibility.Hidden;
-		PreviewImageSource = null;
+		WeakReferenceMessenger.Default.Send(new ImagePreviewHideMessage());
 	}
 
 	/// <summary>浏览选择模组图标</summary>

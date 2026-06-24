@@ -30,6 +30,12 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
     [ObservableProperty]
     private bool _hasCompletedTasks;
 
+    /// <summary>
+    /// 手动输入的下载链接
+    /// </summary>
+    [ObservableProperty]
+    private string _manualUrl = string.Empty;
+
     public DownloadProgressViewModel(
         ILogger<DownloadProgressViewModel> logger,
         IServiceProvider provider,
@@ -146,6 +152,42 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to copy URL to clipboard");
+        }
+    }
+
+    /// <summary>
+    /// 手动添加下载链接
+    /// </summary>
+    [RelayCommand]
+    private async Task AddManualDownloadAsync()
+    {
+        var url = ManualUrl.Trim();
+        
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _logger.LogWarning("User attempted to add empty download URL");
+            return;
+        }
+
+        var success = _browserExtensionService.AddManualDownload(url);
+        
+        if (success)
+        {
+            _logger.LogInformation("Manual download added successfully: {Url}", url);
+            ManualUrl = string.Empty; // 清空输入框
+        }
+        else
+        {
+            _logger.LogWarning("Failed to add manual download: {Url}", url);
+            // 可以在这里显示错误提示
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                MessageBox.Show(
+                    "添加下载失败\n\n请确保：\n• 链接格式正确（必须为 HTTPS）\n\n支持的链接格式示例：\nhttps://example.com/file.zip",
+                    "添加下载",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            });
         }
     }
 

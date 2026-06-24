@@ -8,7 +8,7 @@ internal sealed class ModOption : IJsonSerializable<ModOption>
 {
     public required string Name { get; init; }
     
-    public required string Description { get; init; }
+    public string Description { get; init; } = string.Empty;
     
     public IReadOnlyList<string>? Include { get; init; }
     
@@ -19,7 +19,9 @@ internal sealed class ModOption : IJsonSerializable<ModOption>
     public static ModOption Deserialize(JsonElement root, ILogger? logger = null)
     {
         var name = root.GetProperty<string>(nameof(Name));
-        var description = root.GetProperty<string>(nameof(Description));
+        var description = root.TryGetProperty(nameof(Description), JsonValueKind.String, out var descProp)
+            ? descProp.GetString()!
+            : string.Empty;
         List<string>? include = null;
         if (root.TryGetProperty(nameof(Include), JsonValueKind.Array, out var prop))
         {

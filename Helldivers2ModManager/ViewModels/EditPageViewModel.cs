@@ -1,10 +1,11 @@
-using System.Windows;
-using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using System.Windows.Media;
 
 namespace Helldivers2ModManager.ViewModels;
 
@@ -18,12 +19,6 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 	public override string Title => "Mod Options";
 
 	public ModViewModel? EditMod => _editModStore.CurrentMod;
-
-	[ObservableProperty]
-	private ImageSource? _previewImageSource;
-
-	[ObservableProperty]
-	private Visibility _imagePreviewVisibility = Visibility.Collapsed;
 
 	private readonly NavigationStore _navStore;
 	private readonly EditModStore _editModStore;
@@ -71,14 +66,12 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 	[RelayCommand]
 	void ShowImagePreview(ImageSource imageSource)
 	{
-		PreviewImageSource = imageSource;
-		ImagePreviewVisibility = Visibility.Visible;
+		WeakReferenceMessenger.Default.Send(new ImagePreviewShowMessage { ImageSource = imageSource });
 	}
 
 	[RelayCommand]
 	void HideImagePreview()
 	{
-		ImagePreviewVisibility = Visibility.Hidden;
-		PreviewImageSource = null;
+		WeakReferenceMessenger.Default.Send(new ImagePreviewHideMessage());
 	}
 }

@@ -59,10 +59,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [ObservableProperty]
     private string _searchText = string.Empty;
     [ObservableProperty]
-    private Visibility _imagePreviewVisibility = Visibility.Hidden;
-    [ObservableProperty]
-    private ImageSource? _previewImageSource;
-    [ObservableProperty]
     private bool _initialized = false;
 
     [ObservableProperty]
@@ -1631,15 +1627,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand]
     void ShowImagePreview(ImageSource imageSource)
     {
-        PreviewImageSource = imageSource;
-        ImagePreviewVisibility = Visibility.Visible;
+        WeakReferenceMessenger.Default.Send(new ImagePreviewShowMessage { ImageSource = imageSource });
     }
 
     [RelayCommand]
     void HideImagePreview()
     {
-        ImagePreviewVisibility = Visibility.Hidden;
-        PreviewImageSource = null;
+        WeakReferenceMessenger.Default.Send(new ImagePreviewHideMessage());
     }
 
     [RelayCommand]

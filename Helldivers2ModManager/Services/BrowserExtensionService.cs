@@ -582,6 +582,93 @@ internal sealed class BrowserExtensionService : IDisposable
     }
 
     /// <summary>
+    /// 手动添加下载任务（通过 URL）
+    /// </summary>
+    /// <param name="url">下载链接（支持任意 HTTPS URL）</param>
+    /// <returns>是否成功添加</returns>
+    public bool AddManualDownload(string url)
+    {
+        // 验证 URL 格式
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _logger.LogWarning("Manual download rejected: URL is empty");
+            return false;
+        }
+
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
+        {
+            _logger.LogWarning("Manual download rejected: Invalid URL format: {Url}", url);
+            return false;
+        }
+
+        // 安全校验：仅允许 HTTPS（防止明文传输泄露敏感信息）
+        if (!uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Manual download rejected: Non-HTTPS URL: {Url}", url);
+            return false;
+        }
+
+        // 从 URL 中提取文件名
+        var filename = ExtractFilenameFromUrl(uri);
+        
+        _logger.LogInformation("Manual download added: {Filename} - {Url}", filename, url);
+
+        var downloadTask = new DownloadTask
+        {
+            Filename = filename,
+            Url = url.Trim(),
+            Status = DownloadStatus.Pending
+        };
+
+        DownloadTasks.Add(downloadTask);
+        DownloadStarted?.Invoke(downloadTask);
+        SaveDownloadTasks();
+
+        // 启动下载任务
+        _ = ProcessDownloadAsync(downloadTask, _cts?.Token ?? default)
+            .ContinueWith(t =>
+            {
+                if (t.IsFaulted && t.Exception != null)
+                {
+                    _logger.LogError(t.Exception, "Unhandled exception in manual download for task {TaskId}", downloadTask.Id);
+                    if (downloadTask.Status != DownloadStatus.Failed)
+                    {
+                        downloadTask.Status = DownloadStatus.Failed;
+                        downloadTask.ErrorMessage = "下载过程中发生未预期的错误";
+                        downloadTask.Speed = 0;
+                        downloadTask.EstimatedTimeRemaining = TimeSpan.Zero;
+                        DownloadFailed?.Invoke(downloadTask);
+                        SaveDownloadTasks();
+                    }
+                }
+            });
+
+        return true;
+    }
+
+    /// <summary>
+    /// 从 URL 中提取文件名
+    /// </summary>
+    private static string ExtractFilenameFromUrl(Uri uri)
+    {
+        // 尝试从路径中获取文件名
+        var pathSegments = uri.Segments;
+        if (pathSegments.Length > 0)
+        {
+            var lastSegment = pathSegments[^1];
+            if (!string.IsNullOrWhiteSpace(lastSegment) && lastSegment.Contains('.'))
+            {
+                return Uri.UnescapeDataString(lastSegment);
+            }
+        }
+
+        // 如果无法从路径提取，使用查询参数或生成默认文件名
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var fileId = query["id"] ?? query["file_id"] ?? Guid.NewGuid().ToString("N")[..8];
+        return $"manual_download_{fileId}.zip";
+    }
+
+    /// <summary>
     /// 将下载任务保存到 JSON 文件，实现持久化
     /// </summary>
     private void SaveDownloadTasks()

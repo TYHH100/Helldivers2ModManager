@@ -176,6 +176,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         
@@ -211,7 +212,44 @@
             </Grid>
         </Border>
         
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <!-- 手动添加下载链接区域 -->
+        <Border Grid.Row="1" Margin="0 0 0 12" Background="#1e1e3a" CornerRadius="8" Padding="16 12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBox Grid.Column="0"
+                         Text="{Binding ManualUrl, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource FluentTextBox}"
+                         Padding="10 8"
+                         FontSize="13"
+                         VerticalContentAlignment="Center"
+                         ToolTip="输入任意 HTTPS 下载链接">
+                    <TextBox.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="CornerRadius" Value="6"/>
+                        </Style>
+                    </TextBox.Resources>
+                </TextBox>
+
+                <Button Grid.Column="1"
+                        Command="{Binding AddManualDownloadCommand}"
+                        Style="{StaticResource FluentPrimaryButton}"
+                        Margin="8 0 0 0"
+                        Padding="16 8"
+                        MinWidth="100"
+                        ToolTip="添加下载任务">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 6 0"/>
+                        <TextBlock Text="添加下载" FontSize="13" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
                 <ItemsControl 
                     ItemsSource="{Binding DownloadTasks}" 

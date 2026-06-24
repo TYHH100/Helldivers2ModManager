@@ -151,6 +151,7 @@
 								<ContentPresenter Name="presenter"
 												  Grid.Row="1"/>
 								<cmp:MessageBox Grid.Row="1"/>
+								<cmp:ImagePreviewOverlay Grid.Row="1"/>
 							</Grid>
 						</Border>
 						<ControlTemplate.Triggers>

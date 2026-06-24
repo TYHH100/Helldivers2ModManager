@@ -58,7 +58,7 @@
 							   FontSize="14"
 							   FontFamily="Segoe UI Variable Text"
 							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   TextWrapping="Wrap"/>
+							   TextWrapping="NoWrap"/>
 				</ScrollViewer>
 
 				<!-- Input TextBox -->

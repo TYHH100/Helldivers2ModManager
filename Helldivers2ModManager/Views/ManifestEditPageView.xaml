@@ -494,39 +494,5 @@
 			</Border>
 		</Grid>
 
-		<!-- 图片预览覆盖层 -->
-		<Border Background="#CC000000"
-				Padding="60 80"
-				Visibility="{Binding ImagePreviewVisibility}"
-				d:Visibility="Hidden"
-				MouseLeftButtonDown="ImagePreviewOverlay_MouseLeftButtonDown">
-			<Border Style="{StaticResource FluentMessageDialog}"
-					MaxWidth="800"
-					MaxHeight="600"
-					VerticalAlignment="Center"
-					HorizontalAlignment="Center"
-					MouseLeftButtonDown="ImagePreviewBorder_MouseLeftButtonDown">
-				<Grid>
-					<Grid.RowDefinitions>
-						<RowDefinition Height="Auto"/>
-						<RowDefinition Height="*"/>
-					</Grid.RowDefinitions>
-
-					<Button Grid.Row="0"
-							Style="{StaticResource FluentIconButton}"
-							Command="{Binding HideImagePreviewCommand}"
-							HorizontalAlignment="Right"
-							Margin="0 0 0 8">
-						<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="20"/>
-					</Button>
-
-					<Image Grid.Row="1"
-						   Source="{Binding PreviewImageSource}"
-						   Stretch="Uniform"
-						   MaxWidth="780"
-						   MaxHeight="550"/>
-				</Grid>
-			</Border>
-		</Border>
 	</Grid>
 </Page>

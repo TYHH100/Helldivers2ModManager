@@ -69,32 +69,6 @@ internal partial class DashboardPageView : Page
 		}
 	}
 
-	private void ImagePreviewOverlay_KeyDown(object sender, KeyEventArgs e)
-	{
-		// 按 ESC 键关闭图片预览
-		if (e.Key == Key.Escape)
-		{
-			var viewModel = DataContext as DashboardPageViewModel;
-			viewModel?.HideImagePreviewCommand.Execute(null);
-			e.Handled = true;
-		}
-	}
-
-	private void ImagePreviewOverlay_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
-	{
-		// 预览变为可见时，让 overlay 获得焦点以接收 ESC 按键事件
-		if (e.NewValue is true && sender is Border border)
-		{
-			border.Focusable = true;
-			_ = border.Focus();
-		}
-	}
-
-	private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-	{
-		e.Handled = true;
-	}
-
 	private void GithubButton_Click(object sender, RoutedEventArgs e)
 	{
 		if (sender is Button button)

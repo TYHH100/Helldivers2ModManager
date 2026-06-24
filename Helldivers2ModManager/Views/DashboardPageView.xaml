@@ -654,47 +654,5 @@
 			</Grid>
 		</Border>
 
-		<!-- Image Preview Overlay -->
-		<Border Grid.Row="0"
-				Grid.RowSpan="3"
-				Grid.Column="0"
-				Grid.ColumnSpan="2"
-				Background="#CC000000"
-				Padding="60 80"
-				Visibility="{Binding ImagePreviewVisibility}"
-				d:Visibility="Hidden"
-				Focusable="True"
-				KeyDown="ImagePreviewOverlay_KeyDown"
-				IsVisibleChanged="ImagePreviewOverlay_IsVisibleChanged">
-			<Border Style="{StaticResource FluentMessageDialog}"
-					MaxWidth="800"
-					MaxHeight="600"
-					VerticalAlignment="Center"
-					HorizontalAlignment="Center"
-					MouseLeftButtonDown="Border_MouseLeftButtonDown">
-				<Grid>
-					<Grid.RowDefinitions>
-						<RowDefinition Height="Auto"/>
-						<RowDefinition Height="*"/>
-					</Grid.RowDefinitions>
-
-					<!-- Close Button -->
-					<Button Grid.Row="0"
-							Style="{StaticResource FluentIconButton}"
-							Command="{Binding HideImagePreviewCommand}"
-							HorizontalAlignment="Right"
-							Margin="0 0 0 8">
-						<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="20"/>
-					</Button>
-
-					<!-- Preview Image -->
-					<Image Grid.Row="1"
-						   Source="{Binding PreviewImageSource}"
-						   Stretch="Uniform"
-						   MaxWidth="780"
-						   MaxHeight="550"/>
-				</Grid>
-			</Border>
-		</Border>
 	</Grid>
 </Page>

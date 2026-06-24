@@ -25,15 +25,4 @@ internal partial class ManifestEditPageView : Page
 			viewModel?.ShowImagePreviewCommand.Execute(image.Source);
 		}
 	}
-
-	private void ImagePreviewOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-	{
-		var viewModel = DataContext as ManifestEditPageViewModel;
-		viewModel?.HideImagePreviewCommand.Execute(null);
-	}
-
-	private void ImagePreviewBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-	{
-		e.Handled = true;
-	}
 }
