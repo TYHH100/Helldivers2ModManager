@@ -255,6 +255,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         // 无任何筛选/排序时使用完整的_orderedItems（分隔符可见）
         if (IsSearchEmpty && !hasActiveSort)
         {
+            // 重置 Mods 指向 _orderedItems，因为 else 分支可能已将 Mods 设为新的数组，
+            // 导致 RebuildOrderedItems 修改 _orderedItems 后 UI 读取的仍是旧数组
+            Mods = _orderedItems;
             RebuildOrderedItems();
         }
         else
