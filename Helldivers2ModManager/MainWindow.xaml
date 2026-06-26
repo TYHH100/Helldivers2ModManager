@@ -24,6 +24,9 @@
 		<DataTemplate DataType="{x:Type vms:DashboardPageViewModel}">
 			<views:DashboardPageView/>
 		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:DeploymentOrderPageViewModel}">
+			<views:DeploymentOrderPageView/>
+		</DataTemplate>
 		<DataTemplate DataType="{x:Type vms:SettingsPageViewModel}">
 			<views:SettingsPageView/>
 		</DataTemplate>
@@ -45,6 +48,7 @@
 		<DataTemplate DataType="{x:Type vms:DownloadProgressViewModel}">
 			<views:DownloadProgressView/>
 		</DataTemplate>
+
 	</Window.Resources>
 
 	<Window.Style>

@@ -19,6 +19,7 @@
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="*"/>
 			<RowDefinition Height="Auto"/>
 		</Grid.RowDefinitions>
@@ -52,8 +53,58 @@
 			</StackPanel>
 		</Border>
 
+		<!-- 流程提示横幅 -->
+		<Border Grid.Row="2"
+				Background="#1a3a5c"
+				CornerRadius="8"
+				Padding="14 12"
+				Margin="0 0 0 12"
+				BorderBrush="#2a5a8c"
+				BorderThickness="1"
+				Visibility="{Binding ShowBanner, Converter={StaticResource BoolToVisibilityConverter}}">
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="Auto"/>
+					<ColumnDefinition Width="*"/>
+					<ColumnDefinition Width="Auto"/>
+				</Grid.ColumnDefinitions>
+				<TextBlock Grid.Column="0"
+						   Text="&#xE946;"
+						   FontFamily="Segoe Fluent Icons"
+						   FontSize="18"
+						   Foreground="#6ab0f3"
+						   VerticalAlignment="Center"
+						   Margin="0 0 10 0"/>
+				<StackPanel Grid.Column="1" VerticalAlignment="Center">
+					<TextBlock Text="创建流程说明"
+							   FontSize="13"
+							   FontWeight="SemiBold"
+							   Foreground="#9ccff0"
+							   Margin="0 0 2 0"/>
+					<TextBlock TextWrapping="Wrap"
+							   FontSize="12"
+							   Foreground="#8abce8"
+							   LineHeight="18">
+						<Run Text="填写完信息并点击「创建」后，系统会自动执行以下操作："/><LineBreak/>
+						<Run Text="1. 将源目录中的模组文件复制到管理器的存储目录"/><LineBreak/>
+						<Run Text="2. 根据你配置的选项生成 manifest.json 清单文件"/><LineBreak/>
+						<Run Text="3. 自动将模组导入到管理器中，即可在主页使用"/><LineBreak/>
+						<Run Text="提示：后续如需编辑 manifest 清单（修改名称、描述、选项等），可在主页右键模组选择「编辑 Manifest」，或直接在存储目录中编辑 manifest.json 文件；如需增删文件，请直接到管理器存储目录操作。"/>
+					</TextBlock>
+				</StackPanel>
+				<Button Grid.Column="2"
+						Command="{Binding DismissBannerCommand}"
+						Style="{StaticResource FluentIconButton}"
+						ToolTip="关闭提示"
+						Padding="4"
+						VerticalAlignment="Top">
+					<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="12" Foreground="#6a9fd8"/>
+				</Button>
+			</Grid>
+		</Border>
+
 		<!-- Form Content -->
-		<ScrollViewer Grid.Row="2"
+		<ScrollViewer Grid.Row="3"
 					  HorizontalScrollBarVisibility="Disabled"
 					  VerticalScrollBarVisibility="Auto">
 
@@ -485,7 +536,7 @@
 		</ScrollViewer>
 
 		<!-- Navigation Buttons -->
-		<Border Grid.Row="3"
+		<Border Grid.Row="4"
 				Style="{StaticResource FluentCard}"
 				CornerRadius="8"
 				Margin="0 16 0 0">

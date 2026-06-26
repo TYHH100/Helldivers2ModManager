@@ -19,7 +19,7 @@ internal sealed class SettingsService
 	
 	public const float OpacityMin = 0.4f;
 	
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_separators))]
 	public bool Initialized { get; private set; }
 	
 	public bool IsReadonly { get; private set; } = true;
@@ -241,6 +241,37 @@ internal sealed class SettingsService
 	}
 
 	/// <summary>
+	/// 在主页导航面板中显示分隔线
+	/// </summary>
+	public bool ShowSeparator
+	{
+		get
+		{
+			GuardInitialized();
+			return _showSeparator;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_showSeparator = value;
+		}
+	}
+
+	/// <summary>
+	/// 模组列表分隔符集合
+	/// </summary>
+	public ObservableCollection<ModSeparator> Separators
+	{
+		get
+		{
+			GuardInitialized();
+			return _separators;
+		}
+	}
+
+	/// <summary>
 	/// 日志保留天数（超过此天数的日志将被清理）
 	/// </summary>
 	public int LogRetentionDays
@@ -285,6 +316,66 @@ internal sealed class SettingsService
 			GuardInitialized();
 			GuardReadonly();
 			_deployBottomToTop = value;
+		}
+	}
+
+	/// <summary>
+	/// 是否启用自定义部署顺序
+	/// true = 部署时使用 DeploymentOrderGuids 的顺序
+	/// false = 默认，部署时使用 Dashboard 顺序
+	/// </summary>
+	public bool UseDeploymentOrder
+	{
+		get
+		{
+			GuardInitialized();
+			return _useDeploymentOrder;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_useDeploymentOrder = value;
+		}
+	}
+
+	/// <summary>
+	/// 自定义部署顺序的 GUID 列表
+	/// 仅当 UseDeploymentOrder = true 时生效
+	/// </summary>
+	public List<Guid> DeploymentOrderGuids
+	{
+		get
+		{
+			GuardInitialized();
+			return _deploymentOrderGuids;
+		}
+	}
+
+	/// <summary>
+	/// 模组选项的部署顺序（按 Mod GUID 索引）
+	/// value 为选项索引的自定义顺序数组
+	/// </summary>
+	public Dictionary<Guid, int[]> OptionOrders
+	{
+		get
+		{
+			GuardInitialized();
+			return _optionOrders;
+		}
+	}
+
+	/// <summary>
+	/// 模组子选项的部署顺序
+	/// key: Mod GUID, value: 选项索引 -> 子选项索引的自定义顺序
+	/// </summary>
+	public Dictionary<Guid, Dictionary<int, int[]>> SubOptionOrders
+	{
+		get
+		{
+			GuardInitialized();
+			return _subOptionOrders;
 		}
 	}
 
@@ -362,11 +453,17 @@ internal sealed class SettingsService
 	private bool _deployBottomToTop;
 	private bool _autoCheckVersionOnStartup;
 	private bool _autoCleanLogs = true;
+	private bool _showSeparator = true;
+	private ObservableCollection<ModSeparator> _separators = null!;
 	private int _logRetentionDays = 7;
 	private ObservableCollection<ModTag> _tags = null!;
 	private string? _encryptedNexusApiKey;
 	private string _extensionHost = "localhost";
 	private int _extensionPort = 7456;
+	private bool _useDeploymentOrder;
+	private List<Guid> _deploymentOrderGuids = [];
+	private Dictionary<Guid, int[]> _optionOrders = [];
+	private Dictionary<Guid, Dictionary<int, int[]>> _subOptionOrders = [];
 
 	public SettingsService(ILogger<SettingsService> logger)
 	{
@@ -454,7 +551,7 @@ internal sealed class SettingsService
 		_logger.LogInformation("Settings service initialization complete");
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_tags))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_tags), nameof(_separators))]
 	public void Reset()
 	{
 		GuardInitialized();
@@ -490,8 +587,59 @@ internal sealed class SettingsService
 			writer.WriteBoolean(nameof(AutoRemoveMissingMods), _autoRemoveMissingMods);
 			writer.WriteBoolean(nameof(EnableSorting), _enableSorting);
 			writer.WriteBoolean(nameof(DeployBottomToTop), _deployBottomToTop);
+			writer.WriteBoolean(nameof(UseDeploymentOrder), _useDeploymentOrder);
+			writer.WriteStartArray(nameof(DeploymentOrderGuids));
+			foreach (var guid in _deploymentOrderGuids)
+				writer.WriteStringValue(guid.ToString());
+			writer.WriteEndArray();
+			writer.WriteStartArray(nameof(OptionOrders));
+			foreach (var kvp in _optionOrders)
+			{
+				writer.WriteStartObject();
+				writer.WriteString("key", kvp.Key.ToString());
+				writer.WriteStartArray("value");
+				foreach (var idx in kvp.Value)
+					writer.WriteNumberValue(idx);
+				writer.WriteEndArray();
+				writer.WriteEndObject();
+			}
+			writer.WriteEndArray();
+			writer.WriteStartArray(nameof(SubOptionOrders));
+			foreach (var kvp in _subOptionOrders)
+			{
+				writer.WriteStartObject();
+				writer.WriteString("key", kvp.Key.ToString());
+				writer.WriteStartObject("value");
+				foreach (var innerKvp in kvp.Value)
+				{
+					writer.WriteStartArray(innerKvp.Key.ToString());
+					foreach (var idx in innerKvp.Value)
+						writer.WriteNumberValue(idx);
+					writer.WriteEndArray();
+				}
+				writer.WriteEndObject();
+				writer.WriteEndObject();
+			}
+			writer.WriteEndArray();
 			writer.WriteBoolean(nameof(AutoCheckVersionOnStartup), _autoCheckVersionOnStartup);
 			writer.WriteBoolean(nameof(AutoCleanLogs), _autoCleanLogs);
+			writer.WriteBoolean(nameof(ShowSeparator), _showSeparator);
+			writer.WriteStartArray(nameof(Separators));
+			foreach (var sep in _separators)
+			{
+				writer.WriteStartObject();
+				writer.WriteString("id", sep.Id.ToString());
+				writer.WriteString("name", sep.Name);
+				writer.WriteString("color", sep.Color);
+				writer.WriteBoolean("isExpanded", sep.IsExpanded);
+				writer.WriteNumber("displayIndex", sep.DisplayIndex);
+				writer.WriteStartArray("modGuids");
+				foreach (var guid in sep.ModGuids)
+					writer.WriteStringValue(guid.ToString());
+				writer.WriteEndArray();
+				writer.WriteEndObject();
+			}
+			writer.WriteEndArray();
 			writer.WriteNumber(nameof(LogRetentionDays), _logRetentionDays);
 			writer.WriteString(nameof(ExtensionHost), _extensionHost);
 			writer.WriteNumber(nameof(ExtensionPort), _extensionPort);
@@ -597,7 +745,7 @@ internal sealed class SettingsService
 			throw new InvalidOperationException("Object is readonly!");
 	}
 	
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_separators))]
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void GuardInitialized()
 	{
@@ -662,10 +810,100 @@ internal sealed class SettingsService
 			_enableSorting = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(DeployBottomToTop), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_deployBottomToTop = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(UseDeploymentOrder), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_useDeploymentOrder = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(DeploymentOrderGuids), JsonValueKind.Array, out var orderArr))
+		{
+			var orderList = new List<Guid>(orderArr.GetArrayLength());
+			foreach (var elm in orderArr.EnumerateArray())
+			{
+				if (elm.ValueKind == JsonValueKind.String && Guid.TryParse(elm.GetString(), out var guid))
+					orderList.Add(guid);
+			}
+			_deploymentOrderGuids = orderList;
+		}
+		_optionOrders = [];
+		if (root.TryGetProperty(nameof(OptionOrders), JsonValueKind.Array, out var optArr))
+		{
+			foreach (var elm in optArr.EnumerateArray())
+			{
+				if (elm.ValueKind != JsonValueKind.Object) continue;
+				if (!elm.TryGetProperty("key", out var keyProp) || keyProp.ValueKind != JsonValueKind.String) continue;
+				if (!Guid.TryParse(keyProp.GetString(), out var guid)) continue;
+				if (!elm.TryGetProperty("value", out var valProp) || valProp.ValueKind != JsonValueKind.Array) continue;
+				var list = new List<int>();
+				foreach (var v in valProp.EnumerateArray())
+					if (v.TryGetInt32(out var vi)) list.Add(vi);
+				_optionOrders[guid] = [.. list];
+			}
+		}
+		_subOptionOrders = [];
+		if (root.TryGetProperty(nameof(SubOptionOrders), JsonValueKind.Array, out var subArr))
+		{
+			foreach (var elm in subArr.EnumerateArray())
+			{
+				if (elm.ValueKind != JsonValueKind.Object) continue;
+				if (!elm.TryGetProperty("key", out var keyProp) || keyProp.ValueKind != JsonValueKind.String) continue;
+				if (!Guid.TryParse(keyProp.GetString(), out var guid)) continue;
+				if (!elm.TryGetProperty("value", out var valProp) || valProp.ValueKind != JsonValueKind.Object) continue;
+				var innerDict = new Dictionary<int, int[]>();
+				foreach (var inner in valProp.EnumerateObject())
+				{
+					if (int.TryParse(inner.Name, out var optIdx) && inner.Value.ValueKind == JsonValueKind.Array)
+					{
+						var subList = new List<int>();
+						foreach (var v in inner.Value.EnumerateArray())
+							if (v.TryGetInt32(out var vi)) subList.Add(vi);
+						innerDict[optIdx] = [.. subList];
+					}
+				}
+				_subOptionOrders[guid] = innerDict;
+			}
+		}
 		if (root.TryGetProperty(nameof(AutoCheckVersionOnStartup), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_autoCheckVersionOnStartup = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(AutoCleanLogs), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_autoCleanLogs = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(ShowSeparator), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_showSeparator = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(Separators), JsonValueKind.Array, out var sepArr))
+		{
+			var sepList = new List<ModSeparator>();
+			foreach (var sepElm in sepArr.EnumerateArray())
+			{
+				if (sepElm.ValueKind != JsonValueKind.Object) continue;
+				try
+				{
+					var id = Guid.Parse(sepElm.GetProperty("id").GetString()!);
+					var name = sepElm.GetProperty("name").GetString() ?? "分隔符";
+					var color = sepElm.TryGetProperty("color", out var colorProp) ? colorProp.GetString() : "#FF6200EE";
+					var isExpanded = sepElm.TryGetProperty("isExpanded", out var expandedProp) && expandedProp.GetBoolean();
+					var displayIndex = sepElm.TryGetProperty("displayIndex", out var diProp) ? diProp.GetInt32() : -1;
+
+					var modGuids = new List<Guid>();
+					if (sepElm.TryGetProperty("modGuids", out var guidsArr) && guidsArr.ValueKind == JsonValueKind.Array)
+					{
+						foreach (var g in guidsArr.EnumerateArray())
+						{
+							if (g.ValueKind == JsonValueKind.String && Guid.TryParse(g.GetString(), out var mg))
+								modGuids.Add(mg);
+						}
+					}
+
+					sepList.Add(new ModSeparator
+					{
+						Id = id,
+						Name = name,
+						Color = color ?? "#FF6200EE",
+						IsExpanded = isExpanded,
+						DisplayIndex = displayIndex,
+						ModGuids = modGuids
+					});
+				}
+				catch { continue; }
+			}
+			_separators = new ObservableCollection<ModSeparator>(sepList);
+		}
 		if (root.TryGetProperty(nameof(LogRetentionDays), JsonValueKind.Number, out prop))
 			_logRetentionDays = Math.Max(1, prop.GetInt32());
 		if (root.TryGetProperty(nameof(ExtensionHost), JsonValueKind.String, out prop))
@@ -745,7 +983,7 @@ internal sealed class SettingsService
 		}
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_tags))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_tags), nameof(_separators))]
 	private void ResetInternal()
 	{
 		_gameDirectory = string.Empty;
@@ -760,10 +998,16 @@ internal sealed class SettingsService
     _deleteToRecycleBin = true;
     _enableSorting = false;
     _autoCheckVersionOnStartup = false;
-    _extensionHost = "localhost";
+		_showSeparator = true;
+		_separators = [];
+		_extensionHost = "localhost";
 		_extensionPort = 7456;
 		_tags = [];
 		_organizationalFolderNames = ["Models", "Model"];
 		_encryptedNexusApiKey = null;
+		_useDeploymentOrder = false;
+		_deploymentOrderGuids = [];
+		_optionOrders = [];
+		_subOptionOrders = [];
 	}
 }

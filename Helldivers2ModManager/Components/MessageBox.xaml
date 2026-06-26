@@ -199,10 +199,25 @@
 						</StackPanel>
 					</StackPanel>
 
+					<!-- Manual Color Input -->
+					<StackPanel Orientation="Horizontal" Margin="0 0 0 12" VerticalAlignment="Center">
+						<TextBlock Text="自定义颜色:" FontSize="12" Foreground="#88FFFFFF" VerticalAlignment="Center" Margin="0 0 8 0"/>
+						<TextBox x:Name="colorInputBox"
+								 TextChanged="ColorInputBox_TextChanged"
+								 Style="{StaticResource FluentTextBox}"
+								 Width="140"
+								 FontFamily="Consolas"
+								 FontSize="13"
+								 VerticalAlignment="Center"/>
+						<Border x:Name="colorInputPreview"
+								Width="24" Height="24" CornerRadius="4" Margin="8 0 0 0"
+								BorderThickness="1" BorderBrush="#40FFFFFF"/>
+						<TextBlock Text="格式: #FFAABBCC" FontSize="11" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="8 0 0 0"/>
+					</StackPanel>
+
 					<!-- Color Palette -->
 					<TextBlock Text="选择颜色" FontSize="12" Foreground="#88FFFFFF" Margin="0 0 0 8"/>
 					<UniformGrid Columns="8" Rows="6">
-						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF6200EE" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF6200EE"/>
 						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF3B82F6" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF3B82F6"/>
 						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF0078D7" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF0078D7"/>
 						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF00B7C3" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF00B7C3"/>

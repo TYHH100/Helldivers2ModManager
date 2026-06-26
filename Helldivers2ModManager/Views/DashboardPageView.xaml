@@ -8,12 +8,341 @@
 	  xmlns:dd="urn:gong-wpf-dragdrop"
 	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
 	  xmlns:local="clr-namespace:Helldivers2ModManager"
+	  xmlns:models="clr-namespace:Helldivers2ModManager.Models"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:DashboardPageViewModel}"
 	  d:Background="{StaticResource MicaBackgroundBrush}"
 	  d:DesignWidth="1000"
 	  d:DesignHeight="700"
 	  Title="{Binding Title}">
+	<Page.Resources>
+		<local:DashboardItemTemplateSelector x:Key="DashboardItemTemplateSelector">
+			<local:DashboardItemTemplateSelector.ModTemplate>
+				<DataTemplate DataType="vms:ModViewModel">
+					<Border Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
+							MouseLeftButtonDown="ModCard_MouseLeftButtonDown">
+						<Border.Style>
+							<Style TargetType="Border" BasedOn="{StaticResource FluentModCard}">
+								<Setter Property="BorderBrush" Value="Transparent"/>
+								<Setter Property="BorderThickness" Value="2"/>
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding IsSelected}" Value="True">
+										<Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</Border.Style>
+						<Border.ContextMenu>
+							<ContextMenu>
+								<MenuItem Header="编辑 Manifest"
+										  Command="{Binding PlacementTarget.Tag.EditManifestCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+								<MenuItem Header="打包并导出"
+										  Command="{Binding PlacementTarget.Tag.ExportModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+								<MenuItem Header="更新模组"
+										  Command="{Binding PlacementTarget.Tag.UpdateModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+								<Separator/>
+								<MenuItem Header="打开文件位置"
+										  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+								<Separator/>
+								<MenuItem Header="设置标签"
+										  Command="{Binding PlacementTarget.Tag.EditModTagsCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+							</ContextMenu>
+						</Border.ContextMenu>
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="60"/>
+								<ColumnDefinition Width="*"/>
+								<ColumnDefinition Width="Auto"/>
+								<ColumnDefinition Width="Auto"/>
+								<ColumnDefinition Width="Auto"/>
+							</Grid.ColumnDefinitions>
+							<Grid.RowDefinitions>
+								<RowDefinition Height="*"/>
+								<RowDefinition Height="Auto"/>
+							</Grid.RowDefinitions>
+
+							<!-- Mod Icon -->
+							<Viewbox Grid.Column="0"
+									 Grid.Row="0"
+									 Grid.RowSpan="2"
+									 Margin="0 0 12 0">
+								<Image Source="{Binding Icon}"
+									   Cursor="Hand"
+									   MouseLeftButtonDown="ModIcon_MouseLeftButtonDown">
+									<Image.ToolTip>
+										<ToolTip Placement="Mouse"
+												 HorizontalOffset="10"
+												 VerticalOffset="10"
+												 StaysOpen="True">
+											<Image Source="{Binding Icon}"
+												   Stretch="Uniform"
+												   Width="300"
+												   Height="300"/>
+										</ToolTip>
+									</Image.ToolTip>
+								</Image>
+							</Viewbox>
+
+							<!-- Mod Name and Tags -->
+							<StackPanel Grid.Column="1"
+									   Grid.Row="0"
+									   Orientation="Vertical"
+									   VerticalAlignment="Center">
+								<TextBlock Text="{Binding Name}"
+										   FontSize="18"
+										   FontWeight="SemiBold"
+										   Foreground="{StaticResource NeutralForegroundBrush}"
+										   TextWrapping="NoWrap"
+										   TextTrimming="CharacterEllipsis">
+									<TextBlock.ToolTip>
+										<ToolTip>
+											<TextBlock Text="{Binding Name}"
+													   FontSize="18"
+													   FontWeight="SemiBold"
+													   Foreground="{StaticResource NeutralForegroundBrush}"/>
+										</ToolTip>
+									</TextBlock.ToolTip>
+								</TextBlock>
+								<StackPanel Orientation="Horizontal" Margin="0 4 0 0">
+									<ItemsControl ItemsSource="{Binding DisplayTags}">
+										<ItemsControl.ItemsPanel>
+											<ItemsPanelTemplate>
+												<StackPanel Orientation="Horizontal"/>
+											</ItemsPanelTemplate>
+										</ItemsControl.ItemsPanel>
+										<ItemsControl.ItemTemplate>
+											<DataTemplate>
+												<Border Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}"
+														CornerRadius="4"
+														Padding="6 2"
+														Margin="0 0 4 0">
+													<TextBlock Text="{Binding Name}"
+															   FontSize="11"
+															   Foreground="{Binding Foreground}"/>
+												</Border>
+											</DataTemplate>
+										</ItemsControl.ItemTemplate>
+									</ItemsControl>
+									<Border Background="#FF6B7280"
+											CornerRadius="4"
+											Padding="6 2"
+											Margin="0 0 4 0"
+											Visibility="{Binding HasHiddenTags, Converter={StaticResource BoolToVisibilityConverter}}">
+										<TextBlock Text="{Binding HiddenTagCount, StringFormat='+{0}'}"
+												   FontSize="11"
+												   Foreground="White"/>
+										<Border.ToolTip>
+											<ToolTip>
+												<StackPanel>
+													<TextBlock Text="更多标签:" FontWeight="SemiBold" Margin="0 0 0 4"/>
+													<ItemsControl ItemsSource="{Binding HiddenTags}">
+														<ItemsControl.ItemsPanel>
+															<ItemsPanelTemplate>
+																<WrapPanel Orientation="Horizontal"/>
+															</ItemsPanelTemplate>
+														</ItemsControl.ItemsPanel>
+														<ItemsControl.ItemTemplate>
+															<DataTemplate>
+																<Border Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}"
+																		CornerRadius="4"
+																		Padding="6 2"
+																		Margin="0 0 4 4">
+																	<TextBlock Text="{Binding Name}"
+																			   FontSize="11"
+																			   Foreground="{Binding Foreground}"/>
+																</Border>
+															</DataTemplate>
+														</ItemsControl.ItemTemplate>
+													</ItemsControl>
+												</StackPanel>
+											</ToolTip>
+										</Border.ToolTip>
+									</Border>
+								</StackPanel>
+							</StackPanel>
+
+							<!-- Mod Description -->
+							<TextBlock Grid.Column="1"
+									   Grid.Row="1"
+									   Text="{Binding Description}"
+									   FontSize="13"
+									   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+									   TextWrapping="NoWrap"
+									   TextTrimming="WordEllipsis"
+									   VerticalAlignment="Center"/>
+
+							<!-- Options Panel -->
+							<StackPanel Grid.Column="2"
+										Grid.Row="0"
+										Grid.RowSpan="2"
+										Orientation="Horizontal"
+										VerticalAlignment="Center">
+								<ComboBox Width="140"
+										  Margin="8 0"
+										  Visibility="{Binding OptionsVisible}"
+										  ItemsSource="{Binding LegacyOptions}"
+										  SelectedIndex="{Binding LegacySelectedOption}"/>
+								<Button Style="{StaticResource FluentSecondaryButton}"
+										Content="编辑"
+										Padding="12 4"
+										Margin="8 0"
+										Visibility="{Binding EditVisible}"
+										Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
+										CommandParameter="{Binding}"/>
+							</StackPanel>
+
+							<!-- Enable Checkbox -->
+							<CheckBox Grid.Column="3"
+									  Grid.Row="0"
+									  Grid.RowSpan="2"
+									  IsChecked="{Binding Enabled}"
+									  Width="24"
+									  Height="24"
+									  Margin="8 0"
+									  VerticalAlignment="Center"/>
+
+							<!-- Remove Button -->
+							<Button Grid.Column="4"
+									Grid.Row="0"
+									Grid.RowSpan="2"
+									Style="{StaticResource FluentIconButton}"
+									Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
+									CommandParameter="{Binding}"
+									ToolTip="删除模组">
+								<TextBlock Text="&#xE74D;"
+										   FontFamily="Segoe Fluent Icons"
+										   FontSize="16"
+										   Foreground="{StaticResource DangerBrush}"/>
+							</Button>
+
+							<!-- 版本状态指示器 -->
+							<Border Grid.Column="0"
+									Grid.Row="0"
+									Width="14"
+									Height="14"
+									CornerRadius="7"
+									HorizontalAlignment="Left"
+									VerticalAlignment="Top"
+									Margin="-7,-7,0,0"
+									Cursor="Hand"
+									Background="{Binding VersionStatus, Converter={StaticResource VersionStatusToColorConverter}}"
+									MouseLeftButtonDown="VersionStatusIndicator_MouseLeftButtonDown">
+								<Border.Style>
+									<Style TargetType="Border">
+										<Setter Property="Visibility" Value="Visible"/>
+										<Style.Triggers>
+											<DataTrigger Binding="{Binding IsCheckingVersion}" Value="True">
+												<Setter Property="Visibility" Value="Collapsed"/>
+											</DataTrigger>
+											<DataTrigger Binding="{Binding VersionStatus}" Value="Unknown">
+												<Setter Property="Visibility" Value="Collapsed"/>
+											</DataTrigger>
+										</Style.Triggers>
+									</Style>
+								</Border.Style>
+								<Border.ToolTip>
+									<ToolTip>
+										<StackPanel>
+											<TextBlock FontWeight="SemiBold" Margin="0 0 0 4">
+												<Run Text="版本兼容性: "/>
+												<Run Text="{Binding VersionStatus, Converter={StaticResource VersionStatusToTextConverter}}"/>
+											</TextBlock>
+											<TextBlock Text="{Binding LastVersionCheck, StringFormat='最后检查: {0:yyyy-MM-dd HH:mm}'}"
+													   FontSize="11"
+													   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+											<TextBlock Text="点击查看详情"
+													   FontSize="11"
+													   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+													   Margin="0 4 0 0"/>
+										</StackPanel>
+									</ToolTip>
+								</Border.ToolTip>
+							</Border>
+							<!-- 检查中加载指示器 -->
+							<Border Grid.Column="0"
+									Grid.Row="0"
+									Width="14"
+									Height="14"
+									CornerRadius="7"
+									HorizontalAlignment="Left"
+									VerticalAlignment="Top"
+									Margin="-7,-7,0,0"
+									Background="{StaticResource SystemAccentBrush}"
+									Visibility="{Binding IsCheckingVersion, Converter={StaticResource BoolToVisibilityConverter}}"
+									ToolTip="正在检查版本兼容性..."/>
+						</Grid>
+					</Border>
+				</DataTemplate>
+			</local:DashboardItemTemplateSelector.ModTemplate>
+			<local:DashboardItemTemplateSelector.SeparatorTemplate>
+				<DataTemplate DataType="models:ModSeparator">
+					<Border Padding="8 4"
+							Margin="0 2"
+							CornerRadius="6"
+							Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
+							Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}">
+						<Border.Style>
+							<Style TargetType="Border">
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding IsExpanded}" Value="False">
+										<Setter Property="Opacity" Value="0.6"/>
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</Border.Style>
+						<Border.ContextMenu>
+							<ContextMenu>
+								<MenuItem Header="重命名"
+										  Command="{Binding PlacementTarget.Tag.RenameSeparatorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+								<MenuItem Header="更改颜色"
+										  Command="{Binding PlacementTarget.Tag.ChangeSeparatorColorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+								<Separator/>
+								<MenuItem Header="删除"
+										  Command="{Binding PlacementTarget.Tag.DeleteSeparatorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+							</ContextMenu>
+						</Border.ContextMenu>
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*"/>
+								<ColumnDefinition Width="Auto"/>
+							</Grid.ColumnDefinitions>
+
+							<!-- 名称 -->
+							<TextBlock Grid.Column="0"
+									   Text="{Binding Name}"
+									   FontSize="14"
+									   FontWeight="SemiBold"
+									   Foreground="{Binding Color, Converter={StaticResource ColorToForegroundConverter}}"
+									   VerticalAlignment="Center"
+									   Margin="4 0 0 0"/>
+
+							<!-- 删除按钮 -->
+							<Button Grid.Column="1"
+									Style="{StaticResource FluentIconButton}"
+									Command="{Binding DataContext.DeleteSeparatorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
+									CommandParameter="{Binding}"
+									Width="24" Height="24"
+									Foreground="{Binding Color, Converter={StaticResource ColorToForegroundConverter}}"
+									ToolTip="删除分隔符">
+								<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="10"
+										   Foreground="{Binding Color, Converter={StaticResource ColorToForegroundConverter}}"
+										   Opacity="0.7"/>
+							</Button>
+						</Grid>
+					</Border>
+				</DataTemplate>
+			</local:DashboardItemTemplateSelector.SeparatorTemplate>
+		</local:DashboardItemTemplateSelector>
+	</Page.Resources>
+
 	<Grid Margin="16">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto"/>
@@ -98,14 +427,24 @@
 				</Button>
 
 					<Button Style="{StaticResource FluentNavigationButton}"
-							Command="{Binding SettingsCommand}">
-						<StackPanel Orientation="Horizontal">
-							<TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-							<TextBlock Text="设置" Margin="12 0 0 0" VerticalAlignment="Center"/>
-						</StackPanel>
-					</Button>
+						Command="{Binding SettingsCommand}">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+						<TextBlock Text="设置" Margin="12 0 0 0" VerticalAlignment="Center"/>
+					</StackPanel>
+				</Button>
 
-					<Border Style="{StaticResource FluentDivider}" Margin="0 8"/>
+					<Button Style="{StaticResource FluentNavigationButton}"
+							Command="{Binding DeploymentOrderCommand}"
+							IsEnabled="{Binding Initialized}">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE718;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+						<TextBlock Text="部署顺序" Margin="12 0 0 0" VerticalAlignment="Center"/>
+					</StackPanel>
+				</Button>
+
+					<Border Style="{StaticResource FluentDivider}" Margin="0 8"
+							Visibility="{Binding ShowSeparator, Converter={StaticResource BoolToVisibilityConverter}}"/>
 				</StackPanel>
 
 				<!-- Social Links - Dock to Bottom -->
@@ -279,295 +618,20 @@
 					  BorderThickness="0"
 					  HorizontalScrollBarVisibility="Disabled"
 					  VerticalScrollBarVisibility="Auto">
+			<ScrollViewer.ContextMenu>
+				<ContextMenu>
+					<MenuItem Header="创建分隔符"
+							  Command="{Binding CreateSeparatorCommand}"/>
+				</ContextMenu>
+			</ScrollViewer.ContextMenu>
 			<ItemsControl ItemsSource="{Binding Mods}"
 					  dd:DragDrop.IsDragSource="{Binding IsSearchEmpty}"
 					  dd:DragDrop.IsDropTarget="True"
 					  dd:DragDrop.DropHandler="{Binding}"
 					  local:DragDropAutoScrollBehavior.IsEnabled="True">
-				<ItemsControl.ItemTemplate>
-					<DataTemplate DataType="vms:ModViewModel">
-						<Border Grid.Row="0"
-										Grid.RowSpan="2"
-										Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
-										MouseLeftButtonDown="ModCard_MouseLeftButtonDown">
-							<Border.Style>
-								<Style TargetType="Border" BasedOn="{StaticResource FluentModCard}">
-									<Setter Property="BorderBrush" Value="Transparent"/>
-									<Setter Property="BorderThickness" Value="2"/>
-									<Style.Triggers>
-										<DataTrigger Binding="{Binding IsSelected}" Value="True">
-											<Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
-										</DataTrigger>
-									</Style.Triggers>
-								</Style>
-							</Border.Style>
-							<Border.ContextMenu>
-								<ContextMenu>
-									<MenuItem Header="编辑 Manifest"
-											  Command="{Binding PlacementTarget.Tag.EditManifestCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/>
-									<MenuItem Header="打包并导出"
-											  Command="{Binding PlacementTarget.Tag.ExportModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/>
-									<MenuItem Header="更新模组"
-											  Command="{Binding PlacementTarget.Tag.UpdateModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/>
-									<Separator/>
-									<MenuItem Header="打开文件位置"
-											  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/>
-									<!-- <MenuItem Header="编辑名字"
-											  Command="{Binding PlacementTarget.Tag.EditNameCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/>
-									<MenuItem Header="编辑描述"
-											  Command="{Binding PlacementTarget.Tag.EditDescriptionCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/>
-									<MenuItem Header="更新图片"
-											  Command="{Binding PlacementTarget.Tag.EditImageCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/> -->
-									<Separator/>
-									<!--<MenuItem Header="在 Nexus 上查看"
-											  Command="{Binding OpenNexusPageCommand}"
-											  IsEnabled="{Binding HasNexusData}"/>
-									<MenuItem Header="检查 Nexus 更新"
-											  Command="{Binding CheckForUpdatesCommand}"
-											  IsEnabled="{Binding HasNexusData}"/>
-									<Separator/> -->
-									<MenuItem Header="设置标签"
-											  Command="{Binding PlacementTarget.Tag.EditModTagsCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-											  CommandParameter="{Binding}"/>
-								</ContextMenu>
-							</Border.ContextMenu>
-							<Grid>
-								<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="60"/>
-								<ColumnDefinition Width="*"/>
-								<ColumnDefinition Width="Auto"/>
-								<ColumnDefinition Width="Auto"/>
-								<ColumnDefinition Width="Auto"/>
-							</Grid.ColumnDefinitions>
-								<Grid.RowDefinitions>
-									<RowDefinition Height="*"/>
-									<RowDefinition Height="Auto"/>
-								</Grid.RowDefinitions>
-
-								<!-- Mod Icon -->
-								<Viewbox Grid.Column="0"
-										 Grid.Row="0"
-										 Grid.RowSpan="2"
-										 Margin="0 0 12 0">
-									<Image Source="{Binding Icon}"
-										   Cursor="Hand"
-										   MouseLeftButtonDown="ModIcon_MouseLeftButtonDown">
-										<Image.ToolTip>
-											<ToolTip Placement="Mouse"
-													 HorizontalOffset="10"
-													 VerticalOffset="10"
-													 StaysOpen="True">
-												<Image Source="{Binding Icon}"
-													   Stretch="Uniform"
-													   Width="300"
-													   Height="300"/>
-											</ToolTip>
-										</Image.ToolTip>
-									</Image>
-								</Viewbox>
-
-								<!-- Mod Name and Tags -->
-								<StackPanel Grid.Column="1"
-										   Grid.Row="0"
-										   Orientation="Vertical"
-										   VerticalAlignment="Center">
-									<TextBlock Text="{Binding Name}"
-											   FontSize="18"
-											   FontWeight="SemiBold"
-											   Foreground="{StaticResource NeutralForegroundBrush}"
-											   TextWrapping="NoWrap"
-											   TextTrimming="CharacterEllipsis">
-										<TextBlock.ToolTip>
-											<ToolTip>
-												<TextBlock Text="{Binding Name}"
-														   FontSize="18"
-														   FontWeight="SemiBold"
-														   Foreground="{StaticResource NeutralForegroundBrush}"/>
-											</ToolTip>
-										</TextBlock.ToolTip>
-									</TextBlock>
-									<StackPanel Orientation="Horizontal" Margin="0 4 0 0">
-										<ItemsControl ItemsSource="{Binding DisplayTags}">
-											<ItemsControl.ItemsPanel>
-												<ItemsPanelTemplate>
-													<StackPanel Orientation="Horizontal"/>
-												</ItemsPanelTemplate>
-											</ItemsControl.ItemsPanel>
-											<ItemsControl.ItemTemplate>
-												<DataTemplate>
-													<Border Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}"
-															CornerRadius="4"
-															Padding="6 2"
-															Margin="0 0 4 0">
-														<TextBlock Text="{Binding Name}"
-																   FontSize="11"
-																   Foreground="{Binding Foreground}"/>
-													</Border>
-												</DataTemplate>
-											</ItemsControl.ItemTemplate>
-										</ItemsControl>
-										<Border x:Name="MoreTagsButton"
-												Background="#FF6B7280"
-												CornerRadius="4"
-												Padding="6 2"
-												Margin="0 0 4 0"
-												Visibility="{Binding HasHiddenTags, Converter={StaticResource BoolToVisibilityConverter}}">
-											<TextBlock Text="{Binding HiddenTagCount, StringFormat='+{0}'}"
-													   FontSize="11"
-													   Foreground="White"/>
-											<Border.ToolTip>
-												<ToolTip>
-													<StackPanel>
-														<TextBlock Text="更多标签:" FontWeight="SemiBold" Margin="0 0 0 4"/>
-														<ItemsControl ItemsSource="{Binding HiddenTags}">
-															<ItemsControl.ItemsPanel>
-																<ItemsPanelTemplate>
-																	<WrapPanel Orientation="Horizontal"/>
-																</ItemsPanelTemplate>
-															</ItemsControl.ItemsPanel>
-															<ItemsControl.ItemTemplate>
-																<DataTemplate>
-																	<Border Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}"
-																			CornerRadius="4"
-																			Padding="6 2"
-																			Margin="0 0 4 4">
-																		<TextBlock Text="{Binding Name}"
-																				   FontSize="11"
-																				   Foreground="{Binding Foreground}"/>
-																	</Border>
-																</DataTemplate>
-															</ItemsControl.ItemTemplate>
-														</ItemsControl>
-													</StackPanel>
-												</ToolTip>
-											</Border.ToolTip>
-										</Border>
-									</StackPanel>
-								</StackPanel>
-
-								<!-- Mod Description -->
-								<TextBlock Grid.Column="1"
-										   Grid.Row="1"
-										   Text="{Binding Description}"
-										   FontSize="13"
-										   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-										   TextWrapping="NoWrap"
-										   TextTrimming="WordEllipsis"
-										   VerticalAlignment="Center"/>
-
-								<!-- Options Panel -->
-								<StackPanel Grid.Column="2"
-											Grid.Row="0"
-											Grid.RowSpan="2"
-											Orientation="Horizontal"
-											VerticalAlignment="Center">
-									<!-- Legacy Options ComboBox -->
-									<ComboBox Width="140"
-											  Margin="8 0"
-											  Visibility="{Binding OptionsVisible}"
-											  ItemsSource="{Binding LegacyOptions}"
-											  SelectedIndex="{Binding LegacySelectedOption}"/>
-
-									<!-- Edit Button -->
-									<Button Style="{StaticResource FluentSecondaryButton}"
-											Content="编辑"
-											Padding="12 4"
-											Margin="8 0"
-											Visibility="{Binding EditVisible}"
-											Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
-											CommandParameter="{Binding}"/>
-								</StackPanel>
-
-								<!-- Enable Checkbox -->
-								<CheckBox Grid.Column="3"
-										  Grid.Row="0"
-										  Grid.RowSpan="2"
-										  IsChecked="{Binding Enabled}"
-										  Width="24"
-										  Height="24"
-										  Margin="8 0"
-										  VerticalAlignment="Center"/>
-
-								<!-- Remove Button -->
-								<Button Grid.Column="4"
-										Grid.Row="0"
-										Grid.RowSpan="2"
-										Style="{StaticResource FluentIconButton}"
-										Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
-										CommandParameter="{Binding}"
-										ToolTip="删除模组">
-									<TextBlock Text="&#xE74D;"
-											   FontFamily="Segoe Fluent Icons"
-											   FontSize="16"
-											   Foreground="{StaticResource DangerBrush}"/>
-								</Button>
-
-								<!-- 版本状态指示器（卡片左上角覆盖层） -->
-								<Border Grid.Column="0"
-										Grid.Row="0"
-										Width="14"
-										Height="14"
-										CornerRadius="7"
-										HorizontalAlignment="Left"
-										VerticalAlignment="Top"
-										Margin="-7,-7,0,0"
-										Cursor="Hand"
-										Background="{Binding VersionStatus, Converter={StaticResource VersionStatusToColorConverter}}"
-										MouseLeftButtonDown="VersionStatusIndicator_MouseLeftButtonDown">
-									<Border.Style>
-										<Style TargetType="Border">
-											<Setter Property="Visibility" Value="Visible"/>
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding IsCheckingVersion}" Value="True">
-													<Setter Property="Visibility" Value="Collapsed"/>
-												</DataTrigger>
-												<DataTrigger Binding="{Binding VersionStatus}" Value="Unknown">
-													<Setter Property="Visibility" Value="Collapsed"/>
-												</DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Border.Style>
-									<Border.ToolTip>
-										<ToolTip>
-											<StackPanel>
-												<TextBlock FontWeight="SemiBold" Margin="0 0 0 4">
-													<Run Text="版本兼容性: "/>
-													<Run Text="{Binding VersionStatus, Converter={StaticResource VersionStatusToTextConverter}}"/>
-												</TextBlock>
-												<TextBlock Text="{Binding LastVersionCheck, StringFormat='最后检查: {0:yyyy-MM-dd HH:mm}'}"
-														   FontSize="11"
-														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
-												<TextBlock Text="点击查看详情"
-														   FontSize="11"
-														   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
-														   Margin="0 4 0 0"/>
-											</StackPanel>
-										</ToolTip>
-									</Border.ToolTip>
-								</Border>
-								<!-- 检查中加载指示器（卡片左上角覆盖层） -->
-								<Border Grid.Column="0"
-										Grid.Row="0"
-										Width="14"
-										Height="14"
-										CornerRadius="7"
-										HorizontalAlignment="Left"
-										VerticalAlignment="Top"
-										Margin="-7,-7,0,0"
-										Background="{StaticResource SystemAccentBrush}"
-										Visibility="{Binding IsCheckingVersion, Converter={StaticResource BoolToVisibilityConverter}}"
-										ToolTip="正在检查版本兼容性..."/>
-							</Grid>
-						</Border>
-					</DataTemplate>
-				</ItemsControl.ItemTemplate>
+				<ItemsControl.ItemTemplateSelector>
+					<StaticResource ResourceKey="DashboardItemTemplateSelector"/>
+				</ItemsControl.ItemTemplateSelector>
 				<ItemsControl.ItemsPanel>
 					<ItemsPanelTemplate>
 						<StackPanel/>

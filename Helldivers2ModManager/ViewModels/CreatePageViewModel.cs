@@ -54,6 +54,10 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	[ObservableProperty]
 	private bool _isJsonMode;
 
+	/// <summary>是否显示创建流程提示横幅（可由用户关闭）</summary>
+	[ObservableProperty]
+	private bool _showBanner = true;
+
 	/// <summary>JSON 编辑器内容（直接编辑模式时使用）</summary>
 	[ObservableProperty]
 	private string _jsonContent = string.Empty;
@@ -125,6 +129,13 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	void Cancel()
 	{
 		_navigationStore.Navigate<DashboardPageViewModel>();
+	}
+
+	/// <summary>关闭创建流程提示横幅</summary>
+	[RelayCommand]
+	void DismissBanner()
+	{
+		ShowBanner = false;
 	}
 
 	/// <summary>判断是否可以执行创建操作（名称和源目录不为空，且不在创建中）</summary>

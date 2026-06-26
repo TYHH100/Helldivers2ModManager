@@ -421,6 +421,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		{
 			colorPreviewBorder.Background = new SolidColorBrush(color);
 			colorCodeText.Text = _selectedColor;
+			colorInputBox.Text = _selectedColor;
+			colorInputPreview.Background = new SolidColorBrush(color);
 		}
 	}
 
@@ -428,6 +430,27 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	{
 		_selectedColor = colorCode;
 		UpdateColorPreview();
+	}
+
+	private void ColorInputBox_TextChanged(object sender, TextChangedEventArgs e)
+	{
+		var text = colorInputBox.Text?.Trim();
+		if (!string.IsNullOrEmpty(text))
+		{
+			try
+			{
+				var color = (Color)ColorConverter.ConvertFromString(text);
+				_selectedColor = text;
+				colorPreviewBorder.Background = new SolidColorBrush(color);
+				colorCodeText.Text = text;
+				colorInputPreview.Background = new SolidColorBrush(color);
+			}
+			catch
+			{
+				// 输入无效颜色时不做响应，预览保持原样
+				colorInputPreview.Background = null;
+			}
+		}
 	}
 
 	private void Reset()
@@ -444,10 +467,13 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		message.Visibility = Visibility.Visible;
 		message.Margin = new Thickness(0);
 		input.Visibility = Visibility.Collapsed;
+		input.Text = string.Empty;
 		selectionComboBox.Visibility = Visibility.Collapsed;
 		tagSelectionList.Visibility = Visibility.Collapsed;
 		tagSelectionList.ItemsSource = null;
 		colorPickerPanel.Visibility = Visibility.Collapsed;
+		colorInputBox.Text = string.Empty;
+		colorInputPreview.Background = null;
 		cancelButton.Visibility = Visibility.Hidden;
 		okButton.Visibility = Visibility.Hidden;
 		yesNoStack.Visibility = Visibility.Hidden;

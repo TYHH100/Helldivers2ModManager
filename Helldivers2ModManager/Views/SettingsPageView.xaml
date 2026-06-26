@@ -145,6 +145,22 @@
                         </Style>
                     </Button.Style>
                 </Button>
+                <!-- 主页 选项卡 -->
+                <Button Content="主页"
+                        Command="{Binding SetTabCommand}"
+                        CommandParameter="6">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="6">
+                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </StackPanel>
         </Border>
 
@@ -387,6 +403,40 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- 自定义部署顺序 -->
+                        <Border Style="{StaticResource FluentSettingsCard}" Margin="0 12 0 0">
+                            <StackPanel>
+                                <Grid Margin="0 0 0 8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
+                                              IsChecked="{Binding UseDeploymentOrder}"
+                                              Margin="0 0 12 0"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="使用自定义部署顺序"
+                                                   Style="{StaticResource FluentSubSectionHeader}"
+                                                   Margin="0"/>
+                                        <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 2 0 0">
+                                            启用后部署时按照下方列表的顺序部署模组，而非主页顺序。
+                                            <LineBreak/>
+                                            此设置不影响主页模组列表的显示。
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Visibility="{Binding UseDeploymentOrder, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           Style="{StaticResource FluentBodyText}"
+                                           Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+                                           Margin="0 4 0 0">
+                                    请前往主页左侧「部署顺序」页面编辑模组部署顺序列表。
+                                </TextBlock>
+                            </StackPanel>
+                                </Border>
+
                         <!-- 跳过列表（开发者选项） -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
@@ -493,59 +543,6 @@
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"
                                                Text="自动删除不存在的模组条目"
-                                               FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
-                                               VerticalAlignment="Center"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- 排序 -->
-                        <Border Style="{StaticResource FluentSettingsCard}">
-                            <StackPanel>
-                                <TextBlock Text="排序"
-                                           Style="{StaticResource FluentSubSectionHeader}"
-                                           Margin="0"/>
-                                <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="启用后可在模组列表顶部选择排序方式"/>
-                                </TextBlock>
-                                <Grid Margin="0 8 0 0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <CheckBox Grid.Column="0"
-                                              Width="24"
-                                              Height="24"
-                                              IsChecked="{Binding EnableSorting}"
-                                              Margin="0 0 12 0"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="启用排序"
-                                               FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
-                                               VerticalAlignment="Center"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- 搜索 -->
-                        <Border Style="{StaticResource FluentSettingsCard}">
-                            <StackPanel>
-                                <TextBlock Text="搜索"
-                                           Style="{StaticResource FluentSubSectionHeader}"
-                                           Margin="0"/>
-                                <Grid Margin="0 8 0 0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <CheckBox Grid.Column="0"
-                                              Width="24"
-                                              Height="24"
-                                              IsChecked="{Binding CaseSensitiveSearch}"
-                                              Margin="0 0 12 0"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="区分大小写"
                                                FontSize="14"
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
@@ -807,6 +804,101 @@
                                            Foreground="{StaticResource WarningBrush}"
                                            FontSize="12"
                                            Margin="0 4 0 0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+                <!-- Tab 6: 主页 -->
+                <Grid>
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="6">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
+                    <StackPanel>
+                        <!-- 分隔符 -->
+                        <Border Style="{StaticResource FluentSettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="分隔符"
+                                           Style="{StaticResource FluentSubSectionHeader}"
+                                           Margin="0"/>
+                                <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
+                                    <Run Text="启用后可在模组列表中创建带颜色名称的分隔符来分类模组"/>
+                                </TextBlock>
+                                <Grid Margin="0 8 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
+                                              IsChecked="{Binding ShowSeparator}"
+                                              Margin="0 0 12 0"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="启用分隔符"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 排序 -->
+                        <Border Style="{StaticResource FluentSettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="排序"
+                                           Style="{StaticResource FluentSubSectionHeader}"
+                                           Margin="0"/>
+                                <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
+                                    <Run Text="启用后可在模组列表顶部选择排序方式"/>
+                                </TextBlock>
+                                <Grid Margin="0 8 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
+                                              IsChecked="{Binding EnableSorting}"
+                                              Margin="0 0 12 0"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="启用排序"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 搜索 -->
+                        <Border Style="{StaticResource FluentSettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="搜索"
+                                           Style="{StaticResource FluentSubSectionHeader}"
+                                           Margin="0"/>
+                                <Grid Margin="0 8 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
+                                              IsChecked="{Binding CaseSensitiveSearch}"
+                                              Margin="0 0 12 0"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="区分大小写"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </StackPanel>

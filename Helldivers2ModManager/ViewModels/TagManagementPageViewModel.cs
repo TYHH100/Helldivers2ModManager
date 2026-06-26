@@ -18,20 +18,6 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
 
     public ObservableCollection<ModTag> Tags => _settingsService.Initialized ? _settingsService.Tags : [];
 
-    public ObservableCollection<ColorOption> ColorOptions { get; } = new()
-    {
-        new ColorOption("紫色", "#FF6200EE"),
-        new ColorOption("蓝色", "#FF0078D7"),
-        new ColorOption("青色", "#FF00B7C3"),
-        new ColorOption("绿色", "#FF107C10"),
-        new ColorOption("黄色", "#FFFFC107"),
-        new ColorOption("橙色", "#FFFF8C00"),
-        new ColorOption("红色", "#FFE81123"),
-        new ColorOption("粉色", "#FFFF4081"),
-        new ColorOption("灰色", "#FF5C5C5C"),
-        new ColorOption("白色", "#FFFFFFFF"),
-    };
-
     [ObservableProperty]
     private ModTag? _selectedTag;
 
@@ -174,17 +160,3 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
     }
 }
 
-public sealed class ColorOption
-{
-    public string Name { get; }
-    public string ColorCode { get; }
-    public string DisplayName => $"{Name} ({ColorCode})";
-
-    public ColorOption(string name, string colorCode)
-    {
-        Name = name;
-        ColorCode = colorCode;
-    }
-
-    public override string ToString() => DisplayName;
-}

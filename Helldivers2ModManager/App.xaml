@@ -13,6 +13,7 @@
 			</ResourceDictionary.MergedDictionaries>
 
 			<local:StringToColorBrushConverter x:Key="StringToColorBrushConverter"/>
+			<local:ColorToForegroundConverter x:Key="ColorToForegroundConverter"/>
 			<local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
 			<local:TagsToStringConverter x:Key="TagsToStringConverter"/>
 			<local:BytesToSizeConverter x:Key="BytesConverter"/>
@@ -24,6 +25,7 @@
 			<local:SortModeConverter x:Key="SortModeConverter"/>
 			<local:VersionStatusToColorConverter x:Key="VersionStatusToColorConverter"/>
 			<local:VersionStatusToTextConverter x:Key="VersionStatusToTextConverter"/>
+			<local:ModLevelToVisibilityConverter x:Key="ModLevelToVisibilityConverter"/>
 
 			<!-- ============================================ -->
 			<!-- Legacy Style Mappings (Backward Compatibility) -->

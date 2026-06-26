@@ -31,7 +31,7 @@ public sealed class ModTag : INotifyPropertyChanged
         }
     }
 
-    private string _color = "#FF6200EE";
+    private string _color = "#FF3B82F6";
     [JsonPropertyName("color")]
     public string Color
     {
@@ -51,7 +51,7 @@ public sealed class ModTag : INotifyPropertyChanged
 
     public SolidColorBrush Foreground => GetForegroundBrush();
 
-    public ModTag(string name, string color = "#FF6200EE")
+    public ModTag(string name, string color = "#FF3B82F6")
     {
         Id = Guid.NewGuid();
         Name = name;

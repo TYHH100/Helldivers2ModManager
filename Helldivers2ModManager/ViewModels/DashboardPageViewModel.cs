@@ -30,7 +30,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 {
     public override string Title => "Mods";
 
-    public IEnumerable<ModViewModel> Mods { get; private set; }
+    public IEnumerable<object> Mods { get; private set; }
 
     public bool IsSearchEmpty => string.IsNullOrEmpty(SearchText);
 
@@ -49,6 +49,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly VersionCheckRepository _versionCheckRepository;
     private readonly ModHashService _modHashService;
     private ObservableCollection<ModViewModel> _mods;
+    private ObservableCollection<object> _orderedItems;
     private Timer? _saveTimer;
     private volatile bool _isSavePending;
     private readonly object _saveLock = new();
@@ -78,6 +79,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// 排序功能是否在设置中启用
     /// </summary>
     public bool IsSortingEnabled => _sortService.IsSortingEnabled;
+
+    /// <summary>
+    /// 在主页导航面板中显示分隔线
+    /// </summary>
+    public bool ShowSeparator => _settingsService.Initialized && _settingsService.ShowSeparator;
 
     // ===== 版本兼容性检测属性（委托给 VersionCheckViewModel） =====
 
@@ -141,9 +147,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             });
         };
         _mods = [];
+        _orderedItems = [];
         _saveTimer = new Timer(OnSaveTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
-        Mods = _mods;
+        Mods = _orderedItems;
 
         if (MessageBox.IsRegistered)
             _ = Init();
@@ -177,7 +184,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             }
 
             // 保存前将当前显示顺序告诉 ProfileService，确保其以正确的顺序写入 SQLite
-            _profileService.SetLastSavedOrder(_mods.Select(static vm => vm.Guid));
+            // 使用显示列表中的模组顺序保存（包含分隔符内的模组顺序）
+            var displayedModGuids = _orderedItems.OfType<ModViewModel>().Select(static vm => vm.Guid);
+            _profileService.SetLastSavedOrder(displayedModGuids);
             await _profileService.SaveAsync(_settingsService, _mods.Select(static vm => vm.Data));
 
             if (showProgress)
@@ -185,6 +194,41 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
             }
         }
+    }
+
+    private void RebuildOrderedItems()
+    {
+        _orderedItems.Clear();
+
+        if (!ShowSeparator)
+        {
+            // 分隔符未启用时，只显示所有模组
+            foreach (var mod in _mods)
+                _orderedItems.Add(mod);
+            OnPropertyChanged(nameof(Mods));
+            return;
+        }
+
+        // 先添加所有模组
+        foreach (var mod in _mods)
+            _orderedItems.Add(mod);
+
+        // 按 DisplayIndex 排序后插入分隔符到对应位置
+        if (_settingsService.Initialized)
+        {
+            var sortedSeps = _settingsService.Separators
+                .OrderBy(s => s.DisplayIndex >= 0 ? s.DisplayIndex : int.MaxValue)
+                .ToList();
+            foreach (var sep in sortedSeps)
+            {
+                int insertAt = sep.DisplayIndex >= 0
+                    ? Math.Min(sep.DisplayIndex, _orderedItems.Count)
+                    : _orderedItems.Count;
+                _orderedItems.Insert(insertAt, sep);
+            }
+        }
+
+        OnPropertyChanged(nameof(Mods));
     }
 
     private void UpdateView()
@@ -199,16 +243,18 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         if (hasActiveSort)
             filteredMods = _sortService.ApplySort(filteredMods, CurrentSortMode);
 
-        // 无任何筛选/排序时直接使用原始 ObservableCollection，保证拖拽功能可用
+        // 无任何筛选/排序时使用完整的_orderedItems（分隔符可见）
         if (IsSearchEmpty && !hasActiveSort)
         {
-            Mods = _mods;
+            RebuildOrderedItems();
         }
         else
         {
+            // 有筛选/排序时只显示过滤后的模组列表（不显示分隔符）
+            // 此时 Mods 是只读的，拖拽不可用
             Mods = filteredMods.ToArray();
+            OnPropertyChanged(nameof(Mods));
         }
-        OnPropertyChanged(nameof(Mods));
     }
 
     /// <summary>
@@ -328,6 +374,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _mods = new(modViewModels);
         _mods.CollectionChanged += Mods_CollectionChanged;
         _profileService.SetLastSavedOrder(_mods.Select(static vm => vm.Guid));
+        RebuildOrderedItems();
         UpdateView();
 
         if (problems.Length > 0)
@@ -482,18 +529,28 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     /// <summary>
-    /// 拖拽悬停 —— 委托给默认处理器以显示拖拽位置指示线
+    /// 拖拽悬停 —— 分隔符不可拖拽，模组使用默认指示器
     /// </summary>
     void IDropTarget.DragOver(IDropInfo dropInfo)
     {
+        // 模组和分隔符均可自由拖动
         new DefaultDropHandler().DragOver(dropInfo);
     }
 
     /// <summary>
-    /// 拖拽放下 —— 当有多个选中项时一并移动，否则按默认单项目行为
+    /// 拖拽放下 —— 支持分隔符归类、多选批量移动和单项目拖拽
     /// </summary>
     void IDropTarget.Drop(IDropInfo dropInfo)
     {
+        // 处理分隔符拖拽重排
+        if (dropInfo?.Data is ModSeparator)
+        {
+            new DefaultDropHandler().Drop(dropInfo);
+            // 同步分隔符顺序到 SettingsService
+            SyncSeparatorsOrder();
+            return;
+        }
+
         if (dropInfo?.Data is not ModViewModel sourceVm)
         {
             new DefaultDropHandler().Drop(dropInfo);
@@ -504,39 +561,77 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         var selected = _mods.Where(vm => vm.IsSelected).ToList();
         if (selected.Contains(sourceVm) && selected.Count > 1)
         {
-            var sortedSelected = selected.OrderBy(vm => _mods.IndexOf(vm)).ToList();
+            var sortedSelected = selected.OrderBy(vm => _orderedItems.IndexOf(vm)).ToList();
             var targetIdx = dropInfo.InsertIndex;
 
-            // 从集合中移除所有选中项（倒序删除以保持索引正确）
+            // 从 _orderedItems 中移除所有选中项（倒序删除以保持索引正确）
             foreach (var vm in sortedSelected.AsEnumerable().Reverse())
-                _mods.Remove(vm);
+                _orderedItems.Remove(vm);
 
             // 如果目标索引位于删除区域之后，需修正插入位置
-            var firstRemovedIdx = _mods.IndexOf(sortedSelected[0]);
-            if (firstRemovedIdx == -1) // 所有项都在目标之前被删除了
+            if (targetIdx > 0 && targetIdx <= _orderedItems.Count)
             {
-                // 计算目标在删除后的新位置
-                var beforeCount = sortedSelected.Count(vm => _mods.IndexOf(vm) < targetIdx);
+                // 重新计算插入位置
+                var beforeCount = sortedSelected.Count(vm => _orderedItems.IndexOf(vm) < targetIdx);
                 targetIdx -= beforeCount;
             }
 
-            targetIdx = Math.Clamp(targetIdx, 0, _mods.Count);
+            targetIdx = Math.Clamp(targetIdx, 0, _orderedItems.Count);
 
-            // 按原始顺序插入
+            // 按原始顺序插入到 _orderedItems
             for (int i = 0; i < sortedSelected.Count; i++)
-                _mods.Insert(targetIdx + i, sortedSelected[i]);
+                _orderedItems.Insert(targetIdx + i, sortedSelected[i]);
 
-            // 多选重排完成后触发自动保存（Remove/Insert 不会触发 CollectionChanged Move）
-            lock (_saveLock)
-            {
-                _isSavePending = true;
-                _saveTimer?.Change(300, Timeout.Infinite);
-            }
+            // 同步 _orderedItems 顺序到 _mods
+            SyncModsOrderFromDisplay();
         }
         else
         {
-            // 单项目拖拽 —— 使用默认处理器
+            // 单项目拖拽
+            // 使用默认处理器在 _orderedItems 上操作
             new DefaultDropHandler().Drop(dropInfo);
+            // 同步到 _mods
+            SyncModsOrderFromDisplay();
+        }
+
+        // 触发自动保存
+        lock (_saveLock)
+        {
+            _isSavePending = true;
+            _saveTimer?.Change(300, Timeout.Infinite);
+        }
+    }
+
+    /// <summary>
+    /// 将 _orderedItems 中的分隔符顺序同步回 SettingsService.Separators
+    /// </summary>
+    private void SyncSeparatorsOrder()
+    {
+        if (!_settingsService.Initialized)
+            return;
+        // 从 _orderedItems 中读取分隔符的当前显示位置
+        foreach (var sep in _settingsService.Separators)
+        {
+            int idx = _orderedItems.IndexOf(sep);
+            sep.DisplayIndex = idx >= 0 ? idx : -1;
+        }
+        _ = _settingsService.SaveAsync();
+    }
+
+    /// <summary>
+    /// 将 _orderedItems 中的模组顺序同步回 _mods
+    /// </summary>
+    private void SyncModsOrderFromDisplay()
+    {
+        var displayOrder = _orderedItems.OfType<ModViewModel>().ToList();
+        // 按 displayOrder 重新排序 _mods
+        for (int i = 0; i < displayOrder.Count; i++)
+        {
+            var currentIdx = _mods.IndexOf(displayOrder[i]);
+            if (currentIdx != i)
+            {
+                _mods.Move(currentIdx, Math.Min(i, _mods.Count - 1));
+            }
         }
     }
 
@@ -992,6 +1087,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
+    async Task DeploymentOrder()
+    {
+        await SaveEnabled();
+
+        _navStore.Value.Navigate<DeploymentOrderPageViewModel>();
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = false)]
     async Task Purge()
     {
         if (!_settingsService.Initialized || string.IsNullOrEmpty(_settingsService.GameDirectory))
@@ -1014,6 +1117,43 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
     }
 
+    /// <summary>
+    /// 根据当前设置获取部署顺序的 GUID 数组
+    /// 如果 UseDeploymentOrder 启用，按 DeploymentOrderGuids 顺序；否则按 Dashboard 顺序
+    /// </summary>
+    private Guid[] GetDeploymentGuids(ModViewModel[] enabledMods)
+    {
+        if (_settingsService.UseDeploymentOrder && _settingsService.DeploymentOrderGuids.Count > 0)
+        {
+            var enabledSet = enabledMods.Select(static vm => vm.Guid).ToHashSet();
+            var result = new List<Guid>();
+
+            foreach (var guid in _settingsService.DeploymentOrderGuids)
+            {
+                if (enabledSet.Contains(guid))
+                {
+                    result.Add(guid);
+                    enabledSet.Remove(guid);
+                }
+            }
+
+            // 添加不在 DeploymentOrderGuids 中的已启用模组（防御性）
+            result.AddRange(enabledSet);
+
+            _logger.LogDebug("Using custom deployment order for {} mods", result.Count);
+            return result.ToArray();
+        }
+        else
+        {
+            var guids = enabledMods.Select(static vm => vm.Guid).ToArray();
+
+            if (_settingsService.DeployBottomToTop)
+                Array.Reverse(guids);
+
+            return guids;
+        }
+    }
+
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task Deploy()
     {
@@ -1033,11 +1173,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         });
 
         var mods = _mods.Where(static vm => vm.Enabled).ToArray();
-        var guids = mods.Select(static vm => vm.Guid).ToArray();
-
-        // 根据设置决定部署顺序: 从下到上时反转 GUID 数组
-        if (_settingsService.DeployBottomToTop)
-            Array.Reverse(guids);
+        var guids = GetDeploymentGuids(mods);
 
         try
         {
@@ -1687,6 +1823,103 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     public IReadOnlyList<ModTag> AllTags => _settingsService.Initialized ? _settingsService.Tags : [];
     public IEnumerable<object> TagItems => _settingsService.Initialized ? _settingsService.Tags : [];
 
+    // ===== 分隔符命令 =====
+
+    /// <summary>
+    /// 创建新的分隔符
+    /// </summary>
+    [RelayCommand]
+    void CreateSeparator()
+    {
+        if (!_settingsService.Initialized || _settingsService.IsReadonly)
+            return;
+
+        var separator = new ModSeparator
+        {
+            Name = "新分隔符",
+            Color = "#FF6200EE",
+            IsExpanded = true,
+            DisplayIndex = _orderedItems.Count
+        };
+        _settingsService.Separators.Add(separator);
+        RebuildOrderedItems();
+        _ = _settingsService.SaveAsync();
+    }
+
+    /// <summary>
+    /// 重命名分隔符
+    /// </summary>
+    [RelayCommand]
+    void RenameSeparator(ModSeparator separator)
+    {
+        if (separator == null || _settingsService.IsReadonly)
+            return;
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+        {
+            Title = "重命名分隔符",
+            Message = "请输入新的分隔符名称：",
+            MaxLength = 32,
+            InitialText = separator.Name,
+            Confirm = (newName) =>
+            {
+                if (string.IsNullOrWhiteSpace(newName))
+                {
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "名称不能为空" });
+                    return;
+                }
+                separator.Name = newName;
+                OnPropertyChanged(nameof(Mods));
+                _ = _settingsService.SaveAsync();
+            }
+        });
+    }
+
+    /// <summary>
+    /// 更改分隔符颜色
+    /// </summary>
+    [RelayCommand]
+    void ChangeSeparatorColor(ModSeparator separator)
+    {
+        if (separator == null || _settingsService.IsReadonly)
+            return;
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxColorPickerMessage
+        {
+            Title = "选择分隔符颜色",
+            Message = $"请为「{separator.Name}」选择颜色：",
+            CurrentColor = separator.Color,
+            Confirm = (selectedColor) =>
+            {
+                separator.Color = selectedColor;
+                OnPropertyChanged(nameof(Mods));
+                _ = _settingsService.SaveAsync();
+            }
+        });
+    }
+
+    /// <summary>
+    /// 删除分隔符
+    /// </summary>
+    [RelayCommand]
+    void DeleteSeparator(ModSeparator separator)
+    {
+        if (separator == null || _settingsService.IsReadonly)
+            return;
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+        {
+            Title = "删除分隔符",
+            Message = $"确定要删除分隔符「{separator.Name}」吗？",
+            Confirm = () =>
+            {
+                _settingsService.Separators.Remove(separator);
+                RebuildOrderedItems();
+                _ = _settingsService.SaveAsync();
+            }
+        });
+    }
+
     protected override void OnDispose()
     {
         _modService.ModAdded -= ModService_ModAdded;
@@ -1695,6 +1928,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         if (_mods is not null)
         {
             _mods.CollectionChanged -= Mods_CollectionChanged;
+            _orderedItems.Clear();
             _mods.Clear();
         }
 

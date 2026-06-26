@@ -10,6 +10,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -123,6 +124,26 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	/// <summary>
+	/// 是否启用自定义部署顺序
+	/// </summary>
+	public bool UseDeploymentOrder
+	{
+		get => _settingsService.Initialized && _settingsService.UseDeploymentOrder;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.UseDeploymentOrder = value;
+			OnPropertyChanged();
+			OnPropertyChanged(nameof(IsCustomOrderEnabled));
+		}
+	}
+
+	/// <summary>
+	/// 启用自定义部署顺序时显示编辑区
+	/// </summary>
+	public bool IsCustomOrderEnabled => _settingsService.Initialized && _settingsService.UseDeploymentOrder;
+
 	public bool DeleteToRecycleBin
 	{
 		get => _settingsService.Initialized ? _settingsService.DeleteToRecycleBin : true;
@@ -178,6 +199,17 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	public bool ShowSeparator
+	{
+		get => _settingsService.Initialized ? _settingsService.ShowSeparator : true;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.ShowSeparator = value;
+			OnPropertyChanged();
+		}
+	}
+
 	public string ExtensionHost
 	{
 		get => _settingsService.Initialized ? _settingsService.ExtensionHost : "localhost";
@@ -216,7 +248,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 	/// <summary>
 	/// 当前选中的选项卡索引
-	/// 0: 路径, 1: 部署, 2: 模组, 3: 日志, 4: 连接, 5: 工具
+	/// 0: 路径, 1: 部署, 2: 模组, 3: 日志, 4: 连接, 5: 工具, 6: 主页
 	/// </summary>
 	[ObservableProperty]
 	private int _selectedTabIndex;
@@ -390,10 +422,13 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(UseSymbolicLinks));
 		OnPropertyChanged(nameof(EnableSorting));
 		OnPropertyChanged(nameof(DeployBottomToTop));
+		OnPropertyChanged(nameof(UseDeploymentOrder));
+		OnPropertyChanged(nameof(IsCustomOrderEnabled));
 		OnPropertyChanged(nameof(DeleteToRecycleBin));
 		OnPropertyChanged(nameof(AutoRemoveMissingMods));
 		OnPropertyChanged(nameof(AutoCheckVersionOnStartup));
 		OnPropertyChanged(nameof(AutoCleanLogs));
+		OnPropertyChanged(nameof(ShowSeparator));
 		OnPropertyChanged(nameof(LogRetentionDays));
 		OnPropertyChanged(nameof(ExtensionHost));
 		OnPropertyChanged(nameof(ExtensionPort));

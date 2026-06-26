@@ -555,6 +555,80 @@ internal sealed partial class ModService
 		_logger.LogInformation("Mod {} removed", removedMod.Manifest.Name);
 	}
 
+	/// <summary>
+	/// 上移模组（在列表中向上移动一位）
+	/// </summary>
+	public bool MoveModUp(ModData mod)
+	{
+		GuardInitialized();
+
+		var index = _mods.FindIndex(m => m.Manifest.Guid == mod.Manifest.Guid);
+		if (index <= 0) return false; // 已经在最上面或找不到
+
+		_mods.RemoveAt(index);
+		_mods.Insert(index - 1, mod);
+
+		_logger.LogInformation("Mod {} moved up (index: {} -> {})", mod.Manifest.Name, index, index - 1);
+		return true;
+	}
+
+	/// <summary>
+	/// 下移模组（在列表中向下移动一位）
+	/// </summary>
+	public bool MoveModDown(ModData mod)
+	{
+		GuardInitialized();
+
+		var index = _mods.FindIndex(m => m.Manifest.Guid == mod.Manifest.Guid);
+		if (index < 0 || index >= _mods.Count - 1) return false; // 已经在最下面或找不到
+
+		_mods.RemoveAt(index);
+		_mods.Insert(index + 1, mod);
+
+		_logger.LogInformation("Mod {} moved down (index: {} -> {})", mod.Manifest.Name, index, index + 1);
+		return true;
+	}
+
+	/// <summary>
+	/// 将模组移动到指定位置（用于拖拽排序）
+	/// </summary>
+	public bool MoveModTo(ModData mod, int newIndex)
+	{
+		GuardInitialized();
+
+		var oldIndex = _mods.FindIndex(m => m.Manifest.Guid == mod.Manifest.Guid);
+		if (oldIndex < 0) return false;
+
+		// 确保新索引在有效范围内
+		newIndex = Math.Max(0, Math.Min(newIndex, _mods.Count - 1));
+
+		if (oldIndex == newIndex) return false;
+
+		_mods.RemoveAt(oldIndex);
+		_mods.Insert(newIndex, mod);
+
+		_logger.LogInformation("Mod {} moved to index {}", mod.Manifest.Name, newIndex);
+		return true;
+	}
+
+	/// <summary>
+	/// 交换两个模组的位置
+	/// </summary>
+	public bool SwapMods(ModData mod1, ModData mod2)
+	{
+		GuardInitialized();
+
+		var index1 = _mods.FindIndex(m => m.Manifest.Guid == mod1.Manifest.Guid);
+		var index2 = _mods.FindIndex(m => m.Manifest.Guid == mod2.Manifest.Guid);
+
+		if (index1 < 0 || index2 < 0) return false;
+
+		(_mods[index1], _mods[index2]) = (_mods[index2], _mods[index1]);
+
+		_logger.LogInformation("Swapped mods: {} <-> {}", mod1.Manifest.Name, mod2.Manifest.Name);
+		return true;
+	}
+
 	public async Task UpdateModFromArchiveAsync(ModData mod, FileInfo archive, IProgress<UpdateProgressInfo>? progress = null)
 	{
 		GuardInitialized();
@@ -991,8 +1065,25 @@ internal sealed partial class ModService
 						}
 
 						_logger.LogInformation("Making include list");
-						for (int i = 0; i < enabled.Length; i++)
+
+						// 确定选项的迭代顺序
+						int[] optOrder;
+						if (_settingsService.UseDeploymentOrder
+							&& _settingsService.OptionOrders.TryGetValue(mod.Manifest.Guid, out var customOrder)
+							&& customOrder.Length == enabled.Length)
 						{
+							optOrder = customOrder;
+							_logger.LogInformation("Using custom option deployment order for mod \"{}\"", mod.Manifest.Name);
+						}
+						else
+						{
+							optOrder = Enumerable.Range(0, enabled.Length).ToArray();
+						}
+
+						for (int oi = 0; oi < optOrder.Length; oi++)
+						{
+							int i = optOrder[oi];
+
 							if (!enabled[i])
 								continue;
 
@@ -1008,12 +1099,35 @@ internal sealed partial class ModService
 
 							if (opt.SubOptions is { } subs)
 							{
-								var sub = subs[selected[i]];
-								foreach (var inc in sub.Include)
+								// 确定子选项的迭代顺序
+								int[] subOrder;
+								if (_settingsService.UseDeploymentOrder
+									&& _settingsService.SubOptionOrders.TryGetValue(mod.Manifest.Guid, out var subOrderDict)
+									&& subOrderDict.TryGetValue(i, out var customSubOrder)
+									&& customSubOrder.Length == subs.Count)
 								{
-									var dir = new DirectoryInfo(Path.Combine(mod.Directory.FullName, inc));
-									_logger.LogInformation("Adding \"{}\"", dir.FullName);
-									AddFilesFromDir(dir);
+									subOrder = customSubOrder;
+								}
+								else
+								{
+									subOrder = Enumerable.Range(0, subs.Count).ToArray();
+								}
+
+								// 找到当前选中的子选项，按自定义顺序部署
+								int selectedSubIdx = selected[i];
+								for (int si = 0; si < subOrder.Length; si++)
+								{
+									if (subOrder[si] != selectedSubIdx)
+										continue;
+
+									var sub = subs[subOrder[si]];
+									foreach (var inc in sub.Include)
+									{
+										var dir = new DirectoryInfo(Path.Combine(mod.Directory.FullName, inc));
+										_logger.LogInformation("Adding \"{}\"", dir.FullName);
+										AddFilesFromDir(dir);
+									}
+									break; // 只处理被选中的子选项
 								}
 							}
 						}

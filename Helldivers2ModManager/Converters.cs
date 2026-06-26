@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 
 namespace Helldivers2ModManager;
@@ -35,6 +36,36 @@ internal sealed class StringToColorBrushConverter : IValueConverter
     }
 }
 
+/// <summary>
+/// 根据背景色亮度返回合适的前景色（深色背景返回白色，浅色背景返回深灰色）
+/// </summary>
+internal sealed class ColorToForegroundConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string colorString && !string.IsNullOrEmpty(colorString))
+        {
+            try
+            {
+                var color = (Color)ColorConverter.ConvertFromString(colorString);
+                // 计算相对亮度: 0.2126*R + 0.7152*G + 0.0722*B (使用 0-255 值)
+                double luminance = 0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B;
+                return luminance > 128 ? new SolidColorBrush(Color.FromRgb(30, 30, 30)) : new SolidColorBrush(Colors.White);
+            }
+            catch
+            {
+                return new SolidColorBrush(Colors.White);
+            }
+        }
+        return new SolidColorBrush(Colors.White);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
 internal sealed class BoolToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -65,6 +96,27 @@ internal sealed class TagsToStringConverter : IValueConverter
             return string.Join(", ", tags.Select(t => t.Name));
         }
         return string.Empty;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// 将 DeploymentItemType 转换为 Visibility
+/// Mod 级别显示，其他级别折叠（用于展开/折叠按钮）
+/// </summary>
+internal sealed class ModLevelToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is DeploymentItemType type)
+        {
+            return type == DeploymentItemType.Mod ? Visibility.Visible : Visibility.Collapsed;
+        }
+        return Visibility.Collapsed;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -358,6 +410,28 @@ internal sealed class SortModeConverter : IValueConverter
             };
         }
         return "默认顺序";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// 将 ListBoxItem 的索引转换为显示序号（从 1 开始）
+/// </summary>
+internal sealed class IndexToNumberConverter : IValueConverter
+{
+    public static IndexToNumberConverter Default { get; } = new();
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is int index)
+        {
+            return index + 1; // 索引从 0 开始，显示从 1 开始
+        }
+        return 1;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

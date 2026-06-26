@@ -275,6 +275,15 @@ internal sealed class ProfileService
 	}
 
 	/// <summary>
+	/// 获取当前缓存的 Dashboard 模组顺序（即主页列表的显示顺序）
+	/// 如果没有缓存则返回 ModService.Mods 的顺序
+	/// </summary>
+	public IReadOnlyList<Guid>? GetCurrentOrder()
+	{
+		return _lastSavedOrder;
+	}
+
+	/// <summary>
 	/// 保存 Mod 配置到 SQLite 数据库。
 	/// 如果有缓存顺序（来自 Dashboard 的 SetLastSavedOrder），则按缓存顺序写入，
 	/// 确保其他页面（如 EditPage）以不同顺序传入时不会打乱已有排序。
