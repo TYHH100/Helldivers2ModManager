@@ -24,7 +24,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 {
-	public override string Title => "Edit Manifest";
+	public override string Title => _localizationService["ManifestEditPage.Title"];
 
 	/// <summary>当前编辑的模组 ViewModel</summary>
 	public ModViewModel? EditMod => _editModStore.CurrentMod;
@@ -118,10 +118,12 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	private readonly ProfileService _profileService;
 	private readonly SettingsService _settingsService;
 	private readonly ModService _modService;
+	private readonly LocalizationService _localizationService;
 
 	public ManifestEditPageViewModel(ILogger<ManifestEditPageViewModel> logger,
 		NavigationStore navStore, EditModStore editModStore,
-		ProfileService profileService, SettingsService settingsService, ModService modService)
+		ProfileService profileService, SettingsService settingsService, ModService modService,
+		LocalizationService localizationService)
 	{
 		_logger = logger;
 		_navStore = navStore;
@@ -129,6 +131,7 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		_profileService = profileService;
 		_settingsService = settingsService;
 		_modService = modService;
+		_localizationService = localizationService;
 	}
 
 	/// <summary>初始化编辑页面，从当前模组加载信息</summary>
@@ -330,8 +333,8 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	{
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
-			Title = "选择模组图标",
-			Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
+			Title = _localizationService["ManifestEditPage.BrowseIconDialog"],
+			Filter = _localizationService["Common.SelectImageFilter"],
 			InitialDirectory = EditMod?.Data?.Directory?.FullName,
 		};
 

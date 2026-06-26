@@ -26,7 +26,7 @@ internal sealed partial class CreateModSubOptionViewModel : ModImageViewModelBas
 	private string _includePaths = string.Empty;
 
 	/// <summary>浏览对话框标题</summary>
-	protected override string BrowseImageDialogTitle => "选择子选项图标";
+	protected override string BrowseImageDialogTitle => LocalizationService?["CreateSubOption.SelectIconTitle"] ?? "选择子选项图标";
 
 	/// <summary>
 	/// 浏览选择 Include 目录（子选项模式）。
@@ -41,7 +41,7 @@ internal sealed partial class CreateModSubOptionViewModel : ModImageViewModelBas
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
 			{
-				Message = "请先设置源目录后再选择 Include 路径。"
+				Message = LocalizationService?["CreateSubOption.SetSourceDirHint"] ?? "请先设置源目录后再选择 Include 路径。"
 			});
 			return;
 		}
@@ -66,7 +66,7 @@ internal sealed partial class CreateModSubOptionViewModel : ModImageViewModelBas
 
 		return new Models.ModSubOption
 		{
-			Name = !string.IsNullOrWhiteSpace(Name) ? Name : "未命名子选项",
+			Name = !string.IsNullOrWhiteSpace(Name) ? Name : (LocalizationService?["CreateSubOption.DefaultName"] ?? "未命名子选项"),
 			Description = !string.IsNullOrWhiteSpace(Description) ? Description : string.Empty,
 			Include = includes,
 			Image = !string.IsNullOrWhiteSpace(ImagePath) ? ImagePath : null,

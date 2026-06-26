@@ -28,7 +28,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropTarget
 {
-    public override string Title => "Mods";
+    public override string Title => _localizationService["DashboardPage.Title"];
 
     public IEnumerable<object> Mods { get; private set; }
 
@@ -56,7 +56,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly SearchFilterService _searchFilterService;
     private readonly SortService _sortService;
     private readonly VersionCheckViewModel _versionCheckVm;
-    
+    private readonly LocalizationService _localizationService;
+
     [ObservableProperty]
     private string _searchText = string.Empty;
     [ObservableProperty]
@@ -73,7 +74,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// <summary>
     /// 选中数量文本（如 "已选 2 项"）
     /// </summary>
-    public string SelectionCountText => _mods is null ? "" : $"已选 {_mods.Count(static vm => vm.IsSelected)} 项";
+    public string SelectionCountText => _mods is null ? "" : $"{_localizationService["DashboardPage.AlreadySelectedPrefix"]}{_mods.Count(static vm => vm.IsSelected)}{_localizationService["DashboardPage.SelectedCountSuffix"]}";
 
     /// <summary>
     /// 排序功能是否在设置中启用
@@ -123,7 +124,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         ModHashService modHashService,
         SearchFilterService searchFilterService,
         SortService sortService,
-        VersionCheckViewModel versionCheckVm)
+        VersionCheckViewModel versionCheckVm,
+        LocalizationService localizationService)
     {
         _logger = logger;
         _navStore = new(provider.GetRequiredService<NavigationStore>);
@@ -137,6 +139,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _searchFilterService = searchFilterService;
         _sortService = sortService;
         _versionCheckVm = versionCheckVm;
+        _localizationService = localizationService;
+
+        // 监听语言切换，通知 Title 属性变更
+        _localizationService.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(Title));
+        };
 
         // 订阅哈希迁移进度事件，将后台计算状态同步到 UI
         _modHashService.MigrationProgressChanged += (progress) =>
@@ -178,8 +187,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             {
                 WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
                 {
-                    Title = "保存模组配置中",
-                    Message = "请民主官耐心等待."
+                    Title = _localizationService["DashboardPage.SavingModConfig"],
+                    Message = _localizationService["DashboardPage.PleaseWait"]
                 });
             }
 
@@ -272,8 +281,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _logger.LogInformation("Loading settings...");
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
         {
-            Title = "加载设置中",
-            Message = "请民主官耐心等待.",
+            Title = _localizationService["DashboardPage.LoadingSettings"],
+            Message = _localizationService["DashboardPage.PleaseWait"],
         });
         try
         {
@@ -285,8 +294,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _logger.LogError(ex, "Loading settings failed");
             WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
             {
-                Title = $"加载设置失败!",
-                Message = "是否立刻前往设置?",
+                Title = _localizationService["DashboardPage.LoadSettingsFailed"],
+                Message = _localizationService["DashboardPage.GoToSettings"],
                 Confirm = _navStore.Value.Navigate<SettingsPageViewModel>,
             });
             return;
@@ -303,8 +312,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _logger.LogError("Settings invalid");
             WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
             {
-                Title = $"设置无效!",
-                Message = "是否立刻前往设置?",
+                Title = _localizationService["DashboardPage.SettingsInvalid"],
+                Message = _localizationService["DashboardPage.GoToSettings"],
                 Confirm = _navStore.Value.Navigate<SettingsPageViewModel>,
             });
             return;
@@ -314,8 +323,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _logger.LogInformation("Loading mods...");
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
         {
-            Title = "加载模组中",
-            Message = "请民主官耐心等待.",
+            Title = _localizationService["DashboardPage.LoadingMods"],
+            Message = _localizationService["DashboardPage.PleaseWait"],
         });
         ModProblem[] problems;
         try
@@ -327,7 +336,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _logger.LogError(ex, "Loading mods failed");
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
             {
-                Message = $"加载模组失败!\n\n{ex}",
+                Message = $"{_localizationService["DashboardPage.LoadModsFailed"]}\n\n{ex}",
             });
             return;
         }
@@ -343,8 +352,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _logger.LogInformation("Loading profile...");
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
         {
-            Title = "加载配置文件中",
-            Message = "请民主官耐心等待.",
+            Title = _localizationService["DashboardPage.LoadingConfig"],
+            Message = _localizationService["DashboardPage.PleaseWait"],
         });
         IReadOnlyList<ModData>? result;
         try
@@ -357,7 +366,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _logger.LogError(ex, "Loading profile failed");
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
             {
-                Message = $"加载配置文件失败!\n\n{ex}",
+                Message = $"{_localizationService["DashboardPage.LoadConfigFailed"]}\n\n{ex}",
             });
             return;
         }
@@ -378,7 +387,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         UpdateView();
 
         if (problems.Length > 0)
-            ShowProblems(problems, "加载模组时出现问题:", false, true);
+            ShowProblems(problems, _localizationService["DashboardPage.LoadProblemsPrefix"], false, true);
 
         // 从数据库加载已缓存的版本检测结果，避免每次启动都需要全量扫描
         _versionCheckVm.LoadCachedResults(_mods);
@@ -406,7 +415,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         var errors = problems.Where(static p => p.IsError).ToArray();
         if (errors.Length != 0)
         {
-            sb.AppendLine("错误:");
+            sb.AppendLine(_localizationService["DashboardPage.Error"]);
             foreach (var e in errors)
             {
                 sb.Append("\t - \"");
@@ -416,16 +425,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 sb.Append("\t\t");
                 string desc = e.Kind switch
                 {
-                    ModProblemKind.CantParseManifest => "无法解析清单文件!",
-                    ModProblemKind.UnknownManifestVersion => "未知清单版本!",
-                    ModProblemKind.OutOfSupportManifest => $"不支持的清单版本!请更新.\n\t\t管理器版本 {App.Version} 不支持此版本的清单文件.",
-                    ModProblemKind.Duplicate => "已添加一个具有相同 GUID 的模组。!",
+                    ModProblemKind.CantParseManifest => _localizationService["DashboardPage.CantParseManifest"],
+                    ModProblemKind.UnknownManifestVersion => _localizationService["DashboardPage.UnknownManifestVersion"],
+                    ModProblemKind.OutOfSupportManifest => $"{_localizationService["DashboardPage.OutOfSupportManifest"]}{App.Version}{_localizationService["DashboardPage.VersionNotSupported"]}",
+                    ModProblemKind.Duplicate => _localizationService["DashboardPage.DuplicateGuid"],
                     ModProblemKind.InvalidPath => e.ExtraData is not null
-                        ? $"包含路径  \"{e.ExtraData}\" 无效!"
-                        : "包含路径无效!",
+                        ? $"{_localizationService["DashboardPage.InvalidPathPrefix"]}{e.ExtraData}{_localizationService["DashboardPage.InvalidPathSuffix"]}"
+                        : _localizationService["DashboardPage.InvalidPathError"],
                     ModProblemKind.CantReadArchive => e.ExtraData is not null
-                        ? $"无法读取压缩文件! 错误: {e.ExtraData}"
-                        : "无法读取压缩文件!",
+                        ? $"{_localizationService["DashboardPage.CantReadArchivePrefix"]}{e.ExtraData}"
+                        : _localizationService["DashboardPage.CantReadArchive"],
                     _ => throw new NotImplementedException()
                 };
                 sb.AppendLine(desc);
@@ -435,7 +444,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         var warnings = problems.Where(static p => !p.IsError).ToArray();
         if (warnings.Length != 0)
         {
-            sb.AppendLine("警告:");
+            sb.AppendLine(_localizationService["DashboardPage.Warning"]);
             foreach (var w in warnings)
             {
                 sb.Append("\t - \"");
@@ -446,15 +455,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 string desc = w.Kind switch
                 {
                     ModProblemKind.NoManifestFound => isInit
-                        ? "目录中未找到清单文件!\n\t\t\t执行操作: 删除(Deleting)"
-                        : "目录中未找到清单文件!\n\t\t\t执行操作: 从目录推断(Inferring from directory)",
-                    ModProblemKind.EmptyOptions => "清单包含空选项! 此模组可能不会产生任何效果.",
-                    ModProblemKind.EmptySubOptions => "清单包含空的子选项！此模组可能无法按预期运行.",
-                    ModProblemKind.EmptyIncludes => "清单包含空的包含列表！此模组可能不会产生任何作用.",
+                        ? _localizationService["DashboardPage.NoManifestFoundDelete"]
+                        : _localizationService["DashboardPage.NoManifestFoundInfer"],
+                    ModProblemKind.EmptyOptions => _localizationService["DashboardPage.EmptyOptions"],
+                    ModProblemKind.EmptySubOptions => _localizationService["DashboardPage.EmptySubOptions"],
+                    ModProblemKind.EmptyIncludes => _localizationService["DashboardPage.EmptyIncludes"],
                     ModProblemKind.InvalidImagePath => w.ExtraData is not null
-                        ? $"清单图片路径 \"{w.ExtraData}\" 无效!"
-                        : "清单包含无效的图片路径!",
-                    ModProblemKind.EmptyImagePath => "清单包含空的图片路径​!",
+                        ? $"{_localizationService["DashboardPage.InvalidImagePathPrefix"]}{w.ExtraData}{_localizationService["DashboardPage.InvalidImagePathSuffix"]}"
+                        : _localizationService["DashboardPage.InvalidImagePathError"],
+                    ModProblemKind.EmptyImagePath => _localizationService["DashboardPage.EmptyImagePath"],
                     _ => throw new NotImplementedException()
                 };
                 sb.AppendLine(desc);
@@ -475,7 +484,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private void ModService_ModAdded(ModData mod)
     {
-        var vm = new ModViewModel(mod, _logger, _settingsService, _nexusModsService);
+        var vm = new ModViewModel(mod, _logger, _settingsService, _nexusModsService, _localizationService);
         vm.OptionsChanged += ModViewModel_OptionsChanged;
         vm.PropertyChanged += ModViewModel_PropertyChanged;
         _mods.Add(vm);
@@ -710,19 +719,19 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             return Task.CompletedTask;
 
         var deleteMessage = _settingsService.DeleteToRecycleBin
-            ? "模组文件将被移动到回收站。"
-            : "模组文件将被永久删除，此操作不可恢复！";
+            ? _localizationService["DashboardPage.RecycleBinConfirm"]
+            : _localizationService["DashboardPage.PermanentDeleteConfirm"];
 
         WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
         {
-            Title = "批量删除",
-            Message = $"确定要删除选中的 {selected.Length} 个模组吗？\n{deleteMessage}",
+            Title = _localizationService["DashboardPage.BatchDeleteTitle"],
+            Message = $"{_localizationService["DashboardPage.BatchDeleteConfirm"].Replace("{count}", selected.Length.ToString())}{deleteMessage}",
             Confirm = async () =>
             {
                 WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
                 {
-                    Title = "批量删除中",
-                    Message = "请民主官耐心等待."
+                    Title = _localizationService["DashboardPage.BatchDeleteProgress"],
+                    Message = _localizationService["DashboardPage.PleaseWait"]
                 });
 
                 try
@@ -747,10 +756,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "批量删除模组失败");
+                    _logger.LogError(ex, _localizationService["DashboardPage.BatchDeleteFailed2"]);
                     WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
                     {
-                        Message = $"批量删除失败: {ex.Message}"
+                        Message = $"{_localizationService["DashboardPage.BatchDeleteFailed"]}{ex.Message}"
                     });
                 }
 
@@ -792,14 +801,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         WeakReferenceMessenger.Default.Send(new MessageBoxTagSelectionMessage
         {
-            Title = "批量设置标签",
-            Message = $"为选中的 {selected.Length} 个模组设置标签：",
+            Title = _localizationService["DashboardPage.BatchTagTitle"],
+            Message = $"{_localizationService["DashboardPage.BatchTagPrefix"]}{selected.Length}{_localizationService["DashboardPage.BatchTagSuffix"]}",
             Tags = selectableTags,
             Confirm = (selectedTags) =>
             {
                 if (_settingsService.IsReadonly)
                 {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法设置标签，设置处于只读模式" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.BatchTagReadonly"] });
                     return;
                 }
 
@@ -809,7 +818,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     vm.Data.TagIds = newTagIds;
                 }
                 _ = SaveEnabled();
-                WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = $"已为 {selected.Length} 个模组更新标签" });
+                WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = $"{_localizationService["DashboardPage.BatchTagUpdatedPrefix"]}{selected.Length}{_localizationService["DashboardPage.BatchTagUpdatedSuffix"]}" });
             }
         });
     }
@@ -831,9 +840,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     CheckFileExists = true,
                     CheckPathExists = true,
                     InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
-                    Filter = "Mod档案|*.rar;*.7z;*.zip;*.tar",
+                    Filter = _localizationService["Common.FileFilterArchive"],
                     Multiselect = true,
-                    Title = "请选择要添加的模组压缩包（可多选）..."
+                    Title = _localizationService["DashboardPage.AddModDialogTitle"]
                 };
 
                 if (!(dialog.ShowDialog() ?? false))
@@ -850,8 +859,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             var totalFiles = selectedFiles.Count;
             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
             {
-                Title = isBatch ? $"批量添加模组中 (0/{totalFiles})" : "添加模组中",
-                Message = isBatch ? $"共 {totalFiles} 个压缩包，请民主官耐心等待..." : "请民主官耐心等待."
+                Title = isBatch ? _localizationService["DashboardPage.BatchAddProgressTitle"].Replace("{current}", "0").Replace("{total}", totalFiles.ToString()) : _localizationService["DashboardPage.AddSingleProgress"],
+                Message = isBatch ? _localizationService["DashboardPage.BatchAddWaitMsg"].Replace("{total}", totalFiles.ToString()) : _localizationService["DashboardPage.PleaseWait"]
             });
 
             try
@@ -868,10 +877,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         var remainingCount = totalFiles - i - 1;
                         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
                         {
-                            Title = $"批量添加模组中 ({i + 1}/{totalFiles})",
+                            Title = _localizationService["DashboardPage.BatchAddProgressTitle"].Replace("{current}", (i + 1).ToString()).Replace("{total}", totalFiles.ToString()),
                             Message = remainingCount > 0
-                                ? $"正在处理: {Path.GetFileName(selectedFiles[i])}，剩余 {remainingCount} 个"
-                                : $"正在处理: {Path.GetFileName(selectedFiles[i])}"
+                                ? _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", Path.GetFileName(selectedFiles[i])).Replace("{remaining}", remainingCount.ToString())
+                                : _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", Path.GetFileName(selectedFiles[i])).Replace("{remaining}", "?")
                         });
                     }
 
@@ -886,8 +895,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                             // 批量导入 + 嵌套处理：显示双层进度
                             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
                             {
-                                Title = $"批量添加模组中 ({currentBatchIndex + 1}/{totalFiles}) ─ 嵌套处理 ({nestedIndex + 1}/{nestedTotal})",
-                                Message = $"正在处理: {nestedFileName}，剩余 {nestedTotal - nestedIndex - 1} 个"
+                                Title = _localizationService["DashboardPage.BatchAddNestedTitle"].Replace("{current}", (currentBatchIndex + 1).ToString()).Replace("{total}", totalFiles.ToString()).Replace("{nested}", (nestedIndex + 1).ToString()).Replace("{nestedTotal}", nestedTotal.ToString()),
+                                Message = _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", nestedFileName).Replace("{remaining}", (nestedTotal - nestedIndex - 1).ToString())
                             });
                         }
                         else
@@ -895,8 +904,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                             // 单文件 + 嵌套处理：显示嵌套进度
                             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
                             {
-                                Title = $"嵌套压缩包处理中 ({nestedIndex + 1}/{nestedTotal})",
-                                Message = $"正在处理: {nestedFileName}，剩余 {nestedTotal - nestedIndex - 1} 个"
+                                Title = _localizationService["DashboardPage.BatchAddNestedProgress"].Replace("{current}", (nestedIndex + 1).ToString()).Replace("{total}", nestedTotal.ToString()),
+                                Message = _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", nestedFileName).Replace("{remaining}", (nestedTotal - nestedIndex - 1).ToString())
                             });
                         }
                     };
@@ -939,7 +948,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
                         WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
                         {
-                            Message = $"成功添加 {successCount} 个模组！"
+                            Message = _localizationService["DashboardPage.BatchAddSuccess"].Replace("{count}", successCount.ToString())
                         });
                     }
                     else if (allProblems.Count > 0)
@@ -947,8 +956,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
                         var error = allProblems.Any(static p => p.IsError);
                         var prefix = error
-                            ? $"批量添加完成：{successCount} 成功，{failCount} 失败。问题如下:"
-                            : $"全部 {successCount} 个模组已添加，但有些相关问题:";
+                            ? _localizationService["DashboardPage.BatchAddDoneErrors"].Replace("{success}", successCount.ToString()).Replace("{fail}", failCount.ToString())
+                            : _localizationService["DashboardPage.BatchAddDoneWarnings"].Replace("{count}", successCount.ToString());
                         ShowProblems([.. allProblems], prefix, error);
                     }
                 }
@@ -959,8 +968,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     {
                         var error = allProblems.Any(static p => p.IsError);
                         var prefix = error
-                            ? "由于出现问题，模组添加失败:"
-                            : "模组已添加, 但有些相关问题:";
+                            ? _localizationService["DashboardPage.AddSingleError"]
+                            : _localizationService["DashboardPage.AddSingleWarning"];
                         ShowProblems([.. allProblems], prefix, error);
                     }
                     else
@@ -985,9 +994,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             CheckFileExists = true,
             CheckPathExists = true,
             InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
-            Filter = "Mod档案|*.rar;*.7z;*.zip;*.tar",
+            Filter = _localizationService["Common.FileFilterArchive"],
             Multiselect = false,
-            Title = $"请选择要更新「{vm.Name}」的模组压缩包..."
+            Title = $"{_localizationService["DashboardPage.UpdateModDialogPrefix"]}{vm.Name}{_localizationService["DashboardPage.UpdateModDialogSuffix"]}"
         };
 
         if (!(dialog.ShowDialog() ?? false))
@@ -996,7 +1005,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         // 发送初始进度消息，显示更新进度UI
         WeakReferenceMessenger.Default.Send(new MessageBoxUpdateProgressMessage
         {
-            Title = "更新模组",
+            Title = _localizationService["DashboardPage.UpdateModProgress"],
             ModName = vm.Name
         });
 
@@ -1016,7 +1025,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     // 显示统计信息
                     WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
                     {
-                        Message = info.Message ?? "模组更新完成"
+                        Message = info.Message ?? _localizationService["DashboardPage.UpdateModDone"]
                     });
                 }
                 else
@@ -1047,7 +1056,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
             {
-                Message = $"模组更新失败: {ex.Message}"
+                Message = $"{_localizationService["DashboardPage.UpdateModFailed"]}{ex.Message}"
             });
         }
     }
@@ -1101,15 +1110,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
-                Message = "无法清理模组! 因为游戏路径未设置."
+                Message = _localizationService["DashboardPage.PurgeNoGameDir"]
             });
             return;
         }
 
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
         {
-            Title = "清理模组中",
-            Message = "请民主官耐心等待."
+            Title = _localizationService["DashboardPage.PurgeProgress"],
+            Message = _localizationService["DashboardPage.PleaseWait"]
         });
 
         await _modService.PurgeAsync();
@@ -1161,15 +1170,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
-                Message = "无法部署模组! 因为游戏路径未设置."
+                Message = _localizationService["DashboardPage.DeployNoGameDir"]
             });
             return;
         }
 
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
         {
-            Title = "部署模组中",
-            Message = "请民主官耐心等待."
+            Title = _localizationService["DashboardPage.DeployProgress"],
+            Message = _localizationService["DashboardPage.PleaseWait"]
         });
 
         var mods = _mods.Where(static vm => vm.Enabled).ToArray();
@@ -1183,7 +1192,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
             {
-                Message = "部署成功."
+                Message = _localizationService["DashboardPage.DeploySuccess"]
             });
         }
         catch (Exception ex)
@@ -1218,13 +1227,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     void Remove(ModViewModel modVm)
     {
         var deleteMessage = _settingsService.DeleteToRecycleBin
-            ? "模组文件将被移动到回收站。"
-            : "模组文件将被永久删除，此操作不可恢复！";
+            ? _localizationService["DashboardPage.RecycleBinConfirm"]
+            : _localizationService["DashboardPage.PermanentDeleteConfirm"];
         
         WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
         {
-            Title = "确认删除",
-            Message = $"确定要删除模组 '{modVm.Name}' 吗？\n{deleteMessage}",
+            Title = _localizationService["DashboardPage.DeleteConfirmTitle"],
+            Message = $"{_localizationService["DashboardPage.DeleteConfirmPrefix"]}{modVm.Name}{_localizationService["DashboardPage.DeleteConfirmSuffix"]}{deleteMessage}",
             Confirm = () =>
             {
                 _ = DeleteModAsync(modVm);
@@ -1236,8 +1245,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     {
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
         {
-            Title = "删除模组中",
-            Message = "请民主官耐心等待."
+            Title = _localizationService["DashboardPage.DeleteModProgress"],
+            Message = _localizationService["DashboardPage.PleaseWait"]
         });
 
         try
@@ -1322,7 +1331,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _logger.LogError(ex, "Failed to open file location for mod {ModName}", modVm.Name);
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
-                Message = $"无法打开文件位置: {ex.Message}"
+                Message = $"{_localizationService["DashboardPage.OpenFileLocationFailed"]}{ex.Message}"
             });
         }
     }
@@ -1334,20 +1343,20 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
             {
-                Title = "编辑名称",
-                Message = "请输入新的模组名称：",
+                Title = _localizationService["DashboardPage.EditNameTitle"],
+                Message = _localizationService["DashboardPage.EditNameMsg"],
                 MaxLength = 64,
                 InitialText = modVm.Name,
                 Confirm = (newName) =>
                 {
                     if (string.IsNullOrWhiteSpace(newName))
                     {
-                        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "模组名称不能为空" });
+                        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.EditNameEmptyError"] });
                         return;
                     }
 
                     modVm.Data.UpdateManifestName(newName);
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "模组名称已更新" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.EditNameUpdated"] });
                 }
             });
         }
@@ -1356,7 +1365,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _logger.LogError(ex, "Failed to edit mod name for mod {ModName}", modVm.Name);
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
-                Message = $"无法编辑模组名称: {ex.Message}"
+                Message = $"{_localizationService["DashboardPage.EditNameFailed"]}{ex.Message}"
             });
         }
     }
@@ -1368,14 +1377,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
             {
-                Title = "编辑描述",
-                Message = "请输入新的模组描述：",
+                Title = _localizationService["DashboardPage.EditDescTitle"],
+                Message = _localizationService["DashboardPage.EditDescMsg"],
                 MaxLength = 1024,
                 InitialText = modVm.Description,
                 Confirm = (newDescription) =>
                 {
                     modVm.Data.UpdateManifestDescription(newDescription);
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "模组描述已更新" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.EditDescUpdated"] });
                 }
             });
         }
@@ -1384,7 +1393,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _logger.LogError(ex, "Failed to edit mod description for mod {ModName}", modVm.Name);
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
-                Message = $"无法编辑模组描述: {ex.Message}"
+                Message = $"{_localizationService["DashboardPage.EditDescFailed"]}{ex.Message}"
             });
         }
     }
@@ -1396,16 +1405,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             CheckFileExists = true,
             CheckPathExists = true,
-            Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp",
-            Title = "请选择要设置的模组图片..."
+            Filter = _localizationService["Common.SelectImageFilter"],
+            Title = _localizationService["DashboardPage.EditImageDialog"]
         };
 
         if (dialog.ShowDialog() ?? false)
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
             {
-                Title = "更新图片中",
-                Message = "请民主官耐心等待."
+                Title = _localizationService["DashboardPage.EditImageProgress"],
+                Message = _localizationService["DashboardPage.PleaseWait"]
             });
 
             try
@@ -1423,7 +1432,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
                 WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
                 {
-                    Message = "图片更新成功."
+                    Message = _localizationService["DashboardPage.EditImageSuccess"]
                 });
             }
             catch (Exception ex)
@@ -1431,7 +1440,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 _logger.LogError(ex, "Failed to edit image for mod {ModName}", modVm.Name);
                 WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
                 {
-                    Message = $"图片更新失败: {ex.Message}"
+                    Message = $"{_localizationService["DashboardPage.EditImageFailed"]}{ex.Message}"
                 });
             }
         }
@@ -1473,15 +1482,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         // Step 1: Show format/compression selection dialog (5 gears)
         WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
         {
-            Title = "导出设置",
-            Message = "请选择导出格式和压缩方式：",
+            Title = _localizationService["DashboardPage.ExportTitle"],
+            Message = _localizationService["DashboardPage.ExportMsg"],
             Options = new List<object>
             {
-                "ZIP (标准 - 兼容性最好, 内存低)",
-                "7z (快速 LZMA2 - 速度快, 内存低)",
-                "7z (标准 LZMA2 - 平衡, 内存中)",
-                "7z (高压缩 LZMA2 - 体积小, 内存中)",
-                "7z (极限 LZMA2 - 体积最小, 内存高 ⚠)"
+                _localizationService["DashboardPage.ExportZip"],
+                _localizationService["DashboardPage.Export7zFast"],
+                _localizationService["DashboardPage.Export7zStandard"],
+                _localizationService["DashboardPage.Export7zHigh"],
+                _localizationService["DashboardPage.Export7zUltra"]
             },
             Confirm = (selectedOption) =>
             {
@@ -1494,17 +1503,17 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 bool isHighMemory;
                 string levelName;
 
-                if (opt.Contains("快速"))    { level = SharpSevenZip.CompressionLevel.Fast;   dictSize = "8m";  isHighMemory = false; levelName = "Fast"; }
-                else if (opt.Contains("高压缩")) { level = SharpSevenZip.CompressionLevel.High;   dictSize = "64m"; isHighMemory = true;  levelName = "High"; }
-                else if (opt.Contains("极限"))   { level = SharpSevenZip.CompressionLevel.Ultra;  dictSize = "128m"; isHighMemory = true;  levelName = "Ultra"; }
+                if (opt == _localizationService["DashboardPage.Export7zFast"])    { level = SharpSevenZip.CompressionLevel.Fast;   dictSize = "8m";  isHighMemory = false; levelName = "Fast"; }
+                else if (opt == _localizationService["DashboardPage.Export7zHigh"]) { level = SharpSevenZip.CompressionLevel.High;   dictSize = "64m"; isHighMemory = true;  levelName = "High"; }
+                else if (opt == _localizationService["DashboardPage.Export7zUltra"])   { level = SharpSevenZip.CompressionLevel.Ultra;  dictSize = "128m"; isHighMemory = true;  levelName = "Ultra"; }
                 else                             { level = SharpSevenZip.CompressionLevel.Normal; dictSize = "32m"; isHighMemory = false; levelName = "Normal"; }
 
                 // Step 2: Show save file dialog
                 var dialog = new SaveFileDialog
                 {
-                    Title = "导出模组",
+                    Title = _localizationService["DashboardPage.ExportSaveDialog"],
                     FileName = $"{vm.Name}.{(is7z ? "7z" : "zip")}",
-                    Filter = is7z ? "7z 压缩包|*.7z|所有文件|*.*" : "ZIP 压缩包|*.zip|所有文件|*.*",
+                    Filter = is7z ? _localizationService["Common.FileFilter7z"] : _localizationService["Common.FileFilterZip"],
                 };
 
                 if (dialog.ShowDialog() != true)
@@ -1539,11 +1548,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
                     WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
                     {
-                        Title = "内存占用警告",
-                        Message = $"模组文件总大小 {sizeText}，选择了「{levelName}」级别。\n\n" +
-                                  $"该级别使用 {dictDesc} 字典进行 LZMA2 压缩，\n" +
-                                  $"压缩过程中内存占用较高，且部分旧版解压工具可能无法解压。\n\n" +
-                                  "是否继续导出？",
+                        Title = _localizationService["DashboardPage.ExportMemoryWarning"],
+                        Message = $"{_localizationService["DashboardPage.ExportMemoryMsgPrefix"]}{sizeText}{_localizationService["DashboardPage.ExportMemoryMsgMid"]}{levelName}{_localizationService["DashboardPage.ExportMemoryMsgCompression"]}{dictDesc}{_localizationService["DashboardPage.ExportMemoryMsgSuffix"]}",
                         Confirm = () => DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, excludedExtensions),
                         Abort = () => { }
                     });
@@ -1566,7 +1572,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         // Show progress dialog on UI thread
         WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressMessage
         {
-            Title = $"导出模组 - {vm.Name}"
+            Title = $"{_localizationService["DashboardPage.ExportSaveDialog"]} - {vm.Name}"
         });
 
         // Run export on background thread to keep UI responsive
@@ -1612,10 +1618,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             }
 
             var speedText = speed >= 1024 * 1024
-                ? $"速度: {speed / (1024.0 * 1024):F1} MB/s"
+                ? $"{_localizationService["DashboardPage.ExportSpeed"]}{speed / (1024.0 * 1024):F1}{_localizationService["DashboardPage.ExportMBS"]}"
                 : speed >= 1024
-                    ? $"速度: {speed / 1024.0:F0} KB/s"
-                    : $"速度: {speed:F0} B/s";
+                    ? $"{_localizationService["DashboardPage.ExportSpeed"]}{speed / 1024.0:F0}{_localizationService["DashboardPage.ExportKBS"]}"
+                    : $"{_localizationService["DashboardPage.ExportSpeed"]}{speed:F0}{_localizationService["DashboardPage.ExportBS"]}";
 
             // Read output file size for ratio (if file exists)
             string ratioText = "";
@@ -1626,7 +1632,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 {
                     // 压缩率 = (1 - 输出大小/输入大小) * 100，表示压缩了多少
                     var saved = (1.0 - (double)outFile.Length / totalInputSize) * 100;
-                    ratioText = $"压缩率: {saved:F1}%";
+                    ratioText = $"{_localizationService["DashboardPage.ExportRatio"]}{saved:F1}{_localizationService["DashboardPage.ExportPercent"]}";
                 }
             }
             catch { }
@@ -1738,7 +1744,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
                 WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
                 {
-                    Message = $"导出模组时出现错误：{ex.Message}"
+                    Message = $"{_localizationService["DashboardPage.ExportError"]}{ex.Message}"
                 });
             });
         }
@@ -1775,11 +1781,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand]
     void DownloadFromNexus()
     {
-        var message = @"从 Nexus Mods 下载模组功能需要 Nexus Mods Premium
-不过由于我没有N网会员这个功能运行效果如何尚且未知所以不要使用
-但是可以考虑使用扩展的方式替代";
-
-        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = message });
+        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.NexusDownloadInfo"] });
         
         _navStore.Value.Navigate<NexusDownloadPageViewModel>();
     }
@@ -1801,8 +1803,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         WeakReferenceMessenger.Default.Send(new MessageBoxTagSelectionMessage
             {
-                Title = "设置标签",
-                Message = "请选择模组的标签：",
+                Title = _localizationService["DashboardPage.EditTagsTitle"],
+                Message = _localizationService["DashboardPage.EditTagsMsg"],
                 Tags = selectableTags,
                 Confirm = (selectedTags) =>
                 {
@@ -1810,11 +1812,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     {
                         modVm.Data.TagIds = selectedTags.Select(t => t.Tag.Id).ToList();
                         _ = SaveEnabled();
-                        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "模组标签已更新" });
+                        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.EditTagsUpdated"] });
                     }
                     else
                     {
-                        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法设置标签，设置处于只读模式" });
+                        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.EditTagsReadonly"] });
                     }
                 }
             });
@@ -1836,7 +1838,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         var separator = new ModSeparator
         {
-            Name = "新分隔符",
+            Name = _localizationService["DashboardPage.DefaultSeparatorName"],
             Color = "#FF6200EE",
             IsExpanded = true,
             DisplayIndex = _orderedItems.Count
@@ -1857,15 +1859,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
         {
-            Title = "重命名分隔符",
-            Message = "请输入新的分隔符名称：",
+            Title = _localizationService["DashboardPage.RenameSeparatorTitle"],
+            Message = _localizationService["DashboardPage.RenameSeparatorMsg"],
             MaxLength = 32,
             InitialText = separator.Name,
             Confirm = (newName) =>
             {
                 if (string.IsNullOrWhiteSpace(newName))
                 {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "名称不能为空" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.RenameSeparatorEmptyError"] });
                     return;
                 }
                 separator.Name = newName;
@@ -1886,8 +1888,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         WeakReferenceMessenger.Default.Send(new MessageBoxColorPickerMessage
         {
-            Title = "选择分隔符颜色",
-            Message = $"请为「{separator.Name}」选择颜色：",
+            Title = _localizationService["DashboardPage.ChangeSeparatorColorTitle"],
+            Message = $"{_localizationService["DashboardPage.ChangeSeparatorColorPrefix"]}{separator.Name}{_localizationService["DashboardPage.ChangeSeparatorColorSuffix"]}",
             CurrentColor = separator.Color,
             Confirm = (selectedColor) =>
             {
@@ -1909,8 +1911,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
         {
-            Title = "删除分隔符",
-            Message = $"确定要删除分隔符「{separator.Name}」吗？",
+            Title = _localizationService["DashboardPage.DeleteSeparatorTitle"],
+            Message = $"{_localizationService["DashboardPage.DeleteSeparatorPrefix"]}{separator.Name}{_localizationService["DashboardPage.DeleteSeparatorSuffix"]}",
             Confirm = () =>
             {
                 _settingsService.Separators.Remove(separator);

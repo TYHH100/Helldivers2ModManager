@@ -8,6 +8,12 @@ namespace Helldivers2ModManager.Services;
 /// </summary>
 internal static class FileHashUtils
 {
+	private static LocalizationService? _localizationService;
+
+	internal static void Init(LocalizationService localizationService)
+	{
+		_localizationService = localizationService;
+	}
     /// <summary>
     /// GPU 资源文件的 SHA-256 跳过阈值。
     /// 超过此大小的 .gpu_resources 文件跳过完整 SHA-256 计算，改用文件大小+修改时间的组合作为伪哈希。
@@ -91,7 +97,7 @@ internal static class FileHashUtils
             }
             catch (Exception ex) when (ex is not IOException)
             {
-                throw new IOException($"无法计算文件「{relativePath}」的哈希值: {ex.Message}", ex);
+                throw new IOException(_localizationService?["FileHashUtils.HashError"].Replace("{path}", relativePath).Replace("{message}", ex.Message) ?? $"无法计算文件「{relativePath}」的哈希值: {ex.Message}", ex);
             }
         }
 
@@ -99,7 +105,7 @@ internal static class FileHashUtils
     }
 
     /// <summary>
-	/// 带数据库缓存的计算目录哈希值 —— 优先从数据库读取有效的缓存哈希，
+    /// 带数据库缓存的计算目录哈希值 —— 优先从数据库读取有效的缓存哈希，
 	/// 仅在文件元数据（大小/修改时间）发生变化时才重新计算 SHA-256。
 	/// 计算完成后自动将新哈希值保存到数据库。
 	/// </summary>
@@ -199,7 +205,7 @@ internal static class FileHashUtils
             }
             catch (Exception ex) when (ex is not IOException)
             {
-                throw new IOException($"无法计算文件「{relativePath}」的哈希值: {ex.Message}", ex);
+                throw new IOException(_localizationService?["FileHashUtils.HashError"].Replace("{path}", relativePath).Replace("{message}", ex.Message) ?? $"无法计算文件「{relativePath}」的哈希值: {ex.Message}", ex);
             }
         }
 

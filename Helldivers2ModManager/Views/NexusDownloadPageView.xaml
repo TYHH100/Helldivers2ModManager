@@ -5,6 +5,7 @@
 	  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
+	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:NexusDownloadPageViewModel}"
 	  d:Background="{StaticResource MicaBackgroundBrush}"
@@ -32,12 +33,12 @@
 					Margin="0 0 12 0">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-                    <TextBlock ToolTip="返回" VerticalAlignment="Center"/>
+                    <TextBlock ToolTip="{loc:Loc NexusDownloadPage.Back}" VerticalAlignment="Center"/>
 				</StackPanel>
 			</Button>
 			
 			<TextBlock Grid.Column="1"
-					   Text="从 Nexus Mods 下载模组"
+					   Text="{loc:Loc NexusDownloadPage.Title}"
 					   Style="{StaticResource FluentSectionHeader}"
 					   VerticalAlignment="Center"/>
 		</Grid>
@@ -49,10 +50,10 @@
 				<!-- URL Input Section -->
 				<Border Style="{StaticResource FluentSettingsCard}">
 					<StackPanel>
-						<TextBlock Text="Nexus Mods 链接"
+						<TextBlock Text="{loc:Loc NexusDownloadPage.UrlLabel}"
 								   Style="{StaticResource FluentSubSectionHeader}"
 								   Margin="0"/>
-						<TextBlock Text="粘贴 Nexus Mods 模组页面链接"
+						<TextBlock Text="{loc:Loc NexusDownloadPage.UrlDesc}"
 								   Style="{StaticResource FluentBodyText}"
 								   Margin="0 4 0 12"/>
 						<Grid>
@@ -67,7 +68,7 @@
 									 IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}"
 									 Margin="0 0 8 0"/>
 							<Button Grid.Column="1"
-									Content="获取模组信息"
+									Content="{loc:Loc NexusDownloadPage.FetchInfo}"
 									Style="{StaticResource FluentPrimaryButton}"
 									Command="{Binding FetchModCommand}"
 									IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}"
@@ -84,7 +85,7 @@
 				<Border Style="{StaticResource FluentSettingsCard}"
 						Margin="0 16 0 0">
 					<StackPanel>
-						<TextBlock Text="模组信息"
+						<TextBlock Text="{loc:Loc NexusDownloadPage.ModInfo}"
 								   Style="{StaticResource FluentSubSectionHeader}"
 								   Margin="0"/>
 						
@@ -126,7 +127,7 @@
 								</StackPanel>
 							</Grid>
 							
-							<TextBlock Text="下载文件"
+							<TextBlock Text="{loc:Loc NexusDownloadPage.DownloadFiles}"
 									   FontSize="14"
 									   FontWeight="SemiBold"
 									   Foreground="{StaticResource NeutralForegroundBrush}"
@@ -174,12 +175,12 @@
 										Orientation="Horizontal"
 										HorizontalAlignment="Right"
 										Margin="0 12 0 0">
-								<Button Content="在浏览器中打开"
+								<Button Content="{loc:Loc NexusDownloadPage.OpenInBrowser}"
 										Style="{StaticResource FluentSecondaryButton}"
 										Command="{Binding OpenInBrowserCommand}"
 										IsEnabled="{Binding SelectedMod, Converter={StaticResource NullToBoolConverter}}"
 										Padding="16 10"/>
-								<Button Content="下载并导入"
+								<Button Content="{loc:Loc NexusDownloadPage.DownloadImport}"
 										Style="{StaticResource FluentPrimaryButton}"
 										Command="{Binding DownloadAndImportCommand}"
 										IsEnabled="{Binding SelectedFile, Converter={StaticResource NullToBoolConverter}}"
@@ -190,7 +191,7 @@
 						
 						<StackPanel Margin="0 8 0 0"
 									Visibility="{Binding SelectedMod, Converter={StaticResource InverseNullToVisibilityConverter}}">
-							<TextBlock Text="请先获取模组信息"
+							<TextBlock Text="{loc:Loc NexusDownloadPage.EmptyHint}"
 									   FontSize="14"
 									   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 									   HorizontalAlignment="Center"

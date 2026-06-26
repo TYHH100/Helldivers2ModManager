@@ -14,7 +14,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class TagManagementPageViewModel : PageViewModelBase
 {
-    public override string Title => "Tag Manager";
+    public override string Title => _localizationService["TagManagementPage.Title"];
 
     public ObservableCollection<ModTag> Tags => _settingsService.Initialized ? _settingsService.Tags : [];
 
@@ -25,13 +25,20 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
     private readonly SettingsService _settingsService;
     private readonly NavigationStore _navigationStore;
     private readonly ModService _modService;
+    private readonly LocalizationService _localizationService;
 
-    public TagManagementPageViewModel(ILogger<TagManagementPageViewModel> logger, SettingsService settingsService, NavigationStore navigationStore, ModService modService)
+    public TagManagementPageViewModel(ILogger<TagManagementPageViewModel> logger, SettingsService settingsService, NavigationStore navigationStore, ModService modService, LocalizationService localizationService)
     {
         _logger = logger;
         _settingsService = settingsService;
         _navigationStore = navigationStore;
         _modService = modService;
+        _localizationService = localizationService;
+
+        _localizationService.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(Title));
+        };
     }
 
     [RelayCommand]
@@ -39,14 +46,14 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
     {
         WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
         {
-            Title = "创建标签",
-            Message = "请输入新标签的名称：",
+            Title = _localizationService["TagManagementPage.CreateTitle"],
+            Message = _localizationService["TagManagementPage.CreateMsg"],
             MaxLength = 16,
             Confirm = (tagName) =>
             {
                 if (string.IsNullOrWhiteSpace(tagName))
                 {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "标签名称不能为空" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.CreateEmptyError"] });
                     return;
                 }
 
@@ -54,11 +61,11 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
                 {
                     _settingsService.Tags.Add(new ModTag(tagName));
                     _ = _settingsService.SaveAsync();
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "标签创建成功" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["TagManagementPage.CreateSuccess"] });
                 }
                 else
                 {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法创建标签，设置处于只读模式" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.CreateReadonly"] });
                 }
             }
         });
@@ -72,15 +79,15 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
 
         WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
         {
-            Title = "重命名标签",
-            Message = "请输入新的标签名称：",
+            Title = _localizationService["TagManagementPage.RenameTitle"],
+            Message = _localizationService["TagManagementPage.RenameMsg"],
             MaxLength = 16,
             InitialText = tag.Name,
             Confirm = (newName) =>
             {
                 if (string.IsNullOrWhiteSpace(newName))
                 {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "标签名称不能为空" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.RenameEmptyError"] });
                     return;
                 }
 
@@ -88,11 +95,11 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
                 {
                     tag.Name = newName;
                     _ = _settingsService.SaveAsync();
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "标签重命名成功" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["TagManagementPage.RenameSuccess"] });
                 }
                 else
                 {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法重命名标签，设置处于只读模式" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.RenameReadonly"] });
                 }
             }
         });
@@ -108,20 +115,20 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxColorPickerMessage
             {
-                Title = "选择颜色",
-                Message = $"为标签 \"{tag.Name}\" 选择颜色：",
+                Title = _localizationService["TagManagementPage.ColorTitle"],
+                Message = $"{_localizationService["TagManagementPage.ColorPrefix"]}{tag.Name}{_localizationService["TagManagementPage.ColorSuffix"]}",
                 CurrentColor = tag.Color,
                 Confirm = (colorCode) =>
                 {
                     tag.Color = colorCode;
                     _ = _settingsService.SaveAsync();
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "标签颜色已更新" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["TagManagementPage.ColorUpdated"] });
                 }
             });
         }
         else
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法更改颜色，设置处于只读模式" });
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.ColorReadonly"] });
         }
     }
 
@@ -135,21 +142,21 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
             {
-                Title = "确认删除",
-                Message = $"确定要删除标签 \"{tag.Name}\" 吗？",
+                Title = _localizationService["TagManagementPage.DeleteTitle"],
+                Message = _localizationService["TagManagementPage.DeletePrefix"] + tag.Name + _localizationService["TagManagementPage.DeleteSuffix"],
                 Confirm = () =>
                 {
                     _settingsService.Tags.Remove(tag);
                     _ = _settingsService.SaveAsync();
 
                     SelectedTag = null;
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = "标签删除成功" });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["TagManagementPage.DeleteSuccess"] });
                 }
             });
         }
         else
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法删除标签，设置处于只读模式" });
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.DeleteReadonly"] });
         }
     }
 

@@ -2,7 +2,8 @@
 		x:ClassModifier="internal"
 		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-		Title="选择 Include 目录"
+		xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
+		Title="{loc:Loc CreateWizard.IncludePickerTitle}"
 		Width="480"
 		Height="520"
 		WindowStartupLocation="CenterOwner"
@@ -18,7 +19,7 @@
 
 		<!-- 提示文字 -->
 		<TextBlock Grid.Row="0"
-				   Text="勾选要包含的目录（相对于源目录的路径将自动生成）："
+				   Text="{loc:Loc CreateWizard.IncludePickerDesc}"
 				   FontSize="13"
 				   Foreground="#CCCCCC"
 				   Margin="0 0 0 8"
@@ -42,12 +43,12 @@
 		<StackPanel Grid.Row="2"
 					Orientation="Horizontal"
 					HorizontalAlignment="Right">
-			<Button Content="确定"
+			<Button Content="{loc:Loc CreateWizard.IncludePickerOK}"
 					Width="80"
 					Height="32"
 					Click="OkButton_Click"
 					Margin="0 0 8 0"/>
-			<Button Content="取消"
+			<Button Content="{loc:Loc CreateWizard.IncludePickerCancel}"
 					Width="80"
 					Height="32"
 					Click="CancelButton_Click"/>

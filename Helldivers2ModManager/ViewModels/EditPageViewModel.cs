@@ -16,7 +16,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class EditPageViewModel : PageViewModelBase
 {
-	public override string Title => "Mod Options";
+	public override string Title => _localizationService["EditPage.Title"];
 
 	public ModViewModel? EditMod => _editModStore.CurrentMod;
 
@@ -25,15 +25,23 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 	private readonly ProfileService _profileService;
 	private readonly SettingsService _settingsService;
 	private readonly ModService _modService;
+	private readonly LocalizationService _localizationService;
 
 	public EditPageViewModel(NavigationStore navStore, EditModStore editModStore,
-		ProfileService profileService, SettingsService settingsService, ModService modService)
+		ProfileService profileService, SettingsService settingsService, ModService modService,
+		LocalizationService localizationService)
 	{
 		_navStore = navStore;
 		_editModStore = editModStore;
 		_profileService = profileService;
 		_settingsService = settingsService;
 		_modService = modService;
+		_localizationService = localizationService;
+
+		_localizationService.PropertyChanged += (_, _) =>
+		{
+			OnPropertyChanged(nameof(Title));
+		};
 	}
 
 	[RelayCommand]
@@ -48,7 +56,7 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 			}
 			catch (Exception ex)
 			{
-				System.Diagnostics.Debug.WriteLine($"保存 Mod 配置失败: {ex.Message}");
+				System.Diagnostics.Debug.WriteLine($"{_localizationService["EditPage.SaveFailed"]}{ex.Message}");
 			}
 		}
 

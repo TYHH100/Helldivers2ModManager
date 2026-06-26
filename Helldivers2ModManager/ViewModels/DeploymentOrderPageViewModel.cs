@@ -19,7 +19,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, IDropTarget
 {
-    public override string Title => "部署顺序";
+    public override string Title => _localizationService["DeploymentOrderPage.Title"];
 
     /// <summary>
     /// 部署顺序列表中的项（扁平列表，模组+选项+子选项）
@@ -41,27 +41,36 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
     /// 当前部署方向说明
     /// </summary>
     public string OrderDescription => _settingsService.DeployBottomToTop
-        ? "当前部署方向：从下到上（列表底部的模组优先部署）"
-        : "当前部署方向：从上到下（列表顶部的模组优先部署）";
+        ? _localizationService["DeploymentOrderPage.OrderDescBottomUp"]
+        : _localizationService["DeploymentOrderPage.OrderDescTopDown"];
 
     private readonly ILogger<DeploymentOrderPageViewModel> _logger;
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
     private readonly ProfileService _profileService;
     private readonly NavigationStore _navigationStore;
+    private readonly LocalizationService _localizationService;
 
     public DeploymentOrderPageViewModel(
         ILogger<DeploymentOrderPageViewModel> logger,
         ModService modService,
         SettingsService settingsService,
         ProfileService profileService,
-        NavigationStore navigationStore)
+        NavigationStore navigationStore,
+        LocalizationService localizationService)
     {
         _logger = logger;
         _modService = modService;
         _settingsService = settingsService;
         _profileService = profileService;
         _navigationStore = navigationStore;
+        _localizationService = localizationService;
+
+        _localizationService.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(OrderDescription));
+        };
 
         LoadItems();
     }
@@ -90,7 +99,7 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
                 }
                 else
                 {
-                    Items.Add(new DeploymentOrderItem(guid, "[已删除的模组]"));
+                    Items.Add(new DeploymentOrderItem(guid, _localizationService["DeploymentOrderPage.DeletedModPlaceholder"]));
                 }
                 modDict.Remove(guid);
             }
@@ -194,7 +203,7 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
                         continue;
 
                     var sub = subs[subOrigIndex];
-                    var subItem = new DeploymentOrderItem(modItem.Guid, $"    ▪ {sub.Name}")
+                    var subItem = new DeploymentOrderItem(modItem.Guid, $"{_localizationService["DeploymentOrderPage.SubOptionPrefix"]}{sub.Name}")
                     {
                         ItemType = DeploymentItemType.SubOption,
                         ParentModGuid = modItem.Guid,

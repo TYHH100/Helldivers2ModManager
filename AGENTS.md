@@ -364,6 +364,130 @@ xmlns:local="clr-namespace:Helldivers2ModManager"
 
 ---
 
+### 3.11 本地化系统（v1.5.0+）
+
+#### 3.11.1 架构概述
+
+本地化系统采用 **JSON 文件 + 运行时服务** 的轻量方案：
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| 本地化服务 | `Services/LocalizationService.cs` | 单例服务，加载 JSON 并提供索引器访问 |
+| 标记扩展 | `Extensions/LocExtension.cs` | XAML 标记扩展 `{loc:Loc Key}` 实现动态绑定 |
+| 中文资源 | `Resources/Language/zh-CN.json` | 中文本地化字符串 |
+| 英文资源 | `Resources/Language/en-US.json` | 英文本地化字符串 |
+| 语言设置 | `SettingsService.Language` | 持久化用户语言偏好 |
+
+#### 3.11.2 JSON 格式
+
+每个 locale 文件格式如下：
+
+```json
+{
+  "locale": "zh-CN",
+  "languageName": "中文",
+  "strings": {
+    "MainWindow.Title": "Helldivers 2 Mod Manager",
+    "DashboardPage.SearchWatermark": "搜索 Mod 名称，使用 @标签名 搜索标签",
+    ...
+  }
+}
+```
+
+- `locale`: 语言代码（如 `zh-CN`、`en-US`）
+- `languageName`: 语言显示名称（如 `中文`、`English`）
+- `strings`: 扁平化的键值对字典，键格式为 `页面/模块名.键名`
+
+#### 3.11.3 LocalizationService
+
+`[RegisterService(ServiceLifetime.Singleton)]` — 在 App 启动时自动注册。
+
+**关键功能**:
+- **自动检测**: 使用 `CultureInfo.InstalledUICulture.Name` 自动匹配系统语言
+- **回退机制**: 精确匹配 → 语言族匹配（如 `zh` → `zh-CN`）→ 第一个可用语言 → `en-US`
+- **运行时切换**: 设置 `SelectedLanguage` 属性即可切换语言，所有绑定自动更新
+- **INotifyPropertyChanged**: 切换时触发 `PropertyChanged("Item")`，WPF 绑定自动刷新
+- **索引器**: `service["DashboardPage.Title"]` 返回对应字符串，缺失时返回 `[Key]`
+
+**语言列表**:
+- 第一个选项为 `Auto Detect`（空字符串表示自动检测）
+- 后续为 JSON 文件中的语言
+
+#### 3.11.4 XAML 中使用
+
+在 XAML 文件中添加命名空间：
+
+```xml
+xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
+```
+
+然后使用标记扩展绑定：
+
+```xml
+<TextBlock Text="{loc:Loc MainWindow.Title}"/>
+<Button Content="{loc:Loc DashboardPage.AddMod}"/>
+<Button ToolTip="{loc:Loc MainWindow.Help}"/>
+<TextBlock Text="{loc:Loc SettingsPage.Language}"/>
+```
+
+`LocExtension` 内部创建 `Binding` 到 `LocalizationService` 的索引器，因此在语言切换时自动更新。
+
+#### 3.11.5 代码中的使用
+
+在 ViewModel 或 Service 中通过 DI 获取 `LocalizationService`：
+
+```csharp
+internal sealed class MyViewModel
+{
+    private readonly LocalizationService _loc;
+    
+    public MyViewModel(LocalizationService loc)
+    {
+        _loc = loc;
+        var title = _loc["MyPage.Title"];
+    }
+}
+```
+
+#### 3.11.6 添加新语言
+
+1. 在 `Resources/Language/` 目录下创建 `{localeCode}.json` 文件
+2. 按照 JSON 格式编写所有字符串翻译
+3. 重新构建项目，系统自动识别新的 locale 文件
+
+所有 locale 文件在构建时自动复制到输出目录（通过 `.csproj` 中的 `Content` 配置）。
+
+#### 3.11.7 语言设置存储
+
+- 用户选择的语言保存在 `settings.json` 的 `Language` 字段
+- 空字符串表示自动检测
+- 非空值（如 `zh-CN`）表示手动指定的语言
+- 设置页面的"主页"选项卡中提供 `ComboBox` 选择语言
+
+#### 3.11.8 字符串键组织规范
+
+键名按 `Section.Key` 格式组织：
+
+| 前缀 | 对应文件 |
+|------|---------|
+| `MainWindow.*` | MainWindow.xaml |
+| `DashboardPage.*` | DashboardPageView.xaml + DashboardPageViewModel.cs |
+| `SettingsPage.*` | SettingsPageView.xaml + SettingsPageViewModel.cs |
+| `CreatePage.*` | CreatePageView.xaml + CreatePageViewModel.cs |
+| `ManifestEditPage.*` | ManifestEditPageView.xaml |
+| `EditPage.*` | EditPageView.xaml |
+| `NexusDownloadPage.*` | NexusDownloadPageView.xaml |
+| `DownloadProgress.*` | DownloadProgressView.xaml |
+| `TagManagementPage.*` | TagManagementPageView.xaml |
+| `HelpPage.*` | HelpPageView.xaml |
+| `DeploymentOrderPage.*` | DeploymentOrderPageView.xaml |
+| `CreateWizard.*` | 创建向导各个页面 |
+| `MessageBox.*` | Components/MessageBox.xaml + .xaml.cs |
+| `VersionCheck.*` | VersionCheckService 相关 |
+| `Common.*` | 通用字符串 |
+
+---
+
 ## 4. Mod清单规范
 
 ### 4.1 清单版本说明

@@ -247,21 +247,27 @@ internal sealed class BytesToSizeConverter : IValueConverter
 
 internal sealed class DownloadStatusToStringConverter : IValueConverter
 {
+    private static LocalizationService? _localizationService;
+    static DownloadStatusToStringConverter()
+    {
+        try { if (Application.Current is App app) _localizationService = app.Host.Services.GetService(typeof(LocalizationService)) as LocalizationService; } catch { }
+    }
+
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is Models.DownloadStatus status)
         {
             return status switch
             {
-                Models.DownloadStatus.Pending => "等待中",
-                Models.DownloadStatus.Downloading => "下载中",
-                Models.DownloadStatus.Completed => "已完成",
-                Models.DownloadStatus.Failed => "失败",
-                Models.DownloadStatus.Cancelled => "已取消",
-                _ => "未知"
+                Models.DownloadStatus.Pending => _localizationService?["Converters.DownloadStatusWaiting"] ?? "等待中",
+                Models.DownloadStatus.Downloading => _localizationService?["Converters.DownloadStatusDownloading"] ?? "下载中",
+                Models.DownloadStatus.Completed => _localizationService?["Converters.DownloadStatusCompleted"] ?? "已完成",
+                Models.DownloadStatus.Failed => _localizationService?["Converters.DownloadStatusFailed"] ?? "失败",
+                Models.DownloadStatus.Cancelled => _localizationService?["Converters.DownloadStatusCancelled"] ?? "已取消",
+                _ => _localizationService?["Converters.Unknown"] ?? "未知"
             };
         }
-        return "未知";
+        return _localizationService?["Converters.Unknown"] ?? "未知";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -367,21 +373,27 @@ internal sealed class VersionStatusToColorConverter : IValueConverter
 /// </summary>
 internal sealed class VersionStatusToTextConverter : IValueConverter
 {
+    private static LocalizationService? _localizationService;
+    static VersionStatusToTextConverter()
+    {
+        try { if (Application.Current is App app) _localizationService = app.Host.Services.GetService(typeof(LocalizationService)) as LocalizationService; } catch { }
+    }
+
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is Models.ModVersionStatus status)
         {
             return status switch
             {
-                Models.ModVersionStatus.Compatible => "兼容",
-                Models.ModVersionStatus.Incompatible => "不兼容",
-                Models.ModVersionStatus.Unknown => "无法确认",
-                Models.ModVersionStatus.Checking => "检查中",
-                Models.ModVersionStatus.Error => "检查失败",
-                _ => "未知"
+                Models.ModVersionStatus.Compatible => _localizationService?["Converters.Compatible"] ?? "兼容",
+                Models.ModVersionStatus.Incompatible => _localizationService?["Converters.Incompatible"] ?? "不兼容",
+                Models.ModVersionStatus.Unknown => _localizationService?["Converters.UnableToConfirm"] ?? "无法确认",
+                Models.ModVersionStatus.Checking => _localizationService?["Converters.Checking"] ?? "检查中",
+                Models.ModVersionStatus.Error => _localizationService?["Converters.CheckFailed"] ?? "检查失败",
+                _ => _localizationService?["Converters.Unknown"] ?? "未知"
             };
         }
-        return "未知";
+        return _localizationService?["Converters.Unknown"] ?? "未知";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -395,21 +407,27 @@ internal sealed class VersionStatusToTextConverter : IValueConverter
 /// </summary>
 internal sealed class SortModeConverter : IValueConverter
 {
+    private static LocalizationService? _localizationService;
+    static SortModeConverter()
+    {
+        try { if (Application.Current is App app) _localizationService = app.Host.Services.GetService(typeof(LocalizationService)) as LocalizationService; } catch { }
+    }
+
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is SortMode mode)
         {
             return mode switch
             {
-                SortMode.Default => "默认顺序",
-                SortMode.NameAsc => "名称 A-Z",
-                SortMode.NameDesc => "名称 Z-A",
-                SortMode.EnabledFirst => "已启用优先",
-                SortMode.DisabledFirst => "已禁用优先",
-                _ => "默认顺序",
+                SortMode.Default => _localizationService?["Converters.SortDefault"] ?? "默认顺序",
+                SortMode.NameAsc => _localizationService?["Converters.SortNameAZ"] ?? "名称 A-Z",
+                SortMode.NameDesc => _localizationService?["Converters.SortNameZA"] ?? "名称 Z-A",
+                SortMode.EnabledFirst => _localizationService?["Converters.SortEnabledFirst"] ?? "已启用优先",
+                SortMode.DisabledFirst => _localizationService?["Converters.SortDisabledFirst"] ?? "已禁用优先",
+                _ => _localizationService?["Converters.SortDefault"] ?? "默认顺序",
             };
         }
-        return "默认顺序";
+        return _localizationService?["Converters.SortDefault"] ?? "默认顺序";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

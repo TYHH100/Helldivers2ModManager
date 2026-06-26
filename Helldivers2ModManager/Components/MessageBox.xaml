@@ -5,6 +5,7 @@
 			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 			 xmlns:local="clr-namespace:Helldivers2ModManager.Components"
+			 xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 			 mc:Ignorable="d"
 			 d:DesignHeight="600"
 			 d:DesignWidth="800"
@@ -194,14 +195,14 @@
 								BorderBrush="White"
 								Margin="0 0 12 0"/>
 						<StackPanel>
-							<TextBlock Text="当前颜色" FontSize="12" Foreground="#88FFFFFF" Margin="0 0 0 4"/>
+							<TextBlock Text="{loc:Loc MessageBox.CurrentColor}" FontSize="12" Foreground="#88FFFFFF" Margin="0 0 0 4"/>
 							<TextBlock x:Name="colorCodeText" FontSize="14" Foreground="White" FontFamily="Consolas"/>
 						</StackPanel>
 					</StackPanel>
 
 					<!-- Manual Color Input -->
 					<StackPanel Orientation="Horizontal" Margin="0 0 0 12" VerticalAlignment="Center">
-						<TextBlock Text="自定义颜色:" FontSize="12" Foreground="#88FFFFFF" VerticalAlignment="Center" Margin="0 0 8 0"/>
+						<TextBlock Text="{loc:Loc MessageBox.CustomColor}" FontSize="12" Foreground="#88FFFFFF" VerticalAlignment="Center" Margin="0 0 8 0"/>
 						<TextBox x:Name="colorInputBox"
 								 TextChanged="ColorInputBox_TextChanged"
 								 Style="{StaticResource FluentTextBox}"
@@ -212,11 +213,11 @@
 						<Border x:Name="colorInputPreview"
 								Width="24" Height="24" CornerRadius="4" Margin="8 0 0 0"
 								BorderThickness="1" BorderBrush="#40FFFFFF"/>
-						<TextBlock Text="格式: #FFAABBCC" FontSize="11" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="8 0 0 0"/>
+						<TextBlock Text="{loc:Loc MessageBox.ColorFormat}" FontSize="11" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="8 0 0 0"/>
 					</StackPanel>
 
 					<!-- Color Palette -->
-					<TextBlock Text="选择颜色" FontSize="12" Foreground="#88FFFFFF" Margin="0 0 0 8"/>
+					<TextBlock Text="{loc:Loc MessageBox.SelectColor}" FontSize="12" Foreground="#88FFFFFF" Margin="0 0 0 8"/>
 					<UniformGrid Columns="8" Rows="6">
 						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF3B82F6" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF3B82F6"/>
 						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF0078D7" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF0078D7"/>
@@ -270,13 +271,13 @@
 							Orientation="Horizontal"
 							HorizontalAlignment="Right">
 					<Button x:Name="cancelButton"
-							Content="取消"
+							Content="{loc:Loc MessageBox.Cancel}"
 							Style="{StaticResource FluentSecondaryButton}"
 							Click="CancelButton_Click"
 							Padding="16 8"
 							Visibility="Hidden"/>
 					<Button x:Name="okButton"
-							Content="确定"
+							Content="{loc:Loc MessageBox.OK}"
 							Style="{StaticResource FluentPrimaryButton}"
 							Click="OkButton_Click"
 							Padding="16 8"
@@ -288,11 +289,11 @@
 							Orientation="Horizontal"
 							HorizontalAlignment="Right"
 							Visibility="Hidden">
-                    <Button Content="确定"
+                    <Button Content="{loc:Loc MessageBox.Yes}"
 							Style="{StaticResource FluentPrimaryButton}"
 							Click="YesButton_Click"	
 							Padding="16 8"/>
-                    <Button Content="取消"
+                    <Button Content="{loc:Loc MessageBox.No}"
 							Style="{StaticResource FluentSecondaryButton}"
 							Click="NoButton_Click"
 							Padding="16 8"/>

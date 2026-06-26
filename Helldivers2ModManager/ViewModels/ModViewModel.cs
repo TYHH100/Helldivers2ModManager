@@ -23,6 +23,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     private readonly ILogger _logger;
     private readonly SettingsService _settingsService;
     private readonly INexusModsService _nexusModsService;
+    private readonly LocalizationService _localizationService;
 
     public Guid Guid => _mod.Manifest.Guid;
 
@@ -73,6 +74,18 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     /// </summary>
     [ObservableProperty]
     private DateTime _lastVersionCheck;
+
+    /// <summary>
+    /// 最后检查时间的本地化显示文本
+    /// </summary>
+    public string LastCheckDisplayText => LastVersionCheck == default
+        ? ""
+        : string.Format(_localizationService["DashboardPage.LastCheckFormat"], LastVersionCheck);
+
+    partial void OnLastVersionCheckChanged(DateTime value)
+    {
+        OnPropertyChanged(nameof(LastCheckDisplayText));
+    }
 
     /// <summary>
     /// 是否正在检查版本兼容性
@@ -185,12 +198,13 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     private readonly ModData _mod;
 
-    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService, INexusModsService nexusModsService)
+    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService, INexusModsService nexusModsService, LocalizationService localizationService)
     {
         _mod = mod;
         _logger = logger;
         _settingsService = settingsService;
         _nexusModsService = nexusModsService;
+        _localizationService = localizationService;
 
         _mod.PropertyChanged += ModData_PropertyChanged;
 
@@ -320,7 +334,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             return;
 
         IsCheckingUpdate = true;
-        NexusUpdateStatus = "正在检查更新...";
+        NexusUpdateStatus = _localizationService["ModViewModel.CheckingUpdate"];
 
         try
         {
@@ -331,7 +345,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
             if (!_nexusModsService.Initialized)
             {
-                NexusUpdateStatus = "未配置 Nexus API Key";
+                NexusUpdateStatus = _localizationService["ModViewModel.NoNexusApiKey"];
                 return;
             }
 
@@ -342,17 +356,17 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             
             if (updateInfo.HasUpdate)
             {
-                NexusUpdateStatus = $"有更新可用: {updateInfo.LatestVersion}";
+                NexusUpdateStatus = _localizationService["ModViewModel.UpdateAvailable"].Replace("{version}", updateInfo.LatestVersion);
             }
             else
             {
-                NexusUpdateStatus = "已是最新版本";
+                NexusUpdateStatus = _localizationService["ModViewModel.UpToDate"];
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to check for updates for mod {ModName}", Name);
-            NexusUpdateStatus = $"检查更新失败: {ex.Message}";
+            NexusUpdateStatus = _localizationService["ModViewModel.CheckFailed"].Replace("{message}", ex.Message);
         }
         finally
         {
@@ -368,7 +382,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
             {
-                Message = "此模组未配置 Nexus 数据"
+                Message = _localizationService["ModViewModel.NoNexusData"]
             });
             return;
         }
@@ -387,7 +401,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             _logger.LogError(ex, "Failed to open Nexus page for mod {ModName}", Name);
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
             {
-                Message = $"无法打开 Nexus 页面: {ex.Message}"
+                Message = _localizationService["ModViewModel.OpenNexusFailed"].Replace("{message}", ex.Message)
             });
         }
     }
@@ -403,26 +417,26 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
             {
-                Message = "尚未进行版本兼容性检查，请点击底部工具栏的「检查版本兼容性」按钮。"
+                Message = _localizationService["ModViewModel.NoVersionCheckHint"]
             });
             return;
         }
 
         var statusText = VersionStatus switch
         {
-            ModVersionStatus.Compatible => "兼容",
-            ModVersionStatus.Incompatible => "不兼容",
-            ModVersionStatus.Unknown => "无法确认",
-            ModVersionStatus.Checking => "检查中",
-            ModVersionStatus.Error => "检查失败",
-            _ => "未知"
+            ModVersionStatus.Compatible => _localizationService["ModViewModel.Compatible"],
+            ModVersionStatus.Incompatible => _localizationService["ModViewModel.Incompatible"],
+            ModVersionStatus.Unknown => _localizationService["ModViewModel.UnableToConfirm"],
+            ModVersionStatus.Checking => _localizationService["ModViewModel.Checking"],
+            ModVersionStatus.Error => _localizationService["ModViewModel.Error"],
+            _ => _localizationService["ModViewModel.Unknown"]
         };
 
         var sb = new StringBuilder();
-        sb.AppendLine($"模组: {Name}");
-        sb.AppendLine($"状态: {statusText}");
-        sb.AppendLine($"参考 Unit 版本: 0x{GameUnitVersion:X8} ({GameUnitVersion})");
-        sb.AppendLine($"最后检查时间: {LastVersionCheck:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine(_localizationService["ModViewModel.VersionInfoHeader"].Replace("{name}", Name));
+        sb.AppendLine(_localizationService["ModViewModel.VersionStatusLabel"].Replace("{status}", statusText));
+        sb.AppendLine(_localizationService["ModViewModel.VersionUnitLabel"].Replace("{unit}", $"0x{GameUnitVersion:X8} ({GameUnitVersion})"));
+        sb.AppendLine(_localizationService["ModViewModel.VersionTimeLabel"].Replace("{time}", LastVersionCheck.ToString("yyyy-MM-dd HH:mm:ss")));
 
         WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
         {

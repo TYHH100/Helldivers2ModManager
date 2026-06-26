@@ -7,6 +7,7 @@
 	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
 	  xmlns:md="https://github.com/whistyun/MdXaml"
 	  xmlns:ae="http://icsharpcode.net/sharpdevelop/avalonedit"
+	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:HelpPageViewModel}"
 	  d:Background="{StaticResource MicaBackgroundBrush}"
@@ -45,7 +46,7 @@
 		<Border Grid.Row="1"
 				Style="{StaticResource FluentCard}"
 				CornerRadius="8">
-			<Button Content="返回"
+			<Button Content="{loc:Loc HelpPage.Back}"
 					Style="{StaticResource FluentPrimaryButton}"
 					Command="{Binding BackCommand}"
 					HorizontalAlignment="Right"

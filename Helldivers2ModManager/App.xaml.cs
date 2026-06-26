@@ -62,6 +62,9 @@ internal partial class App : Application
 		// 初始化 SharpSevenZip：提取嵌入式 7z.dll 并设置库路径
 		InitializeSharpSevenZip();
 
+		// 尽早加载设置并应用已保存的语言偏好（在显示主窗口之前）
+		InitializeLanguagePreference();
+
 		MainWindow = Host.Services.GetRequiredService<MainWindow>();
 		MainWindow.Show();
 
@@ -82,6 +85,41 @@ internal partial class App : Application
 				}
 			});
 		});
+	}
+
+	/// <summary>
+	/// 在启动时尽早加载设置并应用已保存的语言偏好，
+	/// 避免使用自动检测（系统语言）覆盖用户手动指定的语言。
+	/// 异步执行以避免阻塞 UI 线程导致死锁。
+	/// </summary>
+	private void InitializeLanguagePreference()
+	{
+		_ = InitializeLanguageAsync();
+	}
+
+	private async Task InitializeLanguageAsync()
+	{
+		try
+		{
+			var settingsService = Host.Services.GetRequiredService<SettingsService>();
+			var localizationService = Host.Services.GetRequiredService<LocalizationService>();
+
+			if (await settingsService.InitAsync().ConfigureAwait(false))
+			{
+				if (!string.IsNullOrEmpty(settingsService.Language))
+				{
+					await Dispatcher.InvokeAsync(() =>
+					{
+						localizationService.SelectedLanguage = settingsService.Language;
+						_logger?.LogInformation("Applied saved language preference: {Lang}", settingsService.Language);
+					});
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			_logger?.LogWarning(ex, "Failed to initialize language preference, using auto-detect");
+		}
 	}
 
 	protected override void OnExit(ExitEventArgs e)

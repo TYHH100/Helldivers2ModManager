@@ -23,6 +23,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     private readonly VersionCheckRepository _versionCheckRepository;
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
+    private readonly LocalizationService _localizationService;
 
     [ObservableProperty]
     private bool _isCheckingVersion;
@@ -51,13 +52,15 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         VersionCheckService versionCheckService,
         VersionCheckRepository versionCheckRepository,
         ModService modService,
-        SettingsService settingsService)
+        SettingsService settingsService,
+        LocalizationService localizationService)
     {
         _logger = logger;
         _versionCheckService = versionCheckService;
         _versionCheckRepository = versionCheckRepository;
         _modService = modService;
         _settingsService = settingsService;
+        _localizationService = localizationService;
     }
 
     /// <summary>
@@ -68,7 +71,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     public async Task CheckVersionCompatibilityAsync(ObservableCollection<ModViewModel> mods)
     {
         IsCheckingVersion = true;
-        VersionCheckSummary = "正在扫描模组补丁文件...";
+        VersionCheckSummary = _localizationService["VersionCheck.ScanningMods"];
 
         try
         {
@@ -120,7 +123,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "版本兼容性检查失败");
-            VersionCheckSummary = "检查失败";
+            VersionCheckSummary = _localizationService["VersionCheck.CheckFailed"];
         }
         finally
         {
@@ -151,8 +154,8 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 }
 
                 VersionCheckSummary = result.Status == ModVersionStatus.Incompatible
-                    ? $"发现不兼容的新增模组: {mod.Manifest.Name}"
-                    : $"新增模组 \"{mod.Manifest.Name}\" 版本检测完成";
+                    ? $"{_localizationService["VersionCheck.IncompatibleFound"]}{mod.Manifest.Name}"
+                    : $"{_localizationService["VersionCheck.NewModPrefix"]}{mod.Manifest.Name}{_localizationService["VersionCheck.NewModSuffix"]}";
                 OnPropertyChanged(nameof(HasVersionCheckResult));
             }
         }
@@ -188,8 +191,8 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             if (cached.Count > 0)
             {
                 VersionCheckSummary = IncompatibleModCount > 0
-                    ? $"发现 {IncompatibleModCount} 个可能不兼容的模组（来自缓存）"
-                    : $"{CompatibleModCount} 个模组均兼容（来自缓存）";
+                    ? _localizationService["VersionCheck.IncompatibleCached"].Replace("{IncompatibleModCount}", IncompatibleModCount.ToString())
+                    : _localizationService["VersionCheck.AllCompatibleCached"].Replace("{CompatibleModCount}", CompatibleModCount.ToString());
                 OnPropertyChanged(nameof(HasVersionCheckResult));
             }
 
@@ -247,7 +250,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         var changedMods = GetNewOrChangedMods(mods).ToList();
         if (changedMods.Count > 0)
         {
-            VersionCheckSummary = $"检查 {changedMods.Count} 个有变动的模组...";
+            VersionCheckSummary = _localizationService["VersionCheck.CheckingChanged"].Replace("{changedModCount}", changedMods.Count.ToString());
             foreach (var vm in changedMods)
             {
                 var result = await _versionCheckService.CheckSingleModAsync(vm.Data);
@@ -281,15 +284,15 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     {
         if (IncompatibleModCount > 0)
         {
-            VersionCheckSummary = $"发现 {IncompatibleModCount} 个可能不兼容的模组";
+            VersionCheckSummary = _localizationService["VersionCheck.IncompatibleFoundMsg"].Replace("{IncompatibleModCount}", IncompatibleModCount.ToString());
         }
         else if (CompatibleModCount > 0)
         {
-            VersionCheckSummary = $"{CompatibleModCount} 个模组均兼容";
+            VersionCheckSummary = _localizationService["VersionCheck.AllCompatible"].Replace("{CompatibleModCount}", CompatibleModCount.ToString());
         }
         else
         {
-            VersionCheckSummary = "未发现可检查的模组";
+            VersionCheckSummary = _localizationService["VersionCheck.NoneCheckable"];
         }
 
         OnPropertyChanged(nameof(HasVersionCheckResult));

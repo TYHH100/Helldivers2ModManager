@@ -62,6 +62,7 @@ internal sealed class ModHashService
 	private readonly ILogger<ModHashService> _logger;
 	private readonly FileHashRepository _fileHashRepository;
 	private readonly DatabaseService _databaseService;
+	private readonly LocalizationService _localizationService;
 	private SettingsService? _settingsService;
 
 	/// <summary>
@@ -83,11 +84,13 @@ internal sealed class ModHashService
 	public ModHashService(
 		ILogger<ModHashService> logger,
 		FileHashRepository fileHashRepository,
-		DatabaseService databaseService)
+		DatabaseService databaseService,
+		LocalizationService localizationService)
 	{
 		_logger = logger;
 		_fileHashRepository = fileHashRepository;
 		_databaseService = databaseService;
+		_localizationService = localizationService;
 	}
 
 	/// <summary>
@@ -292,7 +295,7 @@ internal sealed class ModHashService
 		{
 			IsMigrating = true,
 			TotalCount = modList.Count,
-			Message = $"正在计算 {modList.Count} 个模组的文件指纹..."
+			Message = _localizationService["ModHashService.ComputingFingerprints"].Replace("{count}", modList.Count.ToString())
 		});
 
 		var migratedCount = 0;
@@ -308,7 +311,10 @@ internal sealed class ModHashService
 				CompletedCount = migratedCount + failedCount,
 				TotalCount = modList.Count,
 				FailedCount = failedCount,
-				Message = $"正在计算文件指纹 ({migratedCount + failedCount + 1}/{modList.Count}): {mod.Manifest.Name}"
+				Message = _localizationService["ModHashService.FingerprintProgress"]
+					.Replace("{current}", (migratedCount + failedCount + 1).ToString())
+					.Replace("{total}", modList.Count.ToString())
+					.Replace("{name}", mod.Manifest.Name)
 			});
 
 			// 注册到 _activeComputations，确保 DeleteForModAsync 能等待迁移完成后再删除目录
@@ -362,8 +368,11 @@ internal sealed class ModHashService
 			TotalCount = modList.Count,
 			FailedCount = failedCount,
 			Message = failedCount > 0
-				? $"文件指纹计算完成: {migratedCount} 成功, {failedCount} 失败"
-				: $"文件指纹计算完成: {migratedCount} 个模组已就绪"
+				? _localizationService["ModHashService.FingerprintDone"]
+					.Replace("{success}", migratedCount.ToString())
+					.Replace("{fail}", failedCount.ToString())
+				: _localizationService["ModHashService.FingerprintReady"]
+					.Replace("{count}", migratedCount.ToString())
 		});
 
 		_logger.LogInformation(

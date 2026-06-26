@@ -18,6 +18,7 @@ internal sealed class BrowserExtensionService : IDisposable
     private readonly ILogger<BrowserExtensionService> _logger;
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
+    private readonly LocalizationService _localizationService;
     private Task? _listenerTask;
     private CancellationTokenSource? _cts;
 
@@ -38,11 +39,12 @@ internal sealed class BrowserExtensionService : IDisposable
 
     public ObservableCollection<DownloadTask> DownloadTasks { get; } = new();
 
-    public BrowserExtensionService(ILogger<BrowserExtensionService> logger, ModService modService, SettingsService settingsService)
+    public BrowserExtensionService(ILogger<BrowserExtensionService> logger, ModService modService, SettingsService settingsService, LocalizationService localizationService)
     {
         _logger = logger;
         _modService = modService;
         _settingsService = settingsService;
+        _localizationService = localizationService;
         _httpListener = new HttpListener();
 
         // 加载持久化的下载任务
@@ -293,7 +295,7 @@ internal sealed class BrowserExtensionService : IDisposable
                         if (downloadTask.Status != DownloadStatus.Failed)
                         {
                             downloadTask.Status = DownloadStatus.Failed;
-                            downloadTask.ErrorMessage = "下载过程中发生未预期的错误";
+                            downloadTask.ErrorMessage = _localizationService["BrowserExt.DownloadError"];
                             downloadTask.Speed = 0;
                             downloadTask.EstimatedTimeRemaining = TimeSpan.Zero;
                             DownloadFailed?.Invoke(downloadTask);
@@ -364,7 +366,7 @@ internal sealed class BrowserExtensionService : IDisposable
                 
                 if (hasOnlyNoManifestIssue)
                 {
-                    task.ErrorMessage = "档案文件已自动生成";
+                    task.ErrorMessage = _localizationService["BrowserExt.ArchiveGenerated"];
                     _logger.LogInformation("Mod downloaded and imported successfully (manifest auto-generated): {Filename}", task.Filename);
                 }
                 else
@@ -390,7 +392,7 @@ internal sealed class BrowserExtensionService : IDisposable
         catch (OperationCanceledException)
         {
             task.Status = DownloadStatus.Cancelled;
-            task.ErrorMessage = "下载已取消";
+            task.ErrorMessage = _localizationService["BrowserExt.DownloadCancelled"];
             task.Speed = 0;
             task.EstimatedTimeRemaining = TimeSpan.Zero;
             _logger.LogInformation("Download cancelled: {Filename}", task.Filename);
@@ -634,7 +636,7 @@ internal sealed class BrowserExtensionService : IDisposable
                     if (downloadTask.Status != DownloadStatus.Failed)
                     {
                         downloadTask.Status = DownloadStatus.Failed;
-                        downloadTask.ErrorMessage = "下载过程中发生未预期的错误";
+                        downloadTask.ErrorMessage = _localizationService["BrowserExt.DownloadError"];
                         downloadTask.Speed = 0;
                         downloadTask.EstimatedTimeRemaining = TimeSpan.Zero;
                         DownloadFailed?.Invoke(downloadTask);
@@ -736,7 +738,7 @@ internal sealed class BrowserExtensionService : IDisposable
                     BytesDownloaded = item.BytesDownloaded,
                     TotalBytes = item.TotalBytes,
                     Progress = item.Progress,
-                    ErrorMessage = status == DownloadStatus.Cancelled ? "应用重启，下载已中断" : item.ErrorMessage
+                    ErrorMessage = status == DownloadStatus.Cancelled ? _localizationService["BrowserExt.AppRestarted"] : item.ErrorMessage
                 };
 
                 DownloadTasks.Add(task);

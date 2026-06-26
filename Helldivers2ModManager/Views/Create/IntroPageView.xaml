@@ -5,6 +5,7 @@
 	  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	  xmlns:local="clr-namespace:Helldivers2ModManager.Views.Create"
+	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DesignHeight="500"
 	  d:DesignWidth="800"
@@ -13,13 +14,13 @@
 		<TextBlock Style="{StaticResource FluentBodyText}"
 				   FontSize="16"
 				   TextWrapping="Wrap">
-			<Run Text="欢迎来到模组创建向导"/>
+			<Run Text="{loc:Loc CreateWizard.IntroWelcome}"/>
 			<LineBreak/>
 			<LineBreak/>
-			<Run Text="该工具将会协助和指导您完成模组的创建"/>
+			<Run Text="{loc:Loc CreateWizard.IntroDesc}"/>
 			<LineBreak/>
 			<LineBreak/>
-			<Run Text="请点击&quot;下一步&quot;继续"
+			<Run Text="{loc:Loc CreateWizard.IntroNext}"
 				 FontWeight="SemiBold"
 				 Foreground="{StaticResource SystemAccentBrush}"/>
 		</TextBlock>

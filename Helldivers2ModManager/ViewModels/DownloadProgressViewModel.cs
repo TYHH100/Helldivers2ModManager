@@ -19,8 +19,9 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
     private readonly BrowserExtensionService _browserExtensionService;
     private readonly SettingsService _settingsService;
     private readonly Lazy<NavigationStore> _navStore;
+    private readonly LocalizationService _localizationService;
 
-    public override string Title => "Download Progress";
+    public override string Title => _localizationService["DownloadProgress.Title"];
 
     public ObservableCollection<DownloadTask> DownloadTasks => _browserExtensionService.DownloadTasks;
 
@@ -40,12 +41,19 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
         ILogger<DownloadProgressViewModel> logger,
         IServiceProvider provider,
         BrowserExtensionService browserExtensionService,
-        SettingsService settingsService)
+        SettingsService settingsService,
+        LocalizationService localizationService)
     {
         _logger = logger;
         _browserExtensionService = browserExtensionService;
         _settingsService = settingsService;
+        _localizationService = localizationService;
         _navStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
+
+        _localizationService.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(Title));
+        };
 
         _browserExtensionService.DownloadStarted += OnDownloadStarted;
         _browserExtensionService.DownloadProgressChanged += OnDownloadProgressChanged;
@@ -183,8 +191,8 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 MessageBox.Show(
-                    "添加下载失败\n\n请确保：\n• 链接格式正确（必须为 HTTPS）\n\n支持的链接格式示例：\nhttps://example.com/file.zip",
-                    "添加下载",
+                    _localizationService["DownloadProgress.AddFailed"],
+                    _localizationService["DownloadProgress.AddFailedTitle"],
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
             });

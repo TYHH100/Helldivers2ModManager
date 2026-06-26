@@ -50,6 +50,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Content Include="Resources\Language\*.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
 	  <Resource Include="Resources\Fonts\Blockletter.otf" />
 	  <Resource Include="Resources\Images\github_icon.png" />
 	  <Resource Include="Resources\Images\logo.png" />

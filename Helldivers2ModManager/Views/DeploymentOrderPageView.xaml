@@ -7,6 +7,7 @@
       xmlns:dd="urn:gong-wpf-dragdrop"
       xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
       xmlns:local="clr-namespace:Helldivers2ModManager"
+      xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
       mc:Ignorable="d"
       d:DataContext="{d:DesignInstance vms:DeploymentOrderPageViewModel}"
       d:Background="{StaticResource MicaBackgroundBrush}"
@@ -32,7 +33,7 @@
             <Button Grid.Column="0"
                     Style="{StaticResource FluentIconButton}"
                     Command="{Binding BackCommand}"
-                    ToolTip="返回"
+                    ToolTip="{loc:Loc DeploymentOrderPage.Back}"
                     Width="36" Height="36">
                 <TextBlock Text="&#xE72B;"
                            FontFamily="Segoe Fluent Icons"
@@ -65,53 +66,56 @@
                 CornerRadius="6"
                 Padding="8"
                 Margin="0 0 0 8">
-            <StackPanel Orientation="Horizontal">
-                <Button Content="上移"
+                <WrapPanel Orientation="Horizontal">
+                <Button Content="{loc:Loc DeploymentOrderPage.MoveUp}"
                         Command="{Binding MoveUpCommand}"
                         IsEnabled="{Binding CanMoveUp}"
                         Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 0"/>
-                <Button Content="下移"
+                        Margin="0 0 6 4"/>
+                <Button Content="{loc:Loc DeploymentOrderPage.MoveDown}"
                         Command="{Binding MoveDownCommand}"
                         IsEnabled="{Binding CanMoveDown}"
                         Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 0"/>
-                <Button Content="置顶"
+                        Margin="0 0 6 4"/>
+                <Button Content="{loc:Loc DeploymentOrderPage.MoveTop}"
                         Command="{Binding MoveToTopCommand}"
                         IsEnabled="{Binding CanMoveUp}"
                         Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 0"/>
-                <Button Content="置底"
+                        Margin="0 0 6 4"/>
+                <Button Content="{loc:Loc DeploymentOrderPage.MoveBottom}"
                         Command="{Binding MoveToBottomCommand}"
                         IsEnabled="{Binding CanMoveDown}"
                         Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 0"/>
+                        Margin="0 0 6 4"/>
                 <Rectangle Width="1"
                            Fill="{StaticResource NeutralStrokeBrush}"
-                           Margin="12 4"/>
-                <Button Content="从主页同步"
+                           Margin="12 4"
+                           Height="20"/>
+                <Button Content="{loc:Loc DeploymentOrderPage.SyncFromHome}"
                         Command="{Binding InitFromCurrentCommand}"
                         Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 0"/>
-                <Button Content="清空列表"
+                        Margin="0 0 6 4"/>
+                <Button Content="{loc:Loc DeploymentOrderPage.ClearList}"
                         Command="{Binding ClearOrderCommand}"
                         Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 0"/>
+                        Margin="0 0 6 4"/>
                 <Rectangle Width="1"
                            Fill="{StaticResource NeutralStrokeBrush}"
-                           Margin="12 4"/>
-                <Button Content="全选"
+                           Margin="12 4"
+                           Height="20"/>
+                <Button Content="{loc:Loc DeploymentOrderPage.SelectAll}"
                         Command="{Binding SelectAllCommand}"
                         Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 0"/>
-                <Button Content="取消全选"
+                        Margin="0 0 6 4"/>
+                <Button Content="{loc:Loc DeploymentOrderPage.DeselectAll}"
                         Command="{Binding DeselectAllCommand}"
                         Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 0"/>
-                <Button Content="反选"
+                        Margin="0 0 6 4"/>
+                <Button Content="{loc:Loc DeploymentOrderPage.InvertSelect}"
                         Command="{Binding InvertSelectionCommand}"
-                        Style="{StaticResource FluentSecondaryButton}"/>
-            </StackPanel>
+                        Style="{StaticResource FluentSecondaryButton}"
+                        Margin="0 0 6 4"/>
+            </WrapPanel>
         </Border>
 
         <!-- 部署顺序列表（支持拖拽和多选） -->
@@ -152,7 +156,7 @@
                                     Padding="0"
                                     VerticalAlignment="Center"
                                     Margin="2 0 0 0"
-                                    ToolTip="展开/折叠选项">
+                                    ToolTip="{loc:Loc DeploymentOrderPage.ExpandCollapse}">
                                 <TextBlock FontFamily="Segoe Fluent Icons"
                                            FontSize="12"
                                            Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
@@ -228,7 +232,7 @@
 
         <!-- Footer -->
         <TextBlock Grid.Row="4"
-                   Text="提示：勾选左侧复选框可多选，然后拖拽批量调整顺序；也可使用上方按钮逐个调整。"
+                   Text="{loc:Loc DeploymentOrderPage.HintText}"
                    FontSize="12"
                    Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
                    Margin="0 8 0 0"/>

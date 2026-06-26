@@ -6,6 +6,7 @@
 	  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	  xmlns:dd="urn:gong-wpf-dragdrop"
 	  xmlns:local="clr-namespace:Helldivers2ModManager.Views"
+	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  xmlns:bhv="clr-namespace:Helldivers2ModManager"
 	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
 	  xmlns:cvms="clr-namespace:Helldivers2ModManager.ViewModels.Create"
@@ -26,7 +27,7 @@
 
 		<!-- Header -->
 		<TextBlock Grid.Row="0"
-				   Text="创建 Mod"
+				   Text="{loc:Loc CreatePage.Title}"
 				   Style="{StaticResource FluentSectionHeader}"
 				   HorizontalAlignment="Center"
 				   Margin="0 0 0 16"/>
@@ -41,13 +42,13 @@
 			<StackPanel Orientation="Horizontal">
 				<RadioButton GroupName="EditMode"
 							 IsChecked="{Binding IsJsonMode, Converter={StaticResource InverseBoolConverter}}"
-							 Content="可视化编辑"
+							 Content="{loc:Loc CreatePage.VisualEdit}"
 							 Margin="0,0,12,0"
 							 Padding="12 4"
 							 Style="{StaticResource FluentRadioButton}"/>
 				<RadioButton GroupName="EditMode"
 							 IsChecked="{Binding IsJsonMode}"
-							 Content="直接编辑 JSON"
+							 Content="{loc:Loc CreatePage.JsonEdit}"
 							 Padding="12 4"
 							 Style="{StaticResource FluentRadioButton}"/>
 			</StackPanel>
@@ -76,7 +77,7 @@
 						   VerticalAlignment="Center"
 						   Margin="0 0 10 0"/>
 				<StackPanel Grid.Column="1" VerticalAlignment="Center">
-					<TextBlock Text="创建流程说明"
+					<TextBlock Text="{loc:Loc CreatePage.GuideTitle}"
 							   FontSize="13"
 							   FontWeight="SemiBold"
 							   Foreground="#9ccff0"
@@ -85,17 +86,17 @@
 							   FontSize="12"
 							   Foreground="#8abce8"
 							   LineHeight="18">
-						<Run Text="填写完信息并点击「创建」后，系统会自动执行以下操作："/><LineBreak/>
-						<Run Text="1. 将源目录中的模组文件复制到管理器的存储目录"/><LineBreak/>
-						<Run Text="2. 根据你配置的选项生成 manifest.json 清单文件"/><LineBreak/>
-						<Run Text="3. 自动将模组导入到管理器中，即可在主页使用"/><LineBreak/>
-						<Run Text="提示：后续如需编辑 manifest 清单（修改名称、描述、选项等），可在主页右键模组选择「编辑 Manifest」，或直接在存储目录中编辑 manifest.json 文件；如需增删文件，请直接到管理器存储目录操作。"/>
+						<Run Text="{loc:Loc CreatePage.GuideDesc1}"/><LineBreak/>
+						<Run Text="{loc:Loc CreatePage.GuideStep1}"/><LineBreak/>
+						<Run Text="{loc:Loc CreatePage.GuideStep2}"/><LineBreak/>
+						<Run Text="{loc:Loc CreatePage.GuideStep3}"/><LineBreak/>
+						<Run Text="{loc:Loc CreatePage.GuideHint}"/>
 					</TextBlock>
 				</StackPanel>
 				<Button Grid.Column="2"
 						Command="{Binding DismissBannerCommand}"
 						Style="{StaticResource FluentIconButton}"
-						ToolTip="关闭提示"
+						ToolTip="{loc:Loc CreatePage.CloseHint}"
 						Padding="4"
 						VerticalAlignment="Top">
 					<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="12" Foreground="#6a9fd8"/>
@@ -127,11 +128,11 @@
 					Padding="24">
 				<StackPanel>
 					<!-- 模组名称 -->
-					<TextBlock Text="名称"
+					<TextBlock Text="{loc:Loc CreatePage.Name}"
 							   FontSize="16"
 							   FontWeight="SemiBold"
 							   Foreground="{StaticResource NeutralForegroundBrush}"/>
-					<TextBlock Text="模组的显示名称。"
+					<TextBlock Text="{loc:Loc CreatePage.NameDesc}"
 							   FontSize="13"
 							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 							   Margin="0 4 0 8"/>
@@ -141,11 +142,11 @@
 							 Margin="0 0 0 16"/>
 
 					<!-- 模组描述 -->
-					<TextBlock Text="描述"
+					<TextBlock Text="{loc:Loc CreatePage.Description}"
 							   FontSize="16"
 							   FontWeight="SemiBold"
 							   Foreground="{StaticResource NeutralForegroundBrush}"/>
-					<TextBlock Text="模组的简短描述。"
+					<TextBlock Text="{loc:Loc CreatePage.DescriptionDesc}"
 							   FontSize="13"
 							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 							   Margin="0 4 0 8"/>
@@ -158,11 +159,11 @@
 							 Margin="0 0 0 16"/>
 
 					<!-- 模组图标 -->
-					<TextBlock Text="图标"
+					<TextBlock Text="{loc:Loc CreatePage.Icon}"
 							   FontSize="16"
 							   FontWeight="SemiBold"
 							   Foreground="{StaticResource NeutralForegroundBrush}"/>
-					<TextBlock Text="模组的显示图标（可选）。"
+					<TextBlock Text="{loc:Loc CreatePage.IconDesc}"
 							   FontSize="13"
 							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 							   Margin="0 4 0 8"/>
@@ -191,7 +192,7 @@
 								 Padding="8 6"
 								 VerticalAlignment="Center"/>
 						<Button Grid.Column="2"
-								Content="浏览..."
+								Content="{loc:Loc CreatePage.BrowseIcon}"
 								Style="{StaticResource FluentSecondaryButton}"
 								Command="{Binding BrowseIconCommand}"
 								Margin="8 0 0 0"
@@ -200,16 +201,16 @@
 					</Grid>
 
 					<!-- 源目录 -->
-					<TextBlock Text="源目录"
+					<TextBlock Text="{loc:Loc CreatePage.SourceDir}"
 							   FontSize="16"
 							   FontWeight="SemiBold"
 							   Foreground="{StaticResource NeutralForegroundBrush}"/>
 					<TextBlock Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 							   FontSize="13"
 							   Margin="0 4 0 8">
-						<Run Text="选择包含模组文件的目录。"/>
+						<Run Text="{loc:Loc CreatePage.SourceDirDesc1}"/>
 						<LineBreak/>
-						<Run Text="（点击 &quot;浏览...&quot; 选择目录）"/>
+						<Run Text="{loc:Loc CreatePage.SourceDirDesc2}"/>
 					</TextBlock>
 					<Grid Margin="0 0 0 24">
 						<Grid.ColumnDefinitions>
@@ -222,7 +223,7 @@
 								 Padding="8 6"
 								 VerticalAlignment="Center"/>
 						<Button Grid.Column="1"
-								Content="浏览..."
+								Content="{loc:Loc CreatePage.BrowseSource}"
 								Style="{StaticResource FluentSecondaryButton}"
 								Command="{Binding BrowseSourceCommand}"
 								Margin="8 0 0 0"
@@ -231,12 +232,12 @@
 					</Grid>
 
 					<!-- 选项区域 -->
-					<TextBlock Text="选项"
+					<TextBlock Text="{loc:Loc CreatePage.Options}"
 							   FontSize="16"
 							   FontWeight="SemiBold"
 							   Foreground="{StaticResource NeutralForegroundBrush}"
 							   Margin="0 0 0 4"/>
-					<TextBlock Text="添加模组的可选项（如颜色切换等），每个选项可包含子选项。"
+					<TextBlock Text="{loc:Loc CreatePage.OptionsDesc}"
 							   FontSize="13"
 							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 							   Margin="0 0 0 4"/>
@@ -246,7 +247,7 @@
 							CornerRadius="4"
 							Padding="8 4"
 							Margin="0 0 0 8">
-						<TextBlock Text="提示：选项和子选项均可拖拽排序"
+						<TextBlock Text="{loc:Loc CreatePage.DragHint}"
 								   FontSize="12"
 								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 								   HorizontalAlignment="Center"/>
@@ -273,16 +274,16 @@
 												<ColumnDefinition Width="Auto"/>
 											</Grid.ColumnDefinitions>
 											<TextBlock Grid.Column="0"
-													   Text="选项"
-													   FontSize="14"
-													   FontWeight="SemiBold"
-													   Foreground="{StaticResource NeutralForegroundBrush}"
-													   VerticalAlignment="Center"/>
+												   Text="{loc:Loc CreatePage.OptionTitle}"
+												   FontSize="14"
+												   FontWeight="SemiBold"
+												   Foreground="{StaticResource NeutralForegroundBrush}"
+												   VerticalAlignment="Center"/>
 											<Button Grid.Column="1"
 													Style="{StaticResource FluentIconButton}"
 													Command="{Binding DataContext.RemoveOptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
 													CommandParameter="{Binding}"
-													ToolTip="删除此选项"
+													ToolTip="{loc:Loc CreatePage.DeleteOption}"
 													Padding="6">
 												<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
 											</Button>
@@ -309,17 +310,17 @@
 											</Border>
 											<!-- 选项名称、描述、Include 路径 -->
 											<StackPanel Grid.Column="1">
-												<TextBlock Text="名称" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
-												<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
-														 FontSize="14"
-														 Padding="4 2"
-														 Margin="0 0 0 6"/>
-												<TextBlock Text="描述" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+												<TextBlock Text="{loc:Loc CreatePage.OptionName}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+											<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+													 FontSize="14"
+													 Padding="4 2"
+													 Margin="0 0 0 6"/>
+											<TextBlock Text="{loc:Loc CreatePage.OptionDesc}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 												<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
 														 FontSize="13"
 														 Padding="4 2"
 														 Margin="0 0 0 6"/>
-												<TextBlock Text="Include 路径（相对于源目录，分号分隔）" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+												<TextBlock Text="{loc:Loc CreatePage.OptionInclude}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 												<Grid Margin="0 0 0 6">
 													<Grid.ColumnDefinitions>
 														<ColumnDefinition Width="*"/>
@@ -331,7 +332,7 @@
 															 Padding="4 2"
 															 VerticalAlignment="Center"/>
 													<Button Grid.Column="1"
-															Content="浏览"
+															Content="{loc:Loc CreatePage.OptionBrowse}"
 															Style="{StaticResource FluentSecondaryButton}"
 															Command="{Binding BrowseIncludeCommand}"
 															Margin="4 0 0 0"
@@ -339,7 +340,7 @@
 															FontSize="12"/>
 												</Grid>
 												<!-- 选项图标选择 -->
-												<TextBlock Text="图标"
+												<TextBlock Text="{loc:Loc CreatePage.OptionIcon}"
 														   FontSize="12"
 														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 														   Margin="0 0 2 2"/>
@@ -354,7 +355,7 @@
 															 Padding="4 2"
 															 VerticalAlignment="Center"/>
 													<Button Grid.Column="1"
-															Content="选择图标"
+															Content="{loc:Loc CreatePage.SelectIcon}"
 															Style="{StaticResource FluentSecondaryButton}"
 															Command="{Binding BrowseImageCommand}"
 															Margin="4 0 0 0"
@@ -365,7 +366,7 @@
 										</Grid>
 
 										<!-- 子选项区域 -->
-										<TextBlock Text="子选项"
+										<TextBlock Text="{loc:Loc CreatePage.SubOptions}"
 												   FontSize="13"
 												   FontWeight="SemiBold"
 												   Foreground="{StaticResource NeutralForegroundBrush}"
@@ -392,17 +393,17 @@
 																	<ColumnDefinition Width="Auto"/>
 																</Grid.ColumnDefinitions>
 																<TextBlock Grid.Column="0"
-																		   Text="子选项"
-																		   FontSize="12"
-																		   FontWeight="SemiBold"
-																		   Foreground="{StaticResource NeutralForegroundBrush}"
-																		   VerticalAlignment="Center"/>
-																<Button Grid.Column="1"
-																		Style="{StaticResource FluentIconButton}"
-																		Command="{Binding DataContext.RemoveSubOptionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-																		CommandParameter="{Binding}"
-																		ToolTip="删除此子选项"
-																		Padding="4">
+																	   Text="{loc:Loc CreatePage.SubOptionTitle}"
+																	   FontSize="12"
+																	   FontWeight="SemiBold"
+																	   Foreground="{StaticResource NeutralForegroundBrush}"
+																	   VerticalAlignment="Center"/>
+															<Button Grid.Column="1"
+																	Style="{StaticResource FluentIconButton}"
+																	Command="{Binding DataContext.RemoveSubOptionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+																	CommandParameter="{Binding}"
+																	ToolTip="{loc:Loc CreatePage.DeleteSubOption}"
+																	Padding="4">
 																	<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="12"/>
 																</Button>
 															</Grid>
@@ -426,18 +427,18 @@
 																</Border>
 																<!-- 子选项名称、描述、Include 路径 -->
 																<StackPanel Grid.Column="1">
-																	<TextBlock Text="名称" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																	<TextBlock Text="{loc:Loc CreatePage.SubOptionName}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 																	<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
 																			 FontSize="13"
 																			 FontWeight="SemiBold"
 																			 Padding="4 2"
 																			 Margin="0 0 0 4"/>
-																	<TextBlock Text="描述" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																	<TextBlock Text="{loc:Loc CreatePage.SubOptionDesc}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 																	<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
 																			 FontSize="12"
 																			 Padding="4 2"
 																			 Margin="0 0 0 4"/>
-																	<TextBlock Text="Include 路径（相对于源目录，分号分隔）" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																	<TextBlock Text="{loc:Loc CreatePage.SubOptionInclude}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 																	<Grid>
 																		<Grid.ColumnDefinitions>
 																			<ColumnDefinition Width="*"/>
@@ -449,7 +450,7 @@
 																				 Padding="4 2"
 																				 VerticalAlignment="Center"/>
 																		<Button Grid.Column="1"
-																				Content="浏览"
+																				Content="{loc:Loc CreatePage.SubOptionBrowse}"
 																				Style="{StaticResource FluentSecondaryButton}"
 																				Command="{Binding BrowseIncludeCommand}"
 																				Margin="4 0 0 0"
@@ -457,7 +458,7 @@
 																				FontSize="12"/>
 																	</Grid>
 																	<!-- 子选项图标选择 -->
-																	<TextBlock Text="图标"
+																	<TextBlock Text="{loc:Loc CreatePage.SubOptionIcon}"
 																			   FontSize="11"
 																			   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 																			   Margin="0 0 2 2"/>
@@ -472,7 +473,7 @@
 																				 Padding="4 2"
 																				 VerticalAlignment="Center"/>
 																		<Button Grid.Column="1"
-																				Content="选择图标"
+																				Content="{loc:Loc CreatePage.SelectSubIcon}"
 																				Style="{StaticResource FluentSecondaryButton}"
 																				Command="{Binding BrowseImageCommand}"
 																				Margin="4 0 0 0"
@@ -487,7 +488,7 @@
 											</ItemsControl.ItemTemplate>
 										</ItemsControl>
 										<!-- 底部添加子选项按钮，避免添加后需重新滑到顶部 -->
-										<Button Content="添加子选项"
+										<Button Content="{loc:Loc CreatePage.AddSubOption}"
 												Style="{StaticResource FluentSecondaryButton}"
 												Command="{Binding AddSubOptionCommand}"
 												HorizontalAlignment="Center"
@@ -499,13 +500,13 @@
 							</DataTemplate>
 						</ItemsControl.ItemTemplate>
 					</ItemsControl>
-					<Button Content="添加选项"
-							Style="{StaticResource FluentSecondaryButton}"
-							Command="{Binding AddOptionCommand}"
-							HorizontalAlignment="Center"
-							Margin="0 8 0 0"
-							Padding="20 8"
-							FontSize="13"/>
+					<Button Content="{loc:Loc CreatePage.AddOption}"
+						Style="{StaticResource FluentSecondaryButton}"
+						Command="{Binding AddOptionCommand}"
+						HorizontalAlignment="Center"
+						Margin="0 8 0 0"
+						Padding="20 8"
+						FontSize="13"/>
 				</StackPanel>
 			</Border>
 			</StackPanel>
@@ -547,14 +548,14 @@
 				</Grid.ColumnDefinitions>
 
 				<Button Grid.Column="0"
-						Content="取消"
+						Content="{loc:Loc CreatePage.Cancel}"
 						Style="{StaticResource FluentSecondaryButton}"
 						Command="{Binding CancelCommand}"
 						HorizontalAlignment="Left"
 						Padding="24 10"/>
 
 				<Button Grid.Column="1"
-						Content="创建"
+						Content="{loc:Loc CreatePage.Create}"
 						Style="{StaticResource FluentPrimaryButton}"
 						Command="{Binding CreateCommand}"
 						HorizontalAlignment="Right"

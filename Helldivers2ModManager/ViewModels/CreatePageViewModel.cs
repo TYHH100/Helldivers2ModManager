@@ -22,7 +22,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class CreatePageViewModel : PageViewModelBase
 {
-	public override string Title => "Crete Mods";
+	public override string Title => _localizationService["CreatePage.Title"];
 
 	/// <summary>模组显示名称</summary>
 	[ObservableProperty]
@@ -115,13 +115,20 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	private readonly NavigationStore _navigationStore;
 	private readonly ModService _modService;
 	private readonly SettingsService _settingsService;
+	private readonly LocalizationService _localizationService;
 
-	public CreatePageViewModel(ILogger<CreatePageViewModel> logger, NavigationStore navigationStore, ModService modService, SettingsService settingsService)
+	public CreatePageViewModel(ILogger<CreatePageViewModel> logger, NavigationStore navigationStore, ModService modService, SettingsService settingsService, LocalizationService localizationService)
 	{
 		_logger = logger;
 		_navigationStore = navigationStore;
 		_modService = modService;
 		_settingsService = settingsService;
+		_localizationService = localizationService;
+
+		_localizationService.PropertyChanged += (_, _) =>
+		{
+			OnPropertyChanged(nameof(Title));
+		};
 	}
 
 	/// <summary>取消创建，返回仪表板</summary>
@@ -265,7 +272,7 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	{
 		using var dialog = new System.Windows.Forms.FolderBrowserDialog
 		{
-			Description = "选择模组文件所在的目录",
+			Description = _localizationService["CreatePage.BrowseSourceDialog"],
 			UseDescriptionForTitle = true,
 		};
 
@@ -281,8 +288,8 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	{
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
-			Title = "选择模组图标",
-			Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
+			Title = _localizationService["CreatePage.BrowseIconDialog"],
+			Filter = _localizationService["Common.SelectImageFilter"],
 			InitialDirectory = !string.IsNullOrWhiteSpace(SourceDirectory) ? SourceDirectory : null,
 		};
 

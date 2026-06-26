@@ -6,6 +6,7 @@
 	  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	  xmlns:local="clr-namespace:Helldivers2ModManager.Views.Create"
 	  xmlns:cvms="clr-namespace:Helldivers2ModManager.ViewModels.Create"
+	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DesignHeight="500"
 	  d:DesignWidth="800"
@@ -16,9 +17,9 @@
 				   FontSize="16"
 				   TextWrapping="Wrap"
 				   Margin="0 0 0 16">
-			<Run Text="让我们从一个简单的问题开始:"/>
+			<Run Text="{loc:Loc CreateWizard.ChooseDesc}"/>
 			<LineBreak/>
-			<Run Text="您的模组有可选项吗(比如颜色切换)?" FontWeight="SemiBold"/>
+			<Run Text="{loc:Loc CreateWizard.ChooseTitle}" FontWeight="SemiBold"/>
 		</TextBlock>
 		<RadioButton GroupName="HasOptions"
 					 IsChecked="{Binding HasOptions}"
@@ -31,7 +32,7 @@
 						   FontSize="16"
 						   VerticalAlignment="Center"
 						   Margin="0 0 8 0"/>
-				<TextBlock Text="是" FontSize="14"/>
+				<TextBlock Text="{loc:Loc CreateWizard.Yes}" FontSize="14"/>
 			</StackPanel>
 		</RadioButton>
 		<RadioButton GroupName="HasOptions"
@@ -44,7 +45,7 @@
 						   FontSize="16"
 						   VerticalAlignment="Center"
 						   Margin="0 0 8 0"/>
-				<TextBlock Text="否" FontSize="14"/>
+				<TextBlock Text="{loc:Loc CreateWizard.No}" FontSize="14"/>
 			</StackPanel>
 		</RadioButton>
 	</StackPanel>

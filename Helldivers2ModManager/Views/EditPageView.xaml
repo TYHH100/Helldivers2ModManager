@@ -6,6 +6,7 @@
 	  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
 	  xmlns:local="clr-namespace:Helldivers2ModManager"
+	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:EditPageViewModel}"
 	  d:Background="{StaticResource MicaBackgroundBrush}"
@@ -39,7 +40,7 @@
 								CornerRadius="4"
 								Padding="8 6"
 								Margin="0 0 0 12">
-							<TextBlock Text="悬停选项图片可查看大图预览, 但是下拉列表需要点开后才能预览"
+							<TextBlock Text="{loc:Loc EditPage.PreviewHint}"
 									   FontSize="12"
 									   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 									   HorizontalAlignment="Center"/>
@@ -170,14 +171,14 @@
 					</Grid.ColumnDefinitions>
 
 					<Button Grid.Column="0"
-							Content="取消"
+							Content="{loc:Loc EditPage.Cancel}"
 							Style="{StaticResource FluentSecondaryButton}"
 							Command="{Binding CancelCommand}"
 							HorizontalAlignment="Left"
 							Padding="24 10"/>
 
 					<Button Grid.Column="1"
-							Content="完成"
+							Content="{loc:Loc EditPage.Done}"
 							Style="{StaticResource FluentPrimaryButton}"
 							Command="{Binding DoneCommand}"
 							HorizontalAlignment="Right"

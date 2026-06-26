@@ -1,6 +1,7 @@
 // Ignore Spelling: Helldivers
 
 using CommunityToolkit.Mvvm.Messaging;
+using Helldivers2ModManager.Services;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -146,6 +147,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	public static bool IsRegistered { get; private set; }
 
 	public static event EventHandler? Registered;
+
+	internal static LocalizationService? LocalizationService { get; private set; }
 	
 	private Action<string>? _inputAction;
 	private Action? _abortAction;
@@ -178,6 +181,12 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		{
 			IsRegistered = true;
 			Registered?.Invoke(this, EventArgs.Empty);
+
+			// 初始化本地化服务
+			if (Application.Current is App app && app.Host?.Services?.GetService(typeof(LocalizationService)) is LocalizationService locService)
+			{
+				LocalizationService = locService;
+			}
 		}
 	}
 
@@ -234,7 +243,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 
 		title.Text = message.Title;
 		brush.Color = Colors.White;
-		this.message.Text = "正在压缩...";
+		this.message.Text = LocalizationService?["MessageBox.Compressing"] ?? "正在压缩...";
 
 		// Switch progress bar to determinate mode
 		progress.IsIndeterminate = false;
@@ -278,7 +287,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 
 		title.Text = message.Title;
 		brush.Color = Colors.White;
-		this.message.Text = $"正在更新模组「{message.ModName}」...";
+		this.message.Text = $"{LocalizationService?["MessageBox.UpdatingModPrefix"]}{message.ModName}{LocalizationService?["MessageBox.UpdatingModSuffix"]}";
 
 		// 切换到确定进度条模式，显示更新进度面板
 		progress.IsIndeterminate = false;
@@ -287,7 +296,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 
 		// 显示更新进度信息面板
 		updateProgressPanel.Visibility = Visibility.Visible;
-		updatePhaseText.Text = "正在计算文件哈希...";
+		updatePhaseText.Text = LocalizationService?["MessageBox.ComputingHashes"] ?? "正在计算文件哈希...";
 		updateCurrentFile.Text = "";
 		updateFileCount.Text = "";
 		updateNeedUpdateCount.Text = "";
@@ -302,7 +311,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 			// 完成状态：隐藏进度条和信息面板，显示完成消息
 			progress.Visibility = Visibility.Hidden;
 			updateProgressPanel.Visibility = Visibility.Collapsed;
-			this.message.Text = "模组更新完成";
+			this.message.Text = LocalizationService?["MessageBox.UpdateDone"] ?? "模组更新完成";
 			okButton.Visibility = Visibility.Visible;
 		}
 		else
@@ -318,11 +327,11 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 				updateCurrentFile.Text = "";
 
 			updateFileCount.Text = message.CacheHits > 0
-				? $"已处理: {message.ProcessedCount} / {message.TotalCount} 个文件 (缓存命中 {message.CacheHits})"
-				: $"已处理: {message.ProcessedCount} / {message.TotalCount} 个文件";
+				? $"{LocalizationService?["MessageBox.ProcessedPrefix"]}{message.ProcessedCount}{LocalizationService?["MessageBox.ProcessedSep"]}{message.TotalCount}{LocalizationService?["MessageBox.ProcessedSuffix"]} ({LocalizationService?["MessageBox.CacheHitPrefix"]}{message.CacheHits}{LocalizationService?["MessageBox.CacheHitSuffix"]})"
+				: $"{LocalizationService?["MessageBox.ProcessedPrefix"]}{message.ProcessedCount}{LocalizationService?["MessageBox.ProcessedSep"]}{message.TotalCount}{LocalizationService?["MessageBox.ProcessedSuffix"]}";
 
 			if (message.NeedUpdateCount > 0)
-				updateNeedUpdateCount.Text = $"需要更新: {message.NeedUpdateCount} 个文件";
+				updateNeedUpdateCount.Text = $"{LocalizationService?["MessageBox.NeedUpdatePrefix"]}{message.NeedUpdateCount}{LocalizationService?["MessageBox.NeedUpdateSuffix"]}";
 			else
 				updateNeedUpdateCount.Text = "";
 		}

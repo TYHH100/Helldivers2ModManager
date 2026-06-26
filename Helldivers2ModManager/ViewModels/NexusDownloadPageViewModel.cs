@@ -19,7 +19,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
 {
-    public override string Title => "Download Nexus Mods";
+    public override string Title => _localizationService["NexusDownloadPage.Title"];
 
     [ObservableProperty]
     private string _nexusUrl = string.Empty;
@@ -53,19 +53,23 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
     private readonly INexusModsService _nexusModsService;
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
+    private readonly LocalizationService _localizationService;
 
     public NexusDownloadPageViewModel(
         ILogger<NexusDownloadPageViewModel> logger,
         IServiceProvider provider,
         INexusModsService nexusModsService,
         ModService modService,
-        SettingsService settingsService)
+        SettingsService settingsService,
+        LocalizationService localizationService)
     {
         _logger = logger;
         _navStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
         _nexusModsService = nexusModsService;
         _modService = modService;
         _settingsService = settingsService;
+        _localizationService = localizationService;
+        _localizationService.PropertyChanged += (_, _) => OnPropertyChanged(nameof(Title));
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
@@ -73,14 +77,14 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
         {
             if (string.IsNullOrWhiteSpace(NexusUrl))
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "请输入 Nexus Mods 链接" });
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.EnterUrl"] });
                 return;
             }
 
             var parsed = ParseNexusUrl(NexusUrl);
             if (!parsed.HasValue)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "无法解析链接，请确保链接格式正确\n示例: https://www.nexusmods.com/helldivers2/mods/123" });
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.ParseFailed"] });
                 return;
             }
 
@@ -93,12 +97,12 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
 
             if (!_nexusModsService.Initialized)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "请先在设置中配置 Nexus API Key" });
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.NoApiKey"] });
                 return;
             }
 
             IsLoading = true;
-            StatusMessage = "正在获取模组信息...";
+            StatusMessage = _localizationService["NexusDownloadPage.Fetching"];
 
             try
             {
@@ -121,19 +125,19 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
 
                 if (ModFiles.Count == 0)
                 {
-                    StatusMessage = "没有找到可用的下载文件";
+                    StatusMessage = _localizationService["NexusDownloadPage.NoFiles"];
                 }
                 else
                 {
                     SelectedFile = ModFiles.FirstOrDefault(f => f.IsPrimary == true) ?? ModFiles.FirstOrDefault();
-                    StatusMessage = $"找到 {ModFiles.Count} 个文件";
+                    StatusMessage = $"{_localizationService["NexusDownloadPage.FoundPrefix"]}{ModFiles.Count}{_localizationService["NexusDownloadPage.FoundSuffix"]}";
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to fetch mod from Nexus");
-                StatusMessage = $"获取失败: {ex.Message}";
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = $"获取模组信息失败: {ex.Message}" });
+                StatusMessage = $"{_localizationService["NexusDownloadPage.FetchFailedPrefix"]}{ex.Message}";
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = $"{_localizationService["NexusDownloadPage.FetchError"]}{ex.Message}" });
             }
             finally
             {
@@ -146,18 +150,18 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
         {
             if (SelectedFile == null || SelectedMod == null)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "请先选择一个文件" });
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.SelectFile"] });
                 return;
             }
 
             if (!_modService.Initialized || !_settingsService.Initialized)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "模组服务未初始化" });
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.ServiceNotReady"] });
                 return;
             }
 
             IsDownloading = true;
-            StatusMessage = "正在下载模组...";
+            StatusMessage = _localizationService["NexusDownloadPage.Downloading"];
             string? downloadedPath = null;
 
             try
@@ -170,7 +174,7 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
                 var parsed = ParseNexusUrl(NexusUrl);
                 if (!parsed.HasValue)
                 {
-                    throw new InvalidOperationException("无法解析 URL");
+                    throw new InvalidOperationException(_localizationService["NexusDownloadPage.ParseFailed"]);
                 }
                 
                 downloadedPath = await _nexusModsService.DownloadModFileAsync(
@@ -179,7 +183,7 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
                     SelectedFile.GameScopedId,
                     tempPath);
 
-                StatusMessage = "正在导入模组...";
+                StatusMessage = _localizationService["NexusDownloadPage.Importing"];
                 
                 var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(downloadedPath));
                 
@@ -187,28 +191,28 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
                 {
                     var hasError = problems.Any(p => p.IsError);
                     var prefix = hasError
-                        ? "导入过程中出现问题:"
-                        : "模组已导入，但有一些提示:";
+                        ? _localizationService["NexusDownloadPage.ImportProblems"]
+                        : _localizationService["NexusDownloadPage.ImportWarnings"];
                     
                     ShowProblems(problems, prefix, hasError);
                 }
                 else
                 {
-                    StatusMessage = "导入成功！";
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = $"模组 '{SelectedMod.Name}' 已成功导入" });
+                    StatusMessage = _localizationService["NexusDownloadPage.ImportSuccess"];
+                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = $"{_localizationService["NexusDownloadPage.ImportSuccessPrefix"]}{SelectedMod.Name}{_localizationService["NexusDownloadPage.ImportSuccessSuffix"]}" });
                     _navStore.Value.Navigate<DashboardPageViewModel>();
                 }
             }
             catch (NexusPremiumRequiredException)
             {
-                StatusMessage = "下载需要 Premium";
+                StatusMessage = _localizationService["NexusDownloadPage.PremiumRequired"];
                 ShowPremiumRequiredMessage();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to download or import mod");
-                StatusMessage = $"下载/导入失败: {ex.Message}";
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = $"操作失败: {ex.Message}" });
+                StatusMessage = $"{_localizationService["NexusDownloadPage.DownloadFailedPrefix"]}{ex.Message}";
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = $"{_localizationService["NexusDownloadPage.OperationFailed"]}{ex.Message}" });
             }
             finally
             {
@@ -233,7 +237,7 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
     {
         if (string.IsNullOrEmpty(NexusUrl))
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = "请先输入 Nexus Mods 链接" });
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.EnterLinkFirst"] });
             return;
         }
 
@@ -248,7 +252,7 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open Nexus page in browser");
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = $"无法打开浏览器: {ex.Message}" });
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = $"{_localizationService["NexusDownloadPage.OpenBrowserFailed"]}{ex.Message}" });
         }
     }
 
@@ -260,14 +264,7 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
 
     private void ShowPremiumRequiredMessage()
     {
-        var message = @"下载功能需要 Nexus Mods Premium 会员资格。
-
-您可以：
-1. 升级为 Nexus Mods Premium 会员
-2. 点击 ""在浏览器中打开"" 按钮手动下载模组
-3. 下载后使用 ""导入本地模组"" 功能添加到管理器";
-
-        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = message });
+        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.PremiumRequiredMsg"] });
     }
 
     private (string GameDomain, string ModId)? ParseNexusUrl(string url)
@@ -291,11 +288,11 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
         var errors = problems.Where(static p => p.IsError).ToArray();
         if (errors.Length != 0)
         {
-            sb.AppendLine("错误:");
+            sb.AppendLine(_localizationService["Common.ErrorPrefix"]);
             foreach (var p in errors)
             {
                 sb.Append("\t- \"");
-                sb.Append(p.Directory?.Name ?? "未知");
+                sb.Append(p.Directory?.Name ?? _localizationService["Converters.Unknown"]);
                 sb.AppendLine("\"");
             }
         }
@@ -303,11 +300,11 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
         var warnings = problems.Where(static p => !p.IsError).ToArray();
         if (warnings.Length != 0)
         {
-            sb.AppendLine("警告:");
+            sb.AppendLine(_localizationService["Common.WarningPrefix"]);
             foreach (var p in warnings)
             {
                 sb.Append("\t- \"");
-                sb.Append(p.Directory?.Name ?? "未知");
+                sb.Append(p.Directory?.Name ?? _localizationService["Converters.Unknown"]);
                 sb.AppendLine("\"");
             }
         }

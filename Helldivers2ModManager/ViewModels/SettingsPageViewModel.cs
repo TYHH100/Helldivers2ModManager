@@ -253,18 +253,52 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	[ObservableProperty]
 	private int _selectedTabIndex;
 
+	/// <summary>
+	/// 当前选中的语言代码。
+	/// 空字符串表示自动检测，非空值表示手动指定的语言。
+	/// </summary>
+	public string SelectedLanguageCode
+	{
+		get => _selectedLanguageCode;
+		set
+		{
+			if (_selectedLanguageCode == value)
+				return;
+			OnPropertyChanging();
+			_selectedLanguageCode = value;
+			OnPropertyChanged();
+
+			// 应用语言切换
+			_localizationService.SelectedLanguage = value;
+
+			// 同步到设置（只在保存时持久化，但先缓存）
+			if (_settingsService.Initialized)
+			{
+				_settingsService.Language = value;
+			}
+		}
+	}
+	private string _selectedLanguageCode = string.Empty;
+
+	/// <summary>
+	/// 可用的语言列表（来自 LocalizationService）。
+	/// 第一个选项为"自动检测"，值为空字符串。
+	/// </summary>
+	public ObservableCollection<LanguageItem> AvailableLanguages => _localizationService.AvailableLanguages;
+
 	private readonly ILogger<SettingsPageViewModel> _logger;
 	private readonly NavigationStore _navStore;
 	private readonly SettingsService _settingsService;
 	private readonly INexusModsService _nexusModsService;
 	private readonly ModHashService _modHashService;
 	private readonly ModService _modService;
+	private readonly LocalizationService _localizationService;
 	[ObservableProperty]
 	private int _selectedSkip = -1;
 	[ObservableProperty]
 	private int _selectedOrgFolder = -1;
 
-	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService, ModHashService modHashService, ModService modService)
+	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService, ModHashService modHashService, ModService modService, LocalizationService localizationService)
 	{
 		_logger = logger;
 		_navStore = navStore;
@@ -272,6 +306,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		_nexusModsService = nexusModsService;
 		_modHashService = modHashService;
 		_modService = modService;
+		_localizationService = localizationService;
 
 		SkipList.CollectionChanged += SkipList_CollectionChanged;
 		OrganizationalFolderNames.CollectionChanged += OrgFolderNames_CollectionChanged;
@@ -294,39 +329,39 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		MessageBox.Registered -= OnMessageBoxRegistered;
 	}
 
-	private static bool ValidateGameDir(DirectoryInfo dir, [NotNullWhen(false)] out string? error)
+	private bool ValidateGameDir(DirectoryInfo dir, [NotNullWhen(false)] out string? error)
 	{
 		if (!dir.Exists)
 		{
-			error = "选择的Helldivers 2文件夹不存在!";
+			error = _localizationService["SettingsPage.ValidateGameDirNotExist"];
 			return false;
 		}
 
 		if (dir is not DirectoryInfo { Name: "Helldivers 2" })
 		{
-			error = "选择的Helldivers 2文件夹并不在有效目录中!";
+			error = _localizationService["SettingsPage.ValidateGameDirInvalid"];
 			return false;
 		}
 
 		var subDirs = dir.EnumerateDirectories();
 		if (!subDirs.Any(static d => d.Name == "data"))
 		{
-			error = "选择的Helldivers 2根目录中没有名为 \"data\" 文件夹!";
+			error = _localizationService["SettingsPage.ValidateGameDirNoData"];
 			return false;
 		}
 		if (!subDirs.Any(static d => d.Name == "tools"))
 		{
-			error = "选择的Helldivers 2根目录中没有名为 \"tools\" 文件夹!";
+			error = _localizationService["SettingsPage.ValidateGameDirNoTools"];
 			return false;
 		}
 		if (subDirs.FirstOrDefault(static d => d.Name == "bin") is not DirectoryInfo binDir)
 		{
-			error = "选择的Helldivers 2根目录中没有名为 \"bin\" 文件夹!";
+			error = _localizationService["SettingsPage.ValidateGameDirNoBin"];
 			return false;
 		}
 		if (!binDir.GetFiles("helldivers2.exe").Any())
 		{
-			error = "选定的Helldivers 2文件路径中,在 \"bin\" 文件夹中没有 \"helldivers2.exe\" 文件!";
+			error = _localizationService["SettingsPage.ValidateGameDirNoExe"];
 			return false;
 		}
 
@@ -350,7 +385,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "游戏目录不能为空!"
+				Message = _localizationService["SettingsPage.ValidateGameDirEmpty"]
             });
 			return false;
 		}
@@ -359,7 +394,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "存储目录不能为空!"
+				Message = _localizationService["SettingsPage.ValidateStorageDirEmpty"]
             });
 			return false;
 		}
@@ -368,7 +403,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "临时目录不能为空!"
+				Message = _localizationService["SettingsPage.ValidateTempDirEmpty"]
             });
 			return false;
 		}
@@ -381,8 +416,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		_logger.LogInformation("Loading settings...");
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
 		{
-			Title = "加载设置中",
-			Message = "请民主官耐心等待.",
+			Title = _localizationService["SettingsPage.LoadingSettings"],
+			Message = _localizationService["SettingsPage.PleaseWait"],
 		});
 		try
 		{
@@ -394,8 +429,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			_logger.LogError(ex, "Loading settings failed");
 			WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
 			{
-				Title = "加载设置失败!",
-				Message = "是否需要重置设置?",
+				Title = _localizationService["SettingsPage.LoadSettingsFailed"],
+				Message = _localizationService["SettingsPage.ResetConfirm"],
 				Confirm = () =>
 				{
 					_settingsService.InitDefault();
@@ -406,6 +441,14 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 		_logger.LogInformation("Settings loaded successfully");
 		WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+
+		// 应用已保存的语言设置到本地化服务（覆盖构造时的自动检测）
+		if (!string.IsNullOrEmpty(_settingsService.Language))
+		{
+			_localizationService.SelectedLanguage = _settingsService.Language;
+		}
+		_selectedLanguageCode = _settingsService.Language;
+
 		Update();
 	}
 
@@ -433,6 +476,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(ExtensionHost));
 		OnPropertyChanged(nameof(ExtensionPort));
 		OnPropertyChanged(nameof(NexusApiKey));
+		OnPropertyChanged(nameof(SelectedLanguageCode));
+		OnPropertyChanged(nameof(AvailableLanguages));
 	}
 
 	private void SkipList_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -455,15 +500,15 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = "无效设置!",
+				Message = _localizationService["SettingsPage.SettingsValid"],
 			});
 			return;
 		}
 
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
 		{
-			Title = "保存设置中",
-			Message = "请民主官耐心等待."
+			Title = _localizationService["SettingsPage.SavingSettings"],
+			Message = _localizationService["SettingsPage.PleaseWait"]
         });
 		try
 		{
@@ -480,7 +525,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			_logger.LogWarning(ex, "Failed to save settings");
 			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
 			{
-				Message = $"设置保存失败!\n\n{ex.Message}",
+				Message = _localizationService["SettingsPage.SaveFailed"].Replace("{message}", ex.Message),
 			});
 			return;
 		}
@@ -510,8 +555,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
 		{
-			Title = "重置?",
-			Message = "您真的要重置设置?",
+			Title = _localizationService["SettingsPage.ResetTitle"],
+			Message = _localizationService["SettingsPage.ResetConfirmMsg"],
 			Confirm = () =>
 			{
 				_settingsService.Reset();
@@ -526,7 +571,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		var dialog = new OpenFolderDialog
 		{
 			Multiselect = false,
-			Title = "请选择您的Helldivers 2文件夹..."
+			Title = _localizationService["SettingsPage.BrowseGameDialog"]
         };
 
 		if (dialog.ShowDialog() ?? false)
@@ -555,7 +600,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			Multiselect = false,
 			ValidateNames = true,
-			Title = "选择您想要模组管理器|存放模组的文件夹..."
+			Title = _localizationService["SettingsPage.BrowseStorageDialog"]
         };
 
 		if (dialog.ShowDialog() ?? false)
@@ -569,7 +614,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			Multiselect = false,
 			ValidateNames = true,
-			Title = "选择您想要模组管理器|存放临时文件的文件夹..."
+			Title = _localizationService["SettingsPage.BrowseTempDialog"]
         };
 
 		if (dialog.ShowDialog() ?? false)
@@ -625,8 +670,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
 		{
-			Title = "文件名?",
-			Message = "Please enter the 16 character name of an archive file you want to skip patch 0 for.",
+			Title = _localizationService["SettingsPage.AddSkipTitle"],
+			Message = _localizationService["SettingsPage.AddSkipMsg"],
 			MaxLength = 16,
 			Confirm = (str) =>
 			{
@@ -635,7 +680,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 				else
 					WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
 					{
-						Message = "Mod文件名的长度只能为 16 字符串."
+						Message = _localizationService["SettingsPage.AddSkipValidation"]
                     });
 			}
 		});
@@ -657,8 +702,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
 		{
-			Title = "归类文件夹名?",
-			Message = "请输入归类文件夹的名称（如 Models），其子目录将被提升为选项。",
+			Title = _localizationService["SettingsPage.AddOrgFolderTitle"],
+			Message = _localizationService["SettingsPage.AddOrgFolderMsg"],
 			MaxLength = 100,
 			Confirm = (str) =>
 			{
@@ -671,7 +716,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 				{
 					WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
 					{
-						Message = $"归类文件夹 \"{name}\" 已存在。"
+						Message = _localizationService["SettingsPage.AddOrgFolderExists"].Replace("{name}", name)
 					});
 					return;
 				}
@@ -707,26 +752,26 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		if (string.IsNullOrWhiteSpace(NexusApiKey))
 		{
-			NexusApiKeyValidationResult = "API Key 不能为空";
+			NexusApiKeyValidationResult = _localizationService["SettingsPage.ApiKeyEmpty"];
 			return;
 		}
 
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
 		{
-			Title = "验证 API Key",
-			Message = "正在验证 Nexus Mods API Key..."
+			Title = _localizationService["SettingsPage.ValidatingApiKeyTitle"],
+			Message = _localizationService["SettingsPage.ValidatingApiKeyMsg"]
 		});
 
 		try
 		{
 			_nexusModsService.Init(NexusApiKey);
 			await _nexusModsService.GetTrendingModsAsync("helldivers2");
-			NexusApiKeyValidationResult = "API Key 验证成功!";
+			NexusApiKeyValidationResult = _localizationService["SettingsPage.ApiKeyValid"];
 			_logger.LogInformation("Nexus API Key validated successfully");
 		}
 		catch (Exception ex)
 		{
-			NexusApiKeyValidationResult = $"验证失败: {ex.Message}";
+			NexusApiKeyValidationResult = _localizationService["SettingsPage.ApiKeyFailed"].Replace("{message}", ex.Message);
 			_logger.LogError(ex, "Failed to validate Nexus API Key");
 		}
 		finally
@@ -748,24 +793,22 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
 			{
-				Message = "当前没有已添加的模组，无需计算文件指纹。"
+				Message = _localizationService["SettingsPage.NoModsForHash"]
 			});
 			return Task.CompletedTask;
 		}
 
 		WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
 		{
-			Title = "重新计算文件指纹",
-			Message = $"将为全部 {modCount} 个模组重新计算 SHA-256 文件指纹。\n" +
-			          "此过程在后台进行，完成后底部状态栏会显示结果。\n" +
-			          "是否继续？",
+			Title = _localizationService["SettingsPage.RecomputeHashTitle"],
+			Message = _localizationService["SettingsPage.RecomputeHashMsg"].Replace("{count}", modCount.ToString()),
 			Confirm = () =>
 			{
 				_logger.LogInformation("User requested full hash recomputation for {Count} mods", modCount);
 				_ = _modHashService.ForceRecomputeAllAsync(_modService.Mods);
 				WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
 				{
-					Message = "已开始重新计算文件指纹，返回模组列表可查看进度。"
+					Message = _localizationService["SettingsPage.RecomputeHashStarted"]
 				});
 			}
 		});
@@ -778,11 +821,11 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	{
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
 		{
-			Title = "查找游戏",
-			Message = "请民主官耐心等待."
+			Title = _localizationService["SettingsPage.DetectingGame"],
+			Message = _localizationService["SettingsPage.PleaseWait"]
 		});
 
-		var (result, path) = await Task.Run<(bool, string?)>(static () =>
+		var (result, path) = await Task.Run<(bool, string?)>(() =>
 		{
 			var steamPath = GetSteamInstallPath();
 			if (!string.IsNullOrEmpty(steamPath))
@@ -827,7 +870,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
         else
 			WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
 			{
-				Message = "无法自动找到 Helldivers 2 游戏,请手动设置."
+				Message = _localizationService["SettingsPage.DetectGameFailed"]
 			});
 	}
 

@@ -6,6 +6,7 @@
              xmlns:local="clr-namespace:Helldivers2ModManager.Views"
              xmlns:vm="clr-namespace:Helldivers2ModManager.ViewModels"
              xmlns:models="clr-namespace:Helldivers2ModManager.Models"
+             xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
     <UserControl.Resources>
@@ -15,7 +16,7 @@
                 <Border.ContextMenu>
                     <ContextMenu MinWidth="160">
                         <!-- 取消下载：仅下载中/等待中显示 -->
-                        <MenuItem Header="取消下载"
+                        <MenuItem Header="{loc:Loc DownloadProgress.CancelDownload}"
                                   Command="{Binding PlacementTarget.Tag.CancelDownloadCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}">
                             <MenuItem.Style>
@@ -33,7 +34,7 @@
                             </MenuItem.Style>
                         </MenuItem>
                         <!-- 重新下载：仅失败/取消显示 -->
-                        <MenuItem Header="重新下载"
+                        <MenuItem Header="{loc:Loc DownloadProgress.Redownload}"
                                   Command="{Binding PlacementTarget.Tag.RetryDownloadCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}">
                             <MenuItem.Style>
@@ -51,7 +52,7 @@
                             </MenuItem.Style>
                         </MenuItem>
                         <!-- 打开文件位置：仅已完成显示 -->
-                        <MenuItem Header="打开文件位置"
+                        <MenuItem Header="{loc:Loc DownloadProgress.OpenFileLocation}"
                                   Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}">
                             <MenuItem.Style>
@@ -67,11 +68,11 @@
                         </MenuItem>
                         <Separator/>
                         <!-- 复制下载链接：始终显示 -->
-                        <MenuItem Header="复制下载链接"
+                        <MenuItem Header="{loc:Loc DownloadProgress.CopyLink}"
                                   Command="{Binding PlacementTarget.Tag.CopyDownloadUrlCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}"/>
                         <!-- 移除任务：非下载中显示 -->
-                        <MenuItem Header="移除任务"
+                        <MenuItem Header="{loc:Loc DownloadProgress.RemoveTask}"
                                   Command="{Binding PlacementTarget.Tag.RemoveTaskCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}">
                             <MenuItem.Style>
@@ -152,7 +153,7 @@
                             <StackPanel Orientation="Horizontal" Margin="0 2 0 0"
                                         Visibility="{Binding Status, Converter={StaticResource DownloadStatusToVisibilityConverter}}">
                                 <TextBlock Text="{Binding Speed, Converter={StaticResource SpeedToReadableConverter}}" FontSize="12" Foreground="#6a9fd8" />
-                                <TextBlock Text="{Binding EstimatedTimeRemainingText, StringFormat=剩余 {0}}" FontSize="12" Foreground="#888" Margin="12 0 0 0"
+                                <TextBlock Text="{Binding EstimatedTimeRemainingText}" FontSize="12" Foreground="#888" Margin="12 0 0 0"
                                            Visibility="{Binding EstimatedTimeRemainingText, Converter={StaticResource StringToVisibilityConverter}}" />
                             </StackPanel>
                             
@@ -194,11 +195,11 @@
                         Margin="4,3,0,4" HorizontalAlignment="Left" Width="36">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-                        <TextBlock ToolTip="返回" VerticalAlignment="Center"/>
+                        <TextBlock ToolTip="{loc:Loc DownloadProgress.Back}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
                 
-                <TextBlock Grid.Column="1" Text="下载进度" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0 8 0 8" />
+                <TextBlock Grid.Column="1" Text="{loc:Loc DownloadProgress.Title}" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0 8 0 8" />
                 
                 <!-- 清除已完成按钮 -->
                 <Button Grid.Column="2"
@@ -206,7 +207,7 @@
                         IsEnabled="{Binding HasCompletedTasks}"
                         Style="{StaticResource FluentIconButton}"
                         Margin="0,3,4,4" HorizontalAlignment="Right"
-                        ToolTip="清除已完成的任务">
+                        ToolTip="{loc:Loc DownloadProgress.ClearCompleted}">
                     <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center"/>
                 </Button>
             </Grid>
@@ -226,7 +227,7 @@
                          Padding="10 8"
                          FontSize="13"
                          VerticalContentAlignment="Center"
-                         ToolTip="输入任意 HTTPS 下载链接">
+                         ToolTip="{loc:Loc DownloadProgress.UrlWatermark}">
                     <TextBox.Resources>
                         <Style TargetType="Border">
                             <Setter Property="CornerRadius" Value="6"/>
@@ -240,10 +241,10 @@
                         Margin="8 0 0 0"
                         Padding="16 8"
                         MinWidth="100"
-                        ToolTip="添加下载任务">
+                        ToolTip="{loc:Loc DownloadProgress.AddHint}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 6 0"/>
-                        <TextBlock Text="添加下载" FontSize="13" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Loc DownloadProgress.AddDownload}" FontSize="13" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
             </Grid>
@@ -262,8 +263,8 @@
                                         <Setter.Value>
                                             <ControlTemplate>
                                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0 40 0 0">
-                                                    <TextBlock Text="暂无下载任务" FontSize="14" Foreground="#666" />
-                                                    <TextBlock Text="从浏览器下载 Nexus Mods 文件时会自动显示在这里" FontSize="12" Foreground="#444" Margin="0 4 0 0" />
+                                                    <TextBlock Text="{loc:Loc DownloadProgress.EmptyHint}" FontSize="14" Foreground="#666" />
+                                                    <TextBlock Text="{loc:Loc DownloadProgress.EmptyDesc}" FontSize="12" Foreground="#444" Margin="0 4 0 0" />
                                                 </StackPanel>
                                             </ControlTemplate>
                                         </Setter.Value>

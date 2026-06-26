@@ -41,13 +41,15 @@ internal sealed partial class ModService
 	private readonly ConcurrentDictionary<Guid, ModViewModel> _modViewModelCache = new();
 	private readonly FileHashRepository _fileHashRepository;
 	private readonly ModHashService _modHashService;
+	private readonly LocalizationService _localizationService;
 	private SettingsService? _settingsService;
 
-	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService)
+	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService, LocalizationService localizationService)
 	{
 		_logger = logger;
 		_fileHashRepository = fileHashRepository;
 		_modHashService = modHashService;
+		_localizationService = localizationService;
 		_mods = new();
 	}
 	
@@ -639,10 +641,11 @@ internal sealed partial class ModService
 		progress?.Report(new UpdateProgressInfo
 		{
 			Phase = UpdatePhase.HashingCurrent,
-			Message = "正在计算当前模组文件哈希（使用缓存加速）..."
+			Message = _localizationService["ModService.CalculatingHashes"]
 		});
 		_logger.LogDebug("Computing SHA-256 hashes for current mod files (with cache)");
 
+		var loc = _localizationService;
 		var hashingProgress = new Progress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>(p =>
 		{
 			progress?.Report(new UpdateProgressInfo
@@ -652,9 +655,9 @@ internal sealed partial class ModService
 				ProcessedCount = p.checkedCount,
 				TotalCount = p.totalCount,
 				CacheHits = p.cacheHits,
-				Message = p.cacheHits > 0
-					? $"正在计算当前模组文件哈希 ({p.checkedCount}/{p.totalCount}, 缓存命中 {p.cacheHits})..."
-					: $"正在计算当前模组文件哈希 ({p.checkedCount}/{p.totalCount})..."
+				Message = loc["ModService.CalculatingHashesProgress"]
+					.Replace("{done}", p.checkedCount.ToString())
+					.Replace("{total}", p.totalCount.ToString())
 			});
 		});
 
@@ -671,7 +674,7 @@ internal sealed partial class ModService
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "Failed to compute hashes for current mod \"{}\"", mod.Manifest.Name);
-			throw new IOException($"无法计算当前模组文件的哈希值: {ex.Message}", ex);
+			throw new IOException(_localizationService["ModService.HashError"].Replace("{message}", ex.Message), ex);
 		}
 		_logger.LogInformation("Computed hashes for {Count} current files", currentHashes.Count);
 
@@ -761,7 +764,7 @@ internal sealed partial class ModService
 		progress?.Report(new UpdateProgressInfo
 		{
 			Phase = UpdatePhase.HashingNew,
-			Message = "正在计算新版本文件哈希..."
+			Message = _localizationService["ModService.CalculatingNewHashes"]
 		});
 		_logger.LogDebug("Computing SHA-256 hashes for new version files");
 
@@ -773,7 +776,9 @@ internal sealed partial class ModService
 				CurrentFile = p.currentFile,
 				ProcessedCount = p.checkedCount,
 				TotalCount = p.totalCount,
-				Message = $"正在计算新版本文件哈希 ({p.checkedCount}/{p.totalCount})..."
+				Message = loc["ModService.CalculatingNewHashesProgress"]
+					.Replace("{done}", p.checkedCount.ToString())
+					.Replace("{total}", p.totalCount.ToString())
 			});
 		});
 
@@ -786,7 +791,7 @@ internal sealed partial class ModService
 		{
 			_logger.LogError(ex, "Failed to compute hashes for new version");
 			tmpDir.Delete(true);
-			throw new IOException($"无法计算新版本文件的哈希值: {ex.Message}", ex);
+			throw new IOException(_localizationService["ModService.NewHashError"].Replace("{message}", ex.Message), ex);
 		}
 		_logger.LogInformation("Computed hashes for {Count} new files", newHashes.Count);
 
@@ -794,7 +799,7 @@ internal sealed partial class ModService
 		progress?.Report(new UpdateProgressInfo
 		{
 			Phase = UpdatePhase.Comparing,
-			Message = "正在比对文件差异..."
+			Message = _localizationService["ModService.ComparingFiles"]
 		});
 		var compareResult = FileHashUtils.CompareHashes(currentHashes, newHashes);
 
@@ -820,7 +825,7 @@ internal sealed partial class ModService
 			{
 				Phase = UpdatePhase.Completed,
 				IsCompleted = true,
-				Message = "所有文件已是最新，无需更新"
+				Message = _localizationService["ModService.AllFilesUpToDate"]
 			});
 			_logger.LogInformation("Mod \"{}\" manifest updated (no file changes needed)", mod.Manifest.Name);
 			return;
@@ -895,7 +900,7 @@ internal sealed partial class ModService
 			{
 				_logger.LogError(ex, "Failed to copy file \"{Path}\"", relativePath);
 				tmpDir.Delete(true);
-				throw new IOException($"无法更新文件「{relativePath}」: {ex.Message}", ex);
+				throw new IOException(_localizationService["ModService.FileUpdateError"].Replace("{path}", relativePath).Replace("{message}", ex.Message), ex);
 			}
 
 			// 报告更新进度
@@ -906,7 +911,9 @@ internal sealed partial class ModService
 				ProcessedCount = i + 1,
 				TotalCount = filesToUpdate.Count,
 				NeedUpdateCount = filesToUpdate.Count,
-				Message = $"正在更新文件 ({i + 1}/{filesToUpdate.Count})..."
+				Message = _localizationService["ModService.UpdatingProgress"]
+					.Replace("{current}", (i + 1).ToString())
+					.Replace("{total}", filesToUpdate.Count.ToString())
 			});
 		}
 
@@ -928,7 +935,10 @@ internal sealed partial class ModService
 			UnchangedCount = compareResult.UnchangedCount,
 			NeedUpdateCount = filesToUpdate.Count,
 			DeletedCount = deletedCount,
-			Message = $"更新完成: {filesToUpdate.Count} 个文件已更新, {compareResult.UnchangedCount} 个文件未变化, {deletedCount} 个文件已删除"
+			Message = _localizationService["ModService.UpdateComplete"]
+				.Replace("{updated}", filesToUpdate.Count.ToString())
+				.Replace("{skipped}", compareResult.UnchangedCount.ToString())
+				.Replace("{failed}", deletedCount.ToString())
 		});
 
 		_logger.LogInformation(
@@ -1251,7 +1261,7 @@ internal sealed partial class ModService
 
 	public ModViewModel GetOrCreateModViewModel(ModData mod, ILogger logger, SettingsService settingsService, Services.Nexus.INexusModsService nexusModsService)
 	{
-		return _modViewModelCache.GetOrAdd(mod.Manifest.Guid, _ => new ModViewModel(mod, logger, settingsService, nexusModsService));
+		return _modViewModelCache.GetOrAdd(mod.Manifest.Guid, _ => new ModViewModel(mod, logger, settingsService, nexusModsService, _localizationService));
 	}
 
 	public void ClearModViewModelCache()

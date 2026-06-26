@@ -354,6 +354,26 @@ internal sealed class SettingsService
 	}
 
 	/// <summary>
+	/// 界面语言设置。
+	/// 空字符串表示自动检测系统语言；
+	/// 非空值表示用户手动指定的语言代码（如 "zh-CN", "en-US"）。
+	/// </summary>
+	public string Language
+	{
+		get
+		{
+			GuardInitialized();
+			return _language;
+		}
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_language = value;
+		}
+	}
+
+	/// <summary>
 	/// 模组选项的部署顺序（按 Mod GUID 索引）
 	/// value 为选项索引的自定义顺序数组
 	/// </summary>
@@ -460,6 +480,7 @@ internal sealed class SettingsService
 	private string? _encryptedNexusApiKey;
 	private string _extensionHost = "localhost";
 	private int _extensionPort = 7456;
+	private string _language = string.Empty;
 	private bool _useDeploymentOrder;
 	private List<Guid> _deploymentOrderGuids = [];
 	private Dictionary<Guid, int[]> _optionOrders = [];
@@ -643,6 +664,7 @@ internal sealed class SettingsService
 			writer.WriteNumber(nameof(LogRetentionDays), _logRetentionDays);
 			writer.WriteString(nameof(ExtensionHost), _extensionHost);
 			writer.WriteNumber(nameof(ExtensionPort), _extensionPort);
+			writer.WriteString(nameof(Language), _language);
 			writer.WriteStartArray(nameof(Tags));
 			foreach (var tag in _tags)
 			{
@@ -911,6 +933,8 @@ internal sealed class SettingsService
 		if (root.TryGetProperty(nameof(ExtensionPort), JsonValueKind.Number, out prop))
 			if (prop.TryGetInt32(out var portValue))
 				_extensionPort = portValue;
+		if (root.TryGetProperty(nameof(Language), JsonValueKind.String, out prop))
+			_language = prop.GetString() ?? string.Empty;
 		if (root.TryGetProperty(nameof(Tags), JsonValueKind.Array, out var tagsArr))
 		{
 			var tagsList = new List<ModTag>();

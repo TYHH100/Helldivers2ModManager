@@ -7,6 +7,7 @@
       xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
       xmlns:sys="clr-namespace:System;assembly=mscorlib"
       xmlns:logging="clr-namespace:Microsoft.Extensions.Logging;assembly=Microsoft.Extensions.Logging.Abstractions"
+      xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
       mc:Ignorable="d"
       d:DataContext="{d:DesignInstance vms:SettingsPageViewModel}"
       d:Background="{StaticResource MicaBackgroundBrush}"
@@ -34,7 +35,7 @@
 
         <!-- Header -->
         <TextBlock Grid.Row="0"
-                   Text="设置"
+                   Text="{loc:Loc SettingsPage.Title}"
                    Style="{StaticResource FluentSectionHeader}"
                    Margin="0 0 0 12"/>
 
@@ -50,7 +51,7 @@
                 Margin="0 0 0 0">
             <StackPanel Orientation="Horizontal">
                 <!-- 路径 选项卡 -->
-                <Button Content="路径"
+                <Button Content="{loc:Loc SettingsPage.TabPaths}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="0">
                     <Button.Style>
@@ -66,7 +67,7 @@
                     </Button.Style>
                 </Button>
                 <!-- 部署 选项卡 -->
-                <Button Content="部署"
+                <Button Content="{loc:Loc SettingsPage.TabDeploy}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="1">
                     <Button.Style>
@@ -82,7 +83,7 @@
                     </Button.Style>
                 </Button>
                 <!-- 模组 选项卡 -->
-                <Button Content="模组"
+                <Button Content="{loc:Loc SettingsPage.TabMods}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="2">
                     <Button.Style>
@@ -98,7 +99,7 @@
                     </Button.Style>
                 </Button>
                 <!-- 日志 选项卡 -->
-                <Button Content="日志"
+                <Button Content="{loc:Loc SettingsPage.TabLogs}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="3">
                     <Button.Style>
@@ -114,7 +115,7 @@
                     </Button.Style>
                 </Button>
                 <!-- 连接 选项卡 -->
-                <Button Content="连接"
+                <Button Content="{loc:Loc SettingsPage.TabConnection}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="4">
                     <Button.Style>
@@ -130,7 +131,7 @@
                     </Button.Style>
                 </Button>
                 <!-- 工具 选项卡 -->
-                <Button Content="工具"
+                <Button Content="{loc:Loc SettingsPage.TabTools}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="5">
                     <Button.Style>
@@ -146,7 +147,7 @@
                     </Button.Style>
                 </Button>
                 <!-- 主页 选项卡 -->
-                <Button Content="主页"
+                <Button Content="{loc:Loc SettingsPage.TabHome}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="6">
                     <Button.Style>
@@ -195,10 +196,10 @@
                         <!-- 游戏目录 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="游戏目录"
+                                <TextBlock Text="{loc:Loc SettingsPage.GameDir}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
-                                <TextBlock Text="您想要安装模组的游戏目录"
+                                <TextBlock Text="{loc:Loc SettingsPage.GameDirDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 4 0 12"/>
                                 <Grid>
@@ -212,13 +213,13 @@
                                              IsReadOnly="True"
                                              VerticalAlignment="Center"/>
                                     <Button Grid.Column="1"
-                                            Content="自动检测"
+                                            Content="{loc:Loc SettingsPage.AutoDetect}"
                                             Style="{StaticResource FluentSecondaryButton}"
                                             Command="{Binding DetectGameCommand}"
                                             Margin="8 0 0 0"
                                             Padding="12 8"/>
                                     <Button Grid.Column="2"
-                                            Content="浏览"
+                                            Content="{loc:Loc SettingsPage.Browse}"
                                             Style="{StaticResource FluentPrimaryButton}"
                                             Command="{Binding BrowseGameCommand}"
                                             Margin="8 0 0 0"
@@ -230,13 +231,13 @@
                         <!-- 存储目录 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="存储目录"
+                                <TextBlock Text="{loc:Loc SettingsPage.StorageDir}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
-                                <TextBlock Text="用于存放添加到模组管理器中的所有模组的目录"
+                                <TextBlock Text="{loc:Loc SettingsPage.StorageDirDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 4 0 4"/>
-                                <TextBlock Text="修改此目录前请先清空，因为已安装文件的记录存储在此处!"
+                                <TextBlock Text="{loc:Loc SettingsPage.StorageDirWarning}"
                                            Foreground="{StaticResource DangerBrush}"
                                            FontSize="12"
                                            Margin="0 0 0 12"/>
@@ -250,7 +251,7 @@
                                              IsReadOnly="True"
                                              VerticalAlignment="Center"/>
                                     <Button Grid.Column="1"
-                                            Content="浏览"
+                                            Content="{loc:Loc SettingsPage.Browse}"
                                             Style="{StaticResource FluentPrimaryButton}"
                                             Command="{Binding BrowseStorageCommand}"
                                             Margin="8 0 0 0"
@@ -262,17 +263,17 @@
                         <!-- 临时目录 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="临时目录"
+                                <TextBlock Text="{loc:Loc SettingsPage.TempDir}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="用于存放临时文件的目录，例如："/>
+                                    <Run Text="{loc:Loc SettingsPage.TempDirDesc1}"/>
                                     <LineBreak/>
-                                    <Run Text="- 下载文件"/>
+                                    <Run Text="{loc:Loc SettingsPage.TempDirDesc2}"/>
                                     <LineBreak/>
-                                    <Run Text="- 部署Mod期间的文件"/>
+                                    <Run Text="{loc:Loc SettingsPage.TempDirDesc3}"/>
                                     <LineBreak/>
-                                    <Run Text="- 解压缩文件"/>
+                                    <Run Text="{loc:Loc SettingsPage.TempDirDesc4}"/>
                                 </TextBlock>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -284,7 +285,7 @@
                                              IsReadOnly="True"
                                              VerticalAlignment="Center"/>
                                     <Button Grid.Column="1"
-                                            Content="浏览"
+                                            Content="{loc:Loc SettingsPage.Browse}"
                                             Style="{StaticResource FluentPrimaryButton}"
                                             Command="{Binding BrowseTempCommand}"
                                             Margin="8 0 0 0"
@@ -296,10 +297,10 @@
                         <!-- 归类文件夹列表 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="归类文件夹"
+                                <TextBlock Text="{loc:Loc SettingsPage.OrgFolders}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
-                                <TextBlock Text="创建 Mod 时这些文件夹的子目录将被提升为选项。默认包含 Models。"
+                                <TextBlock Text="{loc:Loc SettingsPage.OrgFoldersDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 0 0 12"/>
                                 <ListBox Width="400"
@@ -323,7 +324,7 @@
                                             Padding="12 6">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-                                            <TextBlock Text="添加" Margin="8 0 0 0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{loc:Loc SettingsPage.Add}" Margin="8 0 0 0" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <Button Command="{Binding RemoveOrgFolderCommand}"
@@ -331,7 +332,7 @@
                                             Padding="12 6">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-                                            <TextBlock Text="删除" Margin="8 0 0 0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{loc:Loc SettingsPage.Delete}" Margin="8 0 0 0" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
@@ -356,13 +357,13 @@
                         <!-- 模组部署方式 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="模组部署方式"
+                                <TextBlock Text="{loc:Loc SettingsPage.DeployMethod}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="使用符号链接来代替文件复制，来降低部署模组期间的硬盘写入"/>
+                                    <Run Text="{loc:Loc SettingsPage.SymLinkDesc1}"/>
                                     <LineBreak/>
-                                    <Run Text="需要以管理员权限启动应用" FontWeight="SemiBold"/>
+                                    <Run Text="{loc:Loc SettingsPage.SymLinkDesc2}" FontWeight="SemiBold"/>
                                 </TextBlock>
                                 <Grid Margin="0 8 0 0">
                                     <Grid.ColumnDefinitions>
@@ -375,25 +376,25 @@
                                               IsChecked="{Binding UseSymbolicLinks}"
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"
-                                               Text="使用符号链接"
+                                               Text="{loc:Loc SettingsPage.UseSymLinks}"
                                                FontSize="14"
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
-                                <TextBlock Text="模组部署顺序"
+                                <TextBlock Text="{loc:Loc SettingsPage.DeployOrder}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0 12 0 4"/>
                                 <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 8">
-                                    <Run Text="选择部署模组时的文件排列顺序"/>
+                                    <Run Text="{loc:Loc SettingsPage.DeployOrderDesc}"/>
                                 </TextBlock>
-                                <RadioButton Content="从上到下"
+                                <RadioButton Content="{loc:Loc SettingsPage.DeployTopToBottom}"
                                              IsChecked="{Binding DeployBottomToTop, Converter={StaticResource InverseBoolConverter}}"
                                              FontSize="14"
                                              Foreground="{StaticResource NeutralForegroundBrush}"
                                              Margin="0 2 0 2"
                                              GroupName="DeployOrder"
                                              Style="{StaticResource FluentRadioButton}"/>
-                                <RadioButton Content="从下到上"
+                                <RadioButton Content="{loc:Loc SettingsPage.DeployBottomToTop}"
                                              IsChecked="{Binding DeployBottomToTop}"
                                              FontSize="14"
                                              Foreground="{StaticResource NeutralForegroundBrush}"
@@ -417,33 +418,30 @@
                                               IsChecked="{Binding UseDeploymentOrder}"
                                               Margin="0 0 12 0"/>
                                     <StackPanel Grid.Column="1">
-                                        <TextBlock Text="使用自定义部署顺序"
+                                        <TextBlock Text="{loc:Loc SettingsPage.CustomDeployOrder}"
                                                    Style="{StaticResource FluentSubSectionHeader}"
                                                    Margin="0"/>
-                                        <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 2 0 0">
-                                            启用后部署时按照下方列表的顺序部署模组，而非主页顺序。
-                                            <LineBreak/>
-                                            此设置不影响主页模组列表的显示。
-                                        </TextBlock>
+                                        <TextBlock Text="{loc:Loc SettingsPage.CustomDeployOrderDesc}"
+                                                   Style="{StaticResource FluentBodyText}"
+                                                   Margin="0 2 0 0"/>
                                     </StackPanel>
                                 </Grid>
 
-                                <TextBlock Visibility="{Binding UseDeploymentOrder, Converter={StaticResource BoolToVisibilityConverter}}"
+                                <TextBlock Text="{loc:Loc SettingsPage.CustomDeployOrderHint}"
+                                           Visibility="{Binding UseDeploymentOrder, Converter={StaticResource BoolToVisibilityConverter}}"
                                            Style="{StaticResource FluentBodyText}"
                                            Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
-                                           Margin="0 4 0 0">
-                                    请前往主页左侧「部署顺序」页面编辑模组部署顺序列表。
-                                </TextBlock>
+                                           Margin="0 4 0 0"/>
                             </StackPanel>
                                 </Border>
 
                         <!-- 跳过列表（开发者选项） -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="跳过列表"
+                                <TextBlock Text="{loc:Loc SettingsPage.SkipList}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
-                                <TextBlock Text="这将在Mod应用期间跳过所有指定文件的第 0 个索引"
+                                <TextBlock Text="{loc:Loc SettingsPage.SkipListDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 0 0 12"/>
                                 <ListBox Width="400"
@@ -467,7 +465,7 @@
                                             Padding="12 6">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-                                            <TextBlock Text="添加" Margin="8 0 0 0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{loc:Loc SettingsPage.Add}" Margin="8 0 0 0" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <Button Command="{Binding RemoveSkipCommand}"
@@ -475,7 +473,7 @@
                                             Padding="12 6">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-                                            <TextBlock Text="删除" Margin="8 0 0 0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{loc:Loc SettingsPage.Delete}" Margin="8 0 0 0" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
@@ -500,7 +498,7 @@
                         <!-- 删除模组方式 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="删除模组方式"
+                                <TextBlock Text="{loc:Loc SettingsPage.DeleteMethod}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <Grid Margin="0 8 0 0">
@@ -514,7 +512,7 @@
                                               IsChecked="{Binding DeleteToRecycleBin}"
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"
-                                               Text="移动到回收站"
+                                               Text="{loc:Loc SettingsPage.MoveToRecycleBin}"
                                                FontSize="14"
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
@@ -525,11 +523,11 @@
                         <!-- 不存在的模组处理方式 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="不存在的模组处理方式"
+                                <TextBlock Text="{loc:Loc SettingsPage.MissingMods}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="默认是自动跳过不存在的模组条目"/>
+                                    <Run Text="{loc:Loc SettingsPage.MissingModsDesc}"/>
                                 </TextBlock>
                                 <Grid Margin="0 8 0 0">
                                     <Grid.ColumnDefinitions>
@@ -542,7 +540,7 @@
                                               IsChecked="{Binding AutoRemoveMissingMods}"
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"
-                                               Text="自动删除不存在的模组条目"
+                                               Text="{loc:Loc SettingsPage.AutoRemoveMissing}"
                                                FontSize="14"
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
@@ -553,11 +551,11 @@
                         <!-- 版本兼容性检查 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="版本兼容性检查"
+                                <TextBlock Text="{loc:Loc SettingsPage.VersionCheck}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="启动时自动检查模组的版本兼容性，以多数模组的 Unit 版本为参考标记可能存在兼容性问题的模组"/>
+                                    <Run Text="{loc:Loc SettingsPage.VersionCheckDesc}"/>
                                 </TextBlock>
                                 <Grid Margin="0 8 0 0">
                                     <Grid.ColumnDefinitions>
@@ -570,7 +568,7 @@
                                               IsChecked="{Binding AutoCheckVersionOnStartup}"
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"
-                                               Text="启动时自动检查"
+                                               Text="{loc:Loc SettingsPage.AutoCheckOnStartup}"
                                                FontSize="14"
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
@@ -596,15 +594,15 @@
                         <!-- 日志级别 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="日志级别"
+                                <TextBlock Text="{loc:Loc SettingsPage.LogLevel}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="此项用于设置记录到日志文件的消息级别"/>
+                                    <Run Text="{loc:Loc SettingsPage.LogLevelDesc1}"/>
                                     <LineBreak/>
-                                    <Run Text="所选级别及其以下级别的消息都将被捕获并记录"/>
+                                    <Run Text="{loc:Loc SettingsPage.LogLevelDesc2}"/>
                                     <LineBreak/>
-                                    <Run Text="默认仅记录警告(Warning)及以上更严重的消息"/>
+                                    <Run Text="{loc:Loc SettingsPage.LogLevelDesc3}"/>
                                 </TextBlock>
                                 <ComboBox HorizontalAlignment="Left"
                                           Width="200"
@@ -616,11 +614,11 @@
                         <!-- 日志自动清理 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="日志自动清理"
+                                <TextBlock Text="{loc:Loc SettingsPage.LogAutoClean}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="自动删除超过指定天数的日志文件，避免占用过多磁盘空间"/>
+                                    <Run Text="{loc:Loc SettingsPage.LogAutoCleanDesc}"/>
                                 </TextBlock>
                                 <Grid Margin="0 8 0 0">
                                     <Grid.ColumnDefinitions>
@@ -639,10 +637,10 @@
                                              VerticalAlignment="Center"
                                              Margin="0 0 8 0"/>
                                     <TextBlock Grid.Column="2"
-                                               Text="天后自动删除"
-                                               FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
-                                               VerticalAlignment="Center"/>
+                                           Text="{loc:Loc SettingsPage.LogAutoCleanDays}"
+                                           FontSize="14"
+                                           Foreground="{StaticResource NeutralForegroundBrush}"
+                                           VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -665,10 +663,10 @@
                         <!-- 浏览器扩展连接 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="浏览器扩展连接"
+                                <TextBlock Text="{loc:Loc SettingsPage.BrowserExt}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
-                                <TextBlock Text="配置浏览器扩展连接到管理器所需的地址和端口"
+                                <TextBlock Text="{loc:Loc SettingsPage.BrowserExtDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 4 0 12"/>
                                 <Grid>
@@ -683,7 +681,7 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Grid.Column="0"
-                                               Text="地址:"
+                                               Text="{loc:Loc SettingsPage.AddressLabel}"
                                                VerticalAlignment="Center"
                                                Margin="0 0 8 8"
                                                FontSize="14"
@@ -693,7 +691,7 @@
                                              Style="{StaticResource FluentTextBox}"
                                              Margin="0 0 16 8"/>
                                     <TextBlock Grid.Row="0" Grid.Column="2"
-                                               Text="端口:"
+                                               Text="{loc:Loc SettingsPage.PortLabel}"
                                                VerticalAlignment="Center"
                                                Margin="0 0 8 8"
                                                FontSize="14"
@@ -706,7 +704,7 @@
                                 <TextBlock FontSize="12"
                                            Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
                                            Margin="0 4 0 0">
-                                    <Run Text="连接地址: http://"/>
+                                    <Run Text="{loc:Loc SettingsPage.ConnectionAddressLabel}"/>
                                     <Run Text="{Binding ExtensionHost, Mode=OneWay}"/>
                                     <Run Text=":"/>
                                     <Run Text="{Binding ExtensionPort, Mode=OneWay}"/>
@@ -760,33 +758,33 @@
                     <StackPanel>
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="实用工具"
+                                <TextBlock Text="{loc:Loc SettingsPage.Tools}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
-                                <TextBlock Text="在出现异常情况时可使用以下工具进行修复"
+                                <TextBlock Text="{loc:Loc SettingsPage.ToolsDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 4 0 12"/>
 
                                 <!-- 重新计算文件指纹 -->
-                                <Button Content="重新计算文件指纹"
+                                <Button Content="{loc:Loc SettingsPage.RecomputeHashes}"
                                         Style="{StaticResource FluentSecondaryButton}"
                                         Command="{Binding RecomputeAllHashesCommand}"
                                         HorizontalAlignment="Left"
                                         Padding="16 10"
                                         Margin="0 0 0 4"/>
-                                <TextBlock Text="重新计算所有模组的 SHA-256 文件哈希值并更新数据库缓存"
+                                <TextBlock Text="{loc:Loc SettingsPage.RecomputeHashesDesc}"
                                            Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
                                            FontSize="12"
                                            Margin="0 0 0 16"/>
 
                                 <!-- 强制清理补丁文件 -->
-                                <Button Content="强制清理补丁文件"
+                                <Button Content="{loc:Loc SettingsPage.ForceCleanPatches}"
                                         Style="{StaticResource FluentSecondaryButton}"
                                         Command="{Binding HardPurgeCommand}"
                                         HorizontalAlignment="Left"
                                         Padding="16 10"
                                         Margin="0 0 0 4"/>
-                                <TextBlock Text="删除游戏 data 目录下所有 .patch_* 补丁文件及 installed.txt 记录"
+                                <TextBlock Text="{loc:Loc SettingsPage.ForceCleanPatchesDesc}"
                                            Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
                                            FontSize="12"
                                            Margin="0 0 0 16"/>
@@ -794,13 +792,13 @@
                                 <Border Style="{StaticResource FluentDivider}" Margin="0 4"/>
 
                                 <!-- 重置所有设置 -->
-                                <Button Content="重置所有设置"
+                                <Button Content="{loc:Loc SettingsPage.ResetSettings}"
                                         Style="{StaticResource FluentDangerButton}"
                                         Command="{Binding ResetCommand}"
                                         HorizontalAlignment="Left"
                                         Padding="16 10"
                                         Margin="0 8 0 4"/>
-                                <TextBlock Text="这会将所有设置重置为默认值！"
+                                <TextBlock Text="{loc:Loc SettingsPage.ResetSettingsWarning}"
                                            Foreground="{StaticResource WarningBrush}"
                                            FontSize="12"
                                            Margin="0 4 0 0"/>
@@ -824,11 +822,11 @@
                         <!-- 分隔符 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="分隔符"
+                                <TextBlock Text="{loc:Loc SettingsPage.Separators}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="启用后可在模组列表中创建带颜色名称的分隔符来分类模组"/>
+                                    <Run Text="{loc:Loc SettingsPage.SeparatorsDesc}"/>
                                 </TextBlock>
                                 <Grid Margin="0 8 0 0">
                                     <Grid.ColumnDefinitions>
@@ -841,7 +839,7 @@
                                               IsChecked="{Binding ShowSeparator}"
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"
-                                               Text="启用分隔符"
+                                               Text="{loc:Loc SettingsPage.EnableSeparators}"
                                                FontSize="14"
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
@@ -852,11 +850,11 @@
                         <!-- 排序 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="排序"
+                                <TextBlock Text="{loc:Loc SettingsPage.Sorting}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="启用后可在模组列表顶部选择排序方式"/>
+                                    <Run Text="{loc:Loc SettingsPage.SortingDesc}"/>
                                 </TextBlock>
                                 <Grid Margin="0 8 0 0">
                                     <Grid.ColumnDefinitions>
@@ -869,7 +867,7 @@
                                               IsChecked="{Binding EnableSorting}"
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"
-                                               Text="启用排序"
+                                               Text="{loc:Loc SettingsPage.EnableSorting}"
                                                FontSize="14"
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
@@ -880,7 +878,7 @@
                         <!-- 搜索 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="搜索"
+                                <TextBlock Text="{loc:Loc SettingsPage.Search}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0"/>
                                 <Grid Margin="0 8 0 0">
@@ -894,11 +892,30 @@
                                               IsChecked="{Binding CaseSensitiveSearch}"
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"
-                                               Text="区分大小写"
+                                               Text="{loc:Loc SettingsPage.CaseSensitive}"
                                                FontSize="14"
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 界面语言 -->
+                        <Border Style="{StaticResource FluentSettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="{loc:Loc SettingsPage.Language}"
+                                           Style="{StaticResource FluentSubSectionHeader}"
+                                           Margin="0"/>
+                                <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
+                                    <Run Text="{loc:Loc SettingsPage.LanguageDesc}"/>
+                                </TextBlock>
+                                <ComboBox HorizontalAlignment="Left"
+                                          Width="200"
+                                          ItemsSource="{Binding AvailableLanguages}"
+                                          SelectedValue="{Binding SelectedLanguageCode}"
+                                          SelectedValuePath="LocaleCode"
+                                          DisplayMemberPath="DisplayName"
+                                          Margin="0 8 0 0"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -911,7 +928,7 @@
         <Border Grid.Row="3"
                 Style="{StaticResource FluentCard}"
                 CornerRadius="8">
-            <Button Content="确定"
+            <Button Content="{loc:Loc SettingsPage.Ok}"
                     Style="{StaticResource FluentPrimaryButton}"
                     Command="{Binding OkCommand}"
                     HorizontalAlignment="Right"

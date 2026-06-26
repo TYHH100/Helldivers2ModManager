@@ -1,6 +1,8 @@
 using System.IO;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Helldivers2ModManager.Services;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -13,6 +15,21 @@ namespace Helldivers2ModManager.ViewModels;
 /// </summary>
 internal abstract partial class ModImageViewModelBase : ObservableObject
 {
+	/// <summary>获取本地化服务实例</summary>
+	protected static LocalizationService? LocalizationService
+	{
+		get
+		{
+			try
+			{
+				if (Application.Current is App app)
+					return app.Host?.Services?.GetService(typeof(LocalizationService)) as LocalizationService;
+			}
+			catch { }
+			return null;
+		}
+	}
+
 	/// <summary>图片文件路径（显示相对路径，如 icon.png）</summary>
 	[ObservableProperty]
 	private string _imagePath = string.Empty;
@@ -83,7 +100,7 @@ internal abstract partial class ModImageViewModelBase : ObservableObject
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
 			Title = BrowseImageDialogTitle,
-			Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
+			Filter = LocalizationService?["Common.SelectImageFilter"] ?? "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
 			InitialDirectory = !string.IsNullOrWhiteSpace(SourceDirectory) ? SourceDirectory : null,
 		};
 
@@ -96,7 +113,7 @@ internal abstract partial class ModImageViewModelBase : ObservableObject
 	}
 
 	/// <summary>浏览对话框标题，子类可自定义</summary>
-	protected virtual string BrowseImageDialogTitle => "选择图片";
+	protected virtual string BrowseImageDialogTitle => LocalizationService?["ImagePicker.SelectImageTitle"] ?? "选择图片";
 
 	/// <summary>获取图片的完整源路径（优先浏览来源，否则从 SourceDirectory 解析）</summary>
 	public string ResolveImageSourcePath()

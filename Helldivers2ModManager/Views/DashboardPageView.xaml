@@ -9,6 +9,7 @@
 	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
 	  xmlns:local="clr-namespace:Helldivers2ModManager"
 	  xmlns:models="clr-namespace:Helldivers2ModManager.Models"
+	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:DashboardPageViewModel}"
 	  d:Background="{StaticResource MicaBackgroundBrush}"
@@ -34,21 +35,21 @@
 						</Border.Style>
 						<Border.ContextMenu>
 							<ContextMenu>
-								<MenuItem Header="编辑 Manifest"
+								<MenuItem Header="{loc:Loc DashboardPage.EditManifest}"
 										  Command="{Binding PlacementTarget.Tag.EditManifestCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
-								<MenuItem Header="打包并导出"
+								<MenuItem Header="{loc:Loc DashboardPage.PackageExport}"
 										  Command="{Binding PlacementTarget.Tag.ExportModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
-								<MenuItem Header="更新模组"
+								<MenuItem Header="{loc:Loc DashboardPage.UpdateMod}"
 										  Command="{Binding PlacementTarget.Tag.UpdateModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
 								<Separator/>
-								<MenuItem Header="打开文件位置"
+								<MenuItem Header="{loc:Loc DashboardPage.OpenFileLocation}"
 										  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
 								<Separator/>
-								<MenuItem Header="设置标签"
+								<MenuItem Header="{loc:Loc DashboardPage.SetTags}"
 										  Command="{Binding PlacementTarget.Tag.EditModTagsCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
 							</ContextMenu>
@@ -139,7 +140,7 @@
 										<Border.ToolTip>
 											<ToolTip>
 												<StackPanel>
-													<TextBlock Text="更多标签:" FontWeight="SemiBold" Margin="0 0 0 4"/>
+													<TextBlock Text="{loc:Loc DashboardPage.MoreTags}" FontWeight="SemiBold" Margin="0 0 0 4"/>
 													<ItemsControl ItemsSource="{Binding HiddenTags}">
 														<ItemsControl.ItemsPanel>
 															<ItemsPanelTemplate>
@@ -188,7 +189,7 @@
 										  ItemsSource="{Binding LegacyOptions}"
 										  SelectedIndex="{Binding LegacySelectedOption}"/>
 								<Button Style="{StaticResource FluentSecondaryButton}"
-										Content="编辑"
+										Content="{loc:Loc DashboardPage.Edit}"
 										Padding="12 4"
 										Margin="8 0"
 										Visibility="{Binding EditVisible}"
@@ -213,7 +214,7 @@
 									Style="{StaticResource FluentIconButton}"
 									Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
 									CommandParameter="{Binding}"
-									ToolTip="删除模组">
+									ToolTip="{loc:Loc DashboardPage.DeleteModHint}">
 								<TextBlock Text="&#xE74D;"
 										   FontFamily="Segoe Fluent Icons"
 										   FontSize="16"
@@ -249,13 +250,13 @@
 									<ToolTip>
 										<StackPanel>
 											<TextBlock FontWeight="SemiBold" Margin="0 0 0 4">
-												<Run Text="版本兼容性: "/>
+												<Run Text="{loc:Loc DashboardPage.VersionStatusPrefix}"/>
 												<Run Text="{Binding VersionStatus, Converter={StaticResource VersionStatusToTextConverter}}"/>
 											</TextBlock>
-											<TextBlock Text="{Binding LastVersionCheck, StringFormat='最后检查: {0:yyyy-MM-dd HH:mm}'}"
+											<TextBlock Text="{Binding LastCheckDisplayText}"
 													   FontSize="11"
 													   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
-											<TextBlock Text="点击查看详情"
+											<TextBlock Text="{loc:Loc DashboardPage.ClickForDetails}"
 													   FontSize="11"
 													   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
 													   Margin="0 4 0 0"/>
@@ -274,7 +275,7 @@
 									Margin="-7,-7,0,0"
 									Background="{StaticResource SystemAccentBrush}"
 									Visibility="{Binding IsCheckingVersion, Converter={StaticResource BoolToVisibilityConverter}}"
-									ToolTip="正在检查版本兼容性..."/>
+									ToolTip="{loc:Loc DashboardPage.CheckingVersion}"/>
 						</Grid>
 					</Border>
 				</DataTemplate>
@@ -297,14 +298,14 @@
 						</Border.Style>
 						<Border.ContextMenu>
 							<ContextMenu>
-								<MenuItem Header="重命名"
+								<MenuItem Header="{loc:Loc DashboardPage.Rename}"
 										  Command="{Binding PlacementTarget.Tag.RenameSeparatorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
-								<MenuItem Header="更改颜色"
+								<MenuItem Header="{loc:Loc DashboardPage.ChangeColor}"
 										  Command="{Binding PlacementTarget.Tag.ChangeSeparatorColorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
 								<Separator/>
-								<MenuItem Header="删除"
+								<MenuItem Header="{loc:Loc DashboardPage.Delete}"
 										  Command="{Binding PlacementTarget.Tag.DeleteSeparatorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
 							</ContextMenu>
@@ -331,7 +332,7 @@
 									CommandParameter="{Binding}"
 									Width="24" Height="24"
 									Foreground="{Binding Color, Converter={StaticResource ColorToForegroundConverter}}"
-									ToolTip="删除分隔符">
+									ToolTip="{loc:Loc DashboardPage.DeleteSeparatorHint}">
 								<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="10"
 										   Foreground="{Binding Color, Converter={StaticResource ColorToForegroundConverter}}"
 										   Opacity="0.7"/>
@@ -350,7 +351,7 @@
 			<RowDefinition Height="Auto"/>
 		</Grid.RowDefinitions>
 		<Grid.ColumnDefinitions>
-			<ColumnDefinition Width="220"/>
+			<ColumnDefinition Width="240"/>
 			<ColumnDefinition Width="*"/>
 		</Grid.ColumnDefinitions>
 
@@ -390,7 +391,7 @@
 							IsEnabled="{Binding Initialized}">
 						<StackPanel Orientation="Horizontal">
 							<TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-							<TextBlock Text="添加模组" Margin="12 0 0 0" VerticalAlignment="Center"/>
+							<TextBlock Text="{loc:Loc DashboardPage.AddMod}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 						</StackPanel>
 					</Button>
 					<Button Style="{StaticResource FluentNavigationButton}"
@@ -398,7 +399,7 @@
 							IsEnabled="{Binding Initialized}">
 						<StackPanel Orientation="Horizontal">
 							<TextBlock Text="&#xE7AC;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-							<TextBlock Text="创建模组" Margin="12 0 0 0" VerticalAlignment="Center"/>
+							<TextBlock Text="{loc:Loc DashboardPage.CreateMod}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 						</StackPanel>
 					</Button>
 					<!-- <Button Style="{StaticResource FluentNavigationButton}"
@@ -414,7 +415,7 @@
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE118;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="下载进度" Margin="12 0 0 0" VerticalAlignment="Center"/>
+						<TextBlock Text="{loc:Loc DashboardPage.DownloadProgress}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
 					<Button Style="{StaticResource FluentNavigationButton}"
@@ -422,7 +423,7 @@
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE8EC;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="标签管理" Margin="12 0 0 0" VerticalAlignment="Center"/>
+						<TextBlock Text="{loc:Loc DashboardPage.TagManagement}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
 
@@ -430,7 +431,7 @@
 						Command="{Binding SettingsCommand}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="设置" Margin="12 0 0 0" VerticalAlignment="Center"/>
+						<TextBlock Text="{loc:Loc DashboardPage.Settings}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
 
@@ -439,7 +440,7 @@
 							IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE718;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="部署顺序" Margin="12 0 0 0" VerticalAlignment="Center"/>
+						<TextBlock Text="{loc:Loc DashboardPage.DeploymentOrder}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
 
@@ -450,7 +451,7 @@
 				<!-- Social Links - Dock to Bottom -->
 				<StackPanel DockPanel.Dock="Bottom">
 					<!-- Social Links -->
-					<TextBlock Text="相关链接"
+					<TextBlock Text="{loc:Loc DashboardPage.RelatedLinks}"
 							   FontSize="12"
 							   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
 							   Margin="12 8"/>
@@ -461,14 +462,14 @@
 						</Grid.ColumnDefinitions>
                         <Button x:Name="GithubButton"
 								Style="{StaticResource FluentIconButton}"
-								ToolTip="GitHub"
+								ToolTip="{loc:Loc DashboardPage.GitHub}"
 								Click="GithubButton_Click">
                             <Image Source="../Resources/Images/github_icon.png" Height="30"/>
                             <Button.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="原仓库 (teutinsa)"
+                                    <MenuItem Header="{loc:Loc DashboardPage.OriginalRepo}"
                                               Command="{Binding GithubCommand}"/>
-                                    <MenuItem Header="修改版的仓库 (TYHH100)"
+                                    <MenuItem Header="{loc:Loc DashboardPage.ForkedRepo}"
                                               Command="{Binding GithubForkCommand}"/>
                                 </ContextMenu>
                             </Button.ContextMenu>
@@ -476,7 +477,7 @@
                         <Button Grid.Column="1"
 								Style="{StaticResource FluentIconButton}"
 								Command="{Binding DiscordCommand}"
-								ToolTip="Need help? Join the community!">
+								ToolTip="{loc:Loc DashboardPage.Discord}">
 							<Image Source="../Resources/Images/discord_icon.png" Height="30"/>
 						</Button>
 					</Grid>
@@ -489,7 +490,7 @@
 							IsEnabled="{Binding Initialized}">
 						<StackPanel Orientation="Horizontal">
 							<TextBlock Text="&#xE897;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-							<TextBlock Text="检查版本兼容性" Margin="12 0 0 0" VerticalAlignment="Center" ToolTip="仅供参考" />
+							<TextBlock Text="{loc:Loc DashboardPage.CheckVersion}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{loc:Loc DashboardPage.VersionCheckHint}" />
 						</StackPanel>
 					</Button>
 				</StackPanel>
@@ -523,12 +524,12 @@
 						 Style="{StaticResource FluentTextBox}"
 						 Margin="0 0 8 0"
 						 VerticalAlignment="Center"
-						 Tag="搜索 Mod 名称，使用 @标签名 搜索标签"
+						 Tag="{loc:Loc DashboardPage.SearchWatermark}"
 						 Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 					<Button Grid.Column="1"
 							Style="{StaticResource FluentIconButton}"
 							Command="{Binding ClearSearchCommand}"
-							ToolTip="清空搜索"
+							ToolTip="{loc:Loc DashboardPage.ClearSearch}"
 							VerticalAlignment="Center"
 							Margin="0 0 16 0">
                         <TextBlock Text="&#xe750;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
@@ -578,31 +579,31 @@
 							   VerticalAlignment="Center"
 							   Margin="0 0 8 0"/>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="全选"
+							Content="{loc:Loc DashboardPage.SelectAll}"
 							Command="{Binding SelectAllCommand}"
 							Padding="12 6"/>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="取消"
+							Content="{loc:Loc DashboardPage.DeselectAll}"
 							Command="{Binding DeselectAllCommand}"
 							Padding="12 6"/>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="启用"
+							Content="{loc:Loc DashboardPage.BatchEnable}"
 							Command="{Binding BatchEnableCommand}"
 							Padding="12 6"/>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="禁用"
+							Content="{loc:Loc DashboardPage.BatchDisable}"
 							Command="{Binding BatchDisableCommand}"
 							Padding="12 6"/>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="标签"
+							Content="{loc:Loc DashboardPage.BatchTag}"
 							Command="{Binding BatchAddTagsCommand}"
 							Padding="12 6">
 						<Button.ToolTip>
-							<ToolTip Content="为所有选中的模组统一设置标签"/>
+							<ToolTip Content="{loc:Loc DashboardPage.BatchTagHint}"/>
 						</Button.ToolTip>
 					</Button>
 					<Button Style="{StaticResource FluentDangerButton}"
-							Content="删除"
+							Content="{loc:Loc DashboardPage.BatchDelete}"
 							Command="{Binding BatchDeleteCommand}"
 							Padding="12 6"/>
 				</StackPanel>
@@ -620,7 +621,7 @@
 					  VerticalScrollBarVisibility="Auto">
 			<ScrollViewer.ContextMenu>
 				<ContextMenu>
-					<MenuItem Header="创建分隔符"
+					<MenuItem Header="{loc:Loc DashboardPage.CreateSeparator}"
 							  Command="{Binding CreateSeparatorCommand}"/>
 				</ContextMenu>
 			</ScrollViewer.ContextMenu>
@@ -688,30 +689,30 @@
 				<StackPanel Grid.Column="1"
 							Orientation="Horizontal">
 					<Button Style="{StaticResource FluentDangerButton}"
-							Content="清理模组"
+							Content="{loc:Loc DashboardPage.CleanMods}"
 							Command="{Binding PurgeCommand}"
 							IsEnabled="{Binding Initialized}"
 							Padding="20 10">
 						<Button.ToolTip>
-							<ToolTip Content="从 data 文件夹中删除所有模组"/>
+							<ToolTip Content="{loc:Loc DashboardPage.CleanModsHint}"/>
 						</Button.ToolTip>
 					</Button>
 					<Button Style="{StaticResource FluentConfirmButton}"
-							Content="部署模组"
+							Content="{loc:Loc DashboardPage.DeployMods}"
 							Command="{Binding DeployCommand}"
 							IsEnabled="{Binding Initialized}"
 							Padding="20 10">
 						<Button.ToolTip>
-							<ToolTip Content="将所有勾选的模组,自动编号并添加到 data 文件夹中"/>
+							<ToolTip Content="{loc:Loc DashboardPage.DeployModsHint}"/>
 						</Button.ToolTip>
 					</Button>
 					<Button Style="{StaticResource FluentPrimaryButton}"
-							Content="启动 HD2"
+							Content="{loc:Loc DashboardPage.LaunchGame}"
 							Command="{Binding RunCommand}"
 							IsEnabled="{Binding Initialized}"
 							Padding="20 10">
 						<Button.ToolTip>
-							<ToolTip Content="在Steam上启动游戏"/>
+							<ToolTip Content="{loc:Loc DashboardPage.LaunchGameHint}"/>
 						</Button.ToolTip>
 					</Button>
 				</StackPanel>

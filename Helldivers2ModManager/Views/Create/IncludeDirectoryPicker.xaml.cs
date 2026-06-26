@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Helldivers2ModManager.Services;
 
 namespace Helldivers2ModManager.Views.Create;
 
@@ -14,6 +15,21 @@ namespace Helldivers2ModManager.Views.Create;
 /// </summary>
 internal sealed partial class IncludeDirectoryPicker : Window
 {
+	/// <summary>获取本地化服务实例</summary>
+	private static LocalizationService? LocalizationService
+	{
+		get
+		{
+			try
+			{
+				if (Application.Current is App app)
+					return app.Host?.Services?.GetService(typeof(LocalizationService)) as LocalizationService;
+			}
+			catch { }
+			return null;
+		}
+	}
+
 	/// <summary>用户选中的相对路径列表</summary>
 	public List<string> SelectedRelativePaths { get; } = [];
 
@@ -123,7 +139,7 @@ internal sealed partial class IncludeDirectoryPicker : Window
 					{
 						Header = new TextBlock
 						{
-							Text = "父选项的 Include 目录不存在或为空",
+							Text = LocalizationService?["IncludePicker.ParentOptionMissing"] ?? "父选项的 Include 目录不存在或为空",
 							Foreground = Brushes.Gray,
 						},
 					});
@@ -153,7 +169,7 @@ internal sealed partial class IncludeDirectoryPicker : Window
 		}
 		catch (Exception ex)
 		{
-			MessageBox.Show($"无法读取目录结构：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+			MessageBox.Show(LocalizationService?["IncludePicker.ReadDirectoryError"].Replace("{message}", ex.Message) ?? $"无法读取目录结构：{ex.Message}", LocalizationService?["MessageBox.Error"] ?? "错误", MessageBoxButton.OK, MessageBoxImage.Error);
 		}
 	}
 
@@ -239,7 +255,7 @@ internal sealed partial class IncludeDirectoryPicker : Window
 			};
 			var hint = new TextBlock
 			{
-				Text = "（已被选项占用）",
+				Text = LocalizationService?["IncludePicker.OptionOccupied"] ?? "（已被选项占用）",
 				Foreground = Brushes.Gray,
 				FontSize = 11,
 				VerticalAlignment = VerticalAlignment.Center,

@@ -7,6 +7,7 @@
 	  xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
 	  xmlns:models="clr-namespace:Helldivers2ModManager.Models"
 	  xmlns:local="clr-namespace:Helldivers2ModManager"
+	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:TagManagementPageViewModel}"
 	  d:Background="{StaticResource MicaBackgroundBrush}"
@@ -22,7 +23,7 @@
 
 		<!-- Header -->
 		<TextBlock Grid.Row="0"
-				   Text="标签管理"
+				   Text="{loc:Loc TagManagementPage.Title}"
 				   Style="{StaticResource FluentSectionHeader}"
 				   Margin="0 0 0 16"/>
 
@@ -50,7 +51,7 @@
 								Padding="16 8">
 							<StackPanel Orientation="Horizontal">
 								<TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-								<TextBlock Text="创建标签" Margin="8 0 0 0" VerticalAlignment="Center"/>
+								<TextBlock Text="{loc:Loc TagManagementPage.CreateTag}" Margin="8 0 0 0" VerticalAlignment="Center"/>
 							</StackPanel>
 						</Button>
 					</StackPanel>
@@ -108,20 +109,20 @@
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
 												Margin="0 0 8 0"
-												ToolTip="更改颜色">
+												ToolTip="{loc:Loc TagManagementPage.ChangeColor}">
 											<TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
 										</Button>
 										<Button Command="{Binding DataContext.RenameTagCommand, RelativeSource={RelativeSource AncestorType=Page}}"
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
 												Margin="0 0 8 0"
-												ToolTip="重命名标签">
+												ToolTip="{loc:Loc TagManagementPage.RenameTag}">
                                             <TextBlock Text="&#xE8AC;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
 										</Button>
 										<Button Command="{Binding DataContext.DeleteTagCommand, RelativeSource={RelativeSource AncestorType=Page}}"
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
-												ToolTip="删除标签">
+												ToolTip="{loc:Loc TagManagementPage.DeleteTag}">
 											<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="16"
                                                        Foreground="{StaticResource DangerBrush}"/>
 										</Button>
@@ -144,7 +145,7 @@
 					Padding="16 10">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-					<TextBlock Text="返回" Margin="8 0 0 0" VerticalAlignment="Center"/>
+					<TextBlock Text="{loc:Loc TagManagementPage.Back}" Margin="8 0 0 0" VerticalAlignment="Center"/>
 				</StackPanel>
 			</Button>
 		</Border>

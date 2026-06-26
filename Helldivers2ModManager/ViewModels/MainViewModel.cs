@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
@@ -10,7 +11,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class MainViewModel : ObservableObject, IDisposable
 {
-	public string Title => $"HD2 Mod Manager {Version} - {CurrentViewModel.Title}";
+	public string Title => $"{_localizationService["Common.AppName"]} {Version} - {CurrentViewModel.Title}";
 
 	public PageViewModelBase CurrentViewModel => _navigationStore.CurrentViewModel;
 
@@ -22,11 +23,13 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable
 	private static readonly ProcessStartInfo s_reportBugStartInfo = new(@"https://github.com/TYHH100/Helldivers2ModManager/issues") { UseShellExecute = true };
 	private readonly NavigationStore _navigationStore;
 	private readonly SolidColorBrush _background;
+	private readonly LocalizationService _localizationService;
 	private bool _disposed;
 
-	public MainViewModel(NavigationStore navigationStore)
+	public MainViewModel(NavigationStore navigationStore, LocalizationService localizationService)
 	{
 		_navigationStore = navigationStore;
+		_localizationService = localizationService;
 		_background = new SolidColorBrush(Color.FromScRgb(0.7f, 0, 0, 0));
 
 		_navigationStore.Navigated += NavigationStore_Navigated;
