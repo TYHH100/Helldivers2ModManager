@@ -8,7 +8,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class HelpPageViewModel : PageViewModelBase
 {
-	public override string Title => _localizationService["HelpPage.Title"];
+	public override string Title => _localizationService["MainWindow.Help"];
 
 	private readonly NavigationStore _navigationStore;
 	private readonly LocalizationService _localizationService;

@@ -33,7 +33,7 @@
             <Button Grid.Column="0"
                     Style="{StaticResource FluentIconButton}"
                     Command="{Binding BackCommand}"
-                    ToolTip="{loc:Loc DeploymentOrderPage.Back}"
+                    ToolTip="{loc:Loc Common.Back}"
                     Width="36" Height="36">
                 <TextBlock Text="&#xE72B;"
                            FontFamily="Segoe Fluent Icons"
@@ -103,7 +103,7 @@
                            Fill="{StaticResource NeutralStrokeBrush}"
                            Margin="12 4"
                            Height="20"/>
-                <Button Content="{loc:Loc DeploymentOrderPage.SelectAll}"
+                <Button Content="{loc:Loc DashboardPage.SelectAll}"
                         Command="{Binding SelectAllCommand}"
                         Style="{StaticResource FluentSecondaryButton}"
                         Margin="0 0 6 4"/>

@@ -188,7 +188,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
                 {
                     Title = _localizationService["DashboardPage.SavingModConfig"],
-                    Message = _localizationService["DashboardPage.PleaseWait"]
+                    Message = _localizationService["SettingsPage.PleaseWait"]
                 });
             }
 
@@ -284,8 +284,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _logger.LogInformation("Loading settings...");
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
         {
-            Title = _localizationService["DashboardPage.LoadingSettings"],
-            Message = _localizationService["DashboardPage.PleaseWait"],
+            Title = _localizationService["SettingsPage.LoadingSettings"],
+            Message = _localizationService["SettingsPage.PleaseWait"],
         });
         try
         {
@@ -297,7 +297,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _logger.LogError(ex, "Loading settings failed");
             WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
             {
-                Title = _localizationService["DashboardPage.LoadSettingsFailed"],
+                Title = _localizationService["SettingsPage.LoadSettingsFailed"],
                 Message = _localizationService["DashboardPage.GoToSettings"],
                 Confirm = _navStore.Value.Navigate<SettingsPageViewModel>,
             });
@@ -327,7 +327,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
         {
             Title = _localizationService["DashboardPage.LoadingMods"],
-            Message = _localizationService["DashboardPage.PleaseWait"],
+            Message = _localizationService["SettingsPage.PleaseWait"],
         });
         ModProblem[] problems;
         try
@@ -356,7 +356,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
         {
             Title = _localizationService["DashboardPage.LoadingConfig"],
-            Message = _localizationService["DashboardPage.PleaseWait"],
+            Message = _localizationService["SettingsPage.PleaseWait"],
         });
         IReadOnlyList<ModData>? result;
         try
@@ -418,7 +418,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         var errors = problems.Where(static p => p.IsError).ToArray();
         if (errors.Length != 0)
         {
-            sb.AppendLine(_localizationService["DashboardPage.Error"]);
+            sb.AppendLine(_localizationService["Common.ErrorPrefix"]);
             foreach (var e in errors)
             {
                 sb.Append("\t - \"");
@@ -447,7 +447,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         var warnings = problems.Where(static p => !p.IsError).ToArray();
         if (warnings.Length != 0)
         {
-            sb.AppendLine(_localizationService["DashboardPage.Warning"]);
+            sb.AppendLine(_localizationService["Common.WarningPrefix"]);
             foreach (var w in warnings)
             {
                 sb.Append("\t - \"");
@@ -734,7 +734,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
                 {
                     Title = _localizationService["DashboardPage.BatchDeleteProgress"],
-                    Message = _localizationService["DashboardPage.PleaseWait"]
+                    Message = _localizationService["SettingsPage.PleaseWait"]
                 });
 
                 try
@@ -863,7 +863,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
             {
                 Title = isBatch ? _localizationService["DashboardPage.BatchAddProgressTitle"].Replace("{current}", "0").Replace("{total}", totalFiles.ToString()) : _localizationService["DashboardPage.AddSingleProgress"],
-                Message = isBatch ? _localizationService["DashboardPage.BatchAddWaitMsg"].Replace("{total}", totalFiles.ToString()) : _localizationService["DashboardPage.PleaseWait"]
+                Message = isBatch ? _localizationService["DashboardPage.BatchAddWaitMsg"].Replace("{total}", totalFiles.ToString()) : _localizationService["SettingsPage.PleaseWait"]
             });
 
             try
@@ -1121,7 +1121,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
         {
             Title = _localizationService["DashboardPage.PurgeProgress"],
-            Message = _localizationService["DashboardPage.PleaseWait"]
+            Message = _localizationService["SettingsPage.PleaseWait"]
         });
 
         await _modService.PurgeAsync();
@@ -1181,7 +1181,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
         {
             Title = _localizationService["DashboardPage.DeployProgress"],
-            Message = _localizationService["DashboardPage.PleaseWait"]
+            Message = _localizationService["SettingsPage.PleaseWait"]
         });
 
         var mods = _mods.Where(static vm => vm.Enabled).ToArray();
@@ -1249,7 +1249,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
         {
             Title = _localizationService["DashboardPage.DeleteModProgress"],
-            Message = _localizationService["DashboardPage.PleaseWait"]
+            Message = _localizationService["SettingsPage.PleaseWait"]
         });
 
         try
@@ -1417,7 +1417,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
             {
                 Title = _localizationService["DashboardPage.EditImageProgress"],
-                Message = _localizationService["DashboardPage.PleaseWait"]
+                Message = _localizationService["SettingsPage.PleaseWait"]
             });
 
             try
@@ -1819,7 +1819,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     }
                     else
                     {
-                        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.EditTagsReadonly"] });
+                        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.BatchTagReadonly"] });
                     }
                 }
             });
@@ -1914,7 +1914,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
         {
-            Title = _localizationService["DashboardPage.DeleteSeparatorTitle"],
+            Title = _localizationService["DashboardPage.DeleteSeparatorHint"],
             Message = $"{_localizationService["DashboardPage.DeleteSeparatorPrefix"]}{separator.Name}{_localizationService["DashboardPage.DeleteSeparatorSuffix"]}",
             Confirm = () =>
             {

@@ -46,7 +46,7 @@
 		<Border Grid.Row="1"
 				Style="{StaticResource FluentCard}"
 				CornerRadius="8">
-			<Button Content="{loc:Loc HelpPage.Back}"
+			<Button Content="{loc:Loc Common.Back}"
 					Style="{StaticResource FluentPrimaryButton}"
 					Command="{Binding BackCommand}"
 					HorizontalAlignment="Right"

@@ -171,7 +171,7 @@
 					</Grid.ColumnDefinitions>
 
 					<Button Grid.Column="0"
-							Content="{loc:Loc EditPage.Cancel}"
+							Content="{loc:Loc Common.Cancel}"
 							Style="{StaticResource FluentSecondaryButton}"
 							Command="{Binding CancelCommand}"
 							HorizontalAlignment="Left"

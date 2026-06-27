@@ -26,7 +26,7 @@
 
 			<!-- 标题 -->
 			<TextBlock Grid.Row="0"
-					   Text="{loc:Loc ManifestEditPage.Title}"
+					   Text="{loc:Loc DashboardPage.EditManifest}"
 					   Style="{StaticResource FluentSectionHeader}"
 					   HorizontalAlignment="Center"
 					   Margin="0 0 0 16"/>
@@ -41,7 +41,7 @@
 				<StackPanel Orientation="Horizontal">
 					<RadioButton GroupName="EditMode"
 								 IsChecked="{Binding IsJsonMode, Converter={StaticResource InverseBoolConverter}}"
-								 Content="{loc:Loc ManifestEditPage.VisualEdit}"
+								 Content="{loc:Loc CreatePage.VisualEdit}"
 								 Margin="0,0,12,0"
 								 Padding="12 4"
 								 Style="{StaticResource FluentRadioButton}"/>
@@ -105,7 +105,7 @@
 								</Border>
 								<!-- 名称和描述 -->
 								<StackPanel Grid.Column="1">
-									<TextBlock Text="{loc:Loc ManifestEditPage.Name}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+									<TextBlock Text="{loc:Loc CreatePage.Name}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 									<TextBox Text="{Binding ModName, UpdateSourceTrigger=PropertyChanged}"
 											 FontSize="14"
 											 FontWeight="SemiBold"
@@ -120,7 +120,7 @@
 											 MaxHeight="80"
 											 VerticalScrollBarVisibility="Auto"/>
 									<!-- 图标选择 -->
-									<TextBlock Text="{loc:Loc ManifestEditPage.Icon}"
+									<TextBlock Text="{loc:Loc CreatePage.Icon}"
 											   FontSize="12"
 											   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 											   Margin="0 0 2 2"/>
@@ -180,7 +180,7 @@
 									CornerRadius="4"
 									Padding="8 4"
 									Margin="0 0 0 8">
-								<TextBlock Text="{loc:Loc ManifestEditPage.DragHint}"
+								<TextBlock Text="{loc:Loc CreatePage.DragHint}"
 										   FontSize="12"
 										   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 										   HorizontalAlignment="Center"/>
@@ -207,7 +207,7 @@
 														<ColumnDefinition Width="Auto"/>
 													</Grid.ColumnDefinitions>
 													<TextBlock Grid.Column="0"
-															   Text="{loc:Loc ManifestEditPage.OptionTitle}"
+															   Text="{loc:Loc CreatePage.OptionTitle}"
 															   FontSize="14"
 															   FontWeight="SemiBold"
 															   Foreground="{StaticResource NeutralForegroundBrush}"
@@ -216,7 +216,7 @@
 															Style="{StaticResource FluentIconButton}"
 															Command="{Binding DataContext.RemoveOptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
 															CommandParameter="{Binding}"
-															ToolTip="{loc:Loc ManifestEditPage.DeleteOption}"
+															ToolTip="{loc:Loc CreatePage.DeleteOption}"
 															Padding="6">
 														<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
 													</Button>
@@ -243,7 +243,7 @@
 													</Border>
 													<!-- 选项名称、描述、Include 路径 -->
 													<StackPanel Grid.Column="1">
-														<TextBlock Text="{loc:Loc ManifestEditPage.OptionName}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+														<TextBlock Text="{loc:Loc CreatePage.OptionName}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 														<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
 																 FontSize="14"
 																 Padding="4 2"
@@ -253,7 +253,7 @@
 																 FontSize="13"
 																 Padding="4 2"
 																 Margin="0 0 0 6"/>
-														<TextBlock Text="{loc:Loc ManifestEditPage.OptionInclude}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+														<TextBlock Text="{loc:Loc CreatePage.OptionInclude}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 														<Grid Margin="0 0 0 6">
 															<Grid.ColumnDefinitions>
 																<ColumnDefinition Width="*"/>
@@ -273,7 +273,7 @@
 																	FontSize="12"/>
 														</Grid>
 														<!-- 选项图标选择 -->
-														<TextBlock Text="{loc:Loc ManifestEditPage.OptionIcon}"
+														<TextBlock Text="{loc:Loc CreatePage.OptionIcon}"
 																   FontSize="12"
 																   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 																   Margin="0 0 2 2"/>
@@ -335,7 +335,7 @@
 																				Style="{StaticResource FluentIconButton}"
 																				Command="{Binding DataContext.RemoveSubOptionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
 																				CommandParameter="{Binding}"
-																				ToolTip="{loc:Loc ManifestEditPage.DeleteSubOption}"
+																				ToolTip="{loc:Loc CreatePage.DeleteSubOption}"
 																				Padding="4">
 																			<TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="12"/>
 																		</Button>
@@ -360,18 +360,18 @@
 																		</Border>
 																		<!-- 子选项名称、描述、Include 路径 -->
 																		<StackPanel Grid.Column="1">
-																			<TextBlock Text="{loc:Loc ManifestEditPage.SubOptionName}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																			<TextBlock Text="{loc:Loc CreatePage.SubOptionName}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 																			<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
 																					 FontSize="13"
 																					 FontWeight="SemiBold"
 																					 Padding="4 2"
 																					 Margin="0 0 0 4"/>
-																			<TextBlock Text="{loc:Loc ManifestEditPage.SubOptionDesc}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																			<TextBlock Text="{loc:Loc CreatePage.SubOptionDesc}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 																			<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
 																					 FontSize="12"
 																					 Padding="4 2"
 																					 Margin="0 0 0 4"/>
-																			<TextBlock Text="{loc:Loc ManifestEditPage.SubOptionInclude}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																			<TextBlock Text="{loc:Loc CreatePage.SubOptionInclude}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 																			<Grid>
 																				<Grid.ColumnDefinitions>
 																					<ColumnDefinition Width="*"/>
@@ -383,7 +383,7 @@
 																						 Padding="4 2"
 																						 VerticalAlignment="Center"/>
 																				<Button Grid.Column="1"
-																						Content="{loc:Loc ManifestEditPage.SubOptionBrowse}"
+																						Content="{loc:Loc SettingsPage.Browse}"
 																						Style="{StaticResource FluentSecondaryButton}"
 																						Command="{Binding BrowseIncludeCommand}"
 																						Margin="4 0 0 0"
@@ -391,7 +391,7 @@
 																						FontSize="12"/>
 																			</Grid>
 																			<!-- 子选项图标选择 -->
-																			<TextBlock Text="{loc:Loc ManifestEditPage.SubOptionIcon}"
+																			<TextBlock Text="{loc:Loc CreatePage.SubOptionIcon}"
 																					   FontSize="11"
 																					   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 																					   Margin="0 0 2 2"/>
@@ -406,7 +406,7 @@
 																						 Padding="4 2"
 																						 VerticalAlignment="Center"/>
 																				<Button Grid.Column="1"
-																						Content="{loc:Loc ManifestEditPage.SelectSubIcon}"
+																						Content="{loc:Loc CreatePage.SelectSubIcon}"
 																						Style="{StaticResource FluentSecondaryButton}"
 																						Command="{Binding BrowseImageCommand}"
 																						Margin="4 0 0 0"
@@ -432,7 +432,7 @@
 									</DataTemplate>
 								</ItemsControl.ItemTemplate>
 							</ItemsControl>
-							<Button Content="{loc:Loc ManifestEditPage.AddOption}"
+							<Button Content="{loc:Loc CreatePage.AddOption}"
 									Style="{StaticResource FluentSecondaryButton}"
 									Command="{Binding AddOptionCommand}"
 									HorizontalAlignment="Center"
@@ -479,14 +479,14 @@
 					</Grid.ColumnDefinitions>
 
 					<Button Grid.Column="0"
-							Content="{loc:Loc ManifestEditPage.Cancel}"
+							Content="{loc:Loc Common.Cancel}"
 							Style="{StaticResource FluentSecondaryButton}"
 							Command="{Binding CancelCommand}"
 							HorizontalAlignment="Left"
 							Padding="24 10"/>
 
 					<Button Grid.Column="1"
-							Content="{loc:Loc ManifestEditPage.Save}"
+							Content="{loc:Loc Common.Save}"
 							Style="{StaticResource FluentPrimaryButton}"
 							Command="{Binding DoneCommand}"
 							HorizontalAlignment="Right"

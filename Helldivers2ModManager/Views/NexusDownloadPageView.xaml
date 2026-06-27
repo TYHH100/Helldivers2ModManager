@@ -33,7 +33,7 @@
 					Margin="0 0 12 0">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-                    <TextBlock ToolTip="{loc:Loc NexusDownloadPage.Back}" VerticalAlignment="Center"/>
+                    <TextBlock ToolTip="{loc:Loc Common.Back}" VerticalAlignment="Center"/>
 				</StackPanel>
 			</Button>
 			

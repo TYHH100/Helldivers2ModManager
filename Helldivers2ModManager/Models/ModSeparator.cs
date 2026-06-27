@@ -16,7 +16,7 @@ internal sealed class ModSeparator
         try
         {
             if (System.Windows.Application.Current is App app)
-                return (app.Host?.Services?.GetService(typeof(Services.LocalizationService)) as Services.LocalizationService)?["ModSeparator.DefaultName"] ?? "新分隔符";
+                return (app.Host?.Services?.GetService(typeof(Services.LocalizationService)) as Services.LocalizationService)?["DashboardPage.DefaultSeparatorName"] ?? "新分隔符";
         }
         catch { }
         return "新分隔符";

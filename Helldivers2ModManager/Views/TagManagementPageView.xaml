@@ -23,7 +23,7 @@
 
 		<!-- Header -->
 		<TextBlock Grid.Row="0"
-				   Text="{loc:Loc TagManagementPage.Title}"
+				   Text="{loc:Loc DashboardPage.TagManagement}"
 				   Style="{StaticResource FluentSectionHeader}"
 				   Margin="0 0 0 16"/>
 
@@ -51,7 +51,7 @@
 								Padding="16 8">
 							<StackPanel Orientation="Horizontal">
 								<TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-								<TextBlock Text="{loc:Loc TagManagementPage.CreateTag}" Margin="8 0 0 0" VerticalAlignment="Center"/>
+								<TextBlock Text="{loc:Loc TagManagementPage.CreateTitle}" Margin="8 0 0 0" VerticalAlignment="Center"/>
 							</StackPanel>
 						</Button>
 					</StackPanel>
@@ -109,14 +109,14 @@
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
 												Margin="0 0 8 0"
-												ToolTip="{loc:Loc TagManagementPage.ChangeColor}">
+												ToolTip="{loc:Loc DashboardPage.ChangeColor}">
 											<TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
 										</Button>
 										<Button Command="{Binding DataContext.RenameTagCommand, RelativeSource={RelativeSource AncestorType=Page}}"
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
 												Margin="0 0 8 0"
-												ToolTip="{loc:Loc TagManagementPage.RenameTag}">
+												ToolTip="{loc:Loc TagManagementPage.RenameTitle}">
                                             <TextBlock Text="&#xE8AC;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
 										</Button>
 										<Button Command="{Binding DataContext.DeleteTagCommand, RelativeSource={RelativeSource AncestorType=Page}}"
@@ -145,7 +145,7 @@
 					Padding="16 10">
 				<StackPanel Orientation="Horizontal">
 					<TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-					<TextBlock Text="{loc:Loc TagManagementPage.Back}" Margin="8 0 0 0" VerticalAlignment="Center"/>
+					<TextBlock Text="{loc:Loc Common.Back}" Margin="8 0 0 0" VerticalAlignment="Center"/>
 				</StackPanel>
 			</Button>
 		</Border>

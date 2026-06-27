@@ -419,7 +419,7 @@ internal sealed class SortModeConverter : IValueConverter
         {
             return mode switch
             {
-                SortMode.Default => _localizationService?["Converters.SortDefault"] ?? "默认顺序",
+                SortMode.Default => _localizationService?["DashboardPage.SortDefault"] ?? "默认顺序",
                 SortMode.NameAsc => _localizationService?["Converters.SortNameAZ"] ?? "名称 A-Z",
                 SortMode.NameDesc => _localizationService?["Converters.SortNameZA"] ?? "名称 Z-A",
                 SortMode.EnabledFirst => _localizationService?["Converters.SortEnabledFirst"] ?? "已启用优先",

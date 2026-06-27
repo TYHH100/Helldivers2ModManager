@@ -189,7 +189,7 @@
 										  ItemsSource="{Binding LegacyOptions}"
 										  SelectedIndex="{Binding LegacySelectedOption}"/>
 								<Button Style="{StaticResource FluentSecondaryButton}"
-										Content="{loc:Loc DashboardPage.Edit}"
+										Content="{loc:Loc Common.Edit}"
 										Padding="12 4"
 										Margin="8 0"
 										Visibility="{Binding EditVisible}"
@@ -305,7 +305,7 @@
 										  Command="{Binding PlacementTarget.Tag.ChangeSeparatorColorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
 								<Separator/>
-								<MenuItem Header="{loc:Loc DashboardPage.Delete}"
+								<MenuItem Header="{loc:Loc Common.Delete}"
 										  Command="{Binding PlacementTarget.Tag.DeleteSeparatorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
 							</ContextMenu>
@@ -603,7 +603,7 @@
 						</Button.ToolTip>
 					</Button>
 					<Button Style="{StaticResource FluentDangerButton}"
-							Content="{loc:Loc DashboardPage.BatchDelete}"
+							Content="{loc:Loc Common.Delete}"
 							Command="{Binding BatchDeleteCommand}"
 							Padding="12 6"/>
 				</StackPanel>

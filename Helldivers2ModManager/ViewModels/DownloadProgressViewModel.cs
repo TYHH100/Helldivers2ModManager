@@ -21,7 +21,7 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
     private readonly Lazy<NavigationStore> _navStore;
     private readonly LocalizationService _localizationService;
 
-    public override string Title => _localizationService["DownloadProgress.Title"];
+    public override string Title => _localizationService["DashboardPage.DownloadProgress"];
 
     public ObservableCollection<DownloadTask> DownloadTasks => _browserExtensionService.DownloadTasks;
 

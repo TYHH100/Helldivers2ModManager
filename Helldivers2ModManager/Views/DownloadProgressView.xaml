@@ -52,7 +52,7 @@
                             </MenuItem.Style>
                         </MenuItem>
                         <!-- 打开文件位置：仅已完成显示 -->
-                        <MenuItem Header="{loc:Loc DownloadProgress.OpenFileLocation}"
+                        <MenuItem Header="{loc:Loc DashboardPage.OpenFileLocation}"
                                   Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}">
                             <MenuItem.Style>
@@ -195,11 +195,11 @@
                         Margin="4,3,0,4" HorizontalAlignment="Left" Width="36">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-                        <TextBlock ToolTip="{loc:Loc DownloadProgress.Back}" VerticalAlignment="Center"/>
+                        <TextBlock ToolTip="{loc:Loc Common.Back}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
                 
-                <TextBlock Grid.Column="1" Text="{loc:Loc DownloadProgress.Title}" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0 8 0 8" />
+                <TextBlock Grid.Column="1" Text="{loc:Loc DashboardPage.DownloadProgress}" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0 8 0 8" />
                 
                 <!-- 清除已完成按钮 -->
                 <Button Grid.Column="2"

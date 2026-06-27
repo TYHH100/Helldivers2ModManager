@@ -24,7 +24,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 {
-	public override string Title => _localizationService["ManifestEditPage.Title"];
+	public override string Title => _localizationService["DashboardPage.EditManifest"];
 
 	/// <summary>当前编辑的模组 ViewModel</summary>
 	public ModViewModel? EditMod => _editModStore.CurrentMod;

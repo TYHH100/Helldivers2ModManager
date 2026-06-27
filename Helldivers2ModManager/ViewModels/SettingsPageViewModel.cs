@@ -10,6 +10,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Security.Principal;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -99,7 +100,28 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			OnPropertyChanging();
 			_settingsService.UseSymbolicLinks = value;
 			OnPropertyChanged();
+
+			// 如果勾选了符号链接但程序未以管理员身份运行，则弹出提示引导用户
+			if (value && !IsRunningAsAdministrator())
+			{
+				WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+				{
+					Title = _localizationService["MessageBox.Info"],
+					Message = _localizationService["SettingsPage.SymbolicLinkAdminMsg"],
+					Confirm = static () => System.Windows.Application.Current.Shutdown()
+				});
+			}
 		}
+	}
+
+	/// <summary>
+	/// 检测当前程序是否以管理员身份运行
+	/// </summary>
+	private static bool IsRunningAsAdministrator()
+	{
+		using var identity = WindowsIdentity.GetCurrent();
+		var principal = new WindowsPrincipal(identity);
+		return principal.IsInRole(WindowsBuiltInRole.Administrator);
 	}
 
 	public bool EnableSorting
@@ -210,6 +232,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	private bool _restartRequired;
+
 	public string ExtensionHost
 	{
 		get => _settingsService.Initialized ? _settingsService.ExtensionHost : "localhost";
@@ -218,6 +242,9 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			OnPropertyChanging();
 			_settingsService.ExtensionHost = value;
 			OnPropertyChanged();
+
+			// 标记需要重启才能生效
+			_restartRequired = true;
 		}
 	}
 
@@ -229,6 +256,9 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			OnPropertyChanging();
 			_settingsService.ExtensionPort = value;
 			OnPropertyChanged();
+
+			// 标记需要重启才能生效
+			_restartRequired = true;
 		}
 	}
 
@@ -531,7 +561,21 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 		WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
 
-		_navStore.Navigate<DashboardPageViewModel>();
+		if (_restartRequired)
+		{
+			// IP/端口修改后提示重启才能生效
+			WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+			{
+				Title = _localizationService["MessageBox.Info"],
+				Message = _localizationService["SettingsPage.RestartForExtChange"],
+				Confirm = static () => System.Windows.Application.Current.Shutdown(),
+				Abort = () => _navStore.Navigate<DashboardPageViewModel>()
+			});
+		}
+		else
+		{
+			_navStore.Navigate<DashboardPageViewModel>();
+		}
 	}
 
 	/// <summary>

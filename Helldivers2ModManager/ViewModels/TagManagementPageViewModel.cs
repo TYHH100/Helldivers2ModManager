@@ -14,7 +14,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class TagManagementPageViewModel : PageViewModelBase
 {
-    public override string Title => _localizationService["TagManagementPage.Title"];
+    public override string Title => _localizationService["DashboardPage.TagManagement"];
 
     public ObservableCollection<ModTag> Tags => _settingsService.Initialized ? _settingsService.Tags : [];
 
@@ -142,7 +142,7 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
             {
-                Title = _localizationService["TagManagementPage.DeleteTitle"],
+                Title = _localizationService["DashboardPage.DeleteConfirmTitle"],
                 Message = _localizationService["TagManagementPage.DeletePrefix"] + tag.Name + _localizationService["TagManagementPage.DeleteSuffix"],
                 Confirm = () =>
                 {

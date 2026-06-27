@@ -217,7 +217,7 @@
 					</StackPanel>
 
 					<!-- Color Palette -->
-					<TextBlock Text="{loc:Loc MessageBox.SelectColor}" FontSize="12" Foreground="#88FFFFFF" Margin="0 0 0 8"/>
+					<TextBlock Text="{loc:Loc TagManagementPage.ColorTitle}" FontSize="12" Foreground="#88FFFFFF" Margin="0 0 0 8"/>
 					<UniformGrid Columns="8" Rows="6">
 						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF3B82F6" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF3B82F6"/>
 						<Border Margin="2" Width="32" Height="32" CornerRadius="4" Background="#FF0078D7" Cursor="Hand" MouseLeftButtonDown="ColorBorder_Click" Tag="#FF0078D7"/>
@@ -271,13 +271,13 @@
 							Orientation="Horizontal"
 							HorizontalAlignment="Right">
 					<Button x:Name="cancelButton"
-							Content="{loc:Loc MessageBox.Cancel}"
+							Content="{loc:Loc Common.Cancel}"
 							Style="{StaticResource FluentSecondaryButton}"
 							Click="CancelButton_Click"
 							Padding="16 8"
 							Visibility="Hidden"/>
 					<Button x:Name="okButton"
-							Content="{loc:Loc MessageBox.OK}"
+							Content="{loc:Loc Common.OK}"
 							Style="{StaticResource FluentPrimaryButton}"
 							Click="OkButton_Click"
 							Padding="16 8"

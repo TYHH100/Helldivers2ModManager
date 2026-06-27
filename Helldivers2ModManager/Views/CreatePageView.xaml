@@ -223,7 +223,7 @@
 								 Padding="8 6"
 								 VerticalAlignment="Center"/>
 						<Button Grid.Column="1"
-								Content="{loc:Loc CreatePage.BrowseSource}"
+								Content="{loc:Loc CreatePage.BrowseIcon}"
 								Style="{StaticResource FluentSecondaryButton}"
 								Command="{Binding BrowseSourceCommand}"
 								Margin="8 0 0 0"
@@ -450,7 +450,7 @@
 																				 Padding="4 2"
 																				 VerticalAlignment="Center"/>
 																		<Button Grid.Column="1"
-																				Content="{loc:Loc CreatePage.SubOptionBrowse}"
+																				Content="{loc:Loc SettingsPage.Browse}"
 																				Style="{StaticResource FluentSecondaryButton}"
 																				Command="{Binding BrowseIncludeCommand}"
 																				Margin="4 0 0 0"
@@ -548,7 +548,7 @@
 				</Grid.ColumnDefinitions>
 
 				<Button Grid.Column="0"
-						Content="{loc:Loc CreatePage.Cancel}"
+						Content="{loc:Loc Common.Cancel}"
 						Style="{StaticResource FluentSecondaryButton}"
 						Command="{Binding CancelCommand}"
 						HorizontalAlignment="Left"

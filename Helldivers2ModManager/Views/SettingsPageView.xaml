@@ -35,7 +35,7 @@
 
         <!-- Header -->
         <TextBlock Grid.Row="0"
-                   Text="{loc:Loc SettingsPage.Title}"
+                   Text="{loc:Loc DashboardPage.Settings}"
                    Style="{StaticResource FluentSectionHeader}"
                    Margin="0 0 0 12"/>
 
@@ -332,7 +332,7 @@
                                             Padding="12 6">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-                                            <TextBlock Text="{loc:Loc SettingsPage.Delete}" Margin="8 0 0 0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{loc:Loc Common.Delete}" Margin="8 0 0 0" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
@@ -928,7 +928,7 @@
         <Border Grid.Row="3"
                 Style="{StaticResource FluentCard}"
                 CornerRadius="8">
-            <Button Content="{loc:Loc SettingsPage.Ok}"
+            <Button Content="{loc:Loc Common.OK}"
                     Style="{StaticResource FluentPrimaryButton}"
                     Command="{Binding OkCommand}"
                     HorizontalAlignment="Right"
