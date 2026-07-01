@@ -473,7 +473,7 @@
                                             Padding="12 6">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-                                            <TextBlock Text="{loc:Loc SettingsPage.Delete}" Margin="8 0 0 0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{loc:Loc Common.Delete}" Margin="8 0 0 0" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>

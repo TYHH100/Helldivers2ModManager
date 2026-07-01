@@ -67,24 +67,14 @@
                 Padding="8"
                 Margin="0 0 0 8">
                 <WrapPanel Orientation="Horizontal">
-                <Button Content="{loc:Loc DeploymentOrderPage.MoveUp}"
-                        Command="{Binding MoveUpCommand}"
-                        IsEnabled="{Binding CanMoveUp}"
-                        Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 4"/>
-                <Button Content="{loc:Loc DeploymentOrderPage.MoveDown}"
-                        Command="{Binding MoveDownCommand}"
-                        IsEnabled="{Binding CanMoveDown}"
-                        Style="{StaticResource FluentSecondaryButton}"
-                        Margin="0 0 6 4"/>
                 <Button Content="{loc:Loc DeploymentOrderPage.MoveTop}"
                         Command="{Binding MoveToTopCommand}"
-                        IsEnabled="{Binding CanMoveUp}"
+                        IsEnabled="{Binding CanMoveToTop}"
                         Style="{StaticResource FluentSecondaryButton}"
                         Margin="0 0 6 4"/>
                 <Button Content="{loc:Loc DeploymentOrderPage.MoveBottom}"
                         Command="{Binding MoveToBottomCommand}"
-                        IsEnabled="{Binding CanMoveDown}"
+                        IsEnabled="{Binding CanMoveToBottom}"
                         Style="{StaticResource FluentSecondaryButton}"
                         Margin="0 0 6 4"/>
                 <Rectangle Width="1"
@@ -141,89 +131,28 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <!-- 展开/折叠按钮（仅 Mod 级别且包含选项时显示） -->
-                            <Button Grid.Column="0"
-                                    Command="{Binding DataContext.ToggleExpandCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                    CommandParameter="{Binding}"
-                                    Visibility="{Binding ItemType, Converter={StaticResource ModLevelToVisibilityConverter}}"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Width="24"
-                                    Height="24"
-                                    Padding="0"
-                                    VerticalAlignment="Center"
-                                    Margin="2 0 0 0"
-                                    ToolTip="{loc:Loc DeploymentOrderPage.ExpandCollapse}">
-                                <TextBlock FontFamily="Segoe Fluent Icons"
-                                           FontSize="12"
-                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-                                           VerticalAlignment="Center"
-                                           HorizontalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <!-- &#xE70D; = 向右箭头（折叠状态），&#xE70E; = 向下箭头（展开状态） -->
-                                            <Setter Property="Text" Value="&#xE70D;"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsExpanded}" Value="True">
-                                                    <Setter Property="Text" Value="&#xE70E;"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Button>
                             <!-- 多选复选框 -->
-                            <CheckBox Grid.Column="1"
+                            <CheckBox Grid.Column="0"
                                       IsChecked="{Binding IsSelected}"
                                       Style="{StaticResource FluentCheckBox}"
                                       VerticalAlignment="Center"
                                       Margin="6 0 6 0"/>
-                            <!-- 缩进占位（根据层级增加左边距） -->
-                            <Grid Grid.Column="2" Margin="0">
-                                <Grid.Style>
-                                    <Style TargetType="Grid">
-                                        <Setter Property="Margin" Value="0"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Option">
-                                                <Setter Property="Margin" Value="24 0 0 0"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="SubOption">
-                                                <Setter Property="Margin" Value="48 0 0 0"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Grid.Style>
-                                <!-- 拖拽把手图标 -->
-                                <TextBlock Text="&#xE763;"
-                                           FontFamily="Segoe Fluent Icons"
-                                           FontSize="14"
-                                           Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
-                                           VerticalAlignment="Center"/>
-                            </Grid>
+                            <!-- 拖拽把手图标 -->
+                            <TextBlock Grid.Column="1"
+                                       Text="&#xE763;"
+                                       FontFamily="Segoe Fluent Icons"
+                                       FontSize="14"
+                                       Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="0 0 6 0"/>
                             <!-- 名称 -->
-                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Name}"
-                                           FontSize="14"
-                                           Foreground="{StaticResource NeutralForegroundBrush}"
-                                           VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="Option">
-                                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundSecondaryBrush}"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="SubOption">
-                                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundTertiaryBrush}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding Name}"
+                                       FontSize="14"
+                                       Foreground="{StaticResource NeutralForegroundBrush}"
+                                       VerticalAlignment="Center"/>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

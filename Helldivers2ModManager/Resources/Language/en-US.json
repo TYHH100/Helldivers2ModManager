@@ -92,14 +92,9 @@
     "DashboardPage.BatchTagUpdatedPrefix": "Tags have been updated for ",
     "DashboardPage.BatchTagUpdatedSuffix": " mod(s)",
     "DashboardPage.AddModDialogTitle": "Select mod archive files to add (multiple selection allowed)...",
-    "DashboardPage.BatchAddProgress": "Batch adding mods (0/{totalFiles})",
-    "DashboardPage.BatchAddWaitMsg": "{totalFiles} archive(s) in total, please wait, Helldiver...",
-    "DashboardPage.BatchAddProgressFormat": "Batch adding mods ({i+1}/{totalFiles})",
-    "DashboardPage.BatchAddFileMsg": "Processing: {filename}, {remainingCount} remaining",
-    "DashboardPage.BatchAddNestedFormat": "Batch adding mods ({i+1}/{totalFiles}) ─ nested processing ({nestedIdx+1}/{nestedTotal})",
-    "DashboardPage.BatchAddNestedMsg": "Processing: {nestedName}, {remainingCount} remaining",
-    "DashboardPage.BatchAddNestedProgress": "Processing nested archive ({nestedIdx+1}/{nestedTotal})",
-    "DashboardPage.BatchAddSuccess": "Successfully added {successCount} mod(s)!",
+    "DashboardPage.BatchAddWaitMsg": "{total} archive(s) in total, please wait, Helldiver...",
+    "DashboardPage.BatchAddNestedProgress": "Processing nested archive ({current}/{total})",
+    "DashboardPage.BatchAddSuccess": "Successfully added {count} mod(s)!",
     "DashboardPage.BatchAddDonePrefix": "Batch add complete: {successCount} succeeded, {failCount} failed. Issues:",
     "DashboardPage.BatchAddDoneWarning": "All {successCount} mod(s) added, but some issues were found:",
     "DashboardPage.AddSingleError": "Failed to add mod due to a problem:",
@@ -168,6 +163,10 @@
     "DashboardPage.DeleteSeparatorTitle": "Delete Separator",
     "DashboardPage.DeleteSeparatorPrefix": "Are you sure you want to delete separator \"",
     "DashboardPage.DeleteSeparatorSuffix": "\"?",
+    "DashboardPage.RescanMods": "Rescan Mods",
+    "DashboardPage.RescanModsHint": "Rescan mod directory to detect recovered mods from recycle bin",
+    "DashboardPage.RescanProblemsPrefix": "Rescan completed, but some problems were detected:",
+    "DashboardPage.RescanComplete": "Rescan completed.",
     "DashboardPage.SelectedCountPrefix": "Selected ",
     "DashboardPage.SelectedCountSuffix": " item(s)",
     "SettingsPage.TabPaths": "Paths",
@@ -314,6 +313,7 @@
     "CreatePage.OptionName": "Name",
     "CreatePage.OptionDesc": "Description",
     "CreatePage.OptionInclude": "Include paths (relative to source directory, semicolon-separated)",
+    "CreatePage.OptionBrowse": "Browse",
     "CreatePage.OptionIcon": "Icon",
     "CreatePage.SelectIcon": "Select Icon",
     "CreatePage.SubOptions": "Sub-options",
@@ -335,24 +335,7 @@
     "ManifestEditPage.Name": "Name",
     "ManifestEditPage.Description": "Description",
     "ManifestEditPage.Icon": "Icon",
-    "ManifestEditPage.SelectIcon": "Select Icon",
     "ManifestEditPage.LegacyUpgradeHint": "This mod is in legacy format. Adding options will automatically upgrade it to V1 format on save.",
-    "ManifestEditPage.Options": "Options",
-    "ManifestEditPage.OptionsDesc": "Edit mod options. Each option can contain sub-options.",
-    "ManifestEditPage.OptionTitle": "Option",
-
-
-    "ManifestEditPage.OptionInclude": "Include paths (relative to source directory, semicolon-separated)",
-    "ManifestEditPage.OptionBrowse": "Browse",
-
-
-    "ManifestEditPage.SubOptionTitle": "Sub-option",
-    "ManifestEditPage.SubOptionName": "Name",
-
-    "ManifestEditPage.SubOptionInclude": "Include paths (relative to source directory, semicolon-separated)",
-    "ManifestEditPage.SubOptionIcon": "Icon",
-    "ManifestEditPage.SelectSubIcon": "Select Icon",
-    "ManifestEditPage.AddSubOption": "Add Sub-option",
 
     "EditPage.Title": "Mod Options",
     "EditPage.PreviewHint": "Hover over option images for a larger preview; dropdown lists need to be opened first to preview",
@@ -404,8 +387,6 @@
     "DownloadProgress.EmptyHint": "No download tasks",
     "DownloadProgress.EmptyDesc": "Downloads from Nexus Mods via browser will appear here automatically",
     "DownloadProgress.AddFailed": "Failed to add download\n\nPlease ensure:\n...",
-
-
 
     "TagManagementPage.DeleteTag": "Delete Tag",
     "TagManagementPage.CreateTitle": "Create Tag",

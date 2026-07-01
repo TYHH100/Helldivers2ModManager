@@ -29,13 +29,9 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
     [ObservableProperty]
     private DeploymentOrderItem? _selectedItem;
 
-    public bool CanMoveUp => SelectedItem is not null
-        && Items.IndexOf(SelectedItem) > 0
-        && GetTopOfLevel(Items.IndexOf(SelectedItem)) < Items.IndexOf(SelectedItem);
+    public bool CanMoveToTop => Items.Any(i => i.IsSelected && i.ItemType == DeploymentItemType.Mod && Items.IndexOf(i) > 0);
 
-    public bool CanMoveDown => SelectedItem is not null
-        && Items.IndexOf(SelectedItem) < Items.Count - 1
-        && GetBottomOfLevel(Items.IndexOf(SelectedItem)) > Items.IndexOf(SelectedItem);
+    public bool CanMoveToBottom => Items.Any(i => i.IsSelected && i.ItemType == DeploymentItemType.Mod && Items.IndexOf(i) < Items.Count - 1);
 
     /// <summary>
     /// 当前部署方向说明
@@ -72,6 +68,15 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
             OnPropertyChanged(nameof(OrderDescription));
         };
 
+        if (!_settingsService.Initialized || !_settingsService.UseDeploymentOrder)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                _navigationStore.Navigate<DashboardPageViewModel>();
+            });
+            return;
+        }
+
         LoadItems();
     }
 
@@ -81,6 +86,10 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
     private void LoadItems()
     {
         Items.CollectionChanged -= Items_CollectionChanged;
+        foreach (var item in Items)
+        {
+            item.PropertyChanged -= Item_PropertyChanged;
+        }
         Items.Clear();
 
         var modDict = _modService.Initialized
@@ -95,22 +104,25 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
                 {
                     var item = new DeploymentOrderItem(mod.Manifest.Guid, mod.Manifest.Name);
                     item.ItemType = DeploymentItemType.Mod;
+                    item.PropertyChanged += Item_PropertyChanged;
                     Items.Add(item);
                 }
                 else
                 {
-                    Items.Add(new DeploymentOrderItem(guid, _localizationService["DeploymentOrderPage.DeletedModPlaceholder"]));
+                    var item = new DeploymentOrderItem(guid, _localizationService["DeploymentOrderPage.DeletedModPlaceholder"]);
+                    item.PropertyChanged += Item_PropertyChanged;
+                    Items.Add(item);
                 }
                 modDict.Remove(guid);
             }
 
-            // 添加不在 DeploymentOrderGuids 中的模组
             foreach (var mod in _modService.Mods)
             {
                 if (modDict.ContainsKey(mod.Manifest.Guid))
                 {
                     var item = new DeploymentOrderItem(mod.Manifest.Guid, mod.Manifest.Name);
                     item.ItemType = DeploymentItemType.Mod;
+                    item.PropertyChanged += Item_PropertyChanged;
                     Items.Add(item);
                 }
             }
@@ -119,183 +131,29 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
         Items.CollectionChanged += Items_CollectionChanged;
     }
 
-    /// <summary>
-    /// 获取指定模组的选项列表（仅 V1 清单有 Options）
-    /// </summary>
-    private static IReadOnlyList<ModOption>? GetModOptions(ModData mod)
+    private void Item_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (mod.Manifest is V1ModManifest v1Man)
-            return v1Man.Options;
-        return null;
+        if (e.PropertyName == nameof(DeploymentOrderItem.IsSelected))
+        {
+            OnPropertyChanged(nameof(CanMoveToTop));
+            OnPropertyChanged(nameof(CanMoveToBottom));
+        }
     }
 
     /// <summary>
-    /// 展开或折叠模组以显示/隐藏其选项
+    /// 展开或折叠模组功能已禁用
     /// </summary>
     [RelayCommand]
     void ToggleExpand(DeploymentOrderItem? item)
     {
-        if (item is null || item.ItemType != DeploymentItemType.Mod)
-            return;
-
-        if (item.IsExpanded)
-        {
-            CollapseMod(item);
-        }
-        else
-        {
-            ExpandMod(item);
-        }
-    }
-
-    /// <summary>
-    /// 展开模组：在 Items 中插入该模组的选项（及子选项）
-    /// </summary>
-    private void ExpandMod(DeploymentOrderItem modItem)
-    {
-        var modData = _modService.GetModByGuid(modItem.Guid);
-        if (modData is null)
-            return;
-
-        var options = GetModOptions(modData);
-        if (options is null || options.Count == 0)
-            return;
-
-        var modIndex = Items.IndexOf(modItem);
-        if (modIndex < 0)
-            return;
-
-        // 获取自定义选项顺序，如果没有则使用默认顺序
-        var optOrder = _settingsService.OptionOrders.TryGetValue(modItem.Guid, out var order)
-            ? order
-            : Enumerable.Range(0, options.Count).ToArray();
-
-        int insertPos = modIndex + 1;
-
-        for (int optIdx = 0; optIdx < optOrder.Length; optIdx++)
-        {
-            var origIndex = optOrder[optIdx];
-            if (origIndex < 0 || origIndex >= options.Count)
-                continue;
-
-            var opt = options[origIndex];
-            var optItem = new DeploymentOrderItem(modItem.Guid, $"  ▸ {opt.Name}")
-            {
-                ItemType = DeploymentItemType.Option,
-                ParentModGuid = modItem.Guid,
-                OriginalIndex = origIndex,
-            };
-            Items.Insert(insertPos++, optItem);
-
-            // 插入子选项
-            if (opt.SubOptions is { Count: > 0 } subs)
-            {
-                // 获取自定义子选项顺序
-                var subOrder = _settingsService.SubOptionOrders.TryGetValue(modItem.Guid, out var subOrderDict)
-                    && subOrderDict.TryGetValue(origIndex, out var subArr)
-                    ? subArr
-                    : Enumerable.Range(0, subs.Count).ToArray();
-
-                for (int subIdx = 0; subIdx < subOrder.Length; subIdx++)
-                {
-                    var subOrigIndex = subOrder[subIdx];
-                    if (subOrigIndex < 0 || subOrigIndex >= subs.Count)
-                        continue;
-
-                    var sub = subs[subOrigIndex];
-                    var subItem = new DeploymentOrderItem(modItem.Guid, $"{_localizationService["DeploymentOrderPage.SubOptionPrefix"]}{sub.Name}")
-                    {
-                        ItemType = DeploymentItemType.SubOption,
-                        ParentModGuid = modItem.Guid,
-                        ParentOptionIndex = origIndex,
-                        OriginalIndex = subOrigIndex,
-                    };
-                    Items.Insert(insertPos++, subItem);
-                }
-            }
-        }
-
-        modItem.IsExpanded = true;
-    }
-
-    /// <summary>
-    /// 折叠模组：从 Items 中移除该模组下所有选项和子选项
-    /// </summary>
-    private void CollapseMod(DeploymentOrderItem modItem)
-    {
-        // 保存当前选项/子选项顺序到 SettingsService
-        SaveOptionOrderForMod(modItem);
-
-        var modIndex = Items.IndexOf(modItem);
-        if (modIndex < 0)
-            return;
-
-        // 从模组后开始删除，直到遇到下一个 Mod 级别项或列表末尾
-        int i = modIndex + 1;
-        while (i < Items.Count && Items[i].ItemType != DeploymentItemType.Mod)
-        {
-            Items.RemoveAt(i);
-        }
-
-        modItem.IsExpanded = false;
-    }
-
-    /// <summary>
-    /// 将当前展开的选项/子选项顺序保存到 SettingsService
-    /// </summary>
-    private void SaveOptionOrderForMod(DeploymentOrderItem modItem)
-    {
-        var modIndex = Items.IndexOf(modItem);
-        if (modIndex < 0)
-            return;
-
-        // 收集该模组下的所有选项和子选项
-        var optionItems = new List<DeploymentOrderItem>();
-        var subOptionItems = new List<DeploymentOrderItem>();
-
-        for (int i = modIndex + 1; i < Items.Count; i++)
-        {
-            var item = Items[i];
-            if (item.ItemType == DeploymentItemType.Mod)
-                break;
-            if (item.ItemType == DeploymentItemType.Option)
-                optionItems.Add(item);
-            else if (item.ItemType == DeploymentItemType.SubOption)
-                subOptionItems.Add(item);
-        }
-
-        // 保存选项顺序
-        if (optionItems.Count > 0)
-        {
-            _settingsService.OptionOrders[modItem.Guid] = optionItems
-                .Select(static o => o.OriginalIndex)
-                .ToArray();
-        }
-
-        // 保存子选项顺序（按选项分组）
-        if (subOptionItems.Count > 0)
-        {
-            var subDict = new Dictionary<int, int[]>();
-            foreach (var sub in subOptionItems)
-            {
-                if (!subDict.ContainsKey(sub.ParentOptionIndex))
-                {
-                    var subsForOption = subOptionItems
-                        .Where(s => s.ParentOptionIndex == sub.ParentOptionIndex)
-                        .Select(static s => s.OriginalIndex)
-                        .ToArray();
-                    subDict[sub.ParentOptionIndex] = subsForOption;
-                }
-            }
-            _settingsService.SubOptionOrders[modItem.Guid] = subDict;
-        }
+        // 已禁用，不再展开显示选项和子选项
     }
 
     private void Items_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
         SyncToSettings();
-        OnPropertyChanged(nameof(CanMoveUp));
-        OnPropertyChanged(nameof(CanMoveDown));
+        OnPropertyChanged(nameof(CanMoveToTop));
+        OnPropertyChanged(nameof(CanMoveToBottom));
     }
 
     /// <summary>
@@ -316,173 +174,44 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
 
     partial void OnSelectedItemChanged(DeploymentOrderItem? value)
     {
-        OnPropertyChanged(nameof(CanMoveUp));
-        OnPropertyChanged(nameof(CanMoveDown));
+        OnPropertyChanged(nameof(CanMoveToTop));
+        OnPropertyChanged(nameof(CanMoveToBottom));
     }
 
     // ========== 按钮操作 ==========
 
     [RelayCommand]
-    void MoveUp()
-    {
-        if (SelectedItem is null) return;
-        var index = Items.IndexOf(SelectedItem);
-        if (index <= 0) return;
-
-        // 检查上一项是否在同一层级范围
-        var prevIndex = GetPreviousSiblingIndex(index);
-        if (prevIndex < 0) return;
-
-        Items.Move(index, prevIndex);
-    }
-
-    [RelayCommand]
-    void MoveDown()
-    {
-        if (SelectedItem is null) return;
-        var index = Items.IndexOf(SelectedItem);
-        if (index >= Items.Count - 1) return;
-
-        // 检查下一项是否在同一层级范围
-        var nextIndex = GetNextSiblingIndex(index);
-        if (nextIndex < 0) return;
-
-        Items.Move(index, nextIndex);
-    }
-
-    [RelayCommand]
     void MoveToTop()
     {
-        if (SelectedItem is null) return;
-        var index = Items.IndexOf(SelectedItem);
-        if (index <= 0) return;
+        var selected = Items.Where(i => i.IsSelected && i.ItemType == DeploymentItemType.Mod)
+                            .OrderBy(i => Items.IndexOf(i))
+                            .ToList();
 
-        var topIndex = GetTopOfLevel(index);
-        if (topIndex < 0 || topIndex >= index) return;
+        if (selected.Count == 0) return;
 
-        Items.Move(index, topIndex);
+        foreach (var item in selected)
+        {
+            var index = Items.IndexOf(item);
+            if (index <= 0) continue;
+            Items.Move(index, 0);
+        }
     }
 
     [RelayCommand]
     void MoveToBottom()
     {
-        if (SelectedItem is null) return;
-        var index = Items.IndexOf(SelectedItem);
-        if (index >= Items.Count - 1) return;
+        var selected = Items.Where(i => i.IsSelected && i.ItemType == DeploymentItemType.Mod)
+                            .OrderByDescending(i => Items.IndexOf(i))
+                            .ToList();
 
-        var bottomIndex = GetBottomOfLevel(index);
-        if (bottomIndex < 0 || bottomIndex <= index) return;
+        if (selected.Count == 0) return;
 
-        Items.Move(index, bottomIndex);
-    }
-
-    /// <summary>
-    /// 获取同一层级中上一项的索引
-    /// </summary>
-    private int GetPreviousSiblingIndex(int currentIndex)
-    {
-        if (currentIndex <= 0) return -1;
-
-        var currentItem = Items[currentIndex];
-        for (int i = currentIndex - 1; i >= 0; i--)
+        foreach (var item in selected)
         {
-            if (IsSameLevel(Items[i], currentItem))
-                return i;
-            // 如果遇到更高级别的项则停止
-            if (GetLevel(Items[i]) < GetLevel(currentItem))
-                break;
+            var index = Items.IndexOf(item);
+            if (index >= Items.Count - 1) continue;
+            Items.Move(index, Items.Count - 1);
         }
-        return -1;
-    }
-
-    /// <summary>
-    /// 获取同一层级中下一项的索引
-    /// </summary>
-    private int GetNextSiblingIndex(int currentIndex)
-    {
-        if (currentIndex >= Items.Count - 1) return -1;
-
-        var currentItem = Items[currentIndex];
-        for (int i = currentIndex + 1; i < Items.Count; i++)
-        {
-            if (IsSameLevel(Items[i], currentItem))
-                return i;
-            // 如果遇到更高级别的项则停止
-            if (GetLevel(Items[i]) <= GetLevel(currentItem))
-                break;
-        }
-        return -1;
-    }
-
-    /// <summary>
-    /// 获取当前层级的最顶部索引
-    /// </summary>
-    private int GetTopOfLevel(int currentIndex)
-    {
-        if (currentIndex <= 0) return 0;
-
-        var currentItem = Items[currentIndex];
-        var currentLevel = GetLevel(currentItem);
-
-        // 对于 Mod 层级，顶部就是 0
-        if (currentLevel == 0) return 0;
-
-        // 对于 Option 和 SubOption，需要找到所属 Mod 后的第一个同级项
-        for (int i = currentIndex - 1; i >= 0; i--)
-        {
-            var level = GetLevel(Items[i]);
-            if (level < currentLevel)
-                return i + 1;
-        }
-        return 0;
-    }
-
-    /// <summary>
-    /// 获取当前层级的最底部索引
-    /// </summary>
-    private int GetBottomOfLevel(int currentIndex)
-    {
-        if (currentIndex >= Items.Count - 1) return Items.Count - 1;
-
-        var currentItem = Items[currentIndex];
-        var currentLevel = GetLevel(currentItem);
-
-        for (int i = currentIndex + 1; i < Items.Count; i++)
-        {
-            var level = GetLevel(Items[i]);
-            if (level <= currentLevel)
-                return i - 1;
-        }
-        return Items.Count - 1;
-    }
-
-    /// <summary>
-    /// 判断两项是否在同一层级（类型相同且父级相同）
-    /// </summary>
-    private static bool IsSameLevel(DeploymentOrderItem a, DeploymentOrderItem b)
-    {
-        if (a.ItemType != b.ItemType) return false;
-        return a.ItemType switch
-        {
-            DeploymentItemType.Mod => true,
-            DeploymentItemType.Option => a.ParentModGuid == b.ParentModGuid,
-            DeploymentItemType.SubOption => a.ParentModGuid == b.ParentModGuid && a.ParentOptionIndex == b.ParentOptionIndex,
-            _ => false,
-        };
-    }
-
-    /// <summary>
-    /// 获取层级深度（Mod=0, Option=1, SubOption=2）
-    /// </summary>
-    private static int GetLevel(DeploymentOrderItem item)
-    {
-        return item.ItemType switch
-        {
-            DeploymentItemType.Mod => 0,
-            DeploymentItemType.Option => 1,
-            DeploymentItemType.SubOption => 2,
-            _ => 0,
-        };
     }
 
     /// <summary>
@@ -492,15 +221,6 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
     void InitFromCurrent()
     {
         if (!_modService.Initialized || !_settingsService.Initialized) return;
-
-        // 先折叠所有已展开的模组
-        for (int i = Items.Count - 1; i >= 0; i--)
-        {
-            if (Items[i].ItemType == DeploymentItemType.Mod && Items[i].IsExpanded)
-            {
-                CollapseMod(Items[i]);
-            }
-        }
 
         var existingGuids = new HashSet<Guid>(Items.Where(i => i.ItemType == DeploymentItemType.Mod).Select(static i => i.Guid));
         var added = 0;
@@ -556,14 +276,6 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
     [RelayCommand]
     void Back()
     {
-        // 折叠所有已展开的模组以保存选项顺序
-        for (int i = Items.Count - 1; i >= 0; i--)
-        {
-            if (Items[i].ItemType == DeploymentItemType.Mod && Items[i].IsExpanded)
-            {
-                CollapseMod(Items[i]);
-            }
-        }
         _navigationStore.Navigate<DashboardPageViewModel>();
     }
 
@@ -611,26 +323,21 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
             return;
         }
 
+        if (sourceItem.ItemType != DeploymentItemType.Mod)
+        {
+            return;
+        }
+
         // 获取所有选中项（含当前拖拽项），按原始位置排序
         var selected = Items.Where(i => i.IsSelected).ToList();
         if (selected.Contains(sourceItem) && selected.Count > 1)
         {
-            // 限制：只允许同层级的多选拖拽
-            var sameLevel = selected.Where(i => IsSameLevel(i, sourceItem)).ToList();
-            if (sameLevel.Count <= 1)
-            {
-                new DefaultDropHandler().Drop(dropInfo);
-                return;
-            }
-
-            var sortedSelected = sameLevel.OrderBy(i => Items.IndexOf(i)).ToList();
+            var sortedSelected = selected.OrderBy(i => Items.IndexOf(i)).ToList();
             var targetIdx = dropInfo.InsertIndex;
 
-            // 从集合中移除所有选中项（倒序删除以保持索引正确）
             foreach (var item in sortedSelected.AsEnumerable().Reverse())
                 Items.Remove(item);
 
-            // 如果目标索引位于删除区域之后，需修正插入位置
             var firstRemovedIdx = Items.IndexOf(sortedSelected[0]);
             if (firstRemovedIdx == -1)
             {
@@ -640,61 +347,12 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
 
             targetIdx = Math.Clamp(targetIdx, 0, Items.Count);
 
-            // 按原始顺序插入
             for (int i = 0; i < sortedSelected.Count; i++)
                 Items.Insert(targetIdx + i, sortedSelected[i]);
         }
         else
         {
-            // 单项目拖拽 — 检查是否在同一层级内
-            var dropIndex = dropInfo.InsertIndex;
-            var targetItem = dropIndex < Items.Count ? Items[dropIndex] : null;
-
-            if (targetItem is not null && !IsSameLevel(sourceItem, targetItem))
-            {
-                // 不允许跨层级拖拽，但允许拖到同层级的边界
-                // 找到最近的同层级位置
-                var adjustedIdx = FindClosestSameLevelIndex(sourceItem, dropIndex);
-                if (adjustedIdx < 0)
-                    return;
-
-                // 手动执行移动
-                var srcIdx = Items.IndexOf(sourceItem);
-                if (srcIdx < 0) return;
-                if (srcIdx == adjustedIdx) return;
-
-                Items.Move(srcIdx, adjustedIdx);
-                return;
-            }
-
             new DefaultDropHandler().Drop(dropInfo);
         }
-    }
-
-    /// <summary>
-    /// 查找离目标索引最近的同层级位置
-    /// </summary>
-    private int FindClosestSameLevelIndex(DeploymentOrderItem item, int targetIndex)
-    {
-        var itemLevel = GetLevel(item);
-
-        // 扫描 targetIndex 附近的项，找到同层级项可插入的位置
-        for (int i = targetIndex; i < Items.Count; i++)
-        {
-            if (GetLevel(Items[i]) == itemLevel && IsSameLevel(Items[i], item))
-                return i;
-            if (GetLevel(Items[i]) < itemLevel)
-                break;
-        }
-
-        for (int i = targetIndex - 1; i >= 0; i--)
-        {
-            if (GetLevel(Items[i]) == itemLevel && IsSameLevel(Items[i], item))
-                return i + 1;
-            if (GetLevel(Items[i]) < itemLevel)
-                return i + 1;
-        }
-
-        return -1;
     }
 }

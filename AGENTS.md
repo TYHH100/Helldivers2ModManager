@@ -716,6 +716,21 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 - 验证文件权限
 - 重置默认设置
 
+#### XAML 资源未找到错误
+- **错误信息**: `"System.Windows.Markup.XamlParseException": 无法找到名为 "XXX" 的资源`
+- **原因**: 在 XAML 中引用了不存在的样式资源
+- **解决方案**:
+  - 检查 `Resources/Styles/FluentControls.xaml` 中定义的所有可用样式
+  - 按钮样式包括:
+    - `FluentButtonBase` - 基础按钮样式
+    - `FluentPrimaryButton` - 主要按钮（蓝色强调色）
+    - `FluentSecondaryButton` - 次要/轮廓按钮
+    - `FluentConfirmButton` - 确认/成功按钮（绿色）
+    - `FluentDangerButton` - 危险/取消按钮（红色）
+    - `RemoveButton` - 删除按钮
+    - `FluentIconButton` - 图标按钮
+  - 确保使用正确的样式名称，不要使用不存在的样式名
+
 ### 8.4 扩展开发注意事项
 - 新增服务使用 `RegisterServiceAttribute` 标注
 - 新增 ViewModel 遵循 MVVM 模式

@@ -82,6 +82,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     public bool IsSortingEnabled => _sortService.IsSortingEnabled;
 
     /// <summary>
+    /// 自定义部署顺序功能是否在设置中启用
+    /// </summary>
+    public bool IsDeploymentOrderEnabled => _settingsService.Initialized && _settingsService.UseDeploymentOrder;
+
+    /// <summary>
     /// 在主页导航面板中显示分隔线
     /// </summary>
     public bool ShowSeparator => _settingsService.Initialized && _settingsService.ShowSeparator;
@@ -1189,7 +1194,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         try
         {
-            await SaveEnabled();
+            await SaveEnabled(false);
 
             await _modService.DeployAsync(guids);
 
@@ -1201,6 +1206,48 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unknown deployment error");
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
+            {
+                Message = ex.Message
+            });
+        }
+    }
+
+    [RelayCommand]
+    async Task RescanMods()
+    {
+        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
+        {
+            Title = _localizationService["DashboardPage.RescanMods"],
+            Message = _localizationService["SettingsPage.PleaseWait"]
+        });
+
+        try
+        {
+            var problems = _modService.RescanMods();
+
+            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+
+            if (problems.Length > 0)
+                ShowProblems(problems, _localizationService["DashboardPage.RescanProblemsPrefix"], false, true);
+
+            RebuildOrderedItems();
+            UpdateView();
+
+            if (!_settingsService.IsReadonly)
+            {
+                await SaveEnabled(false);
+            }
+
+            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
+            {
+                Message = _localizationService["DashboardPage.RescanComplete"]
+            });
+        }
+        catch (Exception ex)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            _logger.LogError(ex, "Rescan mods failed");
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
                 Message = ex.Message
@@ -1831,9 +1878,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     // ===== 分隔符命令 =====
 
     /// <summary>
+    /// 是否可以创建分隔符（分隔符功能必须在设置中启用）
+    /// </summary>
+    bool CanCreateSeparator() => ShowSeparator;
+
+    /// <summary>
     /// 创建新的分隔符
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanCreateSeparator))]
     void CreateSeparator()
     {
         if (!_settingsService.Initialized || _settingsService.IsReadonly)

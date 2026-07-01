@@ -558,6 +558,118 @@ internal sealed partial class ModService
 	}
 
 	/// <summary>
+	/// 重新扫描 Mods 目录，检测并加载新增的模组（例如从回收站恢复的文件）。
+	/// 已存在的模组不会被重新加载。
+	/// </summary>
+	public ModProblem[] RescanMods()
+	{
+		GuardInitialized();
+
+		var problems = new List<ModProblem>();
+		var addedCount = 0;
+
+		_logger.LogInformation("Rescanning Mods directory...");
+
+		var modsDir = new DirectoryInfo(Path.Combine(_settingsService.StorageDirectory, "Mods"));
+		if (!modsDir.Exists)
+		{
+			_logger.LogInformation("Mods directory does not exist, nothing to rescan");
+			return problems.ToArray();
+		}
+
+		var dirs = modsDir.GetDirectories();
+		_logger.LogInformation("Found {} folders in Mods directory", dirs.Length);
+
+		foreach (var dir in dirs)
+		{
+			var existingMod = _mods.FirstOrDefault(m => m.Directory.FullName == dir.FullName);
+			if (existingMod != null)
+			{
+				_logger.LogDebug("Mod \"{}\" already loaded, skipping", dir.FullName);
+				continue;
+			}
+
+			_logger.LogDebug("Processing new folder \"{}\"", dir.FullName);
+
+			var manifestFile = new FileInfo(Path.Combine(dir.FullName, "manifest.json"));
+			if (manifestFile.Exists)
+			{
+				IModManifest manifest;
+
+				try
+				{
+					manifest = ModManifest.DeserializeFromFile(manifestFile);
+				}
+				catch (UnknownManifestVersionException)
+				{
+					_logger.LogError("Manifest \"{}\" has unknown version", manifestFile.FullName);
+					problems.Add(new ModProblem
+					{
+						Directory = dir,
+						Kind = ModProblemKind.UnknownManifestVersion,
+					});
+					continue;
+				}
+				catch (EndOfLifeException)
+				{
+					_logger.LogError("Manifest \"{}\" is unsupported version 2", manifestFile.FullName);
+					problems.Add(new ModProblem
+					{
+						Directory = dir,
+						Kind = ModProblemKind.OutOfSupportManifest,
+					});
+					continue;
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "Unable to parse manifest \"{}\"", manifestFile.FullName);
+					problems.Add(new ModProblem
+					{
+						Directory = dir,
+						Kind = ModProblemKind.CantParseManifest,
+					});
+					continue;
+				}
+
+				if (_mods.Any(data => data.Manifest.Guid == manifest.Guid))
+				{
+					_logger.LogError("Mod \"{}\" has a duplicate guid of \"{}\"", dir.FullName, manifest.Guid);
+					problems.Add(new ModProblem
+					{
+						Directory = dir,
+						Kind = ModProblemKind.Duplicate,
+					});
+					continue;
+				}
+
+				if (!CheckPaths(manifest, problems, dir, manifestFile))
+					continue;
+
+				var mod = new ModData(dir, manifest);
+				_mods.Add(mod);
+				ModAdded?.Invoke(mod);
+				addedCount++;
+
+				_logger.LogInformation("Added recovered mod \"{}\" ({})", manifest.Name, manifest.Guid);
+
+				_modHashService.ComputeAndStoreForModAsync(mod);
+			}
+			else
+			{
+				_logger.LogWarning("No manifest found in \"{}\"", dir.FullName);
+				problems.Add(new ModProblem
+				{
+					Directory = dir,
+					Kind = ModProblemKind.NoManifestFound,
+				});
+			}
+		}
+
+		_logger.LogInformation("Rescan complete, {} new mods added", addedCount);
+		return problems.ToArray();
+	}
+
+	/// <summary>
 	/// 上移模组（在列表中向上移动一位）
 	/// </summary>
 	public bool MoveModUp(ModData mod)
@@ -1076,19 +1188,7 @@ internal sealed partial class ModService
 
 						_logger.LogInformation("Making include list");
 
-						// 确定选项的迭代顺序
-						int[] optOrder;
-						if (_settingsService.UseDeploymentOrder
-							&& _settingsService.OptionOrders.TryGetValue(mod.Manifest.Guid, out var customOrder)
-							&& customOrder.Length == enabled.Length)
-						{
-							optOrder = customOrder;
-							_logger.LogInformation("Using custom option deployment order for mod \"{}\"", mod.Manifest.Name);
-						}
-						else
-						{
-							optOrder = Enumerable.Range(0, enabled.Length).ToArray();
-						}
+						var optOrder = Enumerable.Range(0, enabled.Length).ToArray();
 
 						for (int oi = 0; oi < optOrder.Length; oi++)
 						{
@@ -1108,38 +1208,23 @@ internal sealed partial class ModService
 								}
 
 							if (opt.SubOptions is { } subs)
-							{
-								// 确定子选项的迭代顺序
-								int[] subOrder;
-								if (_settingsService.UseDeploymentOrder
-									&& _settingsService.SubOptionOrders.TryGetValue(mod.Manifest.Guid, out var subOrderDict)
-									&& subOrderDict.TryGetValue(i, out var customSubOrder)
-									&& customSubOrder.Length == subs.Count)
 								{
-									subOrder = customSubOrder;
-								}
-								else
-								{
-									subOrder = Enumerable.Range(0, subs.Count).ToArray();
-								}
-
-								// 找到当前选中的子选项，按自定义顺序部署
-								int selectedSubIdx = selected[i];
-								for (int si = 0; si < subOrder.Length; si++)
-								{
-									if (subOrder[si] != selectedSubIdx)
-										continue;
-
-									var sub = subs[subOrder[si]];
-									foreach (var inc in sub.Include)
+									int selectedSubIdx = selected[i];
+									for (int si = 0; si < subs.Count; si++)
 									{
-										var dir = new DirectoryInfo(Path.Combine(mod.Directory.FullName, inc));
-										_logger.LogInformation("Adding \"{}\"", dir.FullName);
-										AddFilesFromDir(dir);
+										if (si != selectedSubIdx)
+											continue;
+
+										var sub = subs[si];
+										foreach (var inc in sub.Include)
+										{
+											var dir = new DirectoryInfo(Path.Combine(mod.Directory.FullName, inc));
+											_logger.LogInformation("Adding \"{}\"", dir.FullName);
+											AddFilesFromDir(dir);
+										}
+										break;
 									}
-									break; // 只处理被选中的子选项
 								}
-							}
 						}
 					}
 					else

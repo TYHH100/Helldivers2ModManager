@@ -436,8 +436,9 @@
 				</Button>
 
 					<Button Style="{StaticResource FluentNavigationButton}"
-							Command="{Binding DeploymentOrderCommand}"
-							IsEnabled="{Binding Initialized}">
+						Command="{Binding DeploymentOrderCommand}"
+						IsEnabled="{Binding Initialized}"
+						Visibility="{Binding IsDeploymentOrderEnabled, Converter={StaticResource BoolToVisibilityConverter}}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE718;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
 						<TextBlock Text="{loc:Loc DashboardPage.DeploymentOrder}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
@@ -620,7 +621,7 @@
 					  HorizontalScrollBarVisibility="Disabled"
 					  VerticalScrollBarVisibility="Auto">
 			<ScrollViewer.ContextMenu>
-				<ContextMenu>
+				<ContextMenu Visibility="{Binding ShowSeparator, Converter={StaticResource BoolToVisibilityConverter}}">
 					<MenuItem Header="{loc:Loc DashboardPage.CreateSeparator}"
 							  Command="{Binding CreateSeparatorCommand}"/>
 				</ContextMenu>
@@ -688,6 +689,15 @@
 				<!-- Action Buttons (右侧) -->
 				<StackPanel Grid.Column="1"
 							Orientation="Horizontal">
+					<Button Style="{StaticResource FluentSecondaryButton}"
+							Content="{loc:Loc DashboardPage.RescanMods}"
+							Command="{Binding RescanModsCommand}"
+							IsEnabled="{Binding Initialized}"
+							Padding="20 10">
+						<Button.ToolTip>
+							<ToolTip Content="{loc:Loc DashboardPage.RescanModsHint}"/>
+						</Button.ToolTip>
+					</Button>
 					<Button Style="{StaticResource FluentDangerButton}"
 							Content="{loc:Loc DashboardPage.CleanMods}"
 							Command="{Binding PurgeCommand}"

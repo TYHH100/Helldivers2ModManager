@@ -93,14 +93,9 @@
     "DashboardPage.BatchTagUpdatedPrefix": "已为 ",
     "DashboardPage.BatchTagUpdatedSuffix": " 个模组更新标签",
     "DashboardPage.AddModDialogTitle": "请选择要添加的模组压缩包（可多选）...",
-    "DashboardPage.BatchAddProgress": "批量添加模组中 (0/{totalFiles})",
-    "DashboardPage.BatchAddWaitMsg": "共 {totalFiles} 个压缩包，请民主官耐心等待...",
-    "DashboardPage.BatchAddProgressFormat": "批量添加模组中 ({i+1}/{totalFiles})",
-    "DashboardPage.BatchAddFileMsg": "正在处理: {filename}，剩余 {remainingCount} 个",
-    "DashboardPage.BatchAddNestedFormat": "批量添加模组中 ({i+1}/{totalFiles}) ─ 嵌套处理 ({nestedIdx+1}/{nestedTotal})",
-    "DashboardPage.BatchAddNestedMsg": "正在处理: {nestedName}，剩余 {remainingCount} 个",
-    "DashboardPage.BatchAddNestedProgress": "嵌套压缩包处理中 ({nestedIdx+1}/{nestedTotal})",
-    "DashboardPage.BatchAddSuccess": "成功添加 {successCount} 个模组！",
+    "DashboardPage.BatchAddWaitMsg": "共 {total} 个压缩包，请民主官耐心等待...",
+    "DashboardPage.BatchAddNestedProgress": "嵌套压缩包处理中 ({current}/{total})",
+    "DashboardPage.BatchAddSuccess": "成功添加 {count} 个模组！",
     "DashboardPage.BatchAddDonePrefix": "批量添加完成：{successCount} 成功，{failCount} 失败。问题如下:",
     "DashboardPage.BatchAddDoneWarning": "全部 {successCount} 个模组已添加，但有些相关问题:",
     "DashboardPage.AddSingleError": "由于出现问题，模组添加失败:",
@@ -169,6 +164,10 @@
 
     "DashboardPage.DeleteSeparatorPrefix": "确定要删除分隔符「",
     "DashboardPage.DeleteSeparatorSuffix": "」吗？",
+    "DashboardPage.RescanMods": "刷新模组",
+    "DashboardPage.RescanModsHint": "重新扫描模组目录，检测从回收站恢复的模组",
+    "DashboardPage.RescanProblemsPrefix": "刷新完成，但检测到一些问题：",
+    "DashboardPage.RescanComplete": "刷新完成。",
     "DashboardPage.SelectedCountPrefix": "已选 ",
     "DashboardPage.SelectedCountSuffix": " 项",
     "SettingsPage.TabPaths": "路径",
@@ -338,29 +337,7 @@
     "ManifestEditPage.Name": "名称",
 
     "ManifestEditPage.Icon": "图标",
-    "ManifestEditPage.SelectIcon": "选择图标",
     "ManifestEditPage.LegacyUpgradeHint": "此模组为旧版格式，添加选项后保存时将自动升级为 V1 格式。",
-
-    "ManifestEditPage.OptionsDesc": "编辑模组的可选项，每个选项可包含子选项。",
-    "ManifestEditPage.DragHint": "提示：选项和子选项均可拖拽排序",
-    "ManifestEditPage.OptionTitle": "选项",
-
-    "ManifestEditPage.OptionName": "名称",
-
-    "ManifestEditPage.OptionInclude": "Include 路径（相对于源目录，分号分隔）",
-    "ManifestEditPage.OptionBrowse": "浏览",
-    "ManifestEditPage.OptionIcon": "图标",
-
-    "ManifestEditPage.SubOptions": "子选项",
-    "ManifestEditPage.SubOptionTitle": "子选项",
-    "ManifestEditPage.DeleteSubOption": "删除此子选项",
-    "ManifestEditPage.SubOptionName": "名称",
-
-
-
-    "ManifestEditPage.SubOptionIcon": "图标",
-
-
 
     "EditPage.Title": "模组选项",
     "EditPage.PreviewHint": "悬停选项图片可查看大图预览，但是下拉列表需要点开后才能预览",
@@ -412,7 +389,6 @@
     "DownloadProgress.EmptyHint": "暂无下载任务",
     "DownloadProgress.EmptyDesc": "从浏览器下载 Nexus Mods 文件时会自动显示在这里",
     "DownloadProgress.AddFailed": "添加下载失败\n\n请确保：\n...",
-
 
     "TagManagementPage.RenameTag": "重命名标签",
     "TagManagementPage.DeleteTag": "删除标签",
