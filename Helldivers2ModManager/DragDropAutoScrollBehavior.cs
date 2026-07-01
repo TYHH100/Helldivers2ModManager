@@ -1,13 +1,13 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Threading;
 
 namespace Helldivers2ModManager;
 
 /// <summary>
 /// 拖拽边界自动滚动附加行为。
 /// 附加到 ItemsControl 上，当拖拽到列表上下边缘时自动滚动父级 ScrollViewer。
+/// 使用 CompositionTarget.Rendering 与 WPF 渲染管线同步，实现丝滑的滚动效果。
 /// </summary>
 /// <remarks>
 /// XAML 用法：
@@ -34,8 +34,8 @@ internal static class DragDropAutoScrollBehavior
 	/// <summary>边界检测区域高度（像素），拖拽进入此区域时触发自动滚动</summary>
 	private const double AutoScrollZoneHeight = 40.0;
 
-	/// <summary>自动滚动速度（像素/次）</summary>
-	private const double AutoScrollSpeed = 12.0;
+	/// <summary>自动滚动速度（像素/帧），配合 60fps 渲染实现丝滑滚动</summary>
+	private const double AutoScrollSpeed = 3.0;
 
 	// ── 状态管理 ──────────────────────────────────────
 
@@ -73,14 +73,14 @@ internal static class DragDropAutoScrollBehavior
 			itemsControl.Drop -= OnDragStop;
 			itemsControl.Unloaded -= OnUnloaded;
 			if (s_states.Remove(itemsControl, out var state))
-				state.Timer?.Stop();
+				StopAutoScroll(state);
 		}
 	}
 
 	private static void OnUnloaded(object sender, RoutedEventArgs e)
 	{
 		if (sender is ItemsControl control && s_states.Remove(control, out var state))
-			state.Timer?.Stop();
+			StopAutoScroll(state);
 	}
 
 	// ── 事件处理 ──────────────────────────────────────
@@ -103,14 +103,17 @@ internal static class DragDropAutoScrollBehavior
 			return;
 
 		var state = GetOrCreateState(itemsControl);
+		state.ScrollViewer = scrollViewer;
 
 		if (position.Y <= AutoScrollZoneHeight && scrollOffset > 0)
 		{
-			StartAutoScroll(state, scrollViewer, -AutoScrollSpeed);
+			state.Direction = -AutoScrollSpeed;
+			TryStartRendering(state);
 		}
 		else if (position.Y >= scrollHeight - AutoScrollZoneHeight && scrollOffset < maxOffset)
 		{
-			StartAutoScroll(state, scrollViewer, AutoScrollSpeed);
+			state.Direction = AutoScrollSpeed;
+			TryStartRendering(state);
 		}
 		else
 		{
@@ -124,43 +127,47 @@ internal static class DragDropAutoScrollBehavior
 			StopAutoScroll(state);
 	}
 
-	// ── 计时器控制 ────────────────────────────────────
+	// ── 渲染同步滚动 ────────────────────────────────────
 
-	private static void StartAutoScroll(AutoScrollState state, ScrollViewer scrollViewer, double direction)
+	/// <summary>
+	/// 尝试启动渲染事件监听。已在监听中则跳过。
+	/// </summary>
+	private static void TryStartRendering(AutoScrollState state)
 	{
-		if (state.Timer is not null)
-		{
-			state.Timer.Tag = direction;
+		if (state.IsRendering)
 			return;
-		}
 
-		state.Timer = new DispatcherTimer
-		{
-			Interval = TimeSpan.FromMilliseconds(16), // 约 60fps
-			Tag = direction
-		};
-		state.Timer.Tick += (_, _) => OnTick(state, scrollViewer);
-		state.Timer.Start();
+		state.IsRendering = true;
+		CompositionTarget.Rendering += OnRendering;
 	}
 
+	/// <summary>
+	/// 停止自动滚动，移除渲染事件监听。
+	/// </summary>
 	private static void StopAutoScroll(AutoScrollState state)
 	{
-		if (state.Timer is not null)
-		{
-			state.Timer.Stop();
-			state.Timer = null;
-		}
+		state.Direction = 0;
+		state.IsRendering = false;
+		CompositionTarget.Rendering -= OnRendering;
 	}
 
-	private static void OnTick(AutoScrollState state, ScrollViewer scrollViewer)
+	/// <summary>
+	/// 渲染事件处理，每帧执行一次滚动。
+	/// 使用 CompositionTarget.Rendering 与 WPF 渲染管线同步，实现丝滑滚动。
+	/// </summary>
+	private static void OnRendering(object? sender, EventArgs e)
 	{
-		if (state.Timer is null)
-			return;
+		// 遍历所有活跃的滚动状态，执行滚动
+		foreach (var kvp in s_states)
+		{
+			var state = kvp.Value;
+			if (state.Direction == 0 || state.ScrollViewer is null)
+				continue;
 
-		var direction = (double)state.Timer.Tag!;
-		var newOffset = scrollViewer.VerticalOffset + direction;
-		newOffset = Math.Max(0, Math.Min(newOffset, scrollViewer.ScrollableHeight));
-		scrollViewer.ScrollToVerticalOffset(newOffset);
+			var newOffset = state.ScrollViewer.VerticalOffset + state.Direction;
+			newOffset = Math.Max(0, Math.Min(newOffset, state.ScrollViewer.ScrollableHeight));
+			state.ScrollViewer.ScrollToVerticalOffset(newOffset);
+		}
 	}
 
 	// ── 辅助方法 ──────────────────────────────────────
@@ -181,6 +188,13 @@ internal static class DragDropAutoScrollBehavior
 
 	private sealed class AutoScrollState
 	{
-		public DispatcherTimer? Timer { get; set; }
+		/// <summary>滚动目标 ScrollViewer</summary>
+		public ScrollViewer? ScrollViewer { get; set; }
+
+		/// <summary>滚动方向和速度（正数向下，负数向上，0 表示停止）</summary>
+		public double Direction { get; set; }
+
+		/// <summary>是否正在监听渲染事件</summary>
+		public bool IsRendering { get; set; }
 	}
 }
