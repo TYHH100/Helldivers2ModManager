@@ -57,6 +57,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly SortService _sortService;
     private readonly VersionCheckViewModel _versionCheckVm;
     private readonly LocalizationService _localizationService;
+    private readonly BackgroundTaskService _backgroundTaskService;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -130,7 +131,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         SearchFilterService searchFilterService,
         SortService sortService,
         VersionCheckViewModel versionCheckVm,
-        LocalizationService localizationService)
+        LocalizationService localizationService,
+        BackgroundTaskService backgroundTaskService)
     {
         _logger = logger;
         _navStore = new(provider.GetRequiredService<NavigationStore>);
@@ -145,6 +147,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _sortService = sortService;
         _versionCheckVm = versionCheckVm;
         _localizationService = localizationService;
+        _backgroundTaskService = backgroundTaskService;
 
         // 监听语言切换，通知 Title 属性变更
         _localizationService.PropertyChanged += (_, _) =>
@@ -404,9 +407,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _logger.LogInformation("Initialization successful");
 
         // 检测新增或变动的模组，自动触发版本兼容性检查
-        if (_versionCheckVm.ShouldAutoCheck(_mods))
+        var autoCheckReason = _versionCheckVm.GetAutoCheckReason(_mods);
+        if (autoCheckReason != VersionAutoCheckReason.None)
         {
-            _logger.LogInformation("检测到新增/变动的模组或游戏 exe 已更新，自动检查版本兼容性...");
+            var message = autoCheckReason == VersionAutoCheckReason.GameExeUpdated
+                ? _localizationService["DashboardPage.VersionCheckAutoGameExeMsg"]
+                : _localizationService["DashboardPage.VersionCheckAutoModMsg"];
+            _logger.LogInformation("{Message}", message);
             _ = CheckVersionCompatibility();
         }
 
@@ -492,7 +499,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private void ModService_ModAdded(ModData mod)
     {
-        var vm = new ModViewModel(mod, _logger, _settingsService, _nexusModsService, _localizationService);
+        var vm = _modService.GetOrCreateModViewModel(mod, _logger, _settingsService, _nexusModsService);
         vm.OptionsChanged += ModViewModel_OptionsChanged;
         vm.PropertyChanged += ModViewModel_PropertyChanged;
         _mods.Add(vm);
@@ -871,6 +878,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 Message = isBatch ? _localizationService["DashboardPage.BatchAddWaitMsg"].Replace("{total}", totalFiles.ToString()) : _localizationService["SettingsPage.PleaseWait"]
             });
 
+            var backgroundTask = _backgroundTaskService.Add(
+                _localizationService["BackgroundTasksPage.TaskTypeImport"],
+                isBatch ? _localizationService["DashboardPage.BatchAddWaitMsg"].Replace("{total}", totalFiles.ToString()) : Path.GetFileName(selectedFiles[0]));
+            _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
+
             try
             {
                 var allProblems = new List<ModProblem>();
@@ -883,13 +895,19 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     if (isBatch)
                     {
                         var remainingCount = totalFiles - i - 1;
+                        var description = remainingCount > 0
+                            ? _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", Path.GetFileName(selectedFiles[i])).Replace("{remaining}", remainingCount.ToString())
+                            : _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", Path.GetFileName(selectedFiles[i])).Replace("{remaining}", "?");
                         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
                         {
                             Title = _localizationService["DashboardPage.BatchAddProgressTitle"].Replace("{current}", (i + 1).ToString()).Replace("{total}", totalFiles.ToString()),
-                            Message = remainingCount > 0
-                                ? _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", Path.GetFileName(selectedFiles[i])).Replace("{remaining}", remainingCount.ToString())
-                                : _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", Path.GetFileName(selectedFiles[i])).Replace("{remaining}", "?")
+                            Message = description
                         });
+                        _backgroundTaskService.Update(backgroundTask, description, (double)i / totalFiles, false);
+                    }
+                    else
+                    {
+                        _backgroundTaskService.Update(backgroundTask, Path.GetFileName(selectedFiles[i]), (double)i / totalFiles, false);
                     }
 
                     // 创建嵌套压缩包处理进度回调，用于在处理嵌套压缩包时更新UI进度显示
@@ -897,6 +915,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     var currentFileName = selectedFiles[i];
                     Action<int, int, string> nestedProgress = (nestedIndex, nestedTotal, nestedFileName) =>
                     {
+                        var nestedDescription = _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", nestedFileName).Replace("{remaining}", (nestedTotal - nestedIndex - 1).ToString());
                         // 根据是否为批量导入模式，组合显示外层批量进度和内层嵌套进度
                         if (isBatch)
                         {
@@ -904,7 +923,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
                             {
                                 Title = _localizationService["DashboardPage.BatchAddNestedTitle"].Replace("{current}", (currentBatchIndex + 1).ToString()).Replace("{total}", totalFiles.ToString()).Replace("{nested}", (nestedIndex + 1).ToString()).Replace("{nestedTotal}", nestedTotal.ToString()),
-                                Message = _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", nestedFileName).Replace("{remaining}", (nestedTotal - nestedIndex - 1).ToString())
+                                Message = nestedDescription
                             });
                         }
                         else
@@ -913,9 +932,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                             WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
                             {
                                 Title = _localizationService["DashboardPage.BatchAddNestedProgress"].Replace("{current}", (nestedIndex + 1).ToString()).Replace("{total}", nestedTotal.ToString()),
-                                Message = _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", nestedFileName).Replace("{remaining}", (nestedTotal - nestedIndex - 1).ToString())
+                                Message = nestedDescription
                             });
                         }
+
+                        var outerProgress = (double)currentBatchIndex / totalFiles;
+                        var nestedRatio = nestedTotal > 0 ? (double)(nestedIndex + 1) / nestedTotal : 0;
+                        _backgroundTaskService.Update(backgroundTask, nestedDescription, outerProgress + nestedRatio / totalFiles, false);
                     };
 
                     try
@@ -947,6 +970,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         failCount++;
                     }
                 }
+
+                _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.ImportComplete"].Replace("{success}", successCount.ToString()).Replace("{fail}", failCount.ToString()));
 
                 // 汇总结果
                 if (isBatch)
@@ -987,6 +1012,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to add mod");
+                _backgroundTaskService.Fail(backgroundTask, ex.Message);
                 WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
                 {
                     Message = ex.Message
@@ -1017,6 +1043,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             ModName = vm.Name
         });
 
+        var backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypeUpdate"],
+            vm.Name);
+
         try
         {
             // 创建进度报告回调，将服务层进度映射为UI消息
@@ -1035,9 +1065,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     {
                         Message = info.Message ?? _localizationService["DashboardPage.UpdateModDone"]
                     });
+                    _backgroundTaskService.Complete(backgroundTask, info.Message ?? _localizationService["DashboardPage.UpdateModDone"]);
                 }
                 else
                 {
+                    var taskProgress = info.TotalCount > 0
+                        ? (double)info.ProcessedCount / info.TotalCount
+                        : 0;
                     WeakReferenceMessenger.Default.Send(new MessageBoxUpdateProgressUpdateMessage
                     {
                         PhaseText = info.Message,
@@ -1046,10 +1080,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         TotalCount = info.TotalCount,
                         NeedUpdateCount = info.NeedUpdateCount,
                         CacheHits = info.CacheHits,
-                        Progress = info.TotalCount > 0
-                            ? (double)info.ProcessedCount / info.TotalCount
-                            : 0
+                        Progress = taskProgress
                     });
+                    _backgroundTaskService.Update(backgroundTask, info.Message, taskProgress, info.TotalCount <= 0);
                 }
             });
 
@@ -1061,6 +1094,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update mod \"{}\"", vm.Name);
+            _backgroundTaskService.Fail(backgroundTask, ex.Message);
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
             {
@@ -1129,9 +1163,24 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             Message = _localizationService["SettingsPage.PleaseWait"]
         });
 
-        await _modService.PurgeAsync();
+        var backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypePurge"],
+            _localizationService["SettingsPage.PleaseWait"]);
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+        try
+        {
+            await _modService.PurgeAsync();
+            _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.PurgeComplete"]);
+        }
+        catch (Exception ex)
+        {
+            _backgroundTaskService.Fail(backgroundTask, ex.Message);
+            throw;
+        }
+        finally
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+        }
     }
 
     /// <summary>
@@ -1191,12 +1240,17 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         var mods = _mods.Where(static vm => vm.Enabled).ToArray();
         var guids = GetDeploymentGuids(mods);
+        var backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypeDeploy"],
+            _localizationService["SettingsPage.PleaseWait"]);
 
         try
         {
             await SaveEnabled(false);
 
             await _modService.DeployAsync(guids);
+
+            _backgroundTaskService.Complete(backgroundTask, _localizationService["DashboardPage.DeploySuccess"]);
 
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
             {
@@ -1206,6 +1260,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unknown deployment error");
+            _backgroundTaskService.Fail(backgroundTask, ex.Message);
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
                 Message = ex.Message
@@ -1299,6 +1354,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             Message = _localizationService["SettingsPage.PleaseWait"]
         });
 
+        var backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypeDelete"],
+            modVm.Name);
+
         try
         {
             await _modService.RemoveAsync(modVm.Data);
@@ -1312,10 +1371,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             }
 
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.DeleteComplete"].Replace("{name}", modVm.Name));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unknown mod removal error");
+            _backgroundTaskService.Fail(backgroundTask, ex.Message);
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
                 Message = ex.Message
@@ -1625,15 +1686,20 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             Title = $"{_localizationService["DashboardPage.ExportSaveDialog"]} - {vm.Name}"
         });
 
+        var backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypeExport"],
+            vm.Name);
+        _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
+
         // Run export on background thread to keep UI responsive
-        Task.Run(() => DoExportAsync(vm, modDir, outputPath, is7z, level, dictSize, levelName, excludedExtensions));
+        Task.Run(() => DoExportAsync(vm, modDir, outputPath, is7z, level, dictSize, levelName, excludedExtensions, backgroundTask));
     }
 
     /// <summary>
     /// Background export with real-time progress reporting.
     /// </summary>
     private void DoExportAsync(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
-        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions)
+        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions, BackgroundTaskItem backgroundTask)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         long lastUpdateBytes = 0;
@@ -1697,6 +1763,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     RatioText = ratioText,
                 });
             });
+            _backgroundTaskService.Update(backgroundTask, currentFile, progress, false);
         }
 
         try
@@ -1784,11 +1851,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             {
                 WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressUpdateMessage { IsCompleted = true });
             });
+            _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.ExportComplete"].Replace("{name}", vm.Name));
             // Don't auto-close - user clicks OK to dismiss and see final ratio/speed
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to export mod");
+            _backgroundTaskService.Fail(backgroundTask, ex.Message);
             Application.Current.Dispatcher.Invoke(() =>
             {
                 WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
@@ -1840,6 +1909,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     void ShowDownloadProgress()
     {
         _navStore.Value.Navigate<DownloadProgressViewModel>();
+    }
+
+    [RelayCommand]
+    void ShowBackgroundTasks()
+    {
+        _navStore.Value.Navigate<BackgroundTasksPageViewModel>();
     }
 
     [RelayCommand]

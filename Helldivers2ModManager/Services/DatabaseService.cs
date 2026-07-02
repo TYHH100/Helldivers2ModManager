@@ -69,9 +69,14 @@ internal sealed class DatabaseService : IDisposable
 			ModGuid TEXT PRIMARY KEY NOT NULL,
 			Status INTEGER NOT NULL DEFAULT 0,
 			GameVersion INTEGER NOT NULL DEFAULT 0,
-			LastChecked TEXT NOT NULL DEFAULT ''
+			LastChecked TEXT NOT NULL DEFAULT '',
+			ModLastWriteTimeUtc TEXT NOT NULL DEFAULT ''
 		);
 	";
+
+	private const string AddModLastWriteTimeColumnSql = "ALTER TABLE version_check_results ADD COLUMN ModLastWriteTimeUtc TEXT NOT NULL DEFAULT '';";
+
+	private const string CheckModLastWriteTimeColumnSql = "SELECT COUNT(*) FROM pragma_table_info('version_check_results') WHERE name='ModLastWriteTimeUtc';";
 
 	/// <summary>
 	/// 数据库表创建 SQL —— 存储游戏 exe 最后写入时间，用于检测游戏版本变化
@@ -218,6 +223,18 @@ internal sealed class DatabaseService : IDisposable
 				{
 					cmd.CommandText = CreateVersionCheckResultsTableSql;
 					cmd.ExecuteNonQuery();
+				}
+				using (var checkCmd = initConnection.CreateCommand())
+				{
+					checkCmd.CommandText = CheckModLastWriteTimeColumnSql;
+					var exists = (long)checkCmd.ExecuteScalar()!;
+					if (exists == 0)
+					{
+						using var alterCmd = initConnection.CreateCommand();
+						alterCmd.CommandText = AddModLastWriteTimeColumnSql;
+						alterCmd.ExecuteNonQuery();
+						_logger.LogInformation("Added ModLastWriteTimeUtc column to version check results");
+					}
 				}
 
 				// 创建游戏版本跟踪表 + 默认行

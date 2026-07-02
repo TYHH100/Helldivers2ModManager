@@ -9,6 +9,13 @@ using System.IO;
 
 namespace Helldivers2ModManager.ViewModels;
 
+internal enum VersionAutoCheckReason
+{
+    None,
+    ModChanged,
+    GameExeUpdated
+}
+
 /// <summary>
 /// 版本检查视图模型 —— 封装版本兼容性检查的所有逻辑和状态
 /// 从 DashboardPageViewModel 中拆分出来，独立管理版本检测相关的 UI 状态和业务逻辑
@@ -24,6 +31,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
     private readonly LocalizationService _localizationService;
+    private readonly BackgroundTaskService _backgroundTaskService;
 
     [ObservableProperty]
     private bool _isCheckingVersion;
@@ -53,7 +61,8 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         VersionCheckRepository versionCheckRepository,
         ModService modService,
         SettingsService settingsService,
-        LocalizationService localizationService)
+        LocalizationService localizationService,
+        BackgroundTaskService backgroundTaskService)
     {
         _logger = logger;
         _versionCheckService = versionCheckService;
@@ -61,17 +70,21 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         _modService = modService;
         _settingsService = settingsService;
         _localizationService = localizationService;
+        _backgroundTaskService = backgroundTaskService;
     }
 
     /// <summary>
     /// 检查所有模组的版本兼容性。
     /// 首次点击时执行全量扫描建立参考版本，后续只检查新增/变动的模组。
-    /// 检查结果仅提取关键状态字段，不保留 DetailedAnalysis/PatchUnits 等大对象以节省内存。
+    /// 检查结果仅保留状态字段，详细诊断在用户点击详情时按需扫描，避免常驻占用内存。
     /// </summary>
     public async Task CheckVersionCompatibilityAsync(ObservableCollection<ModViewModel> mods)
     {
         IsCheckingVersion = true;
         VersionCheckSummary = _localizationService["VersionCheck.ScanningMods"];
+        var backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
+            VersionCheckSummary);
 
         try
         {
@@ -102,11 +115,11 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
 
             if (needsFullScan)
             {
-                await FullScanAsync(mods);
+                await FullScanAsync(mods, backgroundTask);
             }
             else
             {
-                await IncrementalCheckAsync(mods);
+                await IncrementalCheckAsync(mods, backgroundTask);
             }
 
             UpdateStatistics(mods);
@@ -119,11 +132,13 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 _ = UpdateGameExeTimestampAsync();
 
             UpdateSummaryText();
+            _backgroundTaskService.Complete(backgroundTask, VersionCheckSummary);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "版本兼容性检查失败");
             VersionCheckSummary = _localizationService["VersionCheck.CheckFailed"];
+            _backgroundTaskService.Fail(backgroundTask, ex.Message);
         }
         finally
         {
@@ -183,6 +198,8 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                     vm.VersionStatus = entry.Status;
                     vm.GameUnitVersion = entry.GameVersion;
                     vm.LastVersionCheck = entry.LastChecked;
+                    if (entry.ModLastWriteTimeUtc != DateTime.MinValue)
+                        s_knownModTimestamps[vm.Guid] = entry.ModLastWriteTimeUtc;
                 }
             }
 
@@ -209,12 +226,17 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     /// </summary>
     public bool ShouldAutoCheck(ObservableCollection<ModViewModel> mods)
     {
+        return GetAutoCheckReason(mods) != VersionAutoCheckReason.None;
+    }
+
+    public VersionAutoCheckReason GetAutoCheckReason(ObservableCollection<ModViewModel> mods)
+    {
         if (!_settingsService.AutoCheckVersionOnStartup || mods.Count == 0)
-            return false;
+            return VersionAutoCheckReason.None;
 
         var changedMods = GetNewOrChangedMods(mods).ToList();
         if (changedMods.Count > 0)
-            return true;
+            return VersionAutoCheckReason.ModChanged;
 
         // 检测游戏 exe 是否已更新
         var gameExePath = GetGameExePath();
@@ -222,18 +244,25 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         {
             var currentExeTime = new FileInfo(gameExePath).LastWriteTimeUtc;
             var lastExeTime = _versionCheckRepository.GetGameExeLastWriteTime(_settingsService.StorageDirectory);
-            return lastExeTime != DateTime.MinValue && currentExeTime != lastExeTime;
+            if (lastExeTime != DateTime.MinValue && currentExeTime != lastExeTime)
+                return VersionAutoCheckReason.GameExeUpdated;
         }
 
-        return false;
+        return VersionAutoCheckReason.None;
     }
 
     #region Private Methods
 
-    private async Task FullScanAsync(ObservableCollection<ModViewModel> mods)
+    private async Task FullScanAsync(ObservableCollection<ModViewModel> mods, BackgroundTaskItem backgroundTask)
     {
+        _backgroundTaskService.Update(
+            backgroundTask,
+            _localizationService["VersionCheck.ScanningMods"],
+            0,
+            false);
         var results = await _versionCheckService.CheckAllModsAsync(_modService.Mods);
 
+        var processed = 0;
         foreach (var vm in mods)
         {
             if (results.TryGetValue(vm.Guid, out var result))
@@ -242,17 +271,31 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 vm.LastVersionCheck = result.LastChecked;
                 vm.VersionStatus = result.Status;
             }
+
+            processed++;
+            _backgroundTaskService.Update(
+                backgroundTask,
+                vm.Name,
+                mods.Count > 0 ? (double)processed / mods.Count : 1,
+                false);
         }
     }
 
-    private async Task IncrementalCheckAsync(ObservableCollection<ModViewModel> mods)
+    private async Task IncrementalCheckAsync(ObservableCollection<ModViewModel> mods, BackgroundTaskItem backgroundTask)
     {
         var changedMods = GetNewOrChangedMods(mods).ToList();
         if (changedMods.Count > 0)
         {
             VersionCheckSummary = _localizationService["VersionCheck.CheckingChanged"].Replace("{changedModCount}", changedMods.Count.ToString());
-            foreach (var vm in changedMods)
+            for (var i = 0; i < changedMods.Count; i++)
             {
+                var vm = changedMods[i];
+                _backgroundTaskService.Update(
+                    backgroundTask,
+                    vm.Name,
+                    changedMods.Count > 0 ? (double)i / changedMods.Count : 1,
+                    false);
+
                 var result = await _versionCheckService.CheckSingleModAsync(vm.Data);
                 if (result is not null)
                 {
@@ -260,6 +303,12 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                     vm.LastVersionCheck = result.LastChecked;
                     vm.VersionStatus = result.Status;
                 }
+
+                _backgroundTaskService.Update(
+                    backgroundTask,
+                    vm.Name,
+                    changedMods.Count > 0 ? (double)(i + 1) / changedMods.Count : 1,
+                    false);
             }
         }
     }
@@ -339,12 +388,12 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             if (!_settingsService.Initialized || string.IsNullOrEmpty(_settingsService.StorageDirectory))
                 return;
 
-            var results = new Dictionary<Guid, (ModVersionStatus Status, uint GameVersion, DateTime LastChecked)>();
+            var results = new Dictionary<Guid, (ModVersionStatus Status, uint GameVersion, DateTime LastChecked, DateTime ModLastWriteTimeUtc)>();
             foreach (var vm in mods)
             {
                 if (vm.VersionStatus != ModVersionStatus.Unknown || vm.LastVersionCheck != default)
                 {
-                    results[vm.Guid] = (vm.VersionStatus, vm.GameUnitVersion, vm.LastVersionCheck);
+                    results[vm.Guid] = (vm.VersionStatus, vm.GameUnitVersion, vm.LastVersionCheck, vm.Data.Directory.LastWriteTimeUtc);
                 }
             }
 

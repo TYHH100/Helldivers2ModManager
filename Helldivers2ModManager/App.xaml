@@ -18,6 +18,7 @@
 			<local:TagsToStringConverter x:Key="TagsToStringConverter"/>
 			<local:BytesToSizeConverter x:Key="BytesConverter"/>
 			<local:DownloadStatusToStringConverter x:Key="DownloadStatusToStringConverter"/>
+			<local:BackgroundTaskStatusToStringConverter x:Key="BackgroundTaskStatusToStringConverter"/>
 			<local:DownloadStatusToVisibilityConverter x:Key="DownloadStatusToVisibilityConverter"/>
 			<local:NullToVisibilityConverter x:Key="StringToVisibilityConverter"/>
 			<local:ProgressWidthConverter x:Key="ProgressWidthConverter"/>

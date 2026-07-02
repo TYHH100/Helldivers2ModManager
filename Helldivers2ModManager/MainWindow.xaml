@@ -49,6 +49,9 @@
 		<DataTemplate DataType="{x:Type vms:DownloadProgressViewModel}">
 			<views:DownloadProgressView/>
 		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:BackgroundTasksPageViewModel}">
+			<views:BackgroundTasksPageView/>
+		</DataTemplate>
 
 	</Window.Resources>
 

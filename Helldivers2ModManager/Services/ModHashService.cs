@@ -63,6 +63,7 @@ internal sealed class ModHashService
 	private readonly FileHashRepository _fileHashRepository;
 	private readonly DatabaseService _databaseService;
 	private readonly LocalizationService _localizationService;
+	private readonly BackgroundTaskService _backgroundTaskService;
 	private SettingsService? _settingsService;
 
 	/// <summary>
@@ -85,12 +86,14 @@ internal sealed class ModHashService
 		ILogger<ModHashService> logger,
 		FileHashRepository fileHashRepository,
 		DatabaseService databaseService,
-		LocalizationService localizationService)
+		LocalizationService localizationService,
+		BackgroundTaskService backgroundTaskService)
 	{
 		_logger = logger;
 		_fileHashRepository = fileHashRepository;
 		_databaseService = databaseService;
 		_localizationService = localizationService;
+		_backgroundTaskService = backgroundTaskService;
 	}
 
 	/// <summary>
@@ -129,6 +132,10 @@ internal sealed class ModHashService
 		// 启动后台任务，不阻塞调用方
 		var task = Task.Run(async () =>
 		{
+			var backgroundTask = _backgroundTaskService.Add(
+				_localizationService["BackgroundTasksPage.TaskTypeHash"],
+				_localizationService["ModHashService.FingerprintSingleProgress"].Replace("{name}", mod.Manifest.Name));
+
 			await _computationSemaphore.WaitAsync();
 			try
 			{
@@ -142,10 +149,14 @@ internal sealed class ModHashService
 					_settingsService.StorageDirectory);
 
 				_logger.LogInformation("File hashes computed and stored for mod \"{Name}\"", mod.Manifest.Name);
+				_backgroundTaskService.Complete(
+					backgroundTask,
+					_localizationService["ModHashService.FingerprintSingleReady"].Replace("{name}", mod.Manifest.Name));
 			}
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Failed to compute file hashes for mod \"{Name}\" ({Guid})", mod.Manifest.Name, mod.Manifest.Guid);
+				_backgroundTaskService.Fail(backgroundTask, ex.Message);
 			}
 			finally
 			{
@@ -297,6 +308,10 @@ internal sealed class ModHashService
 			TotalCount = modList.Count,
 			Message = _localizationService["ModHashService.ComputingFingerprints"].Replace("{count}", modList.Count.ToString())
 		});
+		var backgroundTask = _backgroundTaskService.Add(
+			_localizationService["BackgroundTasksPage.TaskTypeHash"],
+			_localizationService["ModHashService.ComputingFingerprints"].Replace("{count}", modList.Count.ToString()));
+		_backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
 
 		var migratedCount = 0;
 		var failedCount = 0;
@@ -316,6 +331,14 @@ internal sealed class ModHashService
 					.Replace("{total}", modList.Count.ToString())
 					.Replace("{name}", mod.Manifest.Name)
 			});
+			_backgroundTaskService.Update(
+				backgroundTask,
+				_localizationService["ModHashService.FingerprintProgress"]
+					.Replace("{current}", (migratedCount + failedCount + 1).ToString())
+					.Replace("{total}", modList.Count.ToString())
+					.Replace("{name}", mod.Manifest.Name),
+				(double)(migratedCount + failedCount) / modList.Count,
+				false);
 
 			// 注册到 _activeComputations，确保 DeleteForModAsync 能等待迁移完成后再删除目录
 			// 避免迁移读取大文件时因文件被占用而导致删除失败
@@ -354,6 +377,7 @@ internal sealed class ModHashService
 				// 通知等待者：该模组的哈希计算已全部完成，文件句柄已释放
 				tcs.TrySetResult();
 				_activeComputations.TryRemove(mod.Manifest.Guid, out _);
+				_backgroundTaskService.Update(backgroundTask, progress: (double)(migratedCount + failedCount) / modList.Count, isIndeterminate: false);
 			}
 		}
 
@@ -374,6 +398,14 @@ internal sealed class ModHashService
 				: _localizationService["ModHashService.FingerprintReady"]
 					.Replace("{count}", migratedCount.ToString())
 		});
+		_backgroundTaskService.Complete(
+			backgroundTask,
+			failedCount > 0
+				? _localizationService["ModHashService.FingerprintDone"]
+					.Replace("{success}", migratedCount.ToString())
+					.Replace("{fail}", failedCount.ToString())
+				: _localizationService["ModHashService.FingerprintReady"]
+					.Replace("{count}", migratedCount.ToString()));
 
 		_logger.LogInformation(
 			"Hash migration completed: {Migrated} mods migrated, {Failed} mods failed, migration version set to {Version}",

@@ -42,14 +42,16 @@ internal sealed partial class ModService
 	private readonly FileHashRepository _fileHashRepository;
 	private readonly ModHashService _modHashService;
 	private readonly LocalizationService _localizationService;
+	private readonly VersionCheckService _versionCheckService;
 	private SettingsService? _settingsService;
 
-	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService, LocalizationService localizationService)
+	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService, LocalizationService localizationService, VersionCheckService versionCheckService)
 	{
 		_logger = logger;
 		_fileHashRepository = fileHashRepository;
 		_modHashService = modHashService;
 		_localizationService = localizationService;
+		_versionCheckService = versionCheckService;
 		_mods = new();
 	}
 	
@@ -1346,7 +1348,7 @@ internal sealed partial class ModService
 
 	public ModViewModel GetOrCreateModViewModel(ModData mod, ILogger logger, SettingsService settingsService, Services.Nexus.INexusModsService nexusModsService)
 	{
-		return _modViewModelCache.GetOrAdd(mod.Manifest.Guid, _ => new ModViewModel(mod, logger, settingsService, nexusModsService, _localizationService));
+		return _modViewModelCache.GetOrAdd(mod.Manifest.Guid, _ => new ModViewModel(mod, logger, settingsService, nexusModsService, _localizationService, _versionCheckService));
 	}
 
 	public void ClearModViewModelCache()

@@ -7,6 +7,7 @@ using Helldivers2ModManager.Models.Nexus;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Services.Nexus;
 using Microsoft.Extensions.Logging;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -24,6 +25,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     private readonly SettingsService _settingsService;
     private readonly INexusModsService _nexusModsService;
     private readonly LocalizationService _localizationService;
+    private readonly VersionCheckService _versionCheckService;
 
     public Guid Guid => _mod.Manifest.Guid;
 
@@ -92,6 +94,18 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     /// </summary>
     [ObservableProperty]
     private bool _isCheckingVersion;
+
+    /// <summary>
+    /// 版本检查提取到的 Unit 明细
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<PatchUnitInfo> _patchUnits = [];
+
+    /// <summary>
+    /// 版本检查的详细结构分析结果
+    /// </summary>
+    [ObservableProperty]
+    private ModDetailedAnalysis? _detailedAnalysis;
 
     public ModData Data => _mod;
 
@@ -198,13 +212,14 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     private readonly ModData _mod;
 
-    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService, INexusModsService nexusModsService, LocalizationService localizationService)
+    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService, INexusModsService nexusModsService, LocalizationService localizationService, VersionCheckService versionCheckService)
     {
         _mod = mod;
         _logger = logger;
         _settingsService = settingsService;
         _nexusModsService = nexusModsService;
         _localizationService = localizationService;
+        _versionCheckService = versionCheckService;
 
         _mod.PropertyChanged += ModData_PropertyChanged;
 
@@ -410,7 +425,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     /// 显示版本兼容性详细信息
     /// </summary>
     [RelayCommand]
-    public void ShowVersionDetail()
+    public async Task ShowVersionDetail()
     {
         // 从未检查过时提示用户
         if (VersionStatus == ModVersionStatus.Unknown && LastVersionCheck == default)
@@ -424,19 +439,115 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
         var statusText = VersionStatus switch
         {
-            ModVersionStatus.Compatible => _localizationService["ModViewModel.Compatible"],
-            ModVersionStatus.Incompatible => _localizationService["ModViewModel.Incompatible"],
-            ModVersionStatus.Unknown => _localizationService["ModViewModel.UnableToConfirm"],
-            ModVersionStatus.Checking => _localizationService["ModViewModel.Checking"],
-            ModVersionStatus.Error => _localizationService["ModViewModel.Error"],
-            _ => _localizationService["ModViewModel.Unknown"]
+            ModVersionStatus.Compatible => _localizationService["Converters.Compatible"],
+            ModVersionStatus.Incompatible => _localizationService["Converters.Incompatible"],
+            ModVersionStatus.Unknown => _localizationService["Converters.UnableToConfirm"],
+            ModVersionStatus.Checking => _localizationService["Converters.Checking"],
+            ModVersionStatus.Error => _localizationService["Converters.CheckFailed"],
+            _ => _localizationService["Converters.Unknown"]
         };
 
+        var detailResult = await _versionCheckService.CheckSingleModAsync(_mod, GameUnitVersion == 0 ? null : GameUnitVersion, includeDetailedAnalysis: true);
+        var patchUnits = detailResult?.PatchUnits.ToList() ?? [];
+        var detailedAnalysis = detailResult?.DetailedAnalysis;
+
         var sb = new StringBuilder();
+
+        // 标题行
         sb.AppendLine(_localizationService["ModViewModel.VersionInfoHeader"].Replace("{name}", Name));
         sb.AppendLine(_localizationService["ModViewModel.VersionStatusLabel"].Replace("{status}", statusText));
         sb.AppendLine(_localizationService["ModViewModel.VersionUnitLabel"].Replace("{unit}", $"0x{GameUnitVersion:X8} ({GameUnitVersion})"));
         sb.AppendLine(_localizationService["ModViewModel.VersionTimeLabel"].Replace("{time}", LastVersionCheck.ToString("yyyy-MM-dd HH:mm:ss")));
+        sb.AppendLine();
+
+        // Patch Units 部分
+        if (patchUnits.Count > 0)
+        {
+            sb.AppendLine(_localizationService["ModViewModel.PatchUnitVersions"]);
+            var distinctVersions = patchUnits.Select(p => p.Version).Distinct().ToList();
+            foreach (var version in distinctVersions)
+            {
+                var count = patchUnits.Count(p => p.Version == version);
+                var match = version == GameUnitVersion ? _localizationService["ModViewModel.MatchOk"] : _localizationService["ModViewModel.MatchMismatch"];
+                var fileSuffix = count == 1 ? "file" : "files";
+                sb.AppendLine(string.Format("  {0} 0x{1:X8} ({1}) - {2} {3}", match, version, count, fileSuffix));
+            }
+            sb.AppendLine();
+            sb.AppendLine(_localizationService["ModViewModel.DetailsHeader"]);
+            foreach (var unit in patchUnits)
+            {
+                var match = unit.Version == GameUnitVersion ? _localizationService["ModViewModel.MatchOk"] : _localizationService["ModViewModel.MatchMismatch"];
+                sb.AppendLine(string.Format("  {0} {1}  0x{2:X16}  0x{3:X8}", match, unit.FileName, unit.FileId, unit.Version));
+            }
+        }
+        else
+        {
+            sb.AppendLine(_localizationService["ModViewModel.NoUnitResources"]);
+        }
+
+        // Detailed Analysis 部分
+        if (detailedAnalysis is { } analysis)
+        {
+            sb.AppendLine();
+            sb.AppendLine("=== " + _localizationService["ModViewModel.DeepAnalysisTitle"] + " ===");
+            sb.AppendLine(string.Format(_localizationService["ModViewModel.PatchFilesSummary"], analysis.TotalPatchFiles, analysis.FilesWithUnits));
+            sb.AppendLine(string.Format(_localizationService["ModViewModel.FileHealthSummary"],
+                analysis.HealthyFileCount, analysis.WarningFileCount, analysis.CorruptedFileCount));
+
+            if (analysis.HasStructuralIssues)
+                sb.AppendLine("! " + _localizationService["ModViewModel.WarningStructuralIssues"]);
+
+            if (analysis.HasCompanionFileIssues)
+                sb.AppendLine("! " + _localizationService["ModViewModel.WarningCompanionFilesMissing"]);
+
+            if (analysis.HasUnitStructuralIssues)
+                sb.AppendLine("! " + _localizationService["ModViewModel.WarningUnitStructuralIssues"]);
+
+            if (analysis.HasGpuResourceIssues)
+                sb.AppendLine("! " + _localizationService["ModViewModel.WarningGpuResourceIssues"]);
+
+            // Per-file details
+            foreach (var pf in analysis.PatchFiles)
+            {
+                sb.AppendLine();
+                sb.AppendLine(string.Format("--- {0} ---", pf.FileName));
+                sb.AppendLine(string.Format(_localizationService["ModViewModel.FileInfoSummary"], pf.FileSize, pf.HealthStatus));
+                sb.AppendLine(string.Format(_localizationService["ModViewModel.FileHeaderInfo"],
+                    pf.HeaderValid ? _localizationService["ModViewModel.Valid"] : _localizationService["ModViewModel.Invalid"],
+                    pf.FileEntriesInBounds ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"]));
+                sb.AppendLine(string.Format(_localizationService["ModViewModel.FileTypeCounts"],
+                    pf.NumTypes, pf.NumFiles, pf.TotalResources));
+                sb.AppendLine(string.Format(_localizationService["ModViewModel.FileCompanionInfo"],
+                    pf.HasGpuResources ? _localizationService["ModViewModel.Present"] : _localizationService["ModViewModel.Missing"],
+                    pf.HasStream ? _localizationService["ModViewModel.Present"] : _localizationService["ModViewModel.Missing"]));
+                sb.AppendLine(string.Format(_localizationService["ModViewModel.FileGpuBoundsInfo"],
+                    pf.GpuResourceBoundsValid ? _localizationService["ModViewModel.Valid"] : _localizationService["ModViewModel.Invalid"],
+                    pf.GpuResourceIssueCount));
+
+                if (pf.UnitDetails.Count > 0)
+                {
+                    sb.AppendLine("  " + _localizationService["ModViewModel.UnitInternalStructure"]);
+                    foreach (var unit in pf.UnitDetails)
+                    {
+                        sb.AppendLine(string.Format("    [0x{0:X16}] v{1:X8} size={2}",
+                            unit.FileId, unit.Version, unit.DataSize));
+                        sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitLodInfo"],
+                            unit.LODGroupOffset, unit.LODGroupSize, unit.LODGroupInBounds ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"]));
+                        if (unit.LayoutFormatChecked)
+                        {
+                            sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitLayoutInfo"],
+                                unit.LayoutFormatChecked, unit.LayoutFormatValid ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"],
+                                unit.LayoutFormatIssueCount));
+                        }
+                        if (!string.IsNullOrEmpty(unit.Warning))
+                            sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitWarning"], unit.Warning));
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(pf.Message))
+                    sb.AppendLine(string.Format(_localizationService["ModViewModel.FileNote"], pf.Message));
+            }
+        }
 
         WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
         {

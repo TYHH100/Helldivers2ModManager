@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,8 +21,10 @@ internal sealed class SettingsService
 	public const float OpacityMin = 0.4f;
 	
 	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_separators))]
+	[JsonIgnore]
 	public bool Initialized { get; private set; }
 	
+	[JsonIgnore]
 	public bool IsReadonly { get; private set; } = true;
 
 	public string GameDirectory
@@ -290,7 +293,6 @@ internal sealed class SettingsService
 		}
 	}
 
-
 	public ObservableCollection<ModTag> Tags
 	{
 		get
@@ -450,40 +452,69 @@ internal sealed class SettingsService
 	}
 	
 	private static readonly FileInfo s_file = new("settings.json");
-	private static readonly JsonDocumentOptions s_options = new()
-	{
-		AllowTrailingCommas = true,
-		CommentHandling = JsonCommentHandling.Skip
-	};
 	private static readonly byte[] s_optionalEntropy = Encoding.UTF8.GetBytes("Helldivers2ModManager_Entropy_2024");
+	private static readonly JsonSerializerOptions s_serializerOptions = new()
+	{
+		WriteIndented = true,
+		AllowTrailingCommas = true,
+		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+	};
 
 	private readonly ILogger<SettingsService> _logger;
+	
+	[JsonInclude]
 	private string _gameDirectory = null!;
+	[JsonInclude]
 	private string _storageDirectory = null!;
+	[JsonInclude]
 	private string _tempDirectory = null!;
+	[JsonInclude]
 	private LogLevel _logLevel;
+	[JsonInclude]
 	private float _opacity;
+	[JsonInclude]
 	private ObservableCollection<string> _skipList = null!;
+	[JsonInclude]
 	private ObservableCollection<string> _organizationalFolderNames = null!;
+	[JsonInclude]
 	private bool _caseSensitiveSearch;
+	[JsonInclude]
 	private bool _useSymbolicLinks;
+	[JsonInclude]
 	private bool _deleteToRecycleBin = true;
+	[JsonInclude]
 	private bool _autoRemoveMissingMods;
+	[JsonInclude]
 	private bool _enableSorting;
+	[JsonInclude]
 	private bool _deployBottomToTop;
+	[JsonInclude]
 	private bool _autoCheckVersionOnStartup;
+	[JsonInclude]
 	private bool _autoCleanLogs = true;
+	[JsonInclude]
 	private bool _showSeparator = true;
+	[JsonInclude]
 	private ObservableCollection<ModSeparator> _separators = null!;
+	[JsonInclude]
 	private int _logRetentionDays = 7;
+	[JsonInclude]
 	private ObservableCollection<ModTag> _tags = null!;
+	[JsonInclude]
 	private string? _encryptedNexusApiKey;
+	[JsonInclude]
 	private string _extensionHost = "localhost";
+	[JsonInclude]
 	private int _extensionPort = 7456;
+	[JsonInclude]
 	private string _language = string.Empty;
+	[JsonInclude]
 	private bool _useDeploymentOrder;
+	[JsonInclude]
 	private List<Guid> _deploymentOrderGuids = [];
+	[JsonInclude]
 	private Dictionary<Guid, int[]> _optionOrders = [];
+	[JsonInclude]
 	private Dictionary<Guid, Dictionary<int, int[]>> _subOptionOrders = [];
 
 	public SettingsService(ILogger<SettingsService> logger)
@@ -558,6 +589,22 @@ internal sealed class SettingsService
 		return true;
 	}
 
+	public async Task ReloadAsync()
+	{
+		_logger.LogInformation("Reloading settings from disk");
+		
+		s_file.Refresh();
+		if (!s_file.Exists)
+			return;
+
+		ResetInternal();
+
+		await ReadAsync();
+		
+		Initialized = true;
+		_logger.LogInformation("Settings reloaded successfully");
+	}
+
 	public void InitDefault(bool @readonly = false)
 	{
 		if (Initialized)
@@ -585,102 +632,8 @@ internal sealed class SettingsService
 		GuardInitialized();
 		GuardReadonly();
 
-		var stream = s_file.Open(FileMode.Create, FileAccess.Write, FileShare.Read);
-		var writer = new Utf8JsonWriter(stream);
-		
-		writer.WriteStartObject();
-			writer.WriteString(nameof(GameDirectory), _gameDirectory);
-			writer.WriteString(nameof(StorageDirectory), _storageDirectory);
-			writer.WriteString(nameof(TempDirectory), _tempDirectory);
-			writer.WriteString(nameof(LogLevel), _logLevel.ToString());
-			writer.WriteNumber(nameof(Opacity), _opacity);
-				writer.WriteStartArray(nameof(SkipList));
-			foreach (var elm in _skipList)
-				writer.WriteStringValue(elm);
-			writer.WriteEndArray();
-			writer.WriteStartArray(nameof(OrganizationalFolderNames));
-			foreach (var elm in _organizationalFolderNames)
-				writer.WriteStringValue(elm);
-			writer.WriteEndArray();
-			writer.WriteBoolean(nameof(CaseSensitiveSearch), _caseSensitiveSearch);
-			writer.WriteBoolean(nameof(UseSymbolicLinks), _useSymbolicLinks);
-			writer.WriteBoolean(nameof(DeleteToRecycleBin), _deleteToRecycleBin);
-			writer.WriteBoolean(nameof(AutoRemoveMissingMods), _autoRemoveMissingMods);
-			writer.WriteBoolean(nameof(EnableSorting), _enableSorting);
-			writer.WriteBoolean(nameof(DeployBottomToTop), _deployBottomToTop);
-			writer.WriteBoolean(nameof(UseDeploymentOrder), _useDeploymentOrder);
-			writer.WriteStartArray(nameof(DeploymentOrderGuids));
-			foreach (var guid in _deploymentOrderGuids)
-				writer.WriteStringValue(guid.ToString());
-			writer.WriteEndArray();
-			writer.WriteStartArray(nameof(OptionOrders));
-			foreach (var kvp in _optionOrders)
-			{
-				writer.WriteStartObject();
-				writer.WriteString("key", kvp.Key.ToString());
-				writer.WriteStartArray("value");
-				foreach (var idx in kvp.Value)
-					writer.WriteNumberValue(idx);
-				writer.WriteEndArray();
-				writer.WriteEndObject();
-			}
-			writer.WriteEndArray();
-			writer.WriteStartArray(nameof(SubOptionOrders));
-			foreach (var kvp in _subOptionOrders)
-			{
-				writer.WriteStartObject();
-				writer.WriteString("key", kvp.Key.ToString());
-				writer.WriteStartObject("value");
-				foreach (var innerKvp in kvp.Value)
-				{
-					writer.WriteStartArray(innerKvp.Key.ToString());
-					foreach (var idx in innerKvp.Value)
-						writer.WriteNumberValue(idx);
-					writer.WriteEndArray();
-				}
-				writer.WriteEndObject();
-				writer.WriteEndObject();
-			}
-			writer.WriteEndArray();
-			writer.WriteBoolean(nameof(AutoCheckVersionOnStartup), _autoCheckVersionOnStartup);
-			writer.WriteBoolean(nameof(AutoCleanLogs), _autoCleanLogs);
-			writer.WriteBoolean(nameof(ShowSeparator), _showSeparator);
-			writer.WriteStartArray(nameof(Separators));
-			foreach (var sep in _separators)
-			{
-				writer.WriteStartObject();
-				writer.WriteString("id", sep.Id.ToString());
-				writer.WriteString("name", sep.Name);
-				writer.WriteString("color", sep.Color);
-				writer.WriteBoolean("isExpanded", sep.IsExpanded);
-				writer.WriteNumber("displayIndex", sep.DisplayIndex);
-				writer.WriteStartArray("modGuids");
-				foreach (var guid in sep.ModGuids)
-					writer.WriteStringValue(guid.ToString());
-				writer.WriteEndArray();
-				writer.WriteEndObject();
-			}
-			writer.WriteEndArray();
-			writer.WriteNumber(nameof(LogRetentionDays), _logRetentionDays);
-			writer.WriteString(nameof(ExtensionHost), _extensionHost);
-			writer.WriteNumber(nameof(ExtensionPort), _extensionPort);
-			writer.WriteString(nameof(Language), _language);
-			writer.WriteStartArray(nameof(Tags));
-			foreach (var tag in _tags)
-			{
-				writer.WriteStartObject();
-				writer.WriteString("id", tag.Id.ToString());
-				writer.WriteString("name", tag.Name);
-				writer.WriteString("color", tag.Color);
-				writer.WriteEndObject();
-			}
-			writer.WriteEndArray();
-			if (_encryptedNexusApiKey is not null)
-				writer.WriteString(nameof(NexusApiKey), _encryptedNexusApiKey);
-		writer.WriteEndObject();
-		
-		await writer.DisposeAsync();
-		await stream.DisposeAsync();
+		var json = JsonSerializer.Serialize(CreateJsonModel(), s_serializerOptions);
+		await File.WriteAllTextAsync(s_file.FullName, json);
 	}
 
 	public bool Validate()
@@ -777,8 +730,72 @@ internal sealed class SettingsService
 
 	private async Task ReadAsync()
 	{
+		await ReadAsyncFallback();
+	}
+
+	private object CreateJsonModel()
+	{
+		return new
+		{
+			GameDirectory = _gameDirectory,
+			StorageDirectory = _storageDirectory,
+			TempDirectory = _tempDirectory,
+			LogLevel = _logLevel,
+			Opacity = _opacity,
+			SkipList = _skipList,
+			OrganizationalFolderNames = _organizationalFolderNames,
+			CaseSensitiveSearch = _caseSensitiveSearch,
+			UseSymbolicLinks = _useSymbolicLinks,
+			DeleteToRecycleBin = _deleteToRecycleBin,
+			AutoRemoveMissingMods = _autoRemoveMissingMods,
+			EnableSorting = _enableSorting,
+			DeployBottomToTop = _deployBottomToTop,
+			AutoCheckVersionOnStartup = _autoCheckVersionOnStartup,
+			AutoCleanLogs = _autoCleanLogs,
+			ShowSeparator = _showSeparator,
+			Separators = _separators.Select(static separator => new
+			{
+				id = separator.Id,
+				name = separator.Name,
+				color = separator.Color,
+				isExpanded = separator.IsExpanded,
+				displayIndex = separator.DisplayIndex,
+				modGuids = separator.ModGuids
+			}),
+			LogRetentionDays = _logRetentionDays,
+			Tags = _tags.Select(static tag => new
+			{
+				id = tag.Id,
+				name = tag.Name,
+				color = tag.Color
+			}),
+			NexusApiKey = _encryptedNexusApiKey,
+			ExtensionHost = _extensionHost,
+			ExtensionPort = _extensionPort,
+			Language = _language,
+			UseDeploymentOrder = _useDeploymentOrder,
+			DeploymentOrderGuids = _deploymentOrderGuids,
+			OptionOrders = _optionOrders.Select(static item => new
+			{
+				key = item.Key,
+				value = item.Value
+			}),
+			SubOptionOrders = _subOptionOrders.Select(static item => new
+			{
+				key = item.Key,
+				value = item.Value
+			})
+		};
+	}
+
+	private async Task ReadAsyncFallback()
+	{
 		var stream = s_file.Open(FileMode.Open, FileAccess.Read, FileShare.Read);
-		var document = await JsonDocument.ParseAsync(stream, s_options);
+		var document = await JsonDocument.ParseAsync(stream, new JsonDocumentOptions
+		{
+			AllowTrailingCommas = true,
+			CommentHandling = JsonCommentHandling.Skip
+		});
 		var root = document.RootElement;
 		if (root.TryGetProperty(nameof(GameDirectory), JsonValueKind.String, out var prop))
 			_gameDirectory = prop.GetString()!;
@@ -1018,10 +1035,10 @@ internal sealed class SettingsService
 		_skipList = [];
 		_caseSensitiveSearch = false;
 		_useSymbolicLinks = false;
-    _autoRemoveMissingMods = false;
-    _deleteToRecycleBin = true;
-    _enableSorting = false;
-    _autoCheckVersionOnStartup = false;
+		_autoRemoveMissingMods = false;
+		_deleteToRecycleBin = true;
+		_enableSorting = false;
+		_autoCheckVersionOnStartup = false;
 		_showSeparator = true;
 		_separators = [];
 		_extensionHost = "localhost";

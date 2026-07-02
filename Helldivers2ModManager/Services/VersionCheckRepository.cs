@@ -28,14 +28,14 @@ internal sealed class VersionCheckRepository
     /// 从数据库加载所有 Mod 的版本检测结果
     /// </summary>
     /// <param name="storageDirectory">存储目录</param>
-    /// <returns>ModGuid → (Status, GameVersion, LastChecked) 的映射字典</returns>
-    public Dictionary<Guid, (ModVersionStatus Status, uint GameVersion, DateTime LastChecked)> LoadAll(string storageDirectory)
+    /// <returns>ModGuid → (Status, GameVersion, LastChecked, ModLastWriteTimeUtc) 的映射字典</returns>
+    public Dictionary<Guid, (ModVersionStatus Status, uint GameVersion, DateTime LastChecked, DateTime ModLastWriteTimeUtc)> LoadAll(string storageDirectory)
     {
         using var connection = _databaseService.OpenConnection(storageDirectory);
-        var results = new Dictionary<Guid, (ModVersionStatus, uint, DateTime)>();
+        var results = new Dictionary<Guid, (ModVersionStatus, uint, DateTime, DateTime)>();
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT ModGuid, Status, GameVersion, LastChecked FROM version_check_results;";
+        cmd.CommandText = "SELECT ModGuid, Status, GameVersion, LastChecked, ModLastWriteTimeUtc FROM version_check_results;";
 
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -46,8 +46,11 @@ internal sealed class VersionCheckRepository
                 var status = (ModVersionStatus)reader.GetInt32(1);
                 var gameVersion = unchecked((uint)reader.GetInt32(2));
                 var lastChecked = DateTime.Parse(reader.GetString(3), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+                var modLastWriteTimeUtc = DateTime.MinValue;
+                if (!reader.IsDBNull(4) && DateTime.TryParse(reader.GetString(4), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedModTime))
+                    modLastWriteTimeUtc = parsedModTime;
 
-                results[guid] = (status, gameVersion, lastChecked);
+                results[guid] = (status, gameVersion, lastChecked, modLastWriteTimeUtc);
             }
             catch (Exception ex)
             {
@@ -63,9 +66,9 @@ internal sealed class VersionCheckRepository
     /// 批量保存（Upsert）版本检测结果，使用事务确保原子性
     /// </summary>
     /// <param name="storageDirectory">存储目录</param>
-    /// <param name="results">ModGuid → (Status, GameVersion, LastChecked) 的映射</param>
+    /// <param name="results">ModGuid → (Status, GameVersion, LastChecked, ModLastWriteTimeUtc) 的映射</param>
     public async Task SaveAllAsync(string storageDirectory,
-        Dictionary<Guid, (ModVersionStatus Status, uint GameVersion, DateTime LastChecked)> results)
+        Dictionary<Guid, (ModVersionStatus Status, uint GameVersion, DateTime LastChecked, DateTime ModLastWriteTimeUtc)> results)
     {
         await _writeLock.WaitAsync();
         try
@@ -77,18 +80,20 @@ internal sealed class VersionCheckRepository
             {
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = @"
-                    INSERT INTO version_check_results (ModGuid, Status, GameVersion, LastChecked)
-                    VALUES (@ModGuid, @Status, @GameVersion, @LastChecked)
+                    INSERT INTO version_check_results (ModGuid, Status, GameVersion, LastChecked, ModLastWriteTimeUtc)
+                    VALUES (@ModGuid, @Status, @GameVersion, @LastChecked, @ModLastWriteTimeUtc)
                     ON CONFLICT(ModGuid) DO UPDATE SET
                         Status = excluded.Status,
                         GameVersion = excluded.GameVersion,
-                        LastChecked = excluded.LastChecked;
+                        LastChecked = excluded.LastChecked,
+                        ModLastWriteTimeUtc = excluded.ModLastWriteTimeUtc;
                 ";
 
                 var guidParam = cmd.Parameters.Add("@ModGuid", SqliteType.Text);
                 var statusParam = cmd.Parameters.Add("@Status", SqliteType.Integer);
                 var versionParam = cmd.Parameters.Add("@GameVersion", SqliteType.Integer);
                 var checkedParam = cmd.Parameters.Add("@LastChecked", SqliteType.Text);
+                var modLastWriteTimeParam = cmd.Parameters.Add("@ModLastWriteTimeUtc", SqliteType.Text);
 
                 foreach (var kvp in results)
                 {
@@ -96,6 +101,7 @@ internal sealed class VersionCheckRepository
                     statusParam.Value = (int)kvp.Value.Status;
                     versionParam.Value = unchecked((int)kvp.Value.GameVersion);
                     checkedParam.Value = kvp.Value.LastChecked.ToString("O");
+                    modLastWriteTimeParam.Value = kvp.Value.ModLastWriteTimeUtc.ToString("O");
 
                     cmd.ExecuteNonQuery();
                 }

@@ -19,10 +19,12 @@ internal sealed class BrowserExtensionService : IDisposable
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
     private readonly LocalizationService _localizationService;
+    private readonly BackgroundTaskService _backgroundTaskService;
     private Task? _listenerTask;
     private CancellationTokenSource? _cts;
 
     private readonly Dictionary<string, CancellationTokenSource> _downloadCancellations = new();
+    private readonly Dictionary<string, BackgroundTaskItem> _backgroundDownloadTasks = new();
     private readonly SemaphoreSlim _requestSemaphore = new(10, 10); // 限制最大并发请求数为10
 
     /// <summary>
@@ -39,12 +41,13 @@ internal sealed class BrowserExtensionService : IDisposable
 
     public ObservableCollection<DownloadTask> DownloadTasks { get; } = new();
 
-    public BrowserExtensionService(ILogger<BrowserExtensionService> logger, ModService modService, SettingsService settingsService, LocalizationService localizationService)
+    public BrowserExtensionService(ILogger<BrowserExtensionService> logger, ModService modService, SettingsService settingsService, LocalizationService localizationService, BackgroundTaskService backgroundTaskService)
     {
         _logger = logger;
         _modService = modService;
         _settingsService = settingsService;
         _localizationService = localizationService;
+        _backgroundTaskService = backgroundTaskService;
         _httpListener = new HttpListener();
 
         // 加载持久化的下载任务
@@ -313,6 +316,7 @@ internal sealed class BrowserExtensionService : IDisposable
 
     private async Task ProcessDownloadAsync(DownloadTask task, CancellationToken cancellationToken)
     {
+        var backgroundTask = CreateOrGetDownloadBackgroundTask(task);
         // 为每个下载任务创建独立的取消令牌，关联到服务级别的取消令牌
         using var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _downloadCancellations[task.Id] = downloadCts;
@@ -321,6 +325,7 @@ internal sealed class BrowserExtensionService : IDisposable
         {
             task.Status = DownloadStatus.Downloading;
             task.MarkDownloadStarted();
+            _backgroundTaskService.Update(backgroundTask, task.Filename, 0, false);
             
             // 安全校验：防止路径遍历
             var safeFilename = Path.GetFileName(task.Filename);
@@ -329,6 +334,7 @@ internal sealed class BrowserExtensionService : IDisposable
                 _logger.LogError("Invalid filename after sanitization: {Filename}", task.Filename);
                 task.Status = DownloadStatus.Failed;
                 task.ErrorMessage = "Invalid filename";
+                _backgroundTaskService.Fail(backgroundTask, task.ErrorMessage);
                 DownloadFailed?.Invoke(task);
                 return;
             }
@@ -344,11 +350,13 @@ internal sealed class BrowserExtensionService : IDisposable
                 _logger.LogError("Path traversal attempt detected in filename: {Filename}", task.Filename);
                 task.Status = DownloadStatus.Failed;
                 task.ErrorMessage = "Path traversal not allowed";
+                _backgroundTaskService.Fail(backgroundTask, task.ErrorMessage);
                 DownloadFailed?.Invoke(task);
                 return;
             }
             
-            await DownloadFileWithProgressAsync(task.Url, tempPath, task, downloadCts.Token);
+            await DownloadFileWithProgressAsync(task.Url, tempPath, task, backgroundTask, downloadCts.Token);
+            _backgroundTaskService.Update(backgroundTask, _localizationService["BrowserExt.ImportingDownloadedMod"], isIndeterminate: true);
             
             var fileInfo = new FileInfo(tempPath);
             var problems = await _modService.TryAddModFromArchiveAsync(fileInfo);
@@ -375,6 +383,7 @@ internal sealed class BrowserExtensionService : IDisposable
                 }
                 
                 DownloadCompleted?.Invoke(task);
+                _backgroundTaskService.Complete(backgroundTask, task.ErrorMessage ?? _localizationService["BrowserExt.DownloadImportComplete"]);
             }
             else
             {
@@ -385,6 +394,7 @@ internal sealed class BrowserExtensionService : IDisposable
                 task.EstimatedTimeRemaining = TimeSpan.Zero;
                 _logger.LogWarning("Mod import completed with issues: {Errors}", string.Join(", ", errorMessages));
                 DownloadFailed?.Invoke(task);
+                _backgroundTaskService.Fail(backgroundTask, task.ErrorMessage);
             }
 
             SaveDownloadTasks();
@@ -396,6 +406,7 @@ internal sealed class BrowserExtensionService : IDisposable
             task.Speed = 0;
             task.EstimatedTimeRemaining = TimeSpan.Zero;
             _logger.LogInformation("Download cancelled: {Filename}", task.Filename);
+            _backgroundTaskService.Cancel(backgroundTask, _localizationService["BrowserExt.DownloadCancelled"]);
             SaveDownloadTasks();
         }
         catch (Exception ex)
@@ -406,6 +417,7 @@ internal sealed class BrowserExtensionService : IDisposable
             task.EstimatedTimeRemaining = TimeSpan.Zero;
             _logger.LogError(ex, "Failed to download or import mod");
             DownloadFailed?.Invoke(task);
+            _backgroundTaskService.Fail(backgroundTask, ex.Message);
             SaveDownloadTasks();
         }
         finally
@@ -430,7 +442,7 @@ internal sealed class BrowserExtensionService : IDisposable
         }
     }
 
-    private async Task DownloadFileWithProgressAsync(string url, string savePath, DownloadTask task, CancellationToken cancellationToken)
+    private async Task DownloadFileWithProgressAsync(string url, string savePath, DownloadTask task, BackgroundTaskItem backgroundTask, CancellationToken cancellationToken)
     {
         var directory = Path.GetDirectoryName(savePath);
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -474,7 +486,24 @@ internal sealed class BrowserExtensionService : IDisposable
             task.UpdateProgress(bytesRead, totalBytes);
             task.UpdateSpeed(bytesRead, totalBytes);
             DownloadProgressChanged?.Invoke(task);
+            _backgroundTaskService.Update(
+                backgroundTask,
+                task.Filename,
+                totalBytes > 0 ? (double)bytesRead / totalBytes : null,
+                totalBytes <= 0);
         }
+    }
+
+    private BackgroundTaskItem CreateOrGetDownloadBackgroundTask(DownloadTask task)
+    {
+        if (_backgroundDownloadTasks.TryGetValue(task.Id, out var backgroundTask))
+            return backgroundTask;
+
+        backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypeDownload"],
+            task.Filename);
+        _backgroundDownloadTasks[task.Id] = backgroundTask;
+        return backgroundTask;
     }
 
     private static readonly JsonSerializerOptions s_jsonOptions = new()
@@ -559,6 +588,8 @@ internal sealed class BrowserExtensionService : IDisposable
             return false;
 
         var removed = DownloadTasks.Remove(task);
+        if (_backgroundDownloadTasks.Remove(task.Id, out var backgroundTask))
+            _backgroundTaskService.Remove(backgroundTask);
         if (removed)
             SaveDownloadTasks();
         return removed;
@@ -578,6 +609,8 @@ internal sealed class BrowserExtensionService : IDisposable
         foreach (var task in completedTasks)
         {
             DownloadTasks.Remove(task);
+            if (_backgroundDownloadTasks.Remove(task.Id, out var backgroundTask))
+                _backgroundTaskService.Remove(backgroundTask);
         }
 
         SaveDownloadTasks();

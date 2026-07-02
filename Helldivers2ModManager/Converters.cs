@@ -276,6 +276,38 @@ internal sealed class DownloadStatusToStringConverter : IValueConverter
     }
 }
 
+internal sealed class BackgroundTaskStatusToStringConverter : IValueConverter
+{
+    private static LocalizationService? _localizationService;
+
+    static BackgroundTaskStatusToStringConverter()
+    {
+        try { if (Application.Current is App app) _localizationService = app.Host.Services.GetService(typeof(LocalizationService)) as LocalizationService; } catch { }
+    }
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is Models.BackgroundTaskStatus status)
+        {
+            return status switch
+            {
+                Models.BackgroundTaskStatus.Pending => _localizationService?["Converters.TaskStatusPending"] ?? "等待中",
+                Models.BackgroundTaskStatus.Running => _localizationService?["Converters.TaskStatusRunning"] ?? "进行中",
+                Models.BackgroundTaskStatus.Completed => _localizationService?["Converters.TaskStatusCompleted"] ?? "已完成",
+                Models.BackgroundTaskStatus.Failed => _localizationService?["Converters.TaskStatusFailed"] ?? "失败",
+                Models.BackgroundTaskStatus.Cancelled => _localizationService?["Converters.TaskStatusCancelled"] ?? "已取消",
+                _ => _localizationService?["Converters.Unknown"] ?? "未知"
+            };
+        }
+        return _localizationService?["Converters.Unknown"] ?? "未知";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
 internal sealed class DownloadStatusToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -424,10 +456,10 @@ internal sealed class SortModeConverter : IValueConverter
                 SortMode.NameDesc => _localizationService?["Converters.SortNameZA"] ?? "名称 Z-A",
                 SortMode.EnabledFirst => _localizationService?["Converters.SortEnabledFirst"] ?? "已启用优先",
                 SortMode.DisabledFirst => _localizationService?["Converters.SortDisabledFirst"] ?? "已禁用优先",
-                _ => _localizationService?["Converters.SortDefault"] ?? "默认顺序",
+                _ => _localizationService?["DashboardPage.SortDefault"] ?? "默认顺序",
             };
         }
-        return _localizationService?["Converters.SortDefault"] ?? "默认顺序";
+        return _localizationService?["DashboardPage.SortDefault"] ?? "默认顺序";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

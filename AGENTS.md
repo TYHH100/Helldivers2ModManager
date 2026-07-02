@@ -63,6 +63,7 @@ Helldivers2ModManager/
 │   │   ├── JsonElementExtensions.cs
 │   │   └── TypeExtension.cs
 │   ├── Models/                     # 数据模型
+│   │   ├── BackgroundTaskItem.cs   # 后台任务状态模型
 │   │   ├── DownloadTask.cs         # 下载任务模型
 │   │   ├── EnabledData.cs
 │   │   ├── IJsonInplaceSerializable.cs
@@ -113,9 +114,11 @@ Helldivers2ModManager/
 │   │       ├── FluentDesignTokens.xaml
 │   │       └── FluentWindows.xaml
 │   ├── Services/                   # 业务服务
+│   │   ├── BackgroundTaskService.cs    # 后台任务状态管理服务
 │   │   ├── BrowserExtensionService.cs  # 浏览器扩展通信服务
 │   │   ├── DatabaseService.cs      # SQLite数据库服务
 │   │   ├── EnabledDataRepository.cs    # EnabledData仓储
+│   │   ├── ModHashService.cs       # Mod 文件哈希/指纹计算服务
 │   │   ├── ModService.cs
 │   │   ├── ProfileService.cs
 │   │   ├── SettingsService.cs      # Singleton生命周期
@@ -136,6 +139,7 @@ Helldivers2ModManager/
 │   │   │   ├── CreateModOptionViewModel.cs
 │   │   │   ├── CreateModSubOptionViewModel.cs
 │   │   │   └── IntroPageViewModel.cs
+│   │   ├── BackgroundTasksPageViewModel.cs # 后台任务页ViewModel
 │   │   ├── CreatePageViewModel.cs
 │   │   ├── DashboardPageViewModel.cs
 │   │   ├── DownloadProgressViewModel.cs  # 下载进度页ViewModel
@@ -159,6 +163,8 @@ Helldivers2ModManager/
 │   │   │   ├── IncludeDirectoryPicker.xaml.cs
 │   │   │   ├── IntroPageView.xaml
 │   │   │   └── IntroPageView.xaml.cs
+│   │   ├── BackgroundTasksPageView.xaml    # 后台任务页面
+│   │   ├── BackgroundTasksPageView.xaml.cs
 │   │   ├── CreatePageView.xaml
 │   │   ├── CreatePageView.xaml.cs
 │   │   ├── DashboardPageView.xaml
@@ -261,7 +267,7 @@ internal sealed class NexusModsService : INexusModsService
 </Window.Resources>
 ```
 
-当前已注册的页面 DataTemplate 包括：DashboardPageView、SettingsPageView、EditPageView、ManifestEditPageView、CreatePageView、TagManagementPageView、NexusDownloadPageView、DownloadProgressView。
+当前已注册的页面 DataTemplate 包括：DashboardPageView、SettingsPageView、EditPageView、ManifestEditPageView、CreatePageView、TagManagementPageView、NexusDownloadPageView、DownloadProgressView、BackgroundTasksPageView。
 
 **常见错误**: 如果只添加了 `[RegisterService]` 但没有在 XAML 中添加 DataTemplate，导航到该页面时会显示空白或错误。
 
@@ -276,6 +282,61 @@ internal sealed class NexusModsService : INexusModsService
 1. 构造函数注入依赖
 2. `Init()` 或 `InitAsync()` 方法进行完整初始化
 3. 使用 `Initialized` 属性和 `GuardInitialized()` 检查初始化状态
+
+### 3.4.1 后台任务系统
+
+后台任务系统用于展示长耗时、非阻塞 UI 的操作进度，例如 Mod 文件哈希/指纹计算、下载导入、批量导入、更新、导出、部署、清理、删除和版本兼容性检查等。
+
+**核心组件**:
+- `Models/BackgroundTaskItem.cs` — 后台任务状态模型，包含任务名称、描述、状态、进度、错误信息、开始时间和完成时间
+- `Services/BackgroundTaskService.cs` — 单例任务状态管理服务，统一维护后台任务集合并负责 UI 线程切换
+- `ViewModels/BackgroundTasksPageViewModel.cs` — 后台任务页面 ViewModel，提供返回、清理已完成任务、移除已结束任务等命令
+- `Views/BackgroundTasksPageView.xaml` — 后台任务页面，显示任务列表、状态、进度和错误信息
+
+**使用规范**:
+1. 在需要展示后台操作的服务或 ViewModel 中通过 DI 注入 `BackgroundTaskService`
+2. 使用 `Add(name, description)` 创建任务，并保存返回的 `BackgroundTaskItem` 引用
+3. 后台执行期间使用 `Update(task, description, progress, isIndeterminate)` 更新描述和进度
+4. 成功时调用 `Complete(task, description)`，失败时调用 `Fail(task, errorMessage)`，用户取消时调用 `Cancel(task, description)`
+5. 不要直接从业务代码修改 `Tasks` 集合，应通过 `BackgroundTaskService` 提供的方法操作
+
+**进度规则**:
+- `Progress` 使用 `0-1` 的小数值，`0` 表示 0%，`1` 表示 100%
+- `IsIndeterminate = true` 表示不确定进度，适合无法预估总量的任务
+- 有明确总量时应设置 `IsIndeterminate = false`，并按 `已完成数量 / 总数量` 更新 `Progress`
+
+**线程规则**:
+- `BackgroundTaskService` 内部会通过 WPF Dispatcher 切回 UI 线程
+- 后台线程可以安全调用 `Add`、`Update`、`Complete`、`Fail`、`Cancel`、`Remove`、`ClearCompleted`
+- 不要从后台线程直接修改 `BackgroundTaskItem` 属性或 `Tasks` 集合
+
+**接入范围**:
+- 应接入：下载/导入、批量导入、Mod 更新、导出、部署、清理、删除、版本兼容性检查、文件哈希/指纹计算
+- 可选接入：启动加载 Mod、自动检测游戏目录等低频辅助长操作
+- 不建议接入：设置保存、标签保存、语言初始化、HTTP 监听循环等短操作或常驻服务
+- 下载任务保留 `DownloadTask` 作为业务和持久化模型，同时镜像到 `BackgroundTaskItem` 作为后台任务总览
+
+**本地化规则**:
+- 任务名称和描述应优先使用 `LocalizationService`
+- 后台任务页面相关键使用 `BackgroundTasksPage.*`
+- 业务任务描述按服务名组织，例如 `ModHashService.*`
+
+**示例**:
+```csharp
+var backgroundTask = _backgroundTaskService.Add(
+    _localizationService["BackgroundTasksPage.TaskTypeHash"],
+    _localizationService["ModHashService.FingerprintSingleProgress"].Replace("{name}", mod.Manifest.Name));
+
+try
+{
+    await DoLongRunningWorkAsync();
+    _backgroundTaskService.Complete(backgroundTask, _localizationService["ModHashService.FingerprintSingleReady"].Replace("{name}", mod.Manifest.Name));
+}
+catch (Exception ex)
+{
+    _backgroundTaskService.Fail(backgroundTask, ex.Message);
+}
+```
 
 ### 3.5 日志规范
 - 使用 `Microsoft.Extensions.Logging.ILogger<T>`
@@ -361,6 +422,29 @@ xmlns:local="clr-namespace:Helldivers2ModManager"
 **当前使用页面**:
 - `DashboardPageView` — Mod 列表拖拽排序（通过 `xmlns:local` 引用）
 - `CreatePageView` — 选项列表、子选项列表拖拽排序（通过 `xmlns:bhv` 引用）
+
+---
+
+### 3.10 版本检查大文件读取策略
+
+`VersionCheckService` 在解析 `.patch_*` 文件时采用动态读取策略，避免大文件全量进入内存。
+
+**策略规则**:
+- 优先按单个文件判断，不按整个 Mod 或压缩包大小判断
+- `.gpu_resources` 不允许全量读入内存，仅允许按需读取必要结构或使用低内存路径
+- 普通 `.patch_*` 文件在内存充足且小于安全上限时可使用内存快路径
+- 当可用内存不足、文件过大或文件大小超过 `int.MaxValue` 时，自动切换到 `FileStream` 随机读取路径
+
+**动态阈值**:
+- 使用 `GC.GetGCMemoryInfo().TotalAvailableMemoryBytes - GC.GetTotalMemory(false)` 估算当前可用内存
+- 安全读取上限为 `Min(可用内存 / 10, 512MB)`
+- 低内存路径只读取头部、类型表、文件表和 Unit 结构所需字段，不读取完整文件内容
+
+**维护要求**:
+- 新增版本检查、补丁结构分析或 GPU 资源分析逻辑时，不要直接使用 `File.ReadAllBytesAsync` 读取大型文件
+- 需要随机访问补丁结构时优先使用 `FileStream` + 定位读取，并在每次读取前检查 `offset + size <= stream.Length`
+- 对 2GB+ 文件必须避免转换为 `int` 偏移，偏移和长度计算优先使用 `long`
+- 小文件内存快路径只作为性能优化，不能作为唯一解析路径
 
 ---
 
@@ -496,14 +580,14 @@ internal sealed class MyViewModel
 |------|--------|------|------|
 | Legacy | `ManifestVersion.Legacy` | 支持 | 旧版格式，无Version字段 |
 | V1 | `ManifestVersion.V1` | 支持 | 当前推荐格式 |
-| V2 | `ManifestVersion.V2` | 不支持 | 已废弃，抛出 `EndOfLifeException` |
+| V2 | `ManifestVersion.V2` | 不支持 | 草稿阶段，抛出 `EndOfLifeException` |
 
 ### 4.2 V1清单格式 (推荐)
 
 ```json
 {
   "Version": 1,
-  "Guid": "550e8400-e29b-41d4-a716-446655440000",
+  "Guid": "0000000-0000000-0000000-0000000-0000000",
   "Name": "Mod名称",
   "Description": "Mod描述",
   "IconPath": "icon.png",
@@ -522,23 +606,19 @@ internal sealed class MyViewModel
         }
       ]
     }
-  ],
-  "NexusData": {
-    "ModId": 12345,
-    "Version": "1.0.0"
-  }
+  ]
 }
 ```
 
 ### 4.3 字段说明
 
 #### 必填字段
-- `Version`: 必须为1（V1格式）
 - `Guid`: 全局唯一标识符（UUID）
 - `Name`: Mod名称
 - `Description`: Mod描述
 
 #### 可选字段
+- `Version`: 必须为1（V1格式）
 - `IconPath`: 相对于Mod根目录的图标路径
 - `Options`: Mod选项数组
   - `Name`: 选项名称（必填）
@@ -753,116 +833,3 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 | Tag | Mod标签，用于分类和筛选 |
 | EOL | End of Life，生命周期结束 |
 | SkipList | 跳过的文件名列表（16字符名称） |
-
----
-
-## 10. 相关文件参考
-
-- **AGENTS.md**: 本文件，开发和维护指南
-- **README.md**: 项目简介
-- **mod_manifest_v1-schema.json**: Mod清单JSON Schema
-- **.github/workflows/main.yml**: CI/CD工作流
-
----
-
-## 11. 变更记录
-
-### v1.4.1.0 更新内容
-
-#### 新增文件和目录
-
-**新目录**:
-- `Exceptions/Nexus/` - Nexus Mods API 异常类
-- `Models/Nexus/` - Nexus Mods 数据模型
-- `Services/Nexus/` - Nexus Mods 服务层
-
-**新文件**:
-- `Models/DownloadTask.cs` - 下载任务模型（进度跟踪、速度计算、持久化）
-- `Models/VersionCheckStatus.cs` - 版本兼容性检测相关模型（`ModVersionStatus` 枚举、`ModVersionCheckResult` 等）
-- `Exceptions/Nexus/NexusApiException.cs` - Nexus API 异常（含 4 个子类：Not Found、API Key Invalid、Rate Limit、Validation）
-- `Exceptions/Nexus/NexusPremiumRequiredException.cs` - 需要 Nexus Premium 会员权限异常
-- `Services/VersionCheckService.cs` - 版本兼容性检测服务（解析补丁文件二进制头部，提取 Unit 资源版本号）
-- `Services/BrowserExtensionService.cs` - 浏览器扩展通信服务（HttpListener 接收下载请求，管理下载队列）
-- `Services/DatabaseService.cs` - SQLite 数据库服务（WAL 模式，自动迁移）
-- `Services/EnabledDataRepository.cs` - EnabledData 的 SQLite 仓储
-- `Services/Nexus/INexusHttpClient.cs` / `NexusHttpClient.cs` - Nexus Mods API HTTP 客户端
-- `Services/Nexus/INexusModsService.cs` / `NexusModsService.cs` - Nexus Mods 高层服务
-- `Services/Nexus/INexusCacheService.cs` / `NexusCacheService.cs` - Nexus API 缓存服务
-- `ViewModels/DownloadProgressViewModel.cs` - 下载进度页 ViewModel
-- `ViewModels/NexusDownloadPageViewModel.cs` - Nexus 下载页 ViewModel
-- `ViewModels/ManifestEditPageViewModel.cs` - 清单编辑页 ViewModel（右键菜单"编辑模组"）
-- `ViewModels/Create/CreateModOptionViewModel.cs` - 创建页面选项编辑 ViewModel
-- `ViewModels/Create/CreateModSubOptionViewModel.cs` - 创建页面子选项编辑 ViewModel
-- `Views/DownloadProgressView.xaml` / `.xaml.cs` - 下载进度页面
-- `Views/NexusDownloadPageView.xaml` / `.xaml.cs` - Nexus 下载页面
-- `Views/ManifestEditPageView.xaml` / `.xaml.cs` - 清单编辑页面
-- `Views/Create/IncludeDirectoryPicker.xaml` / `.xaml.cs` - 包含目录选择器组件
-- `MainWindow.xaml` / `MainWindow.xaml.cs` - 主窗口
-
-#### 新增功能
-
-1. **Nexus Mods 集成**: 支持从 Nexus Mods 下载并导入 Mod，包括 Mod 信息浏览、文件选择、下载进度显示
-2. **浏览器扩展支持**: 通过 `BrowserExtensionService` 接收浏览器扩展的下载请求
-3. **版本兼容性检测**: 扫描 Mod 补丁文件的二进制头部，对比游戏版本，自动标记兼容/不兼容状态
-4. **Dashboard 排序功能**: 支持按名称（A-Z/Z-A）、启用状态（已启用优先/已禁用优先）排序
-5. **批量操作**: 支持全选/取消全选、批量删除、批量启用/禁用
-6. **原位编辑**: 支持在 Dashboard 中直接编辑 Mod 名称、描述、图片
-7. **标签编辑**: 支持在 Dashboard 中为 Mod 添加/移除标签
-8. **SQLite 数据库**: 引入 `DatabaseService` 和 `EnabledDataRepository`，将 EnabledData 持久化到 SQLite
-9. **自动版本检查**: 启动时可自动检查所有 Mod 的版本兼容性（每会话仅执行一次）
-10. **Nexus API Key 加密存储**: 使用 `ProtectedData` 加密存储 API Key
-11. **游戏路径自动检测**: 设置页面支持通过注册表和 `libraryfolders.vdf` 自动检测 Steam 游戏路径
-12. **退出时清理**: 应用退出时自动清理 `hd2mm_*` 临时目录
-13. **清单编辑页**: 支持通过右键菜单"编辑模组"打开清单编辑页面，直接编辑 Mod 基本信息及选项/子选项
-
-#### 设置更新
-- 新增 `EnableSorting` 设置项（排序功能开关）
-- 新增 `AutoCheckVersionOnStartup` 设置项（启动自动版本检查）
-- 新增 `AutoCleanLogs` 设置项（自动清理过期日志）
-- 新增 `LogRetentionDays` 设置项（日志保留天数）
-- 新增 `ExtensionHost` / `ExtensionPort` 设置项（浏览器扩展地址配置）
-- 新增 `NexusApiKey` 设置项（Nexus API Key，加密存储）
-
-#### 框架更新
-- 新增 NuGet 包：`Microsoft.Data.Sqlite`、`Microsoft.Extensions.Caching.Memory`、`CommunityToolkit.Common`、`SharpSevenZip` 2.0.77
-- **压缩库替换**: 移除 `SharpCompress` 0.48.1，替换为 `SharpSevenZip` 2.0.77
-  - `SharpSevenZip` 基于原生 7z.dll，完整支持所有 LZMA/LZMA2 字典大小
-  - 解决 SharpCompress 纯托管实现对**大字典 LZMA 压缩文件**的兼容性问题
-  - `Resources/Native/7z.dll` 作为 `Content`（`CopyToOutputDirectory`）随程序分发
-  - `App.xaml.cs` 在 `OnStartup` 中通过 `SetLibraryPath()` 初始化路径
-  - 支持所有格式（7z/zip/rar/tar 等），按归档签名自动检测格式
-- `RegisterServiceAttribute` 新增 `Contract` 属性，支持接口/实现类同时注册
-- `HostApplicationBuilder` 模式替代直接创建 `Host`
-- 注册 `IMemoryCache` 缓存服务
-- `App.xaml.cs` 启动后延迟 1 秒启动 `BrowserExtensionService`
-
-### v1.3.0.1 更新内容
-
-#### 新增文件
-- `Models/ModTag.cs` - Mod标签数据模型
-- `Models/TagSelectionItem.cs` - 标签选择项封装
-- `Converters.cs` - 数据绑定转换器集合
-- `ViewModels/TagManagementPageViewModel.cs` - 标签管理页面视图模型
-- `Views/TagManagementPageView.xaml` - 标签管理页面视图
-- `AssemblyInfo.cs` - 程序集信息
-- `ComboBoxScrollBehavior.cs` - 组合框滚动行为
-- `GroupItemConverter.cs` - 分组项转换器
-
-#### 新增功能
-1. **标签系统**: 支持为Mod添加自定义标签
-2. **标签搜索**: 在Dashboard中使用 `@标签名` 语法筛选Mod
-3. **标签管理**: 独立的标签管理页面，支持创建、编辑、删除标签
-4. **颜色定制**: 每个标签可自定义显示颜色
-5. **删除方式设置**: 支持移动到回收站或直接删除
-6. **自动清理**: 自动删除不存在的模组条目
-
-#### 设置更新
-- `SettingsService` 改为 `Singleton` 生命周期
-- 新增 `DeleteToRecycleBin` 设置项
-- 新增 `AutoRemoveMissingMods` 设置项
-- 新增 `Tags` 集合存储标签数据
-
----
-
-*文档版本: 1.4.1*
-*最后更新: 2026-06-17*

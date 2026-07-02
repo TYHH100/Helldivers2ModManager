@@ -213,6 +213,16 @@ internal sealed class PatchFileAnalysis
     public bool HasStream { get; set; }
 
     /// <summary>
+    /// GPU 数据引用是否都在 .gpu_resources 文件边界内
+    /// </summary>
+    public bool GpuResourceBoundsValid { get; set; } = true;
+
+    /// <summary>
+    /// GPU 数据边界异常数量
+    /// </summary>
+    public int GpuResourceIssueCount { get; set; }
+
+    /// <summary>
     /// 该文件中 Unit 资源的深度检查结果
     /// </summary>
     public List<UnitResourceDetail> UnitDetails { get; set; } = [];
@@ -268,6 +278,11 @@ internal sealed class ModDetailedAnalysis
     /// 是否存在 Unit 内部结构问题
     /// </summary>
     public bool HasUnitStructuralIssues { get; set; }
+
+    /// <summary>
+    /// 是否存在 GPU 数据边界问题
+    /// </summary>
+    public bool HasGpuResourceIssues { get; set; }
 
     /// <summary>
     /// 补丁文件总数
@@ -404,6 +419,9 @@ internal sealed class CompatibleCheckInfo
             if (analysis.HasUnitStructuralIssues)
                 sb.AppendLine("! WARNING: Unit internal structure issues detected");
 
+            if (analysis.HasGpuResourceIssues)
+                sb.AppendLine("! WARNING: GPU resource bounds issues detected");
+
             // Per-file details
             foreach (var pf in analysis.PatchFiles)
             {
@@ -418,6 +436,9 @@ internal sealed class CompatibleCheckInfo
                 sb.AppendLine(string.Format("  GPU Resources: {0} | Stream: {1}",
                     pf.HasGpuResources ? "Present" : "Missing",
                     pf.HasStream ? "Present" : "Missing"));
+                sb.AppendLine(string.Format("  GPU Bounds: {0} | Issues: {1}",
+                    pf.GpuResourceBoundsValid ? "Valid" : "INVALID",
+                    pf.GpuResourceIssueCount));
 
                 if (pf.UnitDetails.Count > 0)
                 {

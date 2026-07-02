@@ -300,15 +300,21 @@
 				</StackPanel>
 
 				<!-- Progress Bar -->
-				<ProgressBar x:Name="progress"
-							 Grid.Row="2"
-							 IsIndeterminate="True"
-							 Height="4"
-							 Margin="0 8 0 0"
-							 Foreground="{StaticResource SystemAccentBrush}"
-							 Background="{StaticResource NeutralBackgroundFillBrush}"
-							 BorderThickness="0"
-							 Visibility="Hidden"/>
+				<StackPanel x:Name="progressPanel"
+							Visibility="Hidden">
+					<TextBlock x:Name="progressStep"
+							   Margin="0 0 0 8"
+							   FontSize="12"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   TextTrimming="CharacterEllipsis"/>
+					<ProgressBar x:Name="progress"
+								 IsIndeterminate="True"
+								 Height="4"
+								 Foreground="{StaticResource SystemAccentBrush}"
+								 Background="{StaticResource NeutralBackgroundFillBrush}"
+								 BorderThickness="0"
+								 Visibility="Hidden"/>
+				</StackPanel>
 			</Grid>
 		</Grid>
 	</Border>

@@ -29,6 +29,8 @@ internal sealed class MessageBoxProgressMessage
 	public required string Title { get; init; }
 
 	public required string Message { get; init; }
+
+	public string? Step { get; init; }
 }
 
 /// <summary>
@@ -232,7 +234,9 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		title.Text = message.Title;
 		brush.Color = Colors.White;
 		this.message.Text = message.Message;
+		progressStep.Text = message.Step ?? message.Title;
 
+		progressPanel.Visibility = Visibility.Visible;
 		progress.Visibility = Visibility.Visible;
 		Visibility = Visibility.Visible;
 	}
@@ -248,6 +252,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		// Switch progress bar to determinate mode
 		progress.IsIndeterminate = false;
 		progress.Value = 0;
+		progressPanel.Visibility = Visibility.Visible;
+		progressStep.Text = this.message.Text;
 		progress.Visibility = Visibility.Visible;
 
 		// Show export info panel with all elements visible
@@ -266,6 +272,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		if (message.IsCompleted)
 		{
 			// 完成状态：隐藏进度条/当前文件/速度，保留压缩率，显示确认按钮
+			progressPanel.Visibility = Visibility.Hidden;
 			progress.Visibility = Visibility.Hidden;
 			exportCurrentFile.Visibility = Visibility.Collapsed;
 			exportSpeedText.Visibility = Visibility.Collapsed;
@@ -292,11 +299,13 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		// 切换到确定进度条模式，显示更新进度面板
 		progress.IsIndeterminate = false;
 		progress.Value = 0;
+		progressPanel.Visibility = Visibility.Visible;
+		progressStep.Text = LocalizationService?["MessageBox.ComputingHashes"] ?? "正在计算文件哈希...";
 		progress.Visibility = Visibility.Visible;
 
 		// 显示更新进度信息面板
 		updateProgressPanel.Visibility = Visibility.Visible;
-		updatePhaseText.Text = LocalizationService?["MessageBox.ComputingHashes"] ?? "正在计算文件哈希...";
+		updatePhaseText.Text = progressStep.Text;
 		updateCurrentFile.Text = "";
 		updateFileCount.Text = "";
 		updateNeedUpdateCount.Text = "";
@@ -309,6 +318,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		if (message.IsCompleted)
 		{
 			// 完成状态：隐藏进度条和信息面板，显示完成消息
+			progressPanel.Visibility = Visibility.Hidden;
 			progress.Visibility = Visibility.Hidden;
 			updateProgressPanel.Visibility = Visibility.Collapsed;
 			this.message.Text = LocalizationService?["MessageBox.UpdateDone"] ?? "模组更新完成";
@@ -319,7 +329,10 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 			progress.Value = Math.Clamp(message.Progress * 100, 0, 100);
 
 			if (!string.IsNullOrEmpty(message.PhaseText))
+			{
 				updatePhaseText.Text = message.PhaseText;
+				progressStep.Text = message.PhaseText;
+			}
 
 			if (!string.IsNullOrEmpty(message.CurrentFile))
 				updateCurrentFile.Text = message.CurrentFile;
@@ -487,7 +500,9 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		okButton.Visibility = Visibility.Hidden;
 		yesNoStack.Visibility = Visibility.Hidden;
 		progress.IsIndeterminate = true;
+		progressPanel.Visibility = Visibility.Hidden;
 		progress.Visibility = Visibility.Hidden;
+		progressStep.Text = "";
 		exportProgressPanel.Visibility = Visibility.Collapsed;
 		exportCurrentFile.Visibility = Visibility.Visible;
 		exportSpeedText.Visibility = Visibility.Visible;

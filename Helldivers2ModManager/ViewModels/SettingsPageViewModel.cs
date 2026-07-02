@@ -578,6 +578,21 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	[RelayCommand]
+	async Task Cancel()
+	{
+		_logger.LogInformation("User cancelled settings changes");
+		
+		await _settingsService.ReloadAsync();
+		
+		if (!string.IsNullOrEmpty(_settingsService.Language))
+		{
+			_localizationService.SelectedLanguage = _settingsService.Language;
+		}
+		
+		_navStore.Navigate<DashboardPageViewModel>();
+	}
+
 	/// <summary>
 	/// 切换设置选项卡（XAML CommandParameter 传递的是字符串，需要手动解析为 int）
 	/// </summary>
@@ -844,7 +859,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 		WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
 		{
-			Title = _localizationService["SettingsPage.RecomputeHashTitle"],
+			Title = _localizationService["Common.WarningPrefix"],
 			Message = _localizationService["SettingsPage.RecomputeHashMsg"].Replace("{count}", modCount.ToString()),
 			Confirm = () =>
 			{

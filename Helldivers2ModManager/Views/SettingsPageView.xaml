@@ -928,11 +928,23 @@
         <Border Grid.Row="3"
                 Style="{StaticResource FluentCard}"
                 CornerRadius="8">
-            <Button Content="{loc:Loc Common.OK}"
-                    Style="{StaticResource FluentPrimaryButton}"
-                    Command="{Binding OkCommand}"
-                    HorizontalAlignment="Right"
-                    Padding="24 10"/>
+            <Grid HorizontalAlignment="Right">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="FooterButton"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="FooterButton"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0"
+                        Content="{loc:Loc Common.Cancel}"
+                        Style="{StaticResource FluentSecondaryButton}"
+                        Command="{Binding CancelCommand}"
+                        Padding="24 10"/>
+                <Button Grid.Column="2"
+                        Content="{loc:Loc Common.OK}"
+                        Style="{StaticResource FluentPrimaryButton}"
+                        Command="{Binding OkCommand}"
+                        Padding="24 10"/>
+            </Grid>
         </Border>
     </Grid>
 </Page>
