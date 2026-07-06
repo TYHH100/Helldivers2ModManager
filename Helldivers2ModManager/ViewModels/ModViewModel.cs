@@ -297,6 +297,20 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         }
     }
 
+    public void RefreshGroupStateBindings()
+    {
+        OnPropertyChanged(nameof(Enabled));
+        OnPropertyChanged(nameof(LegacySelectedOption));
+        if (_mod.Manifest.Version == ManifestVersion.V1)
+        {
+            var manifest = (V1ModManifest)_mod.Manifest;
+            Options = manifest.Options is null
+                ? null
+                : manifest.Options.Select((_, i) => new ModOptionViewModel(this, i)).ToArray();
+            OnPropertyChanged(nameof(Options));
+        }
+    }
+
     public void LoadIcon()
     {
         try

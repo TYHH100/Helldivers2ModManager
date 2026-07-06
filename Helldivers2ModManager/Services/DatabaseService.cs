@@ -43,6 +43,36 @@ internal sealed class DatabaseService : IDisposable
 	private const string CheckSortOrderColumnSql = "SELECT COUNT(*) FROM pragma_table_info('enabled_mods') WHERE name='SortOrder';";
 
 	/// <summary>
+	/// 数据库表创建 SQL —— 存储 Dashboard 分组元数据与自定义分组成员
+	/// </summary>
+	private const string CreateModGroupsTableSql = @"
+		CREATE TABLE IF NOT EXISTS mod_groups (
+			Id TEXT PRIMARY KEY NOT NULL,
+			Name TEXT NOT NULL,
+			DisplayIndex INTEGER NOT NULL DEFAULT 0,
+			ModGuids TEXT NOT NULL DEFAULT '[]',
+			CreatedAtUtc TEXT NOT NULL DEFAULT ''
+		);
+	";
+
+	/// <summary>
+	/// 数据库表创建 SQL —— 按分组隔离存储 Mod 启用状态及选项配置
+	/// </summary>
+	private const string CreateGroupEnabledModsTableSql = @"
+		CREATE TABLE IF NOT EXISTS group_enabled_mods (
+			GroupId TEXT NOT NULL,
+			Guid TEXT NOT NULL,
+			Enabled INTEGER NOT NULL DEFAULT 1,
+			Toggled TEXT NOT NULL DEFAULT '[]',
+			Selected TEXT NOT NULL DEFAULT '[]',
+			SortOrder INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (GroupId, Guid)
+		);
+	";
+
+	private const string CreateGroupEnabledModsIndexSql = "CREATE INDEX IF NOT EXISTS idx_group_enabled_mods_group_sort ON group_enabled_mods (GroupId, SortOrder);";
+
+	/// <summary>
 	/// 数据库表创建 SQL —— 存储文件哈希缓存，用于模组增量更新时的快速比对
 	/// </summary>
 	private const string CreateFileHashesTableSql = @"
@@ -202,6 +232,23 @@ internal sealed class DatabaseService : IDisposable
 						alterCmd.ExecuteNonQuery();
 						_logger.LogInformation("Added SortOrder column to legacy database");
 					}
+				}
+
+				// 创建分组表结构
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateModGroupsTableSql;
+					cmd.ExecuteNonQuery();
+				}
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateGroupEnabledModsTableSql;
+					cmd.ExecuteNonQuery();
+				}
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateGroupEnabledModsIndexSql;
+					cmd.ExecuteNonQuery();
 				}
 
 				// 创建文件哈希缓存表

@@ -1,0 +1,83 @@
+<UserControl x:Class="Helldivers2ModManager.Views.ModGroupSidebarView"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
+             xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vms:ModGroupSidebarViewModel}"
+             d:DesignWidth="260"
+             d:DesignHeight="600">
+    <Border Style="{StaticResource FluentElevatedCard}"
+            CornerRadius="8"
+            Padding="12">
+        <DockPanel LastChildFill="True">
+            <StackPanel DockPanel.Dock="Top">
+                <TextBlock Text="{loc:Loc ModGroup.SidebarTitle}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource NeutralForegroundBrush}"
+                           Margin="0 0 0 12"/>
+                <TextBlock Text="{loc:Loc ModGroup.CurrentGroup}"
+                           FontSize="12"
+                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                <TextBlock Text="{Binding SelectedGroupName}"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource SystemAccentBrush}"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="0 2 0 12"/>
+            </StackPanel>
+
+            <StackPanel DockPanel.Dock="Bottom"
+                        Margin="0 12 0 0">
+                <TextBox Style="{StaticResource FluentTextBox}"
+                         Tag="{loc:Loc ModGroup.NewGroupWatermark}"
+                         Text="{Binding NewGroupName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0 0 0 8"/>
+                <Button Style="{StaticResource FluentPrimaryButton}"
+                        Content="{loc:Loc ModGroup.CreateGroup}"
+                        Command="{Binding CreateGroupCommand}"
+                        Margin="0 0 0 8"/>
+                <Button Style="{StaticResource FluentSecondaryButton}"
+                        Content="{loc:Loc ModGroup.RemoveSelected}"
+                        Command="{Binding RemoveSelectedModsCommand}"
+                        Margin="0 0 0 8"/>
+                <Button Style="{StaticResource FluentDangerButton}"
+                        Content="{loc:Loc ModGroup.DeleteGroup}"
+                        Command="{Binding DeleteGroupCommand}"/>
+            </StackPanel>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Groups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Command="{Binding DataContext.SelectGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    Style="{StaticResource FluentSecondaryButton}"
+                                    HorizontalContentAlignment="Stretch"
+                                    Margin="0 0 0 8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Name}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding ModGuids.Count}"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               Margin="8 0 0 0"/>
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</UserControl>

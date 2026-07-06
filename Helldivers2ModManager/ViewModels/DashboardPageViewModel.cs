@@ -58,6 +58,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly VersionCheckViewModel _versionCheckVm;
     private readonly LocalizationService _localizationService;
     private readonly BackgroundTaskService _backgroundTaskService;
+    private readonly ModGroupService _modGroupService;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -70,12 +71,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// <summary>
     /// 是否有选中的 Mod（用于控制批量操作按钮的可见性）
     /// </summary>
-    public bool HasSelection => _mods is not null && _mods.Any(static vm => vm.IsSelected);
+    public bool HasSelection => _mods is not null && _modGroupService.FilterModViewModels(_mods).Any(static vm => vm.IsSelected);
 
     /// <summary>
     /// 选中数量文本（如 "已选 2 项"）
     /// </summary>
-    public string SelectionCountText => _mods is null ? "" : $"{_localizationService["DashboardPage.AlreadySelectedPrefix"]}{_mods.Count(static vm => vm.IsSelected)}{_localizationService["DashboardPage.SelectedCountSuffix"]}";
+    public string SelectionCountText => _mods is null ? "" : $"{_localizationService["DashboardPage.AlreadySelectedPrefix"]}{_modGroupService.FilterModViewModels(_mods).Count(static vm => vm.IsSelected)}{_localizationService["DashboardPage.SelectedCountSuffix"]}";
 
     /// <summary>
     /// 排序功能是否在设置中启用
@@ -91,6 +92,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// 在主页导航面板中显示分隔线
     /// </summary>
     public bool ShowSeparator => _settingsService.Initialized && _settingsService.ShowSeparator;
+
+    public ModGroupSidebarViewModel GroupSidebar { get; }
 
     // ===== 版本兼容性检测属性（委托给 VersionCheckViewModel） =====
 
@@ -132,7 +135,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         SortService sortService,
         VersionCheckViewModel versionCheckVm,
         LocalizationService localizationService,
-        BackgroundTaskService backgroundTaskService)
+        BackgroundTaskService backgroundTaskService,
+        ModGroupService modGroupService,
+        ModGroupSidebarViewModel groupSidebar)
     {
         _logger = logger;
         _navStore = new(provider.GetRequiredService<NavigationStore>);
@@ -148,6 +153,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _versionCheckVm = versionCheckVm;
         _localizationService = localizationService;
         _backgroundTaskService = backgroundTaskService;
+        _modGroupService = modGroupService;
+        GroupSidebar = groupSidebar;
+        GroupSidebar.Configure(GetSelectedModData, () => _mods?.Select(static vm => vm.Data) ?? [], SelectGroupAsync, UpdateGroupedView);
 
         // 监听语言切换，通知 Title 属性变更
         _localizationService.PropertyChanged += (_, _) =>
@@ -204,7 +212,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             // 使用显示列表中的模组顺序保存（包含分隔符内的模组顺序）
             var displayedModGuids = _orderedItems.OfType<ModViewModel>().Select(static vm => vm.Guid);
             _profileService.SetLastSavedOrder(displayedModGuids);
-            await _profileService.SaveAsync(_settingsService, _mods.Select(static vm => vm.Data));
+            await _modGroupService.SaveSelectedGroupStateAsync(_mods.Select(static vm => vm.Data));
+            if (_modGroupService.SelectedGroup.IsDefault)
+                await _profileService.SaveAsync(_settingsService, _mods.Select(static vm => vm.Data));
 
             if (showProgress)
             {
@@ -216,18 +226,19 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private void RebuildOrderedItems()
     {
         _orderedItems.Clear();
+        var groupedMods = _modGroupService.FilterModViewModels(_mods).ToArray();
 
         if (!ShowSeparator)
         {
             // 分隔符未启用时，只显示所有模组
-            foreach (var mod in _mods)
+            foreach (var mod in groupedMods)
                 _orderedItems.Add(mod);
             OnPropertyChanged(nameof(Mods));
             return;
         }
 
         // 先添加所有模组
-        foreach (var mod in _mods)
+        foreach (var mod in groupedMods)
             _orderedItems.Add(mod);
 
         // 按 DisplayIndex 排序后插入分隔符到对应位置
@@ -250,7 +261,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private void UpdateView()
     {
-        IEnumerable<ModViewModel> filteredMods = _mods;
+        IEnumerable<ModViewModel> filteredMods = _modGroupService.FilterModViewModels(_mods);
 
         // 搜索过滤
         filteredMods = _searchFilterService.ApplySearchFilter(filteredMods, SearchText);
@@ -282,6 +293,30 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// </summary>
     partial void OnCurrentSortModeChanged(SortMode value)
     {
+        UpdateView();
+    }
+
+    private IEnumerable<ModData> GetSelectedModData()
+    {
+        return _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected).Select(static vm => vm.Data);
+    }
+
+    private async Task SelectGroupAsync(Guid groupId)
+    {
+        await _modGroupService.SelectGroupAsync(groupId, _mods.Select(static vm => vm.Data));
+        foreach (var vm in _mods)
+        {
+            vm.IsSelected = false;
+            vm.RefreshGroupStateBindings();
+        }
+        UpdateGroupedView();
+    }
+
+    private void UpdateGroupedView()
+    {
+        GroupSidebar.RefreshSelectionProperties();
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectionCountText));
         UpdateView();
     }
 
@@ -394,6 +429,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _mods = new(modViewModels);
         _mods.CollectionChanged += Mods_CollectionChanged;
         _profileService.SetLastSavedOrder(_mods.Select(static vm => vm.Guid));
+        await _modGroupService.InitAsync(_settingsService, _mods.Select(static vm => vm.Data).ToArray());
+        _modGroupService.ApplyGroupState(_modGroupService.SelectedGroup.Id, _mods.Select(static vm => vm.Data));
+        foreach (var vm in _mods)
+            vm.RefreshGroupStateBindings();
+        GroupSidebar.IsOpen = _modGroupService.IsSidebarOpen;
+        GroupSidebar.RefreshSelectionProperties();
         RebuildOrderedItems();
         UpdateView();
 
@@ -504,6 +545,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         vm.PropertyChanged += ModViewModel_PropertyChanged;
         _mods.Add(vm);
         SearchText = string.Empty;
+        _modGroupService.CaptureGroupState(ModGroup.DefaultGroupId, _mods.Select(static vm => vm.Data));
+        GroupSidebar.RefreshSelectionProperties();
         UpdateView();
     }
 
@@ -524,12 +567,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             vm.OptionsChanged -= ModViewModel_OptionsChanged;
             vm.PropertyChanged -= ModViewModel_PropertyChanged;
             _mods.Remove(vm);
+            _modGroupService.CaptureGroupState(_modGroupService.SelectedGroup.Id, _modGroupService.FilterMods(_mods.Select(static vm => vm.Data)));
+            GroupSidebar.RefreshSelectionProperties();
             UpdateView();
         }
     }
 
     private void ModViewModel_OptionsChanged()
     {
+        _modGroupService.CaptureGroupState(_modGroupService.SelectedGroup.Id, _modGroupService.FilterMods(_mods.Select(static vm => vm.Data)));
         lock (_saveLock)
         {
             _isSavePending = true;
@@ -648,6 +694,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private void SyncModsOrderFromDisplay()
     {
         var displayOrder = _orderedItems.OfType<ModViewModel>().ToList();
+        if (!_modGroupService.SelectedGroup.IsDefault)
+        {
+            var group = _modGroupService.SelectedGroup;
+            group.ModGuids.Clear();
+            foreach (var vm in displayOrder)
+                group.ModGuids.Add(vm.Guid);
+            return;
+        }
+
         // 按 displayOrder 重新排序 _mods
         for (int i = 0; i < displayOrder.Count; i++)
         {
@@ -705,7 +760,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand]
     void SelectAll()
     {
-        foreach (var vm in _mods)
+        foreach (var vm in _modGroupService.FilterModViewModels(_mods))
             vm.IsSelected = true;
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectionCountText));
@@ -714,7 +769,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand]
     void DeselectAll()
     {
-        foreach (var vm in _mods)
+        foreach (var vm in _modGroupService.FilterModViewModels(_mods))
             vm.IsSelected = false;
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectionCountText));
@@ -729,7 +784,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand(AllowConcurrentExecutions = false)]
     Task BatchDelete()
     {
-        var selected = _mods.Where(static vm => vm.IsSelected).ToArray();
+        var selected = _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected).ToArray();
         if (selected.Length == 0)
             return Task.CompletedTask;
 
@@ -762,6 +817,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     {
                         var guids = selected.Select(static vm => vm.Guid).ToList();
                         await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, guids);
+                        await _modGroupService.RemoveModsFromAllGroupsAsync(guids);
                         // 同时删除这些模组的版本检测记录
                         foreach (var guid in guids)
                             await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, guid);
@@ -789,14 +845,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand]
     void BatchEnable()
     {
-        foreach (var vm in _mods.Where(static vm => vm.IsSelected))
+        foreach (var vm in _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected))
             vm.Enabled = true;
     }
 
     [RelayCommand]
     void BatchDisable()
     {
-        foreach (var vm in _mods.Where(static vm => vm.IsSelected))
+        foreach (var vm in _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected))
             vm.Enabled = false;
     }
 
@@ -806,7 +862,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand]
     void BatchAddTags()
     {
-        var selected = _mods.Where(static vm => vm.IsSelected).ToArray();
+        var selected = _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected).ToArray();
         if (selected.Length == 0 || !_settingsService.Initialized)
             return;
 
@@ -836,6 +892,61 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = $"{_localizationService["DashboardPage.BatchTagUpdatedPrefix"]}{selected.Length}{_localizationService["DashboardPage.BatchTagUpdatedSuffix"]}" });
             }
         });
+    }
+
+    [RelayCommand]
+    void AddModsToGroup(ModViewModel? source = null)
+    {
+        if (!_settingsService.Initialized)
+            return;
+
+        var selected = source is not null && !source.IsSelected
+            ? [source]
+            : _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected).ToArray();
+        if (selected.Length == 0)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["ModGroup.NoSelectedMods"] });
+            return;
+        }
+
+        var groups = _modGroupService.Groups.Where(static group => !group.IsDefault).Cast<object>().ToArray();
+        if (groups.Length == 0)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["ModGroup.NoCustomGroups"] });
+            return;
+        }
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
+        {
+            Title = _localizationService["ModGroup.AddToGroupTitle"],
+            Message = _localizationService["ModGroup.AddToGroupMessage"].Replace("{count}", selected.Length.ToString()),
+            Options = groups,
+            Confirm = option =>
+            {
+                if (option is not ModGroup group)
+                    return;
+
+                _ = AddModsToGroupAsync(group, selected);
+            }
+        });
+    }
+
+    private async Task AddModsToGroupAsync(ModGroup group, ModViewModel[] selected)
+    {
+        try
+        {
+            await _modGroupService.AddModsToGroupAsync(group.Id, selected.Select(static vm => vm.Data));
+            GroupSidebar.RefreshSelectionProperties();
+            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+            {
+                Message = _localizationService["ModGroup.AddedToGroup"].Replace("{count}", selected.Length.ToString()).Replace("{name}", group.Name)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "加入分组失败");
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = ex.Message });
+        }
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
@@ -1185,13 +1296,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     /// <summary>
     /// 根据当前设置获取部署顺序的 GUID 数组
-    /// 如果 UseDeploymentOrder 启用，按 DeploymentOrderGuids 顺序；否则按 Dashboard 顺序
+    /// 如果 UseDeploymentOrder 启用，按 DeploymentOrderGuids 顺序；否则按 Dashboard 顺序；最后应用部署方向设置
     /// </summary>
     private Guid[] GetDeploymentGuids(ModViewModel[] enabledMods)
     {
         if (_settingsService.UseDeploymentOrder && _settingsService.DeploymentOrderGuids.Count > 0)
         {
-            var enabledSet = enabledMods.Select(static vm => vm.Guid).ToHashSet();
+            var enabledGuids = enabledMods.Select(static vm => vm.Guid).ToArray();
+            var enabledSet = enabledGuids.ToHashSet();
             var result = new List<Guid>();
 
             foreach (var guid in _settingsService.DeploymentOrderGuids)
@@ -1204,7 +1316,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             }
 
             // 添加不在 DeploymentOrderGuids 中的已启用模组（防御性）
-            result.AddRange(enabledSet);
+            result.AddRange(enabledGuids.Where(enabledSet.Contains));
+
+            if (_settingsService.DeployBottomToTop)
+                result.Reverse();
 
             _logger.LogDebug("Using custom deployment order for {} mods", result.Count);
             return result.ToArray();
@@ -1238,7 +1353,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             Message = _localizationService["SettingsPage.PleaseWait"]
         });
 
-        var mods = _mods.Where(static vm => vm.Enabled).ToArray();
+        var mods = _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.Enabled).ToArray();
         var guids = GetDeploymentGuids(mods);
         var backgroundTask = _backgroundTaskService.Add(
             _localizationService["BackgroundTasksPage.TaskTypeDeploy"],
@@ -1366,6 +1481,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             if (!_settingsService.IsReadonly)
             {
                 await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, modVm.Guid);
+                await _modGroupService.RemoveModsFromAllGroupsAsync([modVm.Guid]);
                 // 同时删除该模组的版本检测记录
                 await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, modVm.Guid);
             }

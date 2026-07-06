@@ -26,10 +26,11 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 	private readonly SettingsService _settingsService;
 	private readonly ModService _modService;
 	private readonly LocalizationService _localizationService;
+	private readonly ModGroupService _modGroupService;
 
 	public EditPageViewModel(NavigationStore navStore, EditModStore editModStore,
 		ProfileService profileService, SettingsService settingsService, ModService modService,
-		LocalizationService localizationService)
+		LocalizationService localizationService, ModGroupService modGroupService)
 	{
 		_navStore = navStore;
 		_editModStore = editModStore;
@@ -37,6 +38,7 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 		_settingsService = settingsService;
 		_modService = modService;
 		_localizationService = localizationService;
+		_modGroupService = modGroupService;
 
 		_localizationService.PropertyChanged += (_, _) =>
 		{
@@ -52,7 +54,9 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 		{
 			try
 			{
-				await _profileService.SaveAsync(_settingsService, _modService.Mods);
+				await _modGroupService.SaveSelectedGroupStateAsync(_modService.Mods);
+				if (_modGroupService.SelectedGroup.IsDefault)
+					await _profileService.SaveAsync(_settingsService, _modService.Mods);
 			}
 			catch (Exception ex)
 			{
