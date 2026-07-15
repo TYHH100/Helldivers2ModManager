@@ -464,13 +464,24 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         var detailResult = await _versionCheckService.CheckSingleModAsync(_mod, GameUnitVersion == 0 ? null : GameUnitVersion, includeDetailedAnalysis: true);
         var patchUnits = detailResult?.PatchUnits.ToList() ?? [];
         var detailedAnalysis = detailResult?.DetailedAnalysis;
+        var effectiveStatus = detailResult?.Status ?? VersionStatus;
+        var effectiveGameVersion = detailResult?.GameVersion ?? GameUnitVersion;
+        statusText = effectiveStatus switch
+        {
+            ModVersionStatus.Compatible => _localizationService["Converters.Compatible"],
+            ModVersionStatus.Incompatible => _localizationService["Converters.Incompatible"],
+            ModVersionStatus.Unknown => _localizationService["Converters.UnableToConfirm"],
+            ModVersionStatus.Checking => _localizationService["Converters.Checking"],
+            ModVersionStatus.Error => _localizationService["Converters.CheckFailed"],
+            _ => _localizationService["Converters.Unknown"]
+        };
 
         var sb = new StringBuilder();
 
         // 标题行
         sb.AppendLine(_localizationService["ModViewModel.VersionInfoHeader"].Replace("{name}", Name));
         sb.AppendLine(_localizationService["ModViewModel.VersionStatusLabel"].Replace("{status}", statusText));
-        sb.AppendLine(_localizationService["ModViewModel.VersionUnitLabel"].Replace("{unit}", $"0x{GameUnitVersion:X8} ({GameUnitVersion})"));
+        sb.AppendLine(_localizationService["ModViewModel.VersionUnitLabel"].Replace("{unit}", $"0x{effectiveGameVersion:X8} ({effectiveGameVersion})"));
         sb.AppendLine(_localizationService["ModViewModel.VersionTimeLabel"].Replace("{time}", LastVersionCheck.ToString("yyyy-MM-dd HH:mm:ss")));
         sb.AppendLine();
 
@@ -482,7 +493,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             foreach (var version in distinctVersions)
             {
                 var count = patchUnits.Count(p => p.Version == version);
-                var match = version == GameUnitVersion ? _localizationService["ModViewModel.MatchOk"] : _localizationService["ModViewModel.MatchMismatch"];
+                var match = version == effectiveGameVersion ? _localizationService["ModViewModel.MatchOk"] : _localizationService["ModViewModel.MatchMismatch"];
                 var fileSuffix = count == 1 ? "file" : "files";
                 sb.AppendLine(string.Format("  {0} 0x{1:X8} ({1}) - {2} {3}", match, version, count, fileSuffix));
             }
@@ -490,7 +501,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             sb.AppendLine(_localizationService["ModViewModel.DetailsHeader"]);
             foreach (var unit in patchUnits)
             {
-                var match = unit.Version == GameUnitVersion ? _localizationService["ModViewModel.MatchOk"] : _localizationService["ModViewModel.MatchMismatch"];
+                var match = unit.Version == effectiveGameVersion ? _localizationService["ModViewModel.MatchOk"] : _localizationService["ModViewModel.MatchMismatch"];
                 sb.AppendLine(string.Format("  {0} {1}  0x{2:X16}  0x{3:X8}", match, unit.FileName, unit.FileId, unit.Version));
             }
         }
@@ -520,6 +531,9 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             if (analysis.HasGpuResourceIssues)
                 sb.AppendLine("! " + _localizationService["ModViewModel.WarningGpuResourceIssues"]);
 
+            if (analysis.HasStreamResourceIssues)
+                sb.AppendLine("! " + _localizationService["ModViewModel.WarningStreamResourceIssues"]);
+
             // Per-file details
             foreach (var pf in analysis.PatchFiles)
             {
@@ -531,20 +545,37 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
                     pf.FileEntriesInBounds ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"]));
                 sb.AppendLine(string.Format(_localizationService["ModViewModel.FileTypeCounts"],
                     pf.NumTypes, pf.NumFiles, pf.TotalResources));
+                sb.AppendLine(string.Format(_localizationService["ModViewModel.FileTypeDistributionInfo"],
+                    pf.TypeDistributionValid ? _localizationService["ModViewModel.Valid"] : _localizationService["ModViewModel.Invalid"],
+                    pf.TypeDistributionIssueCount));
+                sb.AppendLine(string.Format(_localizationService["ModViewModel.FileMainBoundsInfo"],
+                    pf.MainDataBoundsValid ? _localizationService["ModViewModel.Valid"] : _localizationService["ModViewModel.Invalid"],
+                    pf.MainDataIssueCount));
+                sb.AppendLine(string.Format(_localizationService["ModViewModel.FileEntryIndexInfo"],
+                    pf.EntryIndicesValid ? _localizationService["ModViewModel.Valid"] : _localizationService["ModViewModel.Invalid"],
+                    pf.EntryIndexIssueCount));
                 sb.AppendLine(string.Format(_localizationService["ModViewModel.FileCompanionInfo"],
                     pf.HasGpuResources ? _localizationService["ModViewModel.Present"] : _localizationService["ModViewModel.Missing"],
-                    pf.HasStream ? _localizationService["ModViewModel.Present"] : _localizationService["ModViewModel.Missing"]));
+                    pf.RequiresGpuResources ? _localizationService["ModViewModel.Required"] : _localizationService["ModViewModel.Optional"],
+                    pf.HasStream ? _localizationService["ModViewModel.Present"] : _localizationService["ModViewModel.Missing"],
+                    pf.RequiresStream ? _localizationService["ModViewModel.Required"] : _localizationService["ModViewModel.Optional"]));
                 sb.AppendLine(string.Format(_localizationService["ModViewModel.FileGpuBoundsInfo"],
                     pf.GpuResourceBoundsValid ? _localizationService["ModViewModel.Valid"] : _localizationService["ModViewModel.Invalid"],
-                    pf.GpuResourceIssueCount));
+                    pf.GpuResourceIssueCount, pf.GpuAlignmentIssueCount));
+                sb.AppendLine(string.Format(_localizationService["ModViewModel.FileStreamBoundsInfo"],
+                    pf.StreamBoundsValid ? _localizationService["ModViewModel.Valid"] : _localizationService["ModViewModel.Invalid"],
+                    pf.StreamIssueCount, pf.StreamAlignmentIssueCount));
 
                 if (pf.UnitDetails.Count > 0)
                 {
                     sb.AppendLine("  " + _localizationService["ModViewModel.UnitInternalStructure"]);
                     foreach (var unit in pf.UnitDetails)
                     {
-                        sb.AppendLine(string.Format("    [0x{0:X16}] v{1:X8} size={2}",
-                            unit.FileId, unit.Version, unit.DataSize));
+                        sb.AppendLine(string.Format("    #{0} [0x{1:X16}] v{2:X8}",
+                            unit.EntryIndex, unit.FileId, unit.Version));
+                        sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitSizeInfo"],
+                            unit.DataSize, unit.ExpectedDataSize,
+                            unit.DeclaredSizeMatchesInternal ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"]));
                         sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitLodInfo"],
                             unit.LODGroupOffset, unit.LODGroupSize, unit.LODGroupInBounds ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"]));
                         if (unit.LayoutFormatChecked)
@@ -563,9 +594,17 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             }
         }
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+        WeakReferenceMessenger.Default.Send(new VersionCheckDetailMessage
         {
-            Message = sb.ToString()
+            ModName = Name,
+            Status = effectiveStatus,
+            GameVersion = effectiveGameVersion,
+            LastChecked = LastVersionCheck,
+            PatchUnits = patchUnits,
+            Analysis = detailedAnalysis ?? new ModDetailedAnalysis(),
+            FullReport = sb.ToString(),
+            ModDirectory = _mod.Directory,
+            RefreshAsync = ShowVersionDetail
         });
     }
 

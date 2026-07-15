@@ -133,6 +133,22 @@ internal sealed class MessageBoxTagSelectionMessage
 	public required Action<IEnumerable<Models.TagSelectionItem>> Confirm { get; init; }
 }
 
+internal sealed class ChecklistSelectionItem
+{
+    public required long Value { get; init; }
+    public required string Title { get; init; }
+    public required string Description { get; init; }
+    public bool IsSelected { get; set; }
+}
+
+internal sealed class MessageBoxChecklistMessage
+{
+    public required string Title { get; init; }
+    public required string Message { get; init; }
+    public required IReadOnlyList<ChecklistSelectionItem> Items { get; init; }
+    public required Action<IReadOnlyList<ChecklistSelectionItem>> Confirm { get; init; }
+}
+
 internal sealed class MessageBoxColorPickerMessage
 {
 	public required string Title { get; init; }
@@ -144,7 +160,7 @@ internal sealed class MessageBoxColorPickerMessage
 	public required Action<string> Confirm { get; init; }
 }
 
-internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxExportProgressMessage>, IRecipient<MessageBoxExportProgressUpdateMessage>, IRecipient<MessageBoxUpdateProgressMessage>, IRecipient<MessageBoxUpdateProgressUpdateMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxColorPickerMessage>
+internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxExportProgressMessage>, IRecipient<MessageBoxExportProgressUpdateMessage>, IRecipient<MessageBoxUpdateProgressMessage>, IRecipient<MessageBoxUpdateProgressUpdateMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxChecklistMessage>, IRecipient<MessageBoxColorPickerMessage>
 {
 	public static bool IsRegistered { get; private set; }
 
@@ -157,6 +173,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	private Action? _confirmAction;
 	private Action<object>? _selectionAction;
 	private Action<IEnumerable<Models.TagSelectionItem>>? _tagSelectionAction;
+	private Action<IReadOnlyList<ChecklistSelectionItem>>? _checklistAction;
 	private Action<string>? _colorPickerAction;
 	private string? _selectedColor;
 
@@ -177,6 +194,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		WeakReferenceMessenger.Default.Register<MessageBoxConfirmMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxSelectionMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxTagSelectionMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxChecklistMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxColorPickerMessage>(this);
 
 		if (!IsRegistered)
@@ -420,6 +438,23 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		Visibility = Visibility.Visible;
 	}
 
+	public void Receive(MessageBoxChecklistMessage message)
+	{
+		Reset();
+
+		_checklistAction = message.Confirm;
+		title.Text = message.Title;
+		brush.Color = Colors.White;
+		this.message.Text = message.Message;
+		this.message.TextWrapping = TextWrapping.Wrap;
+		this.message.Margin = new Thickness(0, 0, 0, 8);
+		checklistSelectionList.ItemsSource = message.Items;
+		checklistSelectionList.Visibility = Visibility.Visible;
+		cancelButton.Visibility = Visibility.Visible;
+		okButton.Visibility = Visibility.Visible;
+		Visibility = Visibility.Visible;
+	}
+
 	public void Receive(MessageBoxColorPickerMessage message)
 	{
 		Reset();
@@ -481,6 +516,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		_confirmAction = null;
 		_selectionAction = null;
 		_tagSelectionAction = null;
+		_checklistAction = null;
 		_colorPickerAction = null;
 		_selectedColor = null;
 
@@ -488,11 +524,14 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		brush.Color = Colors.White;
 		message.Visibility = Visibility.Visible;
 		message.Margin = new Thickness(0);
+		message.TextWrapping = TextWrapping.NoWrap;
 		input.Visibility = Visibility.Collapsed;
 		input.Text = string.Empty;
 		selectionComboBox.Visibility = Visibility.Collapsed;
 		tagSelectionList.Visibility = Visibility.Collapsed;
 		tagSelectionList.ItemsSource = null;
+		checklistSelectionList.Visibility = Visibility.Collapsed;
+		checklistSelectionList.ItemsSource = null;
 		colorPickerPanel.Visibility = Visibility.Collapsed;
 		colorInputBox.Text = string.Empty;
 		colorInputPreview.Background = null;
@@ -532,6 +571,14 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		{
 			var selectedTags = tagSelectionList.ItemsSource.Cast<Models.TagSelectionItem>().Where(t => t.IsSelected).ToList();
 			_tagSelectionAction(selectedTags);
+		}
+		else if (_checklistAction != null)
+		{
+			var selectedItems = checklistSelectionList.ItemsSource
+				.Cast<ChecklistSelectionItem>()
+				.Where(item => item.IsSelected)
+				.ToList();
+			_checklistAction(selectedItems);
 		}
 		else if (_colorPickerAction != null && _selectedColor != null)
 		{

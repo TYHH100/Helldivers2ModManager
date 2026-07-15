@@ -180,6 +180,59 @@
 					</ListBox.ItemContainerStyle>
 				</ListBox>
 
+				<!-- Generic checklist selection (used by per-Unit LOD repair) -->
+				<ListBox x:Name="checklistSelectionList"
+						 Grid.Row="1"
+						 MaxHeight="360"
+						 MinWidth="560"
+						 Margin="0 0 0 16"
+						 Background="Transparent"
+						 BorderThickness="0"
+						 Visibility="Collapsed"
+						 ScrollViewer.VerticalScrollBarVisibility="Auto"
+						 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+						 VirtualizingPanel.IsVirtualizing="True"
+						 VirtualizingPanel.VirtualizationMode="Recycling">
+					<ListBox.ItemTemplate>
+						<DataTemplate>
+							<Grid Margin="0 4">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="Auto"/>
+									<ColumnDefinition Width="*"/>
+								</Grid.ColumnDefinitions>
+								<CheckBox Grid.Column="0"
+										  IsChecked="{Binding IsSelected, Mode=TwoWay}"
+										  VerticalAlignment="Center"
+										  Margin="0 0 10 0"/>
+								<StackPanel Grid.Column="1">
+									<TextBlock Text="{Binding Title}"
+											   Foreground="White"
+											   FontSize="13"
+											   FontWeight="SemiBold"
+											   TextTrimming="CharacterEllipsis"/>
+									<TextBlock Text="{Binding Description}"
+											   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+											   FontSize="11"
+											   FontFamily="Cascadia Mono, Consolas"
+											   TextTrimming="CharacterEllipsis"/>
+								</StackPanel>
+							</Grid>
+						</DataTemplate>
+					</ListBox.ItemTemplate>
+					<ListBox.ItemContainerStyle>
+						<Style TargetType="ListBoxItem">
+							<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+							<Setter Property="Padding" Value="8 3"/>
+							<Setter Property="Background" Value="Transparent"/>
+							<Style.Triggers>
+								<Trigger Property="IsMouseOver" Value="True">
+									<Setter Property="Background" Value="#20FFFFFF"/>
+								</Trigger>
+							</Style.Triggers>
+						</Style>
+					</ListBox.ItemContainerStyle>
+				</ListBox>
+
 				<!-- Color Picker Panel -->
 				<StackPanel x:Name="colorPickerPanel"
 							Grid.Row="1"

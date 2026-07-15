@@ -93,6 +93,11 @@ internal sealed class UnitResourceDetail
     public string FileName { get; set; } = string.Empty;
 
     /// <summary>
+    /// TOC 中的条目序号（1-based）。
+    /// </summary>
+    public int EntryIndex { get; set; }
+
+    /// <summary>
     /// Unit 资源 ID
     /// </summary>
     public long FileId { get; set; }
@@ -106,6 +111,26 @@ internal sealed class UnitResourceDetail
     /// Unit 数据大小（字节）
     /// </summary>
     public int DataSize { get; set; }
+
+    /// <summary>
+    /// Unit 内部记录的结束偏移（头部 +0x60）。
+    /// </summary>
+    public int EndingOffset { get; set; }
+
+    /// <summary>
+    /// 根据 EndingOffset 计算出的完整 Unit 大小（EndingOffset + 8）。
+    /// </summary>
+    public int ExpectedDataSize { get; set; }
+
+    /// <summary>
+    /// TOC 声明大小是否与 Unit 内部大小一致。
+    /// </summary>
+    public bool DeclaredSizeMatchesInternal { get; set; } = true;
+
+    /// <summary>
+    /// Unit 内部大小大于 TOC 声明大小，数据会被解析器截断。
+    /// </summary>
+    public bool IsTruncated { get; set; }
 
     /// <summary>
     /// LOD Group 偏移量（从 Unit 数据起始的偏移）
@@ -193,6 +218,18 @@ internal sealed class PatchFileAnalysis
     public int TotalResources { get; set; }
 
     /// <summary>
+    /// 当前补丁文件声明的完整资源类型分布。
+    /// </summary>
+    public List<ResourceTypeDistribution> ResourceTypes { get; set; } = [];
+
+    /// <summary>
+    /// 类型表声明、文件总数和实际条目类型分布是否一致。
+    /// </summary>
+    public bool TypeDistributionValid { get; set; } = true;
+
+    public int TypeDistributionIssueCount { get; set; }
+
+    /// <summary>
     /// 文件头结构是否有效
     /// </summary>
     public bool HeaderValid { get; set; }
@@ -203,14 +240,38 @@ internal sealed class PatchFileAnalysis
     public bool FileEntriesInBounds { get; set; }
 
     /// <summary>
+    /// 所有主数据 offset/size 是否都在补丁文件边界内。
+    /// </summary>
+    public bool MainDataBoundsValid { get; set; } = true;
+
+    public int MainDataIssueCount { get; set; }
+
+    /// <summary>
+    /// TOC entry_index 是否为连续的 1..N。
+    /// </summary>
+    public bool EntryIndicesValid { get; set; } = true;
+
+    public int EntryIndexIssueCount { get; set; }
+
+    /// <summary>
     /// 对应的 .gpu_resources 文件是否存在
     /// </summary>
     public bool HasGpuResources { get; set; }
 
     /// <summary>
+    /// 至少一个条目声明了非零 GPU 数据，因此伴生文件是必需的。
+    /// </summary>
+    public bool RequiresGpuResources { get; set; }
+
+    /// <summary>
     /// 对应的 .stream 文件是否存在
     /// </summary>
     public bool HasStream { get; set; }
+
+    /// <summary>
+    /// 至少一个条目声明了非零 stream 数据，因此伴生文件是必需的。
+    /// </summary>
+    public bool RequiresStream { get; set; }
 
     /// <summary>
     /// GPU 数据引用是否都在 .gpu_resources 文件边界内
@@ -221,6 +282,20 @@ internal sealed class PatchFileAnalysis
     /// GPU 数据边界异常数量
     /// </summary>
     public int GpuResourceIssueCount { get; set; }
+
+    /// <summary>
+    /// GPU offset 非 64 字节对齐的条目数量。
+    /// </summary>
+    public int GpuAlignmentIssueCount { get; set; }
+
+    /// <summary>
+    /// stream 数据引用是否都在伴生文件边界内。
+    /// </summary>
+    public bool StreamBoundsValid { get; set; } = true;
+
+    public int StreamIssueCount { get; set; }
+
+    public int StreamAlignmentIssueCount { get; set; }
 
     /// <summary>
     /// 该文件中 Unit 资源的深度检查结果
@@ -285,6 +360,11 @@ internal sealed class ModDetailedAnalysis
     public bool HasGpuResourceIssues { get; set; }
 
     /// <summary>
+    /// 是否存在 stream 数据边界或对齐问题。
+    /// </summary>
+    public bool HasStreamResourceIssues { get; set; }
+
+    /// <summary>
     /// 补丁文件总数
     /// </summary>
     public int TotalPatchFiles { get; set; }
@@ -344,6 +424,87 @@ internal sealed class ModVersionCheckResult
     /// 模组详细分析结果（文件结构、Unit 内部结构、伴生文件等深度检查）
     /// </summary>
     public ModDetailedAnalysis? DetailedAnalysis { get; set; }
+}
+
+internal enum PatchRepairKind
+{
+    UnitTocSize,
+    EntryIndex,
+    TypeResourceCount,
+    ResourceTypeId,
+    TypeAlignment,
+    MainDataOffset
+}
+
+/// <summary>
+/// A fixed-width metadata write that can be verified without moving resource payloads.
+/// </summary>
+internal sealed class PatchRepairAction
+{
+    public required PatchRepairKind Kind { get; init; }
+    public required string PatchFilePath { get; init; }
+    public required long Offset { get; init; }
+    public required int Width { get; init; }
+    public required ulong OldValue { get; init; }
+    public required ulong NewValue { get; init; }
+    public int EntryIndex { get; init; }
+    public long FileId { get; init; }
+}
+
+internal sealed class ModRepairPlan
+{
+    public List<PatchRepairAction> Actions { get; init; } = [];
+    public List<string> BlockingReasons { get; init; } = [];
+    public int ActionCount => Actions.Count;
+    public int FileCount => Actions.Select(a => a.PatchFilePath).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+    public bool CanRepair => Actions.Count > 0 && BlockingReasons.Count == 0;
+}
+
+internal sealed class ModRepairResult
+{
+    public bool Success { get; init; }
+    public int AppliedActionCount { get; init; }
+    public List<string> BackupPaths { get; init; } = [];
+    public string? ErrorMessage { get; init; }
+}
+
+internal enum AssistedLodStrategy
+{
+    UseGameReference,
+    PreserveMod
+}
+
+internal sealed class AssistedUnitRepairAction
+{
+    public required string PatchFilePath { get; init; }
+    public int EntryIndex { get; init; }
+    public long FileId { get; init; }
+    public uint CurrentVersion { get; init; }
+    public uint ReferenceVersion { get; init; }
+    public int CurrentLodSize { get; init; }
+    public int ReferenceLodSize { get; init; }
+    public uint CurrentGpuSize { get; init; }
+    public uint ReferenceGpuSize { get; init; }
+    public bool MeshIdsDiffer { get; init; }
+    public bool StrongCustomModelSignal { get; init; }
+    public AssistedLodStrategy LodStrategy { get; init; }
+    public bool LodDataDiffers { get; init; }
+    public string FriendlyName { get; init; } = string.Empty;
+}
+
+internal sealed class AssistedModRepairPlan
+{
+    public List<AssistedUnitRepairAction> Actions { get; init; } = [];
+    public List<string> BlockingReasons { get; init; } = [];
+    public int MatchedReferenceCount { get; init; }
+    public int MissingReferenceCount { get; init; }
+    public bool IsAutomatic { get; init; }
+    public int AutomaticStrongCustomCount { get; init; }
+    public int AutomaticPreserveUnitCount { get; init; }
+    public int AutomaticGameLodUnitCount { get; init; }
+    public int ActionCount => Actions.Count;
+    public int FileCount => Actions.Select(a => a.PatchFilePath).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+    public bool CanRepair => Actions.Count > 0 && BlockingReasons.Count == 0;
 }
 
 /// <summary>
