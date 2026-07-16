@@ -43,7 +43,7 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
     private readonly ILogger<DeploymentOrderPageViewModel> _logger;
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
-    private readonly ProfileService _profileService;
+    private readonly ProfileSaveCoordinator _profileSaveCoordinator;
     private readonly NavigationStore _navigationStore;
     private readonly LocalizationService _localizationService;
 
@@ -51,14 +51,14 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
         ILogger<DeploymentOrderPageViewModel> logger,
         ModService modService,
         SettingsService settingsService,
-        ProfileService profileService,
+        ProfileSaveCoordinator profileSaveCoordinator,
         NavigationStore navigationStore,
         LocalizationService localizationService)
     {
         _logger = logger;
         _modService = modService;
         _settingsService = settingsService;
-        _profileService = profileService;
+        _profileSaveCoordinator = profileSaveCoordinator;
         _navigationStore = navigationStore;
         _localizationService = localizationService;
 
@@ -225,7 +225,7 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
         var existingGuids = new HashSet<Guid>(Items.Where(i => i.ItemType == DeploymentItemType.Mod).Select(static i => i.Guid));
         var added = 0;
 
-        var dashboardOrder = _profileService.GetCurrentOrder();
+        var dashboardOrder = _profileSaveCoordinator.GetCurrentOrder();
         IEnumerable<ModData> orderedMods;
 
         if (dashboardOrder is { Count: > 0 })

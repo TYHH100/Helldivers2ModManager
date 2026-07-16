@@ -199,6 +199,17 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	public bool EnableBatchRepair
+	{
+		get => _settingsService.Initialized ? _settingsService.EnableBatchRepair : false;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.EnableBatchRepair = value;
+			OnPropertyChanged();
+		}
+	}
+
 	public bool AutoCleanLogs
 	{
 		get => _settingsService.Initialized ? _settingsService.AutoCleanLogs : true;
@@ -500,6 +511,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(DeleteToRecycleBin));
 		OnPropertyChanged(nameof(AutoRemoveMissingMods));
 		OnPropertyChanged(nameof(AutoCheckVersionOnStartup));
+		OnPropertyChanged(nameof(EnableBatchRepair));
 		OnPropertyChanged(nameof(AutoCleanLogs));
 		OnPropertyChanged(nameof(ShowSeparator));
 		OnPropertyChanged(nameof(LogRetentionDays));

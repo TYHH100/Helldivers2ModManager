@@ -573,6 +573,26 @@
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
+                                <Grid Margin="0 12 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
+                                              IsChecked="{Binding EnableBatchRepair}"
+                                              Margin="0 0 12 0"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{loc:Loc SettingsPage.EnableBatchRepair}"
+                                                   FontSize="14"
+                                                   Foreground="{StaticResource NeutralForegroundBrush}"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.EnableBatchRepairDesc}"
+                                                   Style="{StaticResource FluentBodyText}"
+                                                   Margin="0 2 0 0"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </StackPanel>

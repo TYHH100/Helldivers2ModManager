@@ -66,11 +66,10 @@ internal sealed class ModGroupService
 		if (missingGuids.Count > 0)
 			await _repository.DeleteStatesByGuidsAsync(_storageDirectory, missingGuids);
 
-		if (!_stateCache[defaultGroup.Id].Any())
-		{
-			CaptureGroupState(defaultGroup.Id, mods);
-			await SaveGroupStateAsync(defaultGroup.Id);
-		}
+		// enabled_mods 是默认组的权威来源。每次启动都用已加载的 Profile 刷新默认组缓存，
+		// 避免上次写入中断造成 group_mod_states 反向覆盖较新的主页状态。
+		CaptureGroupState(defaultGroup.Id, mods);
+		await SaveGroupStateAsync(defaultGroup.Id);
 
 		await SaveGroupsAsync();
 		_initialized = true;
@@ -301,6 +300,18 @@ internal sealed class ModGroupService
 		GuardInitialized();
 		CaptureGroupState(SelectedGroup.Id, FilterMods(mods));
 		await SaveGroupStateAsync(SelectedGroup.Id);
+	}
+
+	public async Task SaveGroupSnapshotAsync(ProfileSnapshot snapshot)
+	{
+		GuardInitialized();
+		var states = snapshot.ToGroupedEnabledData()
+			.ToDictionary(static state => state.Guid);
+		_stateCache[snapshot.GroupId] = states;
+		await _repository.SaveStatesAsync(
+			_storageDirectory,
+			snapshot.GroupId,
+			states.Values.OrderBy(static state => state.SortOrder)).ConfigureAwait(false);
 	}
 
 	public int GetMemberCount(ModGroup group, int totalModCount)

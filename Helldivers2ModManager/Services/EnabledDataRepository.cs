@@ -39,9 +39,9 @@ internal sealed class EnabledDataRepository
 	/// </summary>
 	/// <param name="storageDirectory">存储目录</param>
 	/// <param name="enabledDataList">要保存的启用数据集合</param>
-	public async Task SaveAllAsync(string storageDirectory, IEnumerable<EnabledData> enabledDataList)
+	public async Task SaveAllAsync(string storageDirectory, IReadOnlyList<EnabledData> enabledDataList)
 	{
-		await _writeLock.WaitAsync();
+		await _writeLock.WaitAsync().ConfigureAwait(false);
 		try
 		{
 			using var connection = _databaseService.OpenConnection(storageDirectory);
@@ -88,7 +88,7 @@ internal sealed class EnabledDataRepository
 				}
 
 				transaction.Commit();
-				_logger.LogInformation("Saved {Count} mod configs to database", enabledDataList.Count());
+				_logger.LogInformation("Saved {Count} mod configs to database", enabledDataList.Count);
 			}
 			catch (Exception ex)
 			{

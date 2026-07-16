@@ -1063,11 +1063,11 @@ internal sealed partial class ModService
 		await _modHashService.RecomputeForUpdatedModAsync(mod);
 	}
 
-	public async Task DeployAsync(Guid[] modGuids)
+	public async Task DeployAsync(IReadOnlyList<ModData> requestedMods)
 	{
 		GuardInitialized();
 
-		if (modGuids.Length == 0)
+		if (requestedMods.Count == 0)
 		{
 			_logger.LogInformation("No mods enabled, skipping deployment");
 			return;
@@ -1075,7 +1075,7 @@ internal sealed partial class ModService
 
 		await PurgeAsync();
 
-		_logger.LogInformation("Starting deployment of {} mods", modGuids.Length);
+		_logger.LogInformation("Starting deployment of {} dashboard snapshot mods", requestedMods.Count);
 
 		var stageDir = new DirectoryInfo(Path.Combine(_settingsService.TempDirectory, "Staging"));
 		_logger.LogInformation("Creating clean staging directory \"{}\"", stageDir.FullName);
@@ -1129,15 +1129,8 @@ internal sealed partial class ModService
 		}
 
 		_logger.LogInformation("Grouping files");
-		foreach (var guid in modGuids)
+		foreach (var mod in requestedMods)
 		{
-			var mod = GetModByGuid(guid);
-			if (mod is null)
-			{
-				_logger.LogWarning("Mod with guid {} not found, skipping", guid);
-				continue;
-			}
-
 			_logger.LogInformation("Working on \"{}\"", mod.Manifest.Name);
 
 			switch (mod.Manifest.Version)

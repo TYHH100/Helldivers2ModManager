@@ -225,6 +225,44 @@ internal sealed class SettingsService
 	}
 
 	/// <summary>
+	/// 是否在主页启用批量模组修复入口
+	/// </summary>
+	public bool EnableBatchRepair
+	{
+		get
+		{
+			GuardInitialized();
+			return _enableBatchRepair;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_enableBatchRepair = value;
+		}
+	}
+
+	/// <summary>
+	/// 是否已接受模组修复风险及禁止二次分发声明
+	/// </summary>
+	public bool RepairDisclaimerAccepted
+	{
+		get
+		{
+			GuardInitialized();
+			return _repairDisclaimerAccepted;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_repairDisclaimerAccepted = value;
+		}
+	}
+
+	/// <summary>
 	/// 是否启用自动清理过期日志
 	/// </summary>
 	public bool AutoCleanLogs
@@ -491,6 +529,10 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private bool _autoCheckVersionOnStartup;
 	[JsonInclude]
+	private bool _enableBatchRepair;
+	[JsonInclude]
+	private bool _repairDisclaimerAccepted;
+	[JsonInclude]
 	private bool _autoCleanLogs = true;
 	[JsonInclude]
 	private bool _showSeparator = true;
@@ -751,6 +793,8 @@ internal sealed class SettingsService
 			EnableSorting = _enableSorting,
 			DeployBottomToTop = _deployBottomToTop,
 			AutoCheckVersionOnStartup = _autoCheckVersionOnStartup,
+			EnableBatchRepair = _enableBatchRepair,
+			RepairDisclaimerAccepted = _repairDisclaimerAccepted,
 			AutoCleanLogs = _autoCleanLogs,
 			ShowSeparator = _showSeparator,
 			Separators = _separators.Select(static separator => new
@@ -901,6 +945,10 @@ internal sealed class SettingsService
 		}
 		if (root.TryGetProperty(nameof(AutoCheckVersionOnStartup), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_autoCheckVersionOnStartup = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(EnableBatchRepair), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_enableBatchRepair = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(RepairDisclaimerAccepted), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_repairDisclaimerAccepted = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(AutoCleanLogs), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_autoCleanLogs = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(ShowSeparator), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -1039,6 +1087,8 @@ internal sealed class SettingsService
 		_deleteToRecycleBin = true;
 		_enableSorting = false;
 		_autoCheckVersionOnStartup = false;
+		_enableBatchRepair = false;
+		_repairDisclaimerAccepted = false;
 		_showSeparator = true;
 		_separators = [];
 		_extensionHost = "localhost";

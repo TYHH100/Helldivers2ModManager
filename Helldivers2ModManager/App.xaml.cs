@@ -124,7 +124,17 @@ internal partial class App : Application
 
 	protected override void OnExit(ExitEventArgs e)
 	{
-		base.OnExit(e);
+		try
+		{
+			Host.Services.GetRequiredService<ProfileSaveCoordinator>()
+				.FlushAsync()
+				.GetAwaiter()
+				.GetResult();
+		}
+		catch (Exception ex)
+		{
+			_logger?.LogError(ex, "Failed to flush profile state during application exit");
+		}
 
 		// 清理测试运行时残留的 hd2mm_* 临时目录
 		try
@@ -151,6 +161,8 @@ internal partial class App : Application
 		{
 			_logger?.LogWarning(ex, "清理测试临时目录时发生异常");
 		}
+
+		base.OnExit(e);
 	}
 
 	/// <summary>
@@ -240,4 +252,3 @@ internal partial class App : Application
 			_logger?.LogError(ex, "An unhandled exception occured!");
 	}
 }
-

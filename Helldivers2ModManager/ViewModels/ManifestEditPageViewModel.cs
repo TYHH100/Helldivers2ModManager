@@ -115,21 +115,19 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	private readonly ILogger<ManifestEditPageViewModel> _logger;
 	private readonly NavigationStore _navStore;
 	private readonly EditModStore _editModStore;
-	private readonly ProfileService _profileService;
-	private readonly SettingsService _settingsService;
+	private readonly ProfileSaveCoordinator _profileSaveCoordinator;
 	private readonly ModService _modService;
 	private readonly LocalizationService _localizationService;
 
 	public ManifestEditPageViewModel(ILogger<ManifestEditPageViewModel> logger,
 		NavigationStore navStore, EditModStore editModStore,
-		ProfileService profileService, SettingsService settingsService, ModService modService,
+		ProfileSaveCoordinator profileSaveCoordinator, ModService modService,
 		LocalizationService localizationService)
 	{
 		_logger = logger;
 		_navStore = navStore;
 		_editModStore = editModStore;
-		_profileService = profileService;
-		_settingsService = settingsService;
+		_profileSaveCoordinator = profileSaveCoordinator;
 		_modService = modService;
 		_localizationService = localizationService;
 	}
@@ -289,16 +287,13 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		}
 
 		// 保存配置
-		if (!_settingsService.IsReadonly)
+		try
 		{
-			try
-			{
-				await _profileService.SaveAsync(_settingsService, _modService.Mods);
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "保存 Mod 配置失败");
-			}
+			await _profileSaveCoordinator.SaveCurrentAsync(_modService.Mods);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "保存 Mod 配置失败");
 		}
 
 		_editModStore.CurrentMod = null;

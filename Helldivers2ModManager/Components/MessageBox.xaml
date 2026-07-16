@@ -53,13 +53,13 @@
 							  Margin="0 0 0 16"
 							  Padding="0"
 							  VerticalScrollBarVisibility="Auto"
-							  HorizontalScrollBarVisibility="Auto"
+							  HorizontalScrollBarVisibility="Disabled"
 							  MaxHeight="360">
 					<TextBlock x:Name="message"
 							   FontSize="14"
 							   FontFamily="Segoe UI Variable Text"
 							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   TextWrapping="NoWrap"/>
+							   TextWrapping="Wrap"/>
 				</ScrollViewer>
 
 				<!-- Input TextBox -->

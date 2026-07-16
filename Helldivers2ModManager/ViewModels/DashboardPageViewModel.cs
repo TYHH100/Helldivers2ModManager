@@ -18,7 +18,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
-using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using MessageBox = Helldivers2ModManager.Components.MessageBox;
@@ -45,14 +44,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
     private readonly ProfileService _profileService;
+    private readonly ProfileSaveCoordinator _profileSaveCoordinator;
     private readonly INexusModsService _nexusModsService;
     private readonly VersionCheckRepository _versionCheckRepository;
     private readonly ModHashService _modHashService;
     private ObservableCollection<ModViewModel> _mods;
     private ObservableCollection<object> _orderedItems;
-    private Timer? _saveTimer;
-    private volatile bool _isSavePending;
-    private readonly object _saveLock = new();
     private readonly SearchFilterService _searchFilterService;
     private readonly SortService _sortService;
     private readonly VersionCheckViewModel _versionCheckVm;
@@ -127,6 +124,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         SettingsService settingsService,
         ModService modService,
         ProfileService profileService,
+        ProfileSaveCoordinator profileSaveCoordinator,
         EditModStore editModStore,
         INexusModsService nexusModsService,
         VersionCheckRepository versionCheckRepository,
@@ -145,12 +143,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _settingsService = settingsService;
         _modService = modService;
         _profileService = profileService;
+        _profileSaveCoordinator = profileSaveCoordinator;
         _nexusModsService = nexusModsService;
         _versionCheckRepository = versionCheckRepository;
         _modHashService = modHashService;
         _searchFilterService = searchFilterService;
         _sortService = sortService;
         _versionCheckVm = versionCheckVm;
+        _versionCheckVm.PropertyChanged += VersionCheckVm_PropertyChanged;
         _localizationService = localizationService;
         _backgroundTaskService = backgroundTaskService;
         _modGroupService = modGroupService;
@@ -173,7 +173,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         };
         _mods = [];
         _orderedItems = [];
-        _saveTimer = new Timer(OnSaveTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
         Mods = _orderedItems;
 
@@ -195,31 +194,47 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         base.OnPropertyChanged(e);
     }
 
-    private async Task SaveEnabled(bool showProgress = true)
+    private ProfileSnapshot CaptureProfileSnapshot()
+    {
+        var group = _modGroupService.SelectedGroup;
+        var groupMods = _modGroupService.FilterModViewModels(_mods).ToArray();
+        var order = _orderedItems.OfType<ModViewModel>().Select(static vm => vm.Guid).ToArray();
+        return _profileSaveCoordinator.Capture(
+            groupMods.Select(static vm => vm.Data),
+            order,
+            group.Id,
+            group.IsDefault);
+    }
+
+    private void RequestProfileSave()
     {
         if (!_settingsService.IsReadonly)
+            _profileSaveCoordinator.RequestSave(CaptureProfileSnapshot());
+    }
+
+    private async Task SaveProfileNowAsync(bool showProgress = true, ProfileSnapshot? snapshot = null)
+    {
+        if (_settingsService.IsReadonly)
+            return;
+
+        snapshot ??= CaptureProfileSnapshot();
+        if (showProgress)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
+            {
+                Title = _localizationService["DashboardPage.SavingModConfig"],
+                Message = _localizationService["SettingsPage.PleaseWait"]
+            });
+        }
+
+        try
+        {
+            await _profileSaveCoordinator.SaveNowAsync(snapshot);
+        }
+        finally
         {
             if (showProgress)
-            {
-                WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
-                {
-                    Title = _localizationService["DashboardPage.SavingModConfig"],
-                    Message = _localizationService["SettingsPage.PleaseWait"]
-                });
-            }
-
-            // 保存前将当前显示顺序告诉 ProfileService，确保其以正确的顺序写入 SQLite
-            // 使用显示列表中的模组顺序保存（包含分隔符内的模组顺序）
-            var displayedModGuids = _orderedItems.OfType<ModViewModel>().Select(static vm => vm.Guid);
-            _profileService.SetLastSavedOrder(displayedModGuids);
-            await _modGroupService.SaveSelectedGroupStateAsync(_mods.Select(static vm => vm.Data));
-            if (_modGroupService.SelectedGroup.IsDefault)
-                await _profileService.SaveAsync(_settingsService, _mods.Select(static vm => vm.Data));
-
-            if (showProgress)
-            {
                 WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-            }
         }
     }
 
@@ -366,6 +381,20 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
         _logger.LogInformation("Settings valid");
 
+        try
+        {
+            await _profileSaveCoordinator.FlushAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Flushing pending profile state before dashboard load failed");
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = $"{_localizationService["DashboardPage.LoadConfigFailed"]}\n\n{ex}",
+            });
+            return;
+        }
+
         _logger.LogInformation("Loading mods...");
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
         {
@@ -425,10 +454,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             vm.OptionsChanged += ModViewModel_OptionsChanged;
             vm.PropertyChanged += ModViewModel_PropertyChanged;
+            vm.VersionCheckRefreshed += ModViewModel_VersionCheckRefreshed;
         }
         _mods = new(modViewModels);
         _mods.CollectionChanged += Mods_CollectionChanged;
-        _profileService.SetLastSavedOrder(_mods.Select(static vm => vm.Guid));
         await _modGroupService.InitAsync(_settingsService, _mods.Select(static vm => vm.Data).ToArray());
         _modGroupService.ApplyGroupState(_modGroupService.SelectedGroup.Id, _mods.Select(static vm => vm.Data));
         foreach (var vm in _mods)
@@ -436,6 +465,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         GroupSidebar.IsOpen = _modGroupService.IsSidebarOpen;
         GroupSidebar.RefreshSelectionProperties();
         RebuildOrderedItems();
+        _ = CaptureProfileSnapshot();
         UpdateView();
 
         if (problems.Length > 0)
@@ -455,7 +485,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 ? _localizationService["DashboardPage.VersionCheckAutoGameExeMsg"]
                 : _localizationService["DashboardPage.VersionCheckAutoModMsg"];
             _logger.LogInformation("{Message}", message);
-            _ = CheckVersionCompatibility();
+            _ = RunVersionCheckCompatibilityAsync(false);
         }
 
 #if DEBUG && FALSE
@@ -543,6 +573,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         var vm = _modService.GetOrCreateModViewModel(mod, _logger, _settingsService, _nexusModsService);
         vm.OptionsChanged += ModViewModel_OptionsChanged;
         vm.PropertyChanged += ModViewModel_PropertyChanged;
+        vm.VersionCheckRefreshed += ModViewModel_VersionCheckRefreshed;
         _mods.Add(vm);
         SearchText = string.Empty;
         _modGroupService.CaptureGroupState(ModGroup.DefaultGroupId, _mods.Select(static vm => vm.Data));
@@ -566,6 +597,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             vm.OptionsChanged -= ModViewModel_OptionsChanged;
             vm.PropertyChanged -= ModViewModel_PropertyChanged;
+            vm.VersionCheckRefreshed -= ModViewModel_VersionCheckRefreshed;
             _mods.Remove(vm);
             _modGroupService.CaptureGroupState(_modGroupService.SelectedGroup.Id, _modGroupService.FilterMods(_mods.Select(static vm => vm.Data)));
             GroupSidebar.RefreshSelectionProperties();
@@ -573,14 +605,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
     }
 
+    private void ModViewModel_VersionCheckRefreshed(object? sender, EventArgs e)
+    {
+        _ = _versionCheckVm.RefreshAfterSingleModCheckAsync(_mods);
+    }
+
     private void ModViewModel_OptionsChanged()
     {
-        _modGroupService.CaptureGroupState(_modGroupService.SelectedGroup.Id, _modGroupService.FilterMods(_mods.Select(static vm => vm.Data)));
-        lock (_saveLock)
-        {
-            _isSavePending = true;
-            _saveTimer?.Change(300, Timeout.Infinite);
-        }
+        RequestProfileSave();
     }
 
     /// <summary>
@@ -588,14 +620,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// </summary>
     private void Mods_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Move)
-        {
-            lock (_saveLock)
-            {
-                _isSavePending = true;
-                _saveTimer?.Change(300, Timeout.Infinite);
-            }
-        }
+        if (e.Action is System.Collections.Specialized.NotifyCollectionChangedAction.Add
+            or System.Collections.Specialized.NotifyCollectionChangedAction.Remove
+            or System.Collections.Specialized.NotifyCollectionChangedAction.Move)
+            RequestProfileSave();
     }
 
     /// <summary>
@@ -664,12 +692,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             SyncModsOrderFromDisplay();
         }
 
-        // 触发自动保存
-        lock (_saveLock)
-        {
-            _isSavePending = true;
-            _saveTimer?.Change(300, Timeout.Infinite);
-        }
+        RequestProfileSave();
     }
 
     /// <summary>
@@ -714,28 +737,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
     }
 
-    private async void OnSaveTimerElapsed(object? state)
-    {
-        bool shouldSave;
-        lock (_saveLock)
-        {
-            shouldSave = _isSavePending;
-            _isSavePending = false;
-        }
-        
-        if (shouldSave)
-        {
-            try
-            {
-                await SaveEnabled(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error saving enabled data");
-            }
-        }
-    }
-
     /// <summary>
     /// 监听 ModViewModel 属性变更，捕获 IsSelected 变化以刷新批量操作 UI
     /// </summary>
@@ -745,6 +746,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             OnPropertyChanged(nameof(HasSelection));
             OnPropertyChanged(nameof(SelectionCountText));
+        }
+        else if (e.PropertyName == nameof(ModViewModel.Enabled))
+        {
+            RequestProfileSave();
         }
     }
 
@@ -888,7 +893,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 {
                     vm.Data.TagIds = newTagIds;
                 }
-                _ = SaveEnabled();
+                RequestProfileSave();
                 WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = $"{_localizationService["DashboardPage.BatchTagUpdatedPrefix"]}{selected.Length}{_localizationService["DashboardPage.BatchTagUpdatedSuffix"]}" });
             }
         });
@@ -1200,7 +1205,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             await _modService.UpdateModFromArchiveAsync(vm.Data, new FileInfo(dialog.FileName), progress);
 
             // 更新后保存状态到数据库，确保 EnabledOptions/SelectedOptions 与新清单同步
-            await SaveEnabled();
+            await SaveProfileNowAsync();
         }
         catch (Exception ex)
         {
@@ -1235,7 +1240,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task TagManagement()
     {
-        await SaveEnabled();
+        await SaveProfileNowAsync();
 
         _navStore.Value.Navigate<TagManagementPageViewModel>();
     }
@@ -1243,7 +1248,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task Settings()
     {
-        await SaveEnabled();
+        await SaveProfileNowAsync();
 
         _navStore.Value.Navigate<SettingsPageViewModel>();
     }
@@ -1251,7 +1256,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task DeploymentOrder()
     {
-        await SaveEnabled();
+        await SaveProfileNowAsync();
 
         _navStore.Value.Navigate<DeploymentOrderPageViewModel>();
     }
@@ -1295,28 +1300,32 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     /// <summary>
-    /// 根据当前设置获取部署顺序的 GUID 数组
+    /// 根据当前设置获取按部署顺序排列的主页快照模组
     /// 如果 UseDeploymentOrder 启用，按 DeploymentOrderGuids 顺序；否则按 Dashboard 顺序；最后应用部署方向设置
     /// </summary>
-    private Guid[] GetDeploymentGuids(ModViewModel[] enabledMods)
+    private ModData[] GetDeploymentMods(ProfileSnapshot snapshot)
     {
+        var enabledMods = snapshot.Mods.Where(static mod => mod.Enabled).ToArray();
         if (_settingsService.UseDeploymentOrder && _settingsService.DeploymentOrderGuids.Count > 0)
         {
-            var enabledGuids = enabledMods.Select(static vm => vm.Guid).ToArray();
+            var enabledGuids = enabledMods.Select(static mod => mod.Guid).ToArray();
             var enabledSet = enabledGuids.ToHashSet();
-            var result = new List<Guid>();
+            var modsByGuid = enabledMods.ToDictionary(static mod => mod.Guid);
+            var result = new List<ModData>();
 
             foreach (var guid in _settingsService.DeploymentOrderGuids)
             {
                 if (enabledSet.Contains(guid))
                 {
-                    result.Add(guid);
+                    result.Add(modsByGuid[guid].CreateDeploymentMod());
                     enabledSet.Remove(guid);
                 }
             }
 
             // 添加不在 DeploymentOrderGuids 中的已启用模组（防御性）
-            result.AddRange(enabledGuids.Where(enabledSet.Contains));
+            result.AddRange(enabledGuids
+                .Where(enabledSet.Contains)
+                .Select(guid => modsByGuid[guid].CreateDeploymentMod()));
 
             if (_settingsService.DeployBottomToTop)
                 result.Reverse();
@@ -1326,12 +1335,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
         else
         {
-            var guids = enabledMods.Select(static vm => vm.Guid).ToArray();
+            var mods = enabledMods.Select(static mod => mod.CreateDeploymentMod()).ToArray();
 
             if (_settingsService.DeployBottomToTop)
-                Array.Reverse(guids);
+                Array.Reverse(mods);
 
-            return guids;
+            return mods;
         }
     }
 
@@ -1353,17 +1362,17 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             Message = _localizationService["SettingsPage.PleaseWait"]
         });
 
-        var mods = _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.Enabled).ToArray();
-        var guids = GetDeploymentGuids(mods);
+        var snapshot = CaptureProfileSnapshot();
+        var deploymentMods = GetDeploymentMods(snapshot);
         var backgroundTask = _backgroundTaskService.Add(
             _localizationService["BackgroundTasksPage.TaskTypeDeploy"],
             _localizationService["SettingsPage.PleaseWait"]);
 
         try
         {
-            await SaveEnabled(false);
+            await SaveProfileNowAsync(false, snapshot);
 
-            await _modService.DeployAsync(guids);
+            await _modService.DeployAsync(deploymentMods);
 
             _backgroundTaskService.Complete(backgroundTask, _localizationService["DashboardPage.DeploySuccess"]);
 
@@ -1406,7 +1415,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
             if (!_settingsService.IsReadonly)
             {
-                await SaveEnabled(false);
+                await SaveProfileNowAsync(false);
             }
 
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
@@ -1536,8 +1545,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task CheckVersionCompatibility()
     {
-        await _versionCheckVm.CheckVersionCompatibilityAsync(_mods);
-        // 通知 UI 属性变更（XAML 绑定到本类的转发属性）
+        await RunVersionCheckCompatibilityAsync(true);
+    }
+
+    private async Task RunVersionCheckCompatibilityAsync(bool forceFullScan)
+    {
+        await _versionCheckVm.CheckVersionCompatibilityAsync(_mods, forceFullScan);
+    }
+
+    private void VersionCheckVm_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
         OnPropertyChanged(nameof(IsCheckingVersion));
         OnPropertyChanged(nameof(VersionCheckSummary));
         OnPropertyChanged(nameof(CompatibleModCount));
@@ -1654,7 +1671,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
                 modVm.LoadIcon();
 
-                await SaveEnabled();
+                await SaveProfileNowAsync();
 
                 WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
                 WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
@@ -2052,7 +2069,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     if (!_settingsService.IsReadonly)
                     {
                         modVm.Data.TagIds = selectedTags.Select(t => t.Tag.Id).ToList();
-                        _ = SaveEnabled();
+                        RequestProfileSave();
                         WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.EditTagsUpdated"] });
                     }
                     else
@@ -2171,39 +2188,24 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     protected override void OnDispose()
     {
         _modService.ModAdded -= ModService_ModAdded;
+        _modService.ModAdded -= OnModAdded;
         _modService.ModRemoved -= ModService_ModRemoved;
+        _versionCheckVm.PropertyChanged -= VersionCheckVm_PropertyChanged;
+
+        if (Initialized && !_settingsService.IsReadonly)
+            _profileSaveCoordinator.RequestSave(CaptureProfileSnapshot());
 
         if (_mods is not null)
         {
             _mods.CollectionChanged -= Mods_CollectionChanged;
+            foreach (var vm in _mods)
+            {
+                vm.OptionsChanged -= ModViewModel_OptionsChanged;
+                vm.PropertyChanged -= ModViewModel_PropertyChanged;
+                vm.VersionCheckRefreshed -= ModViewModel_VersionCheckRefreshed;
+            }
             _orderedItems.Clear();
             _mods.Clear();
         }
-
-        // 在页面退出前刷新待保存的更改，否则定时器销毁后未触发的保存会丢失
-        if (_saveTimer is not null)
-        {
-            bool shouldSave;
-            lock (_saveLock)
-            {
-                shouldSave = _isSavePending;
-                _isSavePending = false;
-            }
-            _saveTimer.Dispose();
-
-            if (shouldSave)
-            {
-                try
-                {
-                    SaveEnabled(false).GetAwaiter().GetResult();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "退出页面时保存配置失败");
-                }
-            }
-        }
-
-        _saveTimer = null;
     }
 }

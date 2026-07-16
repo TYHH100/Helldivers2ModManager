@@ -111,6 +111,8 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     public event Action? OptionsChanged;
 
+    public event EventHandler? VersionCheckRefreshed;
+
     public void OnOptionsChanged()
     {
         OptionsChanged?.Invoke();
@@ -462,10 +464,19 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         };
 
         var detailResult = await _versionCheckService.CheckSingleModAsync(_mod, GameUnitVersion == 0 ? null : GameUnitVersion, includeDetailedAnalysis: true);
-        var patchUnits = detailResult?.PatchUnits.ToList() ?? [];
-        var detailedAnalysis = detailResult?.DetailedAnalysis;
-        var effectiveStatus = detailResult?.Status ?? VersionStatus;
-        var effectiveGameVersion = detailResult?.GameVersion ?? GameUnitVersion;
+        if (detailResult is not null)
+        {
+            GameUnitVersion = detailResult.GameVersion;
+            LastVersionCheck = detailResult.LastChecked;
+            PatchUnits = new ObservableCollection<PatchUnitInfo>(detailResult.PatchUnits);
+            DetailedAnalysis = detailResult.DetailedAnalysis;
+            VersionStatus = detailResult.Status;
+        }
+
+        var patchUnits = PatchUnits.ToList();
+        var detailedAnalysis = DetailedAnalysis;
+        var effectiveStatus = VersionStatus;
+        var effectiveGameVersion = GameUnitVersion;
         statusText = effectiveStatus switch
         {
             ModVersionStatus.Compatible => _localizationService["Converters.Compatible"],
@@ -606,6 +617,9 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             ModDirectory = _mod.Directory,
             RefreshAsync = ShowVersionDetail
         });
+
+        if (detailResult is not null)
+            VersionCheckRefreshed?.Invoke(this, EventArgs.Empty);
     }
 
     public bool HasNexusData => GetNexusData() != null && GetNexusData()!.ModId != 0;

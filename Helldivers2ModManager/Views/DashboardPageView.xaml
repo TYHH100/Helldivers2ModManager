@@ -205,7 +205,7 @@
 							<CheckBox Grid.Column="3"
 									  Grid.Row="0"
 									  Grid.RowSpan="2"
-									  IsChecked="{Binding Enabled}"
+									  IsChecked="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 									  Width="24"
 									  Height="24"
 									  Margin="8 0"
@@ -241,7 +241,7 @@
 									<Style TargetType="Border">
 										<Setter Property="Visibility" Value="Visible"/>
 										<Style.Triggers>
-											<DataTrigger Binding="{Binding IsCheckingVersion}" Value="True">
+											<DataTrigger Binding="{Binding DataContext.IsCheckingVersion, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}" Value="True">
 												<Setter Property="Visibility" Value="Collapsed"/>
 											</DataTrigger>
 											<DataTrigger Binding="{Binding VersionStatus}" Value="Unknown">
@@ -278,7 +278,7 @@
 									VerticalAlignment="Top"
 									Margin="-7,-7,0,0"
 									Background="{StaticResource SystemAccentBrush}"
-									Visibility="{Binding IsCheckingVersion, Converter={StaticResource BoolToVisibilityConverter}}"
+									Visibility="{Binding DataContext.IsCheckingVersion, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"
 									ToolTip="{loc:Loc DashboardPage.CheckingVersion}"/>
 						</Grid>
 					</Border>
@@ -751,6 +751,17 @@
 				<!-- Action Buttons (右侧) -->
 				<StackPanel Grid.Column="1"
 							Orientation="Horizontal">
+                    <Button Style="{StaticResource FluentSecondaryButton}"
+                            Command="{Binding BatchRepairCommand}"
+                            IsEnabled="{Binding Initialized}"
+                            Visibility="{Binding IsBatchRepairEnabled, Converter={StaticResource BoolToVisibilityConverter}}"
+                            Padding="14 10"
+                            ToolTip="{loc:Loc VersionCheckBatch.ButtonHint}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE90F;" FontFamily="Segoe Fluent Icons" FontSize="14" Margin="0 0 7 0"/>
+                            <TextBlock Text="{loc:Loc VersionCheckBatch.Button}"/>
+                        </StackPanel>
+                    </Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
 							Content="{loc:Loc DashboardPage.RescanMods}"
 							Command="{Binding RescanModsCommand}"

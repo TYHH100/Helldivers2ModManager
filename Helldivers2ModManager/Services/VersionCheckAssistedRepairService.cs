@@ -98,7 +98,7 @@ internal sealed partial class VersionCheckService
                 .ToHashSet(StringComparer.Ordinal);
             foreach (var unit in units.Where(unit =>
                          wholePatchIsCustom ||
-                         unit.StrongCustom ||
+                         (unit.StrongCustom && strongCustomMeshSignatures.Count > 0) ||
                          strongCustomMeshSignatures.Contains(unit.MeshSignature)))
                 preserveIds.Add(unit.FileId);
         }

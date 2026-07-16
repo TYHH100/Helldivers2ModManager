@@ -24,6 +24,12 @@ internal enum VersionAutoCheckReason
 internal sealed partial class VersionCheckViewModel : ObservableObject
 {
     private static readonly Dictionary<Guid, DateTime> s_knownModTimestamps = [];
+    private static readonly EnumerationOptions s_modTimestampEnumerationOptions = new()
+    {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = true,
+        AttributesToSkip = FileAttributes.ReparsePoint
+    };
 
     private readonly ILogger<VersionCheckViewModel> _logger;
     private readonly VersionCheckService _versionCheckService;
@@ -78,8 +84,13 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     /// 首次点击时执行全量扫描建立参考版本，后续只检查新增/变动的模组。
     /// 检查结果仅保留状态字段，详细诊断在用户点击详情时按需扫描，避免常驻占用内存。
     /// </summary>
-    public async Task CheckVersionCompatibilityAsync(ObservableCollection<ModViewModel> mods)
+    public async Task CheckVersionCompatibilityAsync(
+        ObservableCollection<ModViewModel> mods,
+        bool forceFullScan = false)
     {
+        if (IsCheckingVersion)
+            return;
+
         IsCheckingVersion = true;
         VersionCheckSummary = _localizationService["VersionCheck.ScanningMods"];
         var backgroundTask = _backgroundTaskService.Add(
@@ -88,7 +99,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
 
         try
         {
-            bool needsFullScan = !VersionCheckService.HasCachedReference;
+            bool needsFullScan = forceFullScan || !VersionCheckService.HasCachedReference;
 
             // 检测游戏 exe 是否已更新：若 exe 文件时间变化，说明游戏已更新，必须全量重新扫描
             if (!needsFullScan)
@@ -126,10 +137,10 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
 
             UpdateModTimestampTracking(mods);
 
-            _ = SaveVersionCheckResultsToDatabaseAsync(mods);
+            await SaveVersionCheckResultsToDatabaseAsync(mods);
 
             if (needsFullScan)
-                _ = UpdateGameExeTimestampAsync();
+                await UpdateGameExeTimestampAsync();
 
             UpdateSummaryText();
             _backgroundTaskService.Complete(backgroundTask, VersionCheckSummary);
@@ -143,6 +154,24 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         finally
         {
             IsCheckingVersion = false;
+        }
+    }
+
+    /// <summary>
+    /// 单个模组重新检测后，同步统计、文件时间戳与数据库缓存。
+    /// </summary>
+    public async Task RefreshAfterSingleModCheckAsync(ObservableCollection<ModViewModel> mods)
+    {
+        try
+        {
+            UpdateStatistics(mods);
+            UpdateModTimestampTracking(mods);
+            UpdateSummaryText();
+            await SaveVersionCheckResultsToDatabaseAsync(mods);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to synchronize a refreshed mod version result");
         }
     }
 
@@ -358,7 +387,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             {
                 yield return vm;
             }
-            else if (vm.Data.Directory.LastWriteTimeUtc != lastTime)
+            else if (GetModContentLastWriteTimeUtc(vm.Data.Directory) != lastTime)
             {
                 yield return vm;
             }
@@ -375,7 +404,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             s_knownModTimestamps.Remove(guid);
 
         foreach (var vm in mods)
-            s_knownModTimestamps[vm.Guid] = vm.Data.Directory.LastWriteTimeUtc;
+            s_knownModTimestamps[vm.Guid] = GetModContentLastWriteTimeUtc(vm.Data.Directory);
     }
 
     /// <summary>
@@ -393,7 +422,11 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             {
                 if (vm.VersionStatus != ModVersionStatus.Unknown || vm.LastVersionCheck != default)
                 {
-                    results[vm.Guid] = (vm.VersionStatus, vm.GameUnitVersion, vm.LastVersionCheck, vm.Data.Directory.LastWriteTimeUtc);
+                    results[vm.Guid] = (
+                        vm.VersionStatus,
+                        vm.GameUnitVersion,
+                        vm.LastVersionCheck,
+                        GetModContentLastWriteTimeUtc(vm.Data.Directory));
                 }
             }
 
@@ -411,6 +444,29 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     private string GetGameExePath()
     {
         return Path.Combine(_settingsService.GameDirectory, "bin", "helldivers2.exe");
+    }
+
+    private static DateTime GetModContentLastWriteTimeUtc(DirectoryInfo directory)
+    {
+        var latest = directory.Exists ? directory.LastWriteTimeUtc : DateTime.MinValue;
+        try
+        {
+            foreach (var file in directory.EnumerateFiles("*", s_modTimestampEnumerationOptions))
+            {
+                if (file.LastWriteTimeUtc > latest)
+                    latest = file.LastWriteTimeUtc;
+            }
+        }
+        catch (IOException)
+        {
+            // A concurrent mod update may temporarily hide a file; the directory timestamp remains a safe fallback.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Keep the best timestamp collected so far when a nested folder is unreadable.
+        }
+
+        return latest;
     }
 
     /// <summary>

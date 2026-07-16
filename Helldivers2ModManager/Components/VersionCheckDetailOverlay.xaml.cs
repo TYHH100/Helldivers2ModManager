@@ -75,13 +75,16 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
     private const int MaxVisibleIssues = 50;
     private readonly LocalizationService? _localizationService;
     private readonly VersionCheckService? _versionCheckService;
+    private readonly RepairDisclaimerService? _repairDisclaimerService;
     private VersionCheckDetailMessage? _currentMessage;
     private ModRepairPlan? _repairPlan;
     private AssistedModRepairPlan? _automaticLodPlan;
     private AssistedModRepairPlan? _preserveLodPlan;
     private AssistedModRepairPlan? _gameLodPlan;
     private ModBackupHistory _backupHistory = new();
+    private CompanionRecoveryPlan? _companionRecoveryPlan;
     private bool _useGameReferences;
+    private bool _repairControlsBusy;
     private string _fullReport = string.Empty;
 
     public VersionCheckDetailOverlay()
@@ -100,16 +103,20 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         {
             _versionCheckService = versionCheckService;
         }
+
+        if (Application.Current is App disclaimerApp &&
+            disclaimerApp.Host?.Services?.GetService(typeof(RepairDisclaimerService)) is RepairDisclaimerService disclaimerService)
+        {
+            _repairDisclaimerService = disclaimerService;
+        }
     }
 
     public void Receive(VersionCheckDetailMessage message)
     {
         _currentMessage = message;
-        _repairPlan = null;
-        _automaticLodPlan = null;
-        _preserveLodPlan = null;
-        _gameLodPlan = null;
+        ResetRepairPlans();
         _backupHistory = new ModBackupHistory();
+        _companionRecoveryPlan = null;
         _useGameReferences = false;
         _fullReport = message.FullReport;
         copyStatus.Visibility = Visibility.Collapsed;
@@ -121,9 +128,8 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         backupOperationStatus.Text = string.Empty;
         cleanBackupsButton.IsEnabled = false;
         backupHistoryExpander.IsExpanded = false;
-        repairButton.Visibility = Visibility.Collapsed;
-        advancedRepairButton.Visibility = Visibility.Collapsed;
-        repairButton.IsEnabled = false;
+        _repairControlsBusy = false;
+        RefreshRepairControls();
         DataContext = BuildViewData(message);
         Visibility = Visibility.Visible;
         Focus();
@@ -136,10 +142,26 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         if (_versionCheckService is null)
             return;
 
+        ResetRepairPlans();
+        SetRepairControlsBusy(true);
         repairProgress.Text = L("VersionCheckDetail.CheckingRepair", "Checking repair options...");
         repairProgress.Visibility = Visibility.Visible;
         try
         {
+            var recoveryPlan = await _versionCheckService.CreateCompanionRecoveryPlanAsync(
+                message.ModDirectory);
+            if (!ReferenceEquals(_currentMessage, message))
+                return;
+            _companionRecoveryPlan = recoveryPlan;
+            if (recoveryPlan.MissingCount > 0)
+            {
+                recoveryButtonText.Text = recoveryPlan.CanRecover
+                    ? L("VersionCheckRecovery.Button", "Recover {count} companion file(s)")
+                        .Replace("{count}", recoveryPlan.RecoverableCount.ToString())
+                    : L("VersionCheckRecovery.Unavailable", "No reliable companion source");
+                return;
+            }
+
             var plan = await _versionCheckService.CreateRepairPlanAsync(message.ModDirectory);
             if (!ReferenceEquals(_currentMessage, message))
                 return;
@@ -150,8 +172,6 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                 _useGameReferences = false;
                 repairButtonText.Text = L("VersionCheckDetail.RepairButton", "Repair {count} issue(s)")
                     .Replace("{count}", plan.ActionCount.ToString());
-                repairButton.IsEnabled = true;
-                repairButton.Visibility = Visibility.Visible;
                 return;
             }
 
@@ -167,19 +187,23 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                 _useGameReferences = true;
                 repairButtonText.Text = L("VersionCheckDetail.AutomaticRepairButton", "Automatically repair {count} Unit(s)")
                     .Replace("{count}", automaticLodPlan.ActionCount.ToString());
-                repairButton.IsEnabled = true;
-                repairButton.Visibility = Visibility.Visible;
-                advancedRepairButton.Visibility = Visibility.Visible;
             }
         }
-        catch
+        catch (Exception ex)
         {
-            repairButton.Visibility = Visibility.Collapsed;
+            repairStatus.Text = L(
+                    "VersionCheckDetail.RepairPlanFailed",
+                    "Failed to load repair options: {message}")
+                .Replace("{message}", ex.Message);
+            repairStatus.Visibility = Visibility.Visible;
         }
         finally
         {
             if (ReferenceEquals(_currentMessage, message))
+            {
                 repairProgress.Visibility = Visibility.Collapsed;
+                SetRepairControlsBusy(false);
+            }
         }
     }
 
@@ -506,14 +530,140 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         return _localizationService?.Get(key, fallback) ?? fallback;
     }
 
+    private bool EnsureRepairDisclaimerAccepted(Action continuation)
+    {
+        if (_repairDisclaimerService is not null)
+            return _repairDisclaimerService.ContinueOrRequest(continuation);
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+        {
+            Message = L(
+                "VersionCheckDisclaimer.SettingsUnavailable",
+                "Repair settings are unavailable. Restart HD2MM and try again.")
+        });
+        return false;
+    }
+
+    private void ResetRepairPlans()
+    {
+        _repairPlan = null;
+        _automaticLodPlan = null;
+        _preserveLodPlan = null;
+        _gameLodPlan = null;
+        _companionRecoveryPlan = null;
+        _useGameReferences = false;
+    }
+
+    private void SetRepairControlsBusy(bool busy)
+    {
+        _repairControlsBusy = busy;
+        RefreshRepairControls();
+    }
+
+    private void RefreshRepairControls()
+    {
+        var recoveryVisible = _companionRecoveryPlan?.MissingCount > 0;
+        var safeRepairVisible = !recoveryVisible && _repairPlan?.CanRepair == true;
+        var automaticRepairVisible = !recoveryVisible && !safeRepairVisible &&
+            _automaticLodPlan?.CanRepair == true;
+        var repairVisible = safeRepairVisible || automaticRepairVisible;
+
+        recoveryButton.Visibility = recoveryVisible ? Visibility.Visible : Visibility.Collapsed;
+        recoveryButton.IsEnabled = !_repairControlsBusy &&
+            _companionRecoveryPlan?.CanRecover == true;
+        repairButton.Visibility = repairVisible ? Visibility.Visible : Visibility.Collapsed;
+        repairButton.IsEnabled = !_repairControlsBusy && repairVisible;
+        advancedRepairButton.Visibility = automaticRepairVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        advancedRepairButton.IsEnabled = !_repairControlsBusy && automaticRepairVisible;
+        backupHistoryExpander.IsEnabled = !_repairControlsBusy;
+    }
+
     private static Brush GetBrush(string resourceKey, Color fallback)
     {
         return Application.Current.TryFindResource(resourceKey) as Brush ?? new SolidColorBrush(fallback);
     }
 
+
+    private void RecoveryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_companionRecoveryPlan?.CanRecover != true)
+            return;
+
+        if (!EnsureRepairDisclaimerAccepted(() => RecoveryButton_Click(sender, e)))
+            return;
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+        {
+            Title = L("VersionCheckRecovery.ConfirmTitle", "Recover missing companion files"),
+            Message = L(
+                    "VersionCheckRecovery.ConfirmMessage",
+                    "HD2MM will recover {count} companion file(s) from byte-verified sources, stage them in temporary files, and commit only after bounds validation. Continue?")
+                .Replace("{count}", _companionRecoveryPlan.RecoverableCount.ToString()),
+            Confirm = () => _ = ExecuteCompanionRecoveryAsync()
+        });
+    }
+
+    private async Task ExecuteCompanionRecoveryAsync()
+    {
+        if (_versionCheckService is null || _currentMessage is null ||
+            _companionRecoveryPlan?.CanRecover != true)
+        {
+            return;
+        }
+
+        var message = _currentMessage;
+        SetRepairControlsBusy(true);
+        repairProgress.Text = L(
+            "VersionCheckRecovery.Recovering",
+            "Recovering and validating companion files...");
+        repairProgress.Visibility = Visibility.Visible;
+        try
+        {
+            var result = await _versionCheckService.RecoverCompanionFilesAsync(message.ModDirectory);
+            if (!result.Success)
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+                {
+                    Message = L("VersionCheckRecovery.Failed", "Companion recovery failed: {message}")
+                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
+                });
+                return;
+            }
+
+            repairStatus.Text = L(
+                    "VersionCheckRecovery.Success",
+                    "Recovered {count} companion file(s).")
+                .Replace("{count}", result.RecoveredCount.ToString());
+            repairStatus.Visibility = Visibility.Visible;
+            await message.RefreshAsync();
+            if (ReferenceEquals(_currentMessage, message))
+                await LoadRepairPlanAsync(message);
+        }
+        catch (Exception ex)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = L("VersionCheckRecovery.Failed", "Companion recovery failed: {message}")
+                    .Replace("{message}", ex.Message)
+            });
+        }
+        finally
+        {
+            if (ReferenceEquals(_currentMessage, message))
+            {
+                repairProgress.Visibility = Visibility.Collapsed;
+                SetRepairControlsBusy(false);
+            }
+        }
+    }
     private void RepairButton_Click(object sender, RoutedEventArgs e)
     {
         if (_currentMessage is null)
+            return;
+
+        if (!EnsureRepairDisclaimerAccepted(() => RepairButton_Click(sender, e)))
             return;
 
         if (_useGameReferences)
@@ -562,9 +712,11 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         if (_versionCheckService is null || _currentMessage is null)
             return;
 
+        if (!EnsureRepairDisclaimerAccepted(() => AdvancedRepairButton_Click(sender, e)))
+            return;
+
         var message = _currentMessage;
-        repairButton.IsEnabled = false;
-        advancedRepairButton.IsEnabled = false;
+        SetRepairControlsBusy(true);
         repairProgress.Text = L("VersionCheckDetail.LoadingAdvancedRepair", "Loading advanced LOD strategies...");
         repairProgress.Visibility = Visibility.Visible;
         try
@@ -593,8 +745,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             if (ReferenceEquals(_currentMessage, message))
             {
                 repairProgress.Visibility = Visibility.Collapsed;
-                repairButton.IsEnabled = true;
-                advancedRepairButton.IsEnabled = true;
+                SetRepairControlsBusy(false);
             }
         }
     }
@@ -707,8 +858,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             return;
 
         var message = _currentMessage;
-        repairButton.IsEnabled = false;
-        advancedRepairButton.IsEnabled = false;
+        SetRepairControlsBusy(true);
         var usesMixedLod = preserveModLodUnitIds is not null;
         var usesGameLod = lodStrategy == AssistedLodStrategy.UseGameReference;
         var usesAutomaticLod = useGameReferences &&
@@ -734,51 +884,50 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         repairProgress.Visibility = Visibility.Visible;
         repairStatus.Visibility = Visibility.Collapsed;
 
-        ModRepairResult result;
-        if (!useGameReferences)
+        try
         {
-            result = await _versionCheckService.RepairModAsync(message.ModDirectory);
-        }
-        else if (usesAutomaticLod)
-        {
-            result = await _versionCheckService.RepairModAutomaticallyAsync(message.ModDirectory);
-        }
-        else if (preserveModLodUnitIds is not null)
-        {
-            result = await _versionCheckService.RepairModWithMixedGameReferencesAsync(
-                message.ModDirectory,
-                preserveModLodUnitIds);
-        }
-        else
-        {
-            result = await _versionCheckService.RepairModWithGameReferencesAsync(
-                message.ModDirectory,
-                lodStrategy ?? AssistedLodStrategy.PreserveMod);
-        }
-
-        repairProgress.Visibility = Visibility.Collapsed;
-        if (!result.Success)
-        {
-            repairButton.IsEnabled = true;
-            advancedRepairButton.IsEnabled = true;
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            ModRepairResult result;
+            if (!useGameReferences)
             {
-                Message = L("VersionCheckDetail.RepairFailed", "Repair failed: {message}")
-                    .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
-            });
-            return;
-        }
+                result = await _versionCheckService.RepairModAsync(message.ModDirectory);
+            }
+            else if (usesAutomaticLod)
+            {
+                result = await _versionCheckService.RepairModAutomaticallyAsync(message.ModDirectory);
+            }
+            else if (preserveModLodUnitIds is not null)
+            {
+                result = await _versionCheckService.RepairModWithMixedGameReferencesAsync(
+                    message.ModDirectory,
+                    preserveModLodUnitIds);
+            }
+            else
+            {
+                result = await _versionCheckService.RepairModWithGameReferencesAsync(
+                    message.ModDirectory,
+                    lodStrategy ?? AssistedLodStrategy.PreserveMod);
+            }
 
-        await message.RefreshAsync();
-        repairStatus.Text = useGameReferences
-            ? usesAutomaticLod
-                ? L(
+            if (!result.Success)
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+                {
+                    Message = L("VersionCheckDetail.RepairFailed", "Repair failed: {message}")
+                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
+                });
+                return;
+            }
+
+            await message.RefreshAsync();
+            repairStatus.Text = useGameReferences
+                ? usesAutomaticLod
+                    ? L(
                         "VersionCheckDetail.AutomaticRepairSuccess",
                         "Automatically updated {count} Unit(s): preserved mod LOD for {preserve}, used game LOD for {game}. Original files were kept as backups.")
                     .Replace("{count}", result.AppliedActionCount.ToString())
                     .Replace("{preserve}", (_automaticLodPlan?.AutomaticPreserveUnitCount ?? 0).ToString())
                     .Replace("{game}", (_automaticLodPlan?.AutomaticGameLodUnitCount ?? 0).ToString())
-                : L(
+                    : L(
                         usesMixedLod
                             ? "VersionCheckDetail.AssistedRepairSuccessMixedLod"
                             : usesGameLod
@@ -789,12 +938,30 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                             : usesGameLod
                                 ? "Updated {count} Unit(s) with current game LOD data. Original files were kept as backups."
                                 : "Updated {count} Unit(s) while preserving mod LOD data. Original files were kept as backups.")
-                    .Replace("{count}", result.AppliedActionCount.ToString())
-            : L("VersionCheckDetail.RepairSuccess", "Repaired {count} issue(s). Original files were kept as backups.")
-                .Replace("{count}", result.AppliedActionCount.ToString());
-        repairStatus.Visibility = Visibility.Visible;
-        repairButton.Visibility = Visibility.Collapsed;
-        advancedRepairButton.Visibility = Visibility.Collapsed;
+                        .Replace("{count}", result.AppliedActionCount.ToString())
+                : L("VersionCheckDetail.RepairSuccess", "Repaired {count} issue(s). Original files were kept as backups.")
+                    .Replace("{count}", result.AppliedActionCount.ToString());
+            repairStatus.Visibility = Visibility.Visible;
+            ResetRepairPlans();
+            if (ReferenceEquals(_currentMessage, message))
+                await LoadBackupHistoryAsync(message);
+        }
+        catch (Exception ex)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = L("VersionCheckDetail.RepairFailed", "Repair failed: {message}")
+                    .Replace("{message}", ex.Message)
+            });
+        }
+        finally
+        {
+            if (ReferenceEquals(_currentMessage, message))
+            {
+                repairProgress.Visibility = Visibility.Collapsed;
+                SetRepairControlsBusy(false);
+            }
+        }
     }
 
     private void RestoreBackupButton_Click(object sender, RoutedEventArgs e)
@@ -824,9 +991,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             return;
 
         var message = _currentMessage;
-        backupHistoryExpander.IsEnabled = false;
-        repairButton.IsEnabled = false;
-        advancedRepairButton.IsEnabled = false;
+        SetRepairControlsBusy(true);
         backupOperationStatus.Text = L("VersionCheckBackup.Restoring", "Restoring and validating backup...");
         backupOperationStatus.Foreground = GetBrush("SystemAccentBrush", Colors.DodgerBlue);
         try
@@ -850,16 +1015,23 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             backupOperationStatus.Foreground = GetBrush("SuccessBrush", Colors.ForestGreen);
             await message.RefreshAsync();
             if (ReferenceEquals(_currentMessage, message))
+            {
                 await LoadBackupHistoryAsync(message);
+                await LoadRepairPlanAsync(message);
+            }
+        }
+        catch (Exception ex)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = L("VersionCheckBackup.RestoreFailed", "Backup restore failed: {message}")
+                    .Replace("{message}", ex.Message)
+            });
         }
         finally
         {
             if (ReferenceEquals(_currentMessage, message))
-            {
-                backupHistoryExpander.IsEnabled = true;
-                repairButton.IsEnabled = true;
-                advancedRepairButton.IsEnabled = true;
-            }
+                SetRepairControlsBusy(false);
         }
     }
 
@@ -1002,13 +1174,10 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         Visibility = Visibility.Hidden;
         DataContext = null;
         _currentMessage = null;
-        _repairPlan = null;
-        _automaticLodPlan = null;
-        _preserveLodPlan = null;
-        _gameLodPlan = null;
+        ResetRepairPlans();
         _backupHistory = new ModBackupHistory();
         backupHistoryItems.ItemsSource = null;
-        _useGameReferences = false;
+        _repairControlsBusy = false;
         _fullReport = string.Empty;
     }
 }

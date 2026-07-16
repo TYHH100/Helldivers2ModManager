@@ -214,8 +214,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	{
 		Reset();
 
-			title.Text = "信息";
-			this.message.Text = message.Message;
+		title.Text = LocalizationService?["MessageBox.Info"] ?? "信息";
+		this.message.Text = message.Message;
 
 		okButton.Visibility = Visibility.Visible;
 		Visibility = Visibility.Visible;
@@ -225,9 +225,9 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	{
 		Reset();
 
-			title.Text = "警告";
-			brush.Color = Colors.Yellow;
-			this.message.Text = message.Message;
+		title.Text = LocalizationService?["MessageBox.Warning"] ?? "警告";
+		brush.Color = Colors.Yellow;
+		this.message.Text = message.Message;
 
 		okButton.Visibility = Visibility.Visible;
 		Visibility = Visibility.Visible;
@@ -237,9 +237,9 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	{
 		Reset();
 
-			title.Text = "错误";
-			brush.Color = Colors.Red;
-			this.message.Text = message.Message;
+		title.Text = LocalizationService?["MessageBox.Error"] ?? "错误";
+		brush.Color = Colors.Red;
+		this.message.Text = message.Message;
 
 		okButton.Visibility = Visibility.Visible;
 		Visibility = Visibility.Visible;
@@ -513,6 +513,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	private void Reset()
 	{
 		_inputAction = null;
+		_abortAction = null;
 		_confirmAction = null;
 		_selectionAction = null;
 		_tagSelectionAction = null;
@@ -524,7 +525,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		brush.Color = Colors.White;
 		message.Visibility = Visibility.Visible;
 		message.Margin = new Thickness(0);
-		message.TextWrapping = TextWrapping.NoWrap;
+		message.TextWrapping = TextWrapping.Wrap;
 		input.Visibility = Visibility.Collapsed;
 		input.Text = string.Empty;
 		selectionComboBox.Visibility = Visibility.Collapsed;

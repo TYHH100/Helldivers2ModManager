@@ -22,23 +22,19 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 
 	private readonly NavigationStore _navStore;
 	private readonly EditModStore _editModStore;
-	private readonly ProfileService _profileService;
-	private readonly SettingsService _settingsService;
+	private readonly ProfileSaveCoordinator _profileSaveCoordinator;
 	private readonly ModService _modService;
 	private readonly LocalizationService _localizationService;
-	private readonly ModGroupService _modGroupService;
 
 	public EditPageViewModel(NavigationStore navStore, EditModStore editModStore,
-		ProfileService profileService, SettingsService settingsService, ModService modService,
-		LocalizationService localizationService, ModGroupService modGroupService)
+		ProfileSaveCoordinator profileSaveCoordinator, ModService modService,
+		LocalizationService localizationService)
 	{
 		_navStore = navStore;
 		_editModStore = editModStore;
-		_profileService = profileService;
-		_settingsService = settingsService;
+		_profileSaveCoordinator = profileSaveCoordinator;
 		_modService = modService;
 		_localizationService = localizationService;
-		_modGroupService = modGroupService;
 
 		_localizationService.PropertyChanged += (_, _) =>
 		{
@@ -50,18 +46,13 @@ internal sealed partial class EditPageViewModel : PageViewModelBase
 	async Task Done()
 	{
 		// 在退出编辑前保存当前 Mod 配置到数据库，避免导航回 Dashboard 时数据丢失
-		if (!_settingsService.IsReadonly)
+		try
 		{
-			try
-			{
-				await _modGroupService.SaveSelectedGroupStateAsync(_modService.Mods);
-				if (_modGroupService.SelectedGroup.IsDefault)
-					await _profileService.SaveAsync(_settingsService, _modService.Mods);
-			}
-			catch (Exception ex)
-			{
-				System.Diagnostics.Debug.WriteLine($"{_localizationService["EditPage.SaveFailed"]}{ex.Message}");
-			}
+			await _profileSaveCoordinator.SaveCurrentAsync(_modService.Mods);
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"{_localizationService["EditPage.SaveFailed"]}{ex.Message}");
 		}
 
 		_editModStore.CurrentMod = null;

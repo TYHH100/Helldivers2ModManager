@@ -15,11 +15,6 @@ internal sealed class ProfileService
 	private readonly EnabledDataRepository _repository;
 	private readonly DatabaseService _databaseService;
 
-	/// <summary>
-	/// 缓存最近一次 Dashboard 保存时的 Mod 顺序，供其他页面（如 EditPage）保存时保持正确的排序
-	/// </summary>
-	private List<Guid>? _lastSavedOrder;
-
 	public ProfileService(
 		ILogger<ProfileService> logger,
 		EnabledDataRepository repository,
@@ -266,52 +261,15 @@ internal sealed class ProfileService
 	}
 
 	/// <summary>
-	/// 缓存 Dashboard 当前显示的 Mod 顺序，供其他页面在保存时保持正确的排序。
-	/// 在 Dashboard 初始化完成后调用一次即可。
+	/// 将保存协调器提供的不可变默认组快照原子写入 SQLite。
 	/// </summary>
-	public void SetLastSavedOrder(IEnumerable<Guid> order)
+	public async Task SaveSnapshotAsync(SettingsService settingsService, ProfileSnapshot snapshot)
 	{
-		_lastSavedOrder = [.. order];
-	}
-
-	/// <summary>
-	/// 获取当前缓存的 Dashboard 模组顺序（即主页列表的显示顺序）
-	/// 如果没有缓存则返回 ModService.Mods 的顺序
-	/// </summary>
-	public IReadOnlyList<Guid>? GetCurrentOrder()
-	{
-		return _lastSavedOrder;
-	}
-
-	/// <summary>
-	/// 保存 Mod 配置到 SQLite 数据库。
-	/// 如果有缓存顺序（来自 Dashboard 的 SetLastSavedOrder），则按缓存顺序写入，
-	/// 确保其他页面（如 EditPage）以不同顺序传入时不会打乱已有排序。
-	/// </summary>
-	public async Task SaveAsync(SettingsService settingsService, IEnumerable<ModData> mods)
-	{
-		_logger.LogInformation("Saving profile to SQLite");
-
-		var modsList = mods as IReadOnlyList<ModData> ?? [.. mods];
-
-		// 按缓存顺序重排：确保 Dashboard 设定的顺序始终优先
-		if (_lastSavedOrder is { Count: > 0 })
-		{
-			var orderedMods = _lastSavedOrder
-				.Select(g => modsList.FirstOrDefault(m => m.Manifest.Guid == g))
-				.Where(static m => m is not null)
-				.Cast<ModData>()
-				.ToList();
-			// 添加不在缓存中的新 Mod
-			orderedMods.AddRange(modsList.Where(m => !_lastSavedOrder.Contains(m.Manifest.Guid)));
-			modsList = orderedMods;
-		}
-
-		var dataList = modsList.Select(static m => m.ToEnabledData()).ToList();
+		var dataList = snapshot.ToEnabledData();
+		_logger.LogInformation("Saving profile snapshot {Sequence} to SQLite", snapshot.Sequence);
 		try
 		{
-			await _repository.SaveAllAsync(settingsService.StorageDirectory, dataList);
-			_lastSavedOrder = modsList.Select(static m => m.Manifest.Guid).ToList();
+			await _repository.SaveAllAsync(settingsService.StorageDirectory, dataList).ConfigureAwait(false);
 			_logger.LogInformation("Profile saved to SQLite ({Count} records)", dataList.Count);
 		}
 		catch (Exception ex)
