@@ -60,6 +60,16 @@ internal sealed record LodStrategyOption(
     public override string ToString() => Label;
 }
 
+internal sealed class BackupHistoryItemViewData
+{
+    public required ModBackupEntry Entry { get; init; }
+    public required string Title { get; init; }
+    public required string Detail { get; init; }
+    public required string Status { get; init; }
+    public required Brush StatusBrush { get; init; }
+    public bool CanRestore => Entry.CanRestore;
+}
+
 internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<VersionCheckDetailMessage>
 {
     private const int MaxVisibleIssues = 50;
@@ -70,6 +80,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
     private AssistedModRepairPlan? _automaticLodPlan;
     private AssistedModRepairPlan? _preserveLodPlan;
     private AssistedModRepairPlan? _gameLodPlan;
+    private ModBackupHistory _backupHistory = new();
     private bool _useGameReferences;
     private string _fullReport = string.Empty;
 
@@ -98,11 +109,18 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         _automaticLodPlan = null;
         _preserveLodPlan = null;
         _gameLodPlan = null;
+        _backupHistory = new ModBackupHistory();
         _useGameReferences = false;
         _fullReport = message.FullReport;
         copyStatus.Visibility = Visibility.Collapsed;
         repairStatus.Visibility = Visibility.Collapsed;
         repairProgress.Visibility = Visibility.Collapsed;
+        backupHistoryItems.ItemsSource = null;
+        backupHistorySummary.Text = string.Empty;
+        backupHistoryLoading.Visibility = Visibility.Visible;
+        backupOperationStatus.Text = string.Empty;
+        cleanBackupsButton.IsEnabled = false;
+        backupHistoryExpander.IsExpanded = false;
         repairButton.Visibility = Visibility.Collapsed;
         advancedRepairButton.Visibility = Visibility.Collapsed;
         repairButton.IsEnabled = false;
@@ -110,6 +128,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         Visibility = Visibility.Visible;
         Focus();
         _ = LoadRepairPlanAsync(message);
+        _ = LoadBackupHistoryAsync(message);
     }
 
     private async Task LoadRepairPlanAsync(VersionCheckDetailMessage message)
@@ -164,6 +183,108 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         }
     }
 
+
+    private async Task LoadBackupHistoryAsync(VersionCheckDetailMessage message)
+    {
+        if (_versionCheckService is null)
+            return;
+
+        backupHistoryLoading.Text = L("VersionCheckBackup.Loading", "Loading backup history...");
+        backupHistoryLoading.Visibility = Visibility.Visible;
+        try
+        {
+            var history = await _versionCheckService.GetBackupHistoryAsync(message.ModDirectory);
+            if (!ReferenceEquals(_currentMessage, message))
+                return;
+
+            _backupHistory = history;
+            backupHistoryItems.ItemsSource = history.Entries
+                .Select(BuildBackupHistoryItem)
+                .ToList();
+            backupHistorySummary.Text = history.Entries.Count == 0
+                ? L("VersionCheckBackup.None", "No HD2MM repair backups were found for this mod.")
+                : L(
+                        "VersionCheckBackup.Summary",
+                        "{count} backup(s), {restorable} restorable, {invalid} invalid.")
+                    .Replace("{count}", history.Entries.Count.ToString())
+                    .Replace("{restorable}", history.RestorableCount.ToString())
+                    .Replace("{invalid}", history.InvalidCount.ToString());
+            cleanBackupsButton.IsEnabled = history.Entries
+                .GroupBy(entry => entry.OriginalPath, StringComparer.OrdinalIgnoreCase)
+                .Any(group => group.Count() > 3);
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(_currentMessage, message))
+            {
+                backupHistorySummary.Text = L(
+                        "VersionCheckBackup.LoadFailed",
+                        "Failed to load backup history: {message}")
+                    .Replace("{message}", ex.Message);
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_currentMessage, message))
+                backupHistoryLoading.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private BackupHistoryItemViewData BuildBackupHistoryItem(ModBackupEntry entry)
+    {
+        var status = !entry.CanRestore
+            ? L("VersionCheckBackup.Invalid", "Cannot restore: {message}")
+                .Replace("{message}", entry.ValidationMessage)
+            : entry.CurrentMatchesBackup
+                ? L("VersionCheckBackup.MatchesCurrent", "Current patch already matches this backup.")
+                : !entry.CurrentExists
+                    ? L("VersionCheckBackup.CurrentMissing", "Current patch is missing; restore will recreate it.")
+                    : L("VersionCheckBackup.Ready", "Ready to restore. The current patch will be backed up first.");
+        var statusBrush = !entry.CanRestore
+            ? GetBrush("DangerBrush", Colors.IndianRed)
+            : entry.CurrentMatchesBackup
+                ? GetBrush("WarningBrush", Colors.Goldenrod)
+                : GetBrush("SuccessBrush", Colors.ForestGreen);
+        var detail = L(
+                "VersionCheckBackup.ItemDetail",
+                "{time} | {kind} | {actions} action(s) | {size} | SHA-256 {hash}")
+            .Replace("{time}", entry.CreatedLocal.ToString("yyyy-MM-dd HH:mm:ss"))
+            .Replace("{kind}", GetBackupKindLabel(entry.RepairKind))
+            .Replace("{actions}", entry.ActionCount.ToString())
+            .Replace("{size}", FormatFileSize(entry.BackupSize))
+            .Replace("{hash}", entry.BackupSha256.Length >= 12 ? entry.BackupSha256[..12] : "-");
+        return new BackupHistoryItemViewData
+        {
+            Entry = entry,
+            Title = entry.OriginalFileName,
+            Detail = detail,
+            Status = status,
+            StatusBrush = statusBrush
+        };
+    }
+
+    private string GetBackupKindLabel(ModBackupRepairKind kind)
+    {
+        return kind switch
+        {
+            ModBackupRepairKind.SafeMetadata => L("VersionCheckBackup.KindMetadata", "Safe metadata repair"),
+            ModBackupRepairKind.AutomaticLod => L("VersionCheckBackup.KindAutomatic", "Automatic LOD repair"),
+            ModBackupRepairKind.PreserveModLod => L("VersionCheckBackup.KindPreserve", "Preserve mod LOD"),
+            ModBackupRepairKind.UseGameLod => L("VersionCheckBackup.KindGame", "Use game LOD"),
+            ModBackupRepairKind.MixedLod => L("VersionCheckBackup.KindMixed", "Mixed per-Unit LOD"),
+            ModBackupRepairKind.PreRestore => L("VersionCheckBackup.KindPreRestore", "Snapshot before restore"),
+            _ => L("VersionCheckBackup.KindLegacy", "Legacy backup")
+        };
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024d:F1} KiB";
+        return $"{bytes / (1024d * 1024d):F1} MiB";
+    }
     private VersionCheckDetailViewData BuildViewData(VersionCheckDetailMessage message)
     {
         var issues = BuildIssues(message);
@@ -675,6 +796,171 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         repairButton.Visibility = Visibility.Collapsed;
         advancedRepairButton.Visibility = Visibility.Collapsed;
     }
+
+    private void RestoreBackupButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentMessage is null ||
+            (sender as FrameworkElement)?.Tag is not ModBackupEntry entry ||
+            !entry.CanRestore)
+        {
+            return;
+        }
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+        {
+            Title = L("VersionCheckBackup.RestoreTitle", "Restore patch backup"),
+            Message = L(
+                    "VersionCheckBackup.RestoreConfirm",
+                    "Restore {file} from {time}? HD2MM will snapshot the current patch first, replace it atomically, and verify the restored SHA-256.")
+                .Replace("{file}", entry.OriginalFileName)
+                .Replace("{time}", entry.CreatedLocal.ToString("yyyy-MM-dd HH:mm:ss")),
+            Confirm = () => _ = ExecuteBackupRestoreAsync(entry)
+        });
+    }
+
+    private async Task ExecuteBackupRestoreAsync(ModBackupEntry entry)
+    {
+        if (_versionCheckService is null || _currentMessage is null)
+            return;
+
+        var message = _currentMessage;
+        backupHistoryExpander.IsEnabled = false;
+        repairButton.IsEnabled = false;
+        advancedRepairButton.IsEnabled = false;
+        backupOperationStatus.Text = L("VersionCheckBackup.Restoring", "Restoring and validating backup...");
+        backupOperationStatus.Foreground = GetBrush("SystemAccentBrush", Colors.DodgerBlue);
+        try
+        {
+            var result = await _versionCheckService.RestoreBackupAsync(
+                message.ModDirectory,
+                entry.BackupPath);
+            if (!result.Success)
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+                {
+                    Message = L("VersionCheckBackup.RestoreFailed", "Backup restore failed: {message}")
+                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
+                });
+                return;
+            }
+
+            backupOperationStatus.Text = L(
+                "VersionCheckBackup.RestoreSuccess",
+                "Backup restored. A snapshot of the replaced patch was retained.");
+            backupOperationStatus.Foreground = GetBrush("SuccessBrush", Colors.ForestGreen);
+            await message.RefreshAsync();
+            if (ReferenceEquals(_currentMessage, message))
+                await LoadBackupHistoryAsync(message);
+        }
+        finally
+        {
+            if (ReferenceEquals(_currentMessage, message))
+            {
+                backupHistoryExpander.IsEnabled = true;
+                repairButton.IsEnabled = true;
+                advancedRepairButton.IsEnabled = true;
+            }
+        }
+    }
+
+    private void DeleteBackupButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentMessage is null || (sender as FrameworkElement)?.Tag is not ModBackupEntry entry)
+            return;
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+        {
+            Title = L("VersionCheckBackup.DeleteTitle", "Delete backup"),
+            Message = L(
+                    "VersionCheckBackup.DeleteConfirm",
+                    "Delete the backup of {file} from {time}? The final restorable backup for a patch is always protected.")
+                .Replace("{file}", entry.OriginalFileName)
+                .Replace("{time}", entry.CreatedLocal.ToString("yyyy-MM-dd HH:mm:ss")),
+            Confirm = () => _ = ExecuteBackupDeleteAsync(entry)
+        });
+    }
+
+    private async Task ExecuteBackupDeleteAsync(ModBackupEntry entry)
+    {
+        if (_versionCheckService is null || _currentMessage is null)
+            return;
+
+        var message = _currentMessage;
+        backupHistoryExpander.IsEnabled = false;
+        try
+        {
+            var result = await _versionCheckService.DeleteBackupAsync(
+                message.ModDirectory,
+                entry.BackupPath);
+            if (!result.Success)
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+                {
+                    Message = L("VersionCheckBackup.DeleteFailed", "Backup deletion failed: {message}")
+                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
+                });
+                return;
+            }
+
+            backupOperationStatus.Text = L("VersionCheckBackup.DeleteSuccess", "Backup deleted.");
+            backupOperationStatus.Foreground = GetBrush("SuccessBrush", Colors.ForestGreen);
+            await LoadBackupHistoryAsync(message);
+        }
+        finally
+        {
+            if (ReferenceEquals(_currentMessage, message))
+                backupHistoryExpander.IsEnabled = true;
+        }
+    }
+
+    private void CleanBackupsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentMessage is null)
+            return;
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+        {
+            Title = L("VersionCheckBackup.CleanTitle", "Clean old backups"),
+            Message = L(
+                "VersionCheckBackup.CleanConfirm",
+                "Keep the newest three backups for each patch and delete older entries? At least one restorable backup is always retained."),
+            Confirm = () => _ = ExecuteBackupCleanupAsync()
+        });
+    }
+
+    private async Task ExecuteBackupCleanupAsync()
+    {
+        if (_versionCheckService is null || _currentMessage is null)
+            return;
+
+        var message = _currentMessage;
+        backupHistoryExpander.IsEnabled = false;
+        try
+        {
+            var result = await _versionCheckService.CleanOldBackupsAsync(message.ModDirectory, 3);
+            if (!result.Success)
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+                {
+                    Message = L("VersionCheckBackup.CleanFailed", "Backup cleanup failed: {message}")
+                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
+                });
+                return;
+            }
+
+            backupOperationStatus.Text = L(
+                    "VersionCheckBackup.CleanSuccess",
+                    "Deleted {count} old backup(s).")
+                .Replace("{count}", result.DeletedCount.ToString());
+            backupOperationStatus.Foreground = GetBrush("SuccessBrush", Colors.ForestGreen);
+            await LoadBackupHistoryAsync(message);
+        }
+        finally
+        {
+            if (ReferenceEquals(_currentMessage, message))
+                backupHistoryExpander.IsEnabled = true;
+        }
+    }
     private async void CopyButton_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -720,6 +1006,8 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         _automaticLodPlan = null;
         _preserveLodPlan = null;
         _gameLodPlan = null;
+        _backupHistory = new ModBackupHistory();
+        backupHistoryItems.ItemsSource = null;
         _useGameReferences = false;
         _fullReport = string.Empty;
     }

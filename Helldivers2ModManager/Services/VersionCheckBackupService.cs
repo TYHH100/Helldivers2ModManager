@@ -1,0 +1,461 @@
+using Helldivers2ModManager.Models;
+using Microsoft.Extensions.Logging;
+using System.Globalization;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+
+namespace Helldivers2ModManager.Services;
+
+internal sealed partial class VersionCheckService
+{
+    private static readonly Regex s_backupNamePattern = new(
+        @"^(?<base>.+)\.patch-backup_(?<index>[^.]+)\.(?<stamp>\d{8}-\d{6})(?:-(?<sequence>\d+))?\.hd2mm-backup$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    private static readonly JsonSerializerOptions s_backupJsonOptions = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    public async Task<ModBackupHistory> GetBackupHistoryAsync(
+        DirectoryInfo modDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        if (!modDirectory.Exists)
+            return new ModBackupHistory();
+
+        var entries = new List<ModBackupEntry>();
+        foreach (var backupFile in modDirectory
+                     .GetFiles("*.hd2mm-backup", SearchOption.AllDirectories)
+                     .OrderByDescending(file => file.LastWriteTimeUtc))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            entries.Add(await ReadBackupEntryAsync(modDirectory, backupFile, cancellationToken));
+        }
+
+        return new ModBackupHistory
+        {
+            Entries = entries
+                .OrderByDescending(entry => entry.CreatedLocal)
+                .ThenBy(entry => entry.OriginalPath, StringComparer.OrdinalIgnoreCase)
+                .ToList()
+        };
+    }
+
+    public async Task<ModBackupOperationResult> RestoreBackupAsync(
+        DirectoryInfo modDirectory,
+        string backupPath,
+        CancellationToken cancellationToken = default)
+    {
+        await _repairSemaphore.WaitAsync(cancellationToken);
+        string? temporaryPath = null;
+        string? rollbackPath = null;
+        string? originalPath = null;
+        var originalExisted = false;
+        var committed = false;
+        try
+        {
+            var history = await GetBackupHistoryAsync(modDirectory, cancellationToken);
+            var entry = history.Entries.FirstOrDefault(candidate =>
+                string.Equals(candidate.BackupPath, Path.GetFullPath(backupPath), StringComparison.OrdinalIgnoreCase));
+            if (entry is null)
+                return new ModBackupOperationResult { ErrorMessage = "The selected backup is not part of this mod." };
+            if (!entry.CanRestore)
+                return new ModBackupOperationResult { ErrorMessage = entry.ValidationMessage };
+
+            originalPath = entry.OriginalPath;
+            var originalFile = new FileInfo(originalPath);
+            Directory.CreateDirectory(originalFile.DirectoryName!);
+            temporaryPath = Path.Combine(
+                originalFile.DirectoryName!,
+                "." + originalFile.Name + ".hd2mm-restore-" + Guid.NewGuid().ToString("N") + ".tmp");
+            await CopyFileDurablyAsync(entry.BackupPath, temporaryPath, cancellationToken);
+
+            var stagedAnalysis = await AnalyzeSinglePatchFileStructureAsync(
+                new FileInfo(temporaryPath),
+                originalFile);
+            if (!await IsBackupRestorableAsync(new FileInfo(temporaryPath), originalFile, stagedAnalysis))
+                throw new InvalidDataException("The selected backup failed structural validation before restore.");
+
+            originalExisted = File.Exists(originalPath);
+            if (originalExisted)
+            {
+                rollbackPath = CreateBackupPath(originalFile, DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+                File.Replace(temporaryPath, originalPath, rollbackPath, true);
+            }
+            else
+            {
+                File.Move(temporaryPath, originalPath);
+            }
+            committed = true;
+
+            var restoredHash = await ComputeSha256Async(originalPath, cancellationToken);
+            if (!string.Equals(restoredHash, entry.BackupSha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The restored file hash does not match the selected backup.");
+
+            if (rollbackPath is not null)
+            {
+                await TryWriteBackupMetadataAsync(
+                    rollbackPath,
+                    originalPath,
+                    ModBackupRepairKind.PreRestore,
+                    0,
+                    entry.BackupFileName,
+                    cancellationToken);
+            }
+
+            return new ModBackupOperationResult
+            {
+                Success = true,
+                RestoredPath = originalPath,
+                RollbackBackupPath = rollbackPath
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to restore backup {Backup} in {ModDirectory}", backupPath, modDirectory.FullName);
+            if (committed && originalPath is not null)
+            {
+                try
+                {
+                    if (originalExisted && rollbackPath is not null && File.Exists(rollbackPath))
+                        File.Copy(rollbackPath, originalPath, true);
+                    else if (!originalExisted && File.Exists(originalPath))
+                        File.Delete(originalPath);
+                }
+                catch (Exception rollbackException)
+                {
+                    _logger.LogCritical(rollbackException, "Failed to roll back backup restore for {Patch}", originalPath);
+                }
+            }
+            return new ModBackupOperationResult { ErrorMessage = ex.Message };
+        }
+        finally
+        {
+            if (temporaryPath is not null)
+                TryDeleteFile(temporaryPath);
+            _repairSemaphore.Release();
+        }
+    }
+
+    public async Task<ModBackupOperationResult> DeleteBackupAsync(
+        DirectoryInfo modDirectory,
+        string backupPath,
+        CancellationToken cancellationToken = default)
+    {
+        await _repairSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var history = await GetBackupHistoryAsync(modDirectory, cancellationToken);
+            var fullPath = Path.GetFullPath(backupPath);
+            var entry = history.Entries.FirstOrDefault(candidate =>
+                string.Equals(candidate.BackupPath, fullPath, StringComparison.OrdinalIgnoreCase));
+            if (entry is null)
+                return new ModBackupOperationResult { ErrorMessage = "The selected backup is not part of this mod." };
+
+            var sameFileBackups = history.Entries
+                .Where(candidate => string.Equals(candidate.OriginalPath, entry.OriginalPath, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (sameFileBackups.Count <= 1)
+                return new ModBackupOperationResult { ErrorMessage = "The last backup for a patch cannot be deleted." };
+
+            var remainingRestorable = sameFileBackups.Count(candidate =>
+                !string.Equals(candidate.BackupPath, entry.BackupPath, StringComparison.OrdinalIgnoreCase) &&
+                candidate.CanRestore);
+            if (entry.CanRestore && remainingRestorable == 0)
+                return new ModBackupOperationResult { ErrorMessage = "The last restorable backup for a patch cannot be deleted." };
+
+            DeleteBackupFiles(entry);
+            return new ModBackupOperationResult { Success = true, DeletedCount = 1 };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete backup {Backup}", backupPath);
+            return new ModBackupOperationResult { ErrorMessage = ex.Message };
+        }
+        finally
+        {
+            _repairSemaphore.Release();
+        }
+    }
+
+    public async Task<ModBackupOperationResult> CleanOldBackupsAsync(
+        DirectoryInfo modDirectory,
+        int keepPerPatch = 3,
+        CancellationToken cancellationToken = default)
+    {
+        keepPerPatch = Math.Max(1, keepPerPatch);
+        await _repairSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var history = await GetBackupHistoryAsync(modDirectory, cancellationToken);
+            var deleted = 0;
+            foreach (var group in history.Entries.GroupBy(
+                         entry => entry.OriginalPath,
+                         StringComparer.OrdinalIgnoreCase))
+            {
+                var ordered = group.OrderByDescending(entry => entry.CreatedLocal).ToList();
+                var keep = ordered.Take(keepPerPatch).ToHashSet();
+                if (!keep.Any(entry => entry.CanRestore))
+                {
+                    var newestRestorable = ordered.FirstOrDefault(entry => entry.CanRestore);
+                    if (newestRestorable is not null)
+                        keep.Add(newestRestorable);
+                }
+
+                foreach (var candidate in ordered.Where(entry => !keep.Contains(entry)))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    DeleteBackupFiles(candidate);
+                    deleted++;
+                }
+            }
+
+            return new ModBackupOperationResult { Success = true, DeletedCount = deleted };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to clean old backups in {ModDirectory}", modDirectory.FullName);
+            return new ModBackupOperationResult { ErrorMessage = ex.Message };
+        }
+        finally
+        {
+            _repairSemaphore.Release();
+        }
+    }
+
+    private async Task<ModBackupEntry> ReadBackupEntryAsync(
+        DirectoryInfo modDirectory,
+        FileInfo backupFile,
+        CancellationToken cancellationToken)
+    {
+        var originalPath = string.Empty;
+        try
+        {
+            var match = s_backupNamePattern.Match(backupFile.Name);
+            if (!match.Success)
+                return InvalidBackupEntry(backupFile, "The backup file name is not recognized.");
+
+            var originalName = match.Groups["base"].Value + ".patch_" + match.Groups["index"].Value;
+            originalPath = Path.GetFullPath(Path.Combine(backupFile.DirectoryName!, originalName));
+            if (!IsPathInside(modDirectory.FullName, originalPath))
+                return InvalidBackupEntry(backupFile, "The backup maps outside the mod directory.", originalPath);
+
+            var metadata = await ReadBackupMetadataAsync(backupFile.FullName, cancellationToken);
+            var backupHash = await ComputeSha256Async(backupFile.FullName, cancellationToken);
+            var metadataMatches = metadata is null ||
+                (string.Equals(metadata.OriginalFileName, originalName, StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(metadata.BackupSha256, backupHash, StringComparison.OrdinalIgnoreCase));
+            var currentExists = File.Exists(originalPath);
+            var currentHash = currentExists
+                ? await ComputeSha256Async(originalPath, cancellationToken)
+                : string.Empty;
+            var analysis = await AnalyzeSinglePatchFileStructureAsync(
+                backupFile,
+                new FileInfo(originalPath));
+            var structurallyRestorable = await IsBackupRestorableAsync(
+                backupFile, new FileInfo(originalPath), analysis);
+            var validationMessage = metadataMatches
+                ? structurallyRestorable
+                    ? analysis.Message ?? string.Empty
+                    : analysis.Message ?? "The backup does not contain a structurally readable patch."
+                : "Backup metadata does not match the backup file.";
+
+            var createdLocal = metadata is not null && metadata.CreatedUtc != default
+                ? metadata.CreatedUtc.ToLocalTime()
+                : ParseBackupTimestamp(match, backupFile.LastWriteTime);
+            return new ModBackupEntry
+            {
+                BackupPath = backupFile.FullName,
+                OriginalPath = originalPath,
+                CreatedLocal = createdLocal,
+                BackupSize = backupFile.Length,
+                BackupSha256 = backupHash,
+                CurrentSha256 = currentHash,
+                RepairKind = metadata?.RepairKind ?? ModBackupRepairKind.Unknown,
+                ActionCount = metadata?.ActionCount ?? 0,
+                HasMetadata = metadata is not null,
+                MetadataMatchesFile = metadataMatches,
+                CurrentExists = currentExists,
+                CurrentMatchesBackup = currentExists && string.Equals(backupHash, currentHash, StringComparison.OrdinalIgnoreCase),
+                CanRestore = metadataMatches && structurallyRestorable,
+                HealthStatus = analysis.HealthStatus,
+                ValidationMessage = validationMessage
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to inspect backup {Backup}", backupFile.FullName);
+            return InvalidBackupEntry(backupFile, ex.Message, originalPath);
+        }
+    }
+
+    private async Task TryWriteBackupMetadataAsync(
+        string backupPath,
+        string repairedPath,
+        ModBackupRepairKind repairKind,
+        int actionCount,
+        string? sourceBackupFileName = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var metadata = new ModBackupMetadata
+            {
+                CreatedUtc = DateTime.UtcNow,
+                OriginalFileName = Path.GetFileName(repairedPath),
+                RepairKind = repairKind,
+                ActionCount = actionCount,
+                BackupSha256 = await ComputeSha256Async(backupPath, cancellationToken),
+                RepairedSha256 = await ComputeSha256Async(repairedPath, cancellationToken),
+                SourceBackupFileName = sourceBackupFileName
+            };
+            var metadataPath = backupPath + ".json";
+            var temporaryPath = metadataPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            await File.WriteAllTextAsync(
+                temporaryPath,
+                JsonSerializer.Serialize(metadata, s_backupJsonOptions),
+                cancellationToken);
+            File.Move(temporaryPath, metadataPath, true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write backup metadata for {Backup}", backupPath);
+        }
+    }
+
+    private static async Task<ModBackupMetadata?> ReadBackupMetadataAsync(
+        string backupPath,
+        CancellationToken cancellationToken)
+    {
+        var metadataPath = backupPath + ".json";
+        if (!File.Exists(metadataPath))
+            return null;
+        await using var stream = new FileStream(metadataPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return await JsonSerializer.DeserializeAsync<ModBackupMetadata>(stream, s_backupJsonOptions, cancellationToken);
+    }
+
+    private async Task<bool> IsBackupRestorableAsync(
+        FileInfo backupFile,
+        FileInfo companionSource,
+        PatchFileAnalysis analysis)
+    {
+        if (IsBackupStructurallyRestorable(analysis))
+            return true;
+
+        var actions = new List<PatchRepairAction>();
+        var blockers = new List<string>();
+        await InspectPatchForRepairsAsync(backupFile, actions, blockers, companionSource);
+        return actions.Count > 0 && blockers.Count == 0;
+    }
+
+    private static bool IsBackupStructurallyRestorable(PatchFileAnalysis analysis)
+    {
+        return analysis.HeaderValid &&
+               analysis.FileEntriesInBounds &&
+               analysis.MainDataBoundsValid &&
+               (!analysis.RequiresGpuResources || analysis.HasGpuResources) &&
+               (!analysis.RequiresStream || analysis.HasStream) &&
+               analysis.GpuResourceBoundsValid &&
+               analysis.StreamBoundsValid;
+    }
+
+    private static ModBackupEntry InvalidBackupEntry(
+        FileInfo backupFile,
+        string message,
+        string originalPath = "")
+    {
+        return new ModBackupEntry
+        {
+            BackupPath = backupFile.FullName,
+            OriginalPath = originalPath,
+            CreatedLocal = backupFile.LastWriteTime,
+            BackupSize = backupFile.Exists ? backupFile.Length : 0,
+            BackupSha256 = string.Empty,
+            CanRestore = false,
+            HealthStatus = PatchHealthStatus.Corrupted,
+            MetadataMatchesFile = false,
+            ValidationMessage = message
+        };
+    }
+
+    private static DateTime ParseBackupTimestamp(Match match, DateTime fallback)
+    {
+        return DateTime.TryParseExact(
+            match.Groups["stamp"].Value,
+            "yyyyMMdd-HHmmss",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeLocal,
+            out var parsed)
+            ? parsed
+            : fallback;
+    }
+
+    private static bool IsPathInside(string rootPath, string candidatePath)
+    {
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootPath)) + Path.DirectorySeparatorChar;
+        var candidate = Path.GetFullPath(candidatePath);
+        return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task<string> ComputeSha256Async(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            1024 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+    }
+
+    private static async Task CopyFileDurablyAsync(
+        string sourcePath,
+        string destinationPath,
+        CancellationToken cancellationToken)
+    {
+        await using var source = new FileStream(
+            sourcePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            1024 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var destination = new FileStream(
+            destinationPath,
+            FileMode.CreateNew,
+            FileAccess.Write,
+            FileShare.None,
+            1024 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.WriteThrough);
+        await source.CopyToAsync(destination, cancellationToken);
+        await destination.FlushAsync(cancellationToken);
+        destination.Flush(true);
+    }
+
+    private static void DeleteBackupFiles(ModBackupEntry entry)
+    {
+        File.Delete(entry.BackupPath);
+        if (File.Exists(entry.MetadataPath))
+            File.Delete(entry.MetadataPath);
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        {
+        }
+    }
+}

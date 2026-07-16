@@ -107,6 +107,19 @@ internal sealed partial class VersionCheckService
                 committed.Add(item);
             }
 
+            foreach (var item in prepared)
+            {
+                var actionCount = plan.Actions.Count(action => string.Equals(
+                    action.PatchFilePath,
+                    item.OriginalPath,
+                    StringComparison.OrdinalIgnoreCase));
+                await TryWriteBackupMetadataAsync(
+                    item.BackupPath,
+                    item.OriginalPath,
+                    ModBackupRepairKind.SafeMetadata,
+                    actionCount);
+            }
+
             return new ModRepairResult
             {
                 Success = true,
@@ -152,7 +165,8 @@ internal sealed partial class VersionCheckService
     private async Task InspectPatchForRepairsAsync(
         FileInfo patchFile,
         List<PatchRepairAction> actions,
-        List<string> blockers)
+        List<string> blockers,
+        FileInfo? companionSource = null)
     {
         try
         {
@@ -352,7 +366,7 @@ internal sealed partial class VersionCheckService
             }
 
             var companionAnalysis = new PatchFileAnalysis();
-            ValidateCompanionFiles(patchFile, virtualEntries, companionAnalysis);
+            ValidateCompanionFiles(companionSource ?? patchFile, virtualEntries, companionAnalysis);
             if ((companionAnalysis.RequiresGpuResources && !companionAnalysis.HasGpuResources) ||
                 (companionAnalysis.RequiresStream && !companionAnalysis.HasStream) ||
                 !companionAnalysis.GpuResourceBoundsValid ||

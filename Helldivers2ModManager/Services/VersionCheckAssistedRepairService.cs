@@ -359,6 +359,32 @@ internal sealed partial class VersionCheckService
                 committed.Add(item);
             }
 
+            foreach (var item in prepared)
+            {
+                var fileActions = plan.Actions
+                    .Where(action => string.Equals(
+                        action.PatchFilePath,
+                        item.OriginalPath,
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var strategies = fileActions
+                    .Select(action => action.LodStrategy)
+                    .Distinct()
+                    .ToList();
+                var repairKind = plan.IsAutomatic
+                    ? ModBackupRepairKind.AutomaticLod
+                    : strategies.Count > 1
+                        ? ModBackupRepairKind.MixedLod
+                        : strategies.SingleOrDefault() == AssistedLodStrategy.UseGameReference
+                            ? ModBackupRepairKind.UseGameLod
+                            : ModBackupRepairKind.PreserveModLod;
+                await TryWriteBackupMetadataAsync(
+                    item.BackupPath,
+                    item.OriginalPath,
+                    repairKind,
+                    fileActions.Count);
+            }
+
             return new ModRepairResult
             {
                 Success = true,

@@ -201,6 +201,96 @@
                                  FontFamily="Cascadia Mono, Consolas"
                                  FontSize="11"/>
                     </Expander>
+
+                    <Expander x:Name="backupHistoryExpander"
+                              Header="{loc:Loc VersionCheckBackup.HistoryTitle}"
+                              IsExpanded="False"
+                              Margin="0 12 0 0">
+                        <StackPanel Margin="0 10 0 0">
+                            <TextBlock x:Name="backupHistorySummary"
+                                       FontSize="12"
+                                       Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="2 0 0 8"/>
+                            <TextBlock x:Name="backupHistoryLoading"
+                                       Text="{loc:Loc VersionCheckBackup.Loading}"
+                                       FontSize="12"
+                                       Foreground="{StaticResource SystemAccentBrush}"
+                                       Margin="2 0 0 8"/>
+                            <ItemsControl x:Name="backupHistoryItems">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource FluentSettingsCard}"
+                                                Margin="0 0 0 8"
+                                                Padding="12">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Title}"
+                                                               FontSize="13"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Detail}"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                                               Margin="0 3 0 0"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding Status}"
+                                                               FontSize="11"
+                                                               Foreground="{Binding StatusBrush}"
+                                                               Margin="0 4 0 0"
+                                                               TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1"
+                                                        Width="34"
+                                                        Height="34"
+                                                        Margin="10 0 4 0"
+                                                        VerticalAlignment="Center"
+                                                        Style="{StaticResource FluentIconButton}"
+                                                        ToolTip="{loc:Loc VersionCheckBackup.Restore}"
+                                                        Tag="{Binding Entry}"
+                                                        IsEnabled="{Binding CanRestore}"
+                                                        Click="RestoreBackupButton_Click">
+                                                    <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                                                </Button>
+                                                <Button Grid.Column="2"
+                                                        Width="34"
+                                                        Height="34"
+                                                        VerticalAlignment="Center"
+                                                        Style="{StaticResource FluentIconButton}"
+                                                        ToolTip="{loc:Loc VersionCheckBackup.Delete}"
+                                                        Tag="{Binding Entry}"
+                                                        Click="DeleteBackupButton_Click">
+                                                    <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Grid Margin="0 2 0 0">
+                                <TextBlock x:Name="backupOperationStatus"
+                                           VerticalAlignment="Center"
+                                           FontSize="12"
+                                           Foreground="{StaticResource SuccessBrush}"
+                                           TextWrapping="Wrap"/>
+                                <Button x:Name="cleanBackupsButton"
+                                        HorizontalAlignment="Right"
+                                        Style="{StaticResource FluentSecondaryButton}"
+                                        Padding="10 7"
+                                        Click="CleanBackupsButton_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0 0 6 0"/>
+                                        <TextBlock Text="{loc:Loc VersionCheckBackup.CleanOld}"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+                    </Expander>
                 </StackPanel>
             </ScrollViewer>
 
