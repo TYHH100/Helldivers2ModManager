@@ -73,7 +73,13 @@ internal sealed partial class VersionCheckService
                 .Select(group => new
                 {
                     FileId = group.Key,
-                    StrongCustom = group.Any(action => action.StrongCustomModelSignal)
+                    StrongCustom = group.Any(action => action.StrongCustomModelSignal),
+                    StrongCustomMesh = group.Any(action =>
+                        action.StrongCustomModelSignal && action.MeshIdsDiffer),
+                    MeshSignature = group
+                        .Select(action => action.CurrentMeshSignature)
+                        .FirstOrDefault(signature => !string.IsNullOrEmpty(signature))
+                        ?? string.Empty
                 })
                 .ToList();
             foreach (var unit in units)
@@ -86,7 +92,14 @@ internal sealed partial class VersionCheckService
             var strongCount = units.Count(unit => unit.StrongCustom);
             var wholePatchIsCustom = strongCount > 0 &&
                 strongCount / (double)units.Count >= AutomaticWholePatchCustomDensity;
-            foreach (var unit in units.Where(unit => wholePatchIsCustom || unit.StrongCustom))
+            var strongCustomMeshSignatures = units
+                .Where(unit => unit.StrongCustomMesh && !string.IsNullOrEmpty(unit.MeshSignature))
+                .Select(unit => unit.MeshSignature)
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var unit in units.Where(unit =>
+                         wholePatchIsCustom ||
+                         unit.StrongCustom ||
+                         strongCustomMeshSignatures.Contains(unit.MeshSignature)))
                 preserveIds.Add(unit.FileId);
         }
 
@@ -184,6 +197,9 @@ internal sealed partial class VersionCheckService
                     !unitData.AsSpan(unit.LODGroupOffset, unit.LODGroupSize)
                         .SequenceEqual(reference.LodGroupData);
                 var currentMeshIds = ReadUnitMeshIds(unitData, unitData.Length);
+                var currentMeshSignature = currentMeshIds.Length == 0
+                    ? string.Empty
+                    : string.Join(',', currentMeshIds.Select(id => id.ToString("X8")));
                 var meshIdsDiffer = currentMeshIds.Length > 0 &&
                     reference.MeshIds.Length > 0 &&
                     !currentMeshIds.AsSpan().SequenceEqual(reference.MeshIds);
@@ -225,6 +241,7 @@ internal sealed partial class VersionCheckService
                     CurrentGpuSize = entry.Toc.GpuSize,
                     ReferenceGpuSize = reference.GpuSize,
                     MeshIdsDiffer = meshIdsDiffer,
+                    CurrentMeshSignature = currentMeshSignature,
                     StrongCustomModelSignal = strongCustomModelSignal,
                     LodStrategy = lodStrategy,
                     LodDataDiffers = lodDataDiffers,

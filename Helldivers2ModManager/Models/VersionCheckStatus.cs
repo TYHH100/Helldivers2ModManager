@@ -486,6 +486,7 @@ internal sealed class AssistedUnitRepairAction
     public uint CurrentGpuSize { get; init; }
     public uint ReferenceGpuSize { get; init; }
     public bool MeshIdsDiffer { get; init; }
+    public string CurrentMeshSignature { get; init; } = string.Empty;
     public bool StrongCustomModelSignal { get; init; }
     public AssistedLodStrategy LodStrategy { get; init; }
     public bool LodDataDiffers { get; init; }

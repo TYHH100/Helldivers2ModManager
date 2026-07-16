@@ -46,7 +46,7 @@
                         Height="36"
                         Margin="12 -6 -6 0"
                         Style="{StaticResource FluentIconButton}"
-                        ToolTip="{loc:Loc Common.Close}"
+                        ToolTip="{loc:Loc MainWindow.Close}"
                         Click="CloseButton_Click">
                     <TextBlock Text="&#xE8BB;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
                 </Button>
@@ -257,10 +257,10 @@
                             <TextBlock Text="{loc:Loc VersionCheckDetail.CopyReport}"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource FluentPrimaryButton}"
+                    <!-- <Button Style="{StaticResource FluentPrimaryButton}"
                             Padding="18 8"
                             Click="CloseButton_Click"
-                            Content="{loc:Loc Common.Close}"/>
+                            Content="{loc:Loc Common.Close}"/> -->
                 </StackPanel>
             </Grid>
         </Grid>
