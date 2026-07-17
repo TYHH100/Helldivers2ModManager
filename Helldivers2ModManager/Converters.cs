@@ -7,6 +7,20 @@ using Helldivers2ModManager.Services;
 
 namespace Helldivers2ModManager;
 
+internal sealed class ProportionalDoubleConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is not double source ||
+            !double.TryParse(parameter?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var factor))
+            return DependencyProperty.UnsetValue;
+        return Math.Max(0, source * factor);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 internal sealed class StringToColorBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

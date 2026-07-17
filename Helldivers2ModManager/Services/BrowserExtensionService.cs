@@ -8,18 +8,25 @@ using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Authentication;
+using System.Text;
+using Helldivers2ModManager.Core.BrowserIntegration;
+using Helldivers2ModManager.Core.Security;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Helldivers2ModManager.Services;
 
 [RegisterService(ServiceLifetime.Singleton)]
 internal sealed class BrowserExtensionService : IDisposable
 {
+    private const int MaximumRequestBodyBytes = 64 * 1024;
     private readonly HttpListener _httpListener;
     private readonly ILogger<BrowserExtensionService> _logger;
-    private readonly ModService _modService;
     private readonly SettingsService _settingsService;
     private readonly LocalizationService _localizationService;
     private readonly BackgroundTaskService _backgroundTaskService;
+    private readonly ISafePathPolicy _safePathPolicy;
+    private BrowserPairingCoordinator? _pairingCoordinator;
     private Task? _listenerTask;
     private CancellationTokenSource? _cts;
 
@@ -41,13 +48,18 @@ internal sealed class BrowserExtensionService : IDisposable
 
     public ObservableCollection<DownloadTask> DownloadTasks { get; } = new();
 
-    public BrowserExtensionService(ILogger<BrowserExtensionService> logger, ModService modService, SettingsService settingsService, LocalizationService localizationService, BackgroundTaskService backgroundTaskService)
+    public BrowserExtensionService(
+        ILogger<BrowserExtensionService> logger,
+        SettingsService settingsService,
+        LocalizationService localizationService,
+        BackgroundTaskService backgroundTaskService,
+        ISafePathPolicy safePathPolicy)
     {
         _logger = logger;
-        _modService = modService;
         _settingsService = settingsService;
         _localizationService = localizationService;
         _backgroundTaskService = backgroundTaskService;
+        _safePathPolicy = safePathPolicy;
         _httpListener = new HttpListener();
 
         // 加载持久化的下载任务
@@ -59,14 +71,7 @@ internal sealed class BrowserExtensionService : IDisposable
         if (IsListening)
             return;
 
-        var host = _settingsService.ExtensionHost;
         var port = _settingsService.ExtensionPort;
-
-        if (string.IsNullOrWhiteSpace(host))
-        {
-            _logger.LogError("Browser extension service failed to start: ExtensionHost is empty");
-            throw new InvalidOperationException("ExtensionHost cannot be empty");
-        }
 
         if (port is < 1 or > 65535)
         {
@@ -74,38 +79,53 @@ internal sealed class BrowserExtensionService : IDisposable
             throw new InvalidOperationException($"Invalid port number: {port}. Must be between 1 and 65535");
         }
 
-        if (host.IndexOfAny(new[] { ' ', '\t', '\n', '\r', '"', '\'' }) >= 0)
-        {
-            _logger.LogError("Browser extension service failed to start: ExtensionHost contains invalid characters");
-            throw new InvalidOperationException("ExtensionHost contains invalid characters");
-        }
-
-        var prefix = $"http://{host}:{port}/";
+        _pairingCoordinator = new BrowserPairingCoordinator(
+            _settingsService.BrowserExtensionTokenHash,
+            _settingsService.BrowserExtensionOrigin);
+        var ipv4Prefix = $"http://127.0.0.1:{port}/";
+        var ipv6Prefix = $"http://[::1]:{port}/";
         _httpListener.Prefixes.Clear();
-        _httpListener.Prefixes.Add(prefix);
+        _httpListener.Prefixes.Add(ipv4Prefix);
+        _httpListener.Prefixes.Add(ipv6Prefix);
 
         _cts = new CancellationTokenSource();
-        
+
         try
         {
             _httpListener.Start();
         }
         catch (HttpListenerException ex)
         {
-            _logger.LogError(ex, "Failed to start HttpListener on {Prefix}. Error code: {ErrorCode}", prefix, ex.ErrorCode);
-            
+            _logger.LogError(ex, "Failed to start loopback HttpListener. Error code: {ErrorCode}", ex.ErrorCode);
+
             if (ex.ErrorCode == 87)
             {
-                throw new InvalidOperationException($"Failed to start browser extension service: Invalid prefix format '{prefix}'. Please check your ExtensionHost and ExtensionPort settings.", ex);
+                throw new InvalidOperationException("Failed to start the loopback browser extension service.", ex);
             }
-            
+
             throw;
         }
-        
+
         IsListening = true;
-        _logger.LogInformation("Browser extension service started on {Prefix}", prefix);
-        
+        _logger.LogInformation("Browser extension service started on IPv4 and IPv6 loopback at port {Port}", port);
+
         _listenerTask = ListenAsync(_cts.Token);
+    }
+
+    public string GeneratePairingCode()
+    {
+        EnsurePairingCoordinator();
+        return _pairingCoordinator.GeneratePairingCode(DateTimeOffset.UtcNow);
+    }
+
+    public async Task UnpairAsync(CancellationToken cancellationToken = default)
+    {
+        EnsurePairingCoordinator();
+        _pairingCoordinator.Unpair();
+        _settingsService.BrowserExtensionTokenHash = string.Empty;
+        _settingsService.BrowserExtensionOrigin = string.Empty;
+        await _settingsService.SaveAsync();
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     public void Stop()
@@ -126,19 +146,13 @@ internal sealed class BrowserExtensionService : IDisposable
             try
             {
                 var context = await _httpListener.GetContextAsync();
-                
+
                 // 使用信号量限制并发请求数
                 await _requestSemaphore.WaitAsync(cancellationToken);
-                
-                _ = ProcessRequestAsync(context, cancellationToken)
-                    .ContinueWith(t =>
-                    {
-                        _requestSemaphore.Release();
-                        if (t.IsFaulted && t.Exception != null)
-                        {
-                            _logger.LogError(t.Exception, "Unhandled exception in ProcessRequestAsync");
-                        }
-                    });
+
+                ProcessRequestAsync(context, cancellationToken).Observe(
+                    ex => _logger.LogError(ex, "Unhandled exception in ProcessRequestAsync"),
+                    () => _requestSemaphore.Release());
             }
             catch (HttpListenerException ex)
             {
@@ -161,57 +175,161 @@ internal sealed class BrowserExtensionService : IDisposable
     private async Task ProcessRequestAsync(HttpListenerContext context, CancellationToken cancellationToken)
     {
         var response = context.Response;
+        var request = context.Request;
+        var origin = request.Headers["Origin"];
         try
         {
-            if (context.Request.HttpMethod == "OPTIONS")
+            if (request.RemoteEndPoint?.Address is { } remoteAddress && !remoteAddress.IsLocalAddress())
             {
-                response.StatusCode = 200;
-                response.Headers.Add("Access-Control-Allow-Origin", "*");
-                response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-                response.Close();
+                await SendJsonResponse(response, new { error = "Access denied" }, HttpStatusCode.Forbidden, origin);
                 return;
             }
 
-            var path = context.Request.Url?.AbsolutePath ?? string.Empty;
+            var path = request.Url?.AbsolutePath ?? string.Empty;
             _logger.LogDebug("Received request: {Path}", path);
 
-            if (path == "/api/download/health")
+            if (request.HttpMethod == "OPTIONS")
             {
-                await SendJsonResponse(response, new { status = "ok", hasActiveDownloads = DownloadTasks.Any(t => t.Status == DownloadStatus.Downloading) }, HttpStatusCode.OK);
+                HandlePreflight(response, path, origin);
                 return;
             }
 
-            if (path == "/api/download/tasks")
+            if (path == "/api/v2/pair" && request.HttpMethod == "POST")
             {
-                var tasks = DownloadTasks.Select(t => new
+                await HandlePairRequestAsync(context, cancellationToken);
+                return;
+            }
+
+            if (path == "/api/v2/health" && request.HttpMethod == "GET")
+            {
+                if (!TryAuthenticateRequest(request, out var authError))
                 {
-                    t.Id,
-                    t.Filename,
-                    t.Status,
-                    t.Progress,
-                    t.BytesDownloaded,
-                    t.TotalBytes
-                }).ToList();
-                await SendJsonResponse(response, tasks, HttpStatusCode.OK);
+                    await SendJsonResponse(response, new { error = authError }, HttpStatusCode.Unauthorized, origin);
+                    return;
+                }
+                await SendJsonResponse(
+                    response,
+                    new { status = "ok", hasActiveDownloads = DownloadTasks.Any(t => t.Status == DownloadStatus.Downloading) },
+                    HttpStatusCode.OK,
+                    origin);
                 return;
             }
 
-            if (path == "/api/download" && context.Request.HttpMethod == "POST")
+            if (path == "/api/v2/downloads" && request.HttpMethod == "POST")
             {
+                if (!TryAuthenticateRequest(request, out var authError))
+                {
+                    await SendJsonResponse(response, new { error = authError }, HttpStatusCode.Unauthorized, origin);
+                    return;
+                }
                 await HandleDownloadRequest(context, cancellationToken);
                 return;
             }
 
-            response.StatusCode = (int)HttpStatusCode.NotFound;
-            response.Close();
+            if (path == "/api/v2/unpair" && request.HttpMethod == "POST")
+            {
+                if (!TryAuthenticateRequest(request, out var authError))
+                {
+                    await SendJsonResponse(response, new { error = authError }, HttpStatusCode.Unauthorized, origin);
+                    return;
+                }
+
+                await UnpairAsync(cancellationToken);
+                await SendJsonResponse(response, new { success = true }, HttpStatusCode.OK, origin);
+                return;
+            }
+
+            await SendJsonResponse(response, new { error = "Not found" }, HttpStatusCode.NotFound, origin);
+        }
+        catch (RequestBodyTooLargeException)
+        {
+            await SendJsonResponse(response, new { error = "Request body too large" }, HttpStatusCode.RequestEntityTooLarge, origin);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing request");
-            response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            response.Close();
+            if (response.OutputStream.CanWrite)
+                await SendJsonResponse(response, new { error = "Internal server error" }, HttpStatusCode.InternalServerError, origin);
         }
+    }
+
+    private void HandlePreflight(HttpListenerResponse response, string path, string? origin)
+    {
+        EnsurePairingCoordinator();
+        var isPairingOrigin = path == "/api/v2/pair" &&
+            BrowserPairingCoordinator.TryNormalizeExtensionOrigin(origin, out _);
+        var isPairedOrigin = BrowserPairingCoordinator.TryNormalizeExtensionOrigin(origin, out var normalizedOrigin) &&
+            string.Equals(normalizedOrigin, _pairingCoordinator.PairedOrigin, StringComparison.Ordinal);
+        if (!isPairingOrigin && !isPairedOrigin)
+        {
+            response.StatusCode = (int)HttpStatusCode.Forbidden;
+            response.Close();
+            return;
+        }
+
+        AddCorsHeaders(response, origin!);
+        response.StatusCode = (int)HttpStatusCode.NoContent;
+        response.Close();
+    }
+
+    private async Task HandlePairRequestAsync(HttpListenerContext context, CancellationToken cancellationToken)
+    {
+        EnsurePairingCoordinator();
+        var origin = context.Request.Headers["Origin"];
+        var body = await ReadLimitedBodyAsync(context.Request, cancellationToken);
+        var request = JsonSerializer.Deserialize<PairRequest>(body);
+        if (request is null || string.IsNullOrWhiteSpace(request.Code))
+        {
+            await SendJsonResponse(context.Response, new { error = "Pair.InvalidRequest" }, HttpStatusCode.BadRequest, origin);
+            return;
+        }
+
+        var result = _pairingCoordinator.Pair(request.Code, origin, DateTimeOffset.UtcNow);
+        if (!result.IsSuccess)
+        {
+            var status = result.ErrorCode == "Pair.RateLimited" ? HttpStatusCode.TooManyRequests : HttpStatusCode.Unauthorized;
+            await SendJsonResponse(context.Response, new { error = result.ErrorCode }, status, origin);
+            return;
+        }
+
+        _settingsService.BrowserExtensionTokenHash = _pairingCoordinator.TokenHash ?? string.Empty;
+        _settingsService.BrowserExtensionOrigin = _pairingCoordinator.PairedOrigin ?? string.Empty;
+        await _settingsService.SaveAsync();
+        await SendJsonResponse(context.Response, new { token = result.BearerToken }, HttpStatusCode.OK, origin);
+    }
+
+    private bool TryAuthenticateRequest(HttpListenerRequest request, out string? errorCode)
+    {
+        EnsurePairingCoordinator();
+        var authorization = request.Headers["Authorization"];
+        var token = authorization?.StartsWith("Bearer ", StringComparison.Ordinal) == true
+            ? authorization["Bearer ".Length..]
+            : null;
+        if (!long.TryParse(request.Headers["X-Timestamp"], System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var timestampMilliseconds) ||
+            !Guid.TryParse(request.Headers["X-Request-Id"], out var requestId))
+        {
+            errorCode = "Auth.InvalidHeaders";
+            return false;
+        }
+
+        DateTimeOffset timestamp;
+        try
+        {
+            timestamp = DateTimeOffset.FromUnixTimeMilliseconds(timestampMilliseconds);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            errorCode = "Auth.InvalidHeaders";
+            return false;
+        }
+        return _pairingCoordinator.Authenticate(
+            token,
+            request.Headers["Origin"],
+            timestamp,
+            requestId,
+            DateTimeOffset.UtcNow,
+            out errorCode);
     }
 
     private async Task HandleDownloadRequest(HttpListenerContext context, CancellationToken cancellationToken)
@@ -221,59 +339,28 @@ internal sealed class BrowserExtensionService : IDisposable
 
         try
         {
-            // 安全校验：验证请求来源（仅允许本地请求）
             var origin = request.Headers["Origin"];
-            var referer = request.Headers["Referer"];
-            var remoteEndPoint = request.RemoteEndPoint?.Address;
-            
-            // 检查是否为本地请求（localhost/127.0.0.1/::1）
-            if (remoteEndPoint != null && !remoteEndPoint.IsLocalAddress())
-            {
-                _logger.LogWarning("Rejected non-local download request from {RemoteEndPoint}", remoteEndPoint);
-                await SendJsonResponse(response, new { error = "Access denied" }, HttpStatusCode.Forbidden);
-                return;
-            }
+            var body = await ReadLimitedBodyAsync(request, cancellationToken);
 
-            using var reader = new StreamReader(request.InputStream);
-            var body = await reader.ReadToEndAsync();
-            
-            _logger.LogDebug("Request body: {Body}", body);
-            
             var downloadRequest = JsonSerializer.Deserialize<DownloadRequest>(body);
-            
+
             if (downloadRequest == null || string.IsNullOrWhiteSpace(downloadRequest.Url))
             {
-                _logger.LogWarning("Invalid download request: null={IsNull}, url='{Url}'", 
+                _logger.LogWarning("Invalid download request: null={IsNull}, url='{Url}'",
                     downloadRequest == null, downloadRequest?.Url ?? "null");
-                await SendJsonResponse(response, new { error = "Invalid request" }, HttpStatusCode.BadRequest);
+                await SendJsonResponse(response, new { error = "Invalid request" }, HttpStatusCode.BadRequest, origin);
                 return;
             }
 
             // 安全校验：验证下载 URL 协议和域名
-            if (!Uri.TryCreate(downloadRequest.Url, UriKind.Absolute, out var uri))
+            if (!Uri.TryCreate(downloadRequest.Url, UriKind.Absolute, out var uri) || !NexusDownloadUrlPolicy.IsAllowed(uri))
             {
-                _logger.LogWarning("Invalid download URL format: {Url}", downloadRequest.Url);
-                await SendJsonResponse(response, new { error = "Invalid URL format" }, HttpStatusCode.BadRequest);
+                _logger.LogWarning("Rejected browser download URL host {Host}", uri?.Host ?? "invalid");
+                await SendJsonResponse(response, new { error = "Download.UrlNotAllowed" }, HttpStatusCode.BadRequest, origin);
                 return;
             }
 
-            if (!uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogWarning("Rejected non-HTTPS download URL: {Url}", downloadRequest.Url);
-                await SendJsonResponse(response, new { error = "Only HTTPS URLs are allowed" }, HttpStatusCode.BadRequest);
-                return;
-            }
-
-            // 限制域名为 Nexus Mods 相关域名
-            var allowedHosts = new[] { "nexusmods.com", "www.nexusmods.com", "delivery.nexusmods.com" };
-            if (!allowedHosts.Any(host => uri.Host.EndsWith(host, StringComparison.OrdinalIgnoreCase)))
-            {
-                _logger.LogWarning("Rejected download URL from non-allowed host: {Host}", uri.Host);
-                await SendJsonResponse(response, new { error = "Only Nexus Mods URLs are allowed" }, HttpStatusCode.BadRequest);
-                return;
-            }
-
-            _logger.LogInformation("Received download request for {Filename}: {Url}", downloadRequest.Filename, downloadRequest.Url);
+            _logger.LogInformation("Received download request for {Filename}: {Url}", downloadRequest.Filename, RedactUriForLog(uri));
 
             var downloadTask = new DownloadTask
             {
@@ -286,31 +373,28 @@ internal sealed class BrowserExtensionService : IDisposable
             DownloadStarted?.Invoke(downloadTask);
             SaveDownloadTasks();
 
-            await SendJsonResponse(response, new { success = true, taskId = downloadTask.Id }, HttpStatusCode.OK);
+            await SendJsonResponse(response, new { success = true, taskId = downloadTask.Id }, HttpStatusCode.Accepted, origin);
 
             // 启动下载任务，并记录未处理的异常
-            _ = ProcessDownloadAsync(downloadTask, cancellationToken)
-                .ContinueWith(t =>
+            ProcessDownloadAsync(downloadTask, cancellationToken).Observe(
+                ex =>
                 {
-                    if (t.IsFaulted && t.Exception != null)
+                    _logger.LogError(ex, "Unhandled exception in ProcessDownloadAsync for task {TaskId}", downloadTask.Id);
+                    if (downloadTask.Status != DownloadStatus.Failed)
                     {
-                        _logger.LogError(t.Exception, "Unhandled exception in ProcessDownloadAsync for task {TaskId}", downloadTask.Id);
-                        if (downloadTask.Status != DownloadStatus.Failed)
-                        {
-                            downloadTask.Status = DownloadStatus.Failed;
-                            downloadTask.ErrorMessage = _localizationService["BrowserExt.DownloadError"];
-                            downloadTask.Speed = 0;
-                            downloadTask.EstimatedTimeRemaining = TimeSpan.Zero;
-                            DownloadFailed?.Invoke(downloadTask);
-                            SaveDownloadTasks();
-                        }
+                        downloadTask.Status = DownloadStatus.Failed;
+                        downloadTask.ErrorMessage = _localizationService["BrowserExt.DownloadError"];
+                        downloadTask.Speed = 0;
+                        downloadTask.EstimatedTimeRemaining = TimeSpan.Zero;
+                        DownloadFailed?.Invoke(downloadTask);
+                        SaveDownloadTasks();
                     }
                 });
         }
         catch (JsonException ex)
         {
             _logger.LogError(ex, "JSON parsing error");
-            await SendJsonResponse(response, new { error = "Invalid JSON", details = ex.Message }, HttpStatusCode.BadRequest);
+            await SendJsonResponse(response, new { error = "Invalid JSON" }, HttpStatusCode.BadRequest, request.Headers["Origin"]);
         }
     }
 
@@ -320,82 +404,42 @@ internal sealed class BrowserExtensionService : IDisposable
         // 为每个下载任务创建独立的取消令牌，关联到服务级别的取消令牌
         using var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _downloadCancellations[task.Id] = downloadCts;
+        string? partialPath = null;
 
         try
         {
             task.Status = DownloadStatus.Downloading;
             task.MarkDownloadStarted();
             _backgroundTaskService.Update(backgroundTask, task.Filename, 0, false);
-            
+
             // 安全校验：防止路径遍历
             var safeFilename = Path.GetFileName(task.Filename);
             if (string.IsNullOrWhiteSpace(safeFilename))
             {
                 _logger.LogError("Invalid filename after sanitization: {Filename}", task.Filename);
                 task.Status = DownloadStatus.Failed;
-                task.ErrorMessage = "Invalid filename";
+                task.ErrorMessage = _localizationService["BrowserExt.InvalidFilename"];
                 _backgroundTaskService.Fail(backgroundTask, task.ErrorMessage);
                 DownloadFailed?.Invoke(task);
                 return;
             }
-            
-            var tempPath = Path.Combine(_settingsService.TempDirectory, safeFilename);
-            
-            // 验证最终路径是否在临时目录内
-            var tempBasePath = Path.GetFullPath(_settingsService.TempDirectory);
-            var tempFilePath = Path.GetFullPath(tempPath);
-            if (!tempFilePath.StartsWith(tempBasePath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                && tempFilePath != tempBasePath)
-            {
-                _logger.LogError("Path traversal attempt detected in filename: {Filename}", task.Filename);
-                task.Status = DownloadStatus.Failed;
-                task.ErrorMessage = "Path traversal not allowed";
-                _backgroundTaskService.Fail(backgroundTask, task.ErrorMessage);
-                DownloadFailed?.Invoke(task);
-                return;
-            }
-            
-            await DownloadFileWithProgressAsync(task.Url, tempPath, task, backgroundTask, downloadCts.Token);
-            _backgroundTaskService.Update(backgroundTask, _localizationService["BrowserExt.ImportingDownloadedMod"], isIndeterminate: true);
-            
-            var fileInfo = new FileInfo(tempPath);
-            var problems = await _modService.TryAddModFromArchiveAsync(fileInfo);
-            
-            // 清理临时下载文件
-            CleanupTempFile(tempPath);
-            
-            var hasOnlyNoManifestIssue = problems.Length == 1 && problems[0].Kind == ModProblemKind.NoManifestFound;
-            
-            if (problems.Length == 0 || hasOnlyNoManifestIssue)
-            {
-                task.Status = DownloadStatus.Completed;
-                task.Speed = 0;
-                task.EstimatedTimeRemaining = TimeSpan.Zero;
-                
-                if (hasOnlyNoManifestIssue)
-                {
-                    task.ErrorMessage = _localizationService["BrowserExt.ArchiveGenerated"];
-                    _logger.LogInformation("Mod downloaded and imported successfully (manifest auto-generated): {Filename}", task.Filename);
-                }
-                else
-                {
-                    _logger.LogInformation("Mod downloaded and imported successfully: {Filename}", task.Filename);
-                }
-                
-                DownloadCompleted?.Invoke(task);
-                _backgroundTaskService.Complete(backgroundTask, task.ErrorMessage ?? _localizationService["BrowserExt.DownloadImportComplete"]);
-            }
-            else
-            {
-                var errorMessages = problems.Select(p => p.Kind.ToString()).ToArray();
-                task.ErrorMessage = string.Join(", ", errorMessages);
-                task.Status = DownloadStatus.Failed;
-                task.Speed = 0;
-                task.EstimatedTimeRemaining = TimeSpan.Zero;
-                _logger.LogWarning("Mod import completed with issues: {Errors}", string.Join(", ", errorMessages));
-                DownloadFailed?.Invoke(task);
-                _backgroundTaskService.Fail(backgroundTask, task.ErrorMessage);
-            }
+
+            var pendingDirectory = Path.Combine(_settingsService.StorageDirectory, "PendingImports");
+            Directory.CreateDirectory(pendingDirectory);
+            var queuedName = $"{task.Id}_{safeFilename}";
+            var finalPath = _safePathPolicy.ResolveUnderRoot(pendingDirectory, queuedName);
+            partialPath = _safePathPolicy.ResolveUnderRoot(pendingDirectory, queuedName + ".part");
+
+            await DownloadFileWithProgressAsync(task.Url, partialPath, task, backgroundTask, downloadCts.Token);
+            File.Move(partialPath, finalPath, overwrite: false);
+            partialPath = null;
+            task.LocalFilePath = finalPath;
+            task.Status = DownloadStatus.AwaitingImport;
+            task.Speed = 0;
+            task.EstimatedTimeRemaining = TimeSpan.Zero;
+            _logger.LogInformation("Browser download queued for explicit import confirmation: {Filename}", task.Filename);
+            DownloadCompleted?.Invoke(task);
+            _backgroundTaskService.Complete(backgroundTask, _localizationService["BrowserExt.DownloadQueued"]);
 
             SaveDownloadTasks();
         }
@@ -422,6 +466,8 @@ internal sealed class BrowserExtensionService : IDisposable
         }
         finally
         {
+            if (partialPath is not null)
+                CleanupTempFile(partialPath);
             _downloadCancellations.Remove(task.Id);
         }
     }
@@ -450,8 +496,9 @@ internal sealed class BrowserExtensionService : IDisposable
             Directory.CreateDirectory(directory);
         }
 
-        using var httpClient = new HttpClient 
-        { 
+        using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+        using var httpClient = new HttpClient(handler)
+        {
             Timeout = TimeSpan.FromMinutes(30),
             DefaultRequestHeaders =
             {
@@ -461,27 +508,28 @@ internal sealed class BrowserExtensionService : IDisposable
             }
         };
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-        request.Headers.Add("Accept", "*/*");
-        request.Headers.Add("Referer", "https://www.nexusmods.com/");
-
-        using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var response = await SendWithValidatedRedirectsAsync(httpClient, new Uri(url), cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var totalBytes = response.Content.Headers.ContentLength ?? 0;
         task.UpdateProgress(0, totalBytes);
 
-        using var fileStream = File.Create(savePath);
+        await using var fileStream = new FileStream(
+            savePath,
+            FileMode.CreateNew,
+            FileAccess.Write,
+            FileShare.None,
+            81920,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
         await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
         var buffer = new byte[81920];
         long bytesRead = 0;
         int read;
 
-        while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
+        while ((read = await contentStream.ReadAsync(buffer, cancellationToken)) > 0)
         {
-            await fileStream.WriteAsync(buffer, 0, read, cancellationToken);
+            await fileStream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
             bytesRead += read;
             task.UpdateProgress(bytesRead, totalBytes);
             task.UpdateSpeed(bytesRead, totalBytes);
@@ -492,6 +540,41 @@ internal sealed class BrowserExtensionService : IDisposable
                 totalBytes > 0 ? (double)bytesRead / totalBytes : null,
                 totalBytes <= 0);
         }
+        await fileStream.FlushAsync(cancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> SendWithValidatedRedirectsAsync(
+        HttpClient httpClient,
+        Uri initialUri,
+        CancellationToken cancellationToken)
+    {
+        var currentUri = initialUri;
+        for (var redirects = 0; redirects <= 5; redirects++)
+        {
+            if (!NexusDownloadUrlPolicy.IsAllowed(currentUri))
+                throw new AuthenticationException("A download redirect targeted a disallowed URL.");
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, currentUri);
+            var response = await httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            if ((int)response.StatusCode is < 300 or >= 400)
+                return response;
+
+            if (redirects == 5 || response.Headers.Location is null)
+            {
+                response.Dispose();
+                throw new HttpRequestException("Download redirect limit exceeded or redirect location was missing.");
+            }
+
+            currentUri = response.Headers.Location.IsAbsoluteUri
+                ? response.Headers.Location
+                : new Uri(currentUri, response.Headers.Location);
+            response.Dispose();
+        }
+
+        throw new HttpRequestException("Download redirect limit exceeded.");
     }
 
     private BackgroundTaskItem CreateOrGetDownloadBackgroundTask(DownloadTask task)
@@ -511,19 +594,59 @@ internal sealed class BrowserExtensionService : IDisposable
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
-    private async Task SendJsonResponse(HttpListenerResponse response, object data, HttpStatusCode statusCode)
+    private static async Task<string> ReadLimitedBodyAsync(
+        HttpListenerRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.ContentLength64 > MaximumRequestBodyBytes)
+            throw new RequestBodyTooLargeException();
+
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8 * 1024];
+        while (true)
+        {
+            var read = await request.InputStream.ReadAsync(chunk, cancellationToken);
+            if (read == 0)
+                break;
+            if (buffer.Length + read > MaximumRequestBodyBytes)
+                throw new RequestBodyTooLargeException();
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
+        }
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, checked((int)buffer.Length));
+    }
+
+    [MemberNotNull(nameof(_pairingCoordinator))]
+    private void EnsurePairingCoordinator()
+    {
+        _pairingCoordinator ??= new BrowserPairingCoordinator(
+            _settingsService.BrowserExtensionTokenHash,
+            _settingsService.BrowserExtensionOrigin);
+    }
+
+    private static void AddCorsHeaders(HttpListenerResponse response, string origin)
+    {
+        response.Headers["Access-Control-Allow-Origin"] = origin;
+        response.Headers["Vary"] = "Origin";
+        response.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
+        response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Request-Id, X-Timestamp";
+    }
+
+    private static async Task SendJsonResponse(
+        HttpListenerResponse response,
+        object data,
+        HttpStatusCode statusCode,
+        string? origin)
     {
         response.StatusCode = (int)statusCode;
         response.ContentType = "application/json";
-        response.Headers.Add("Access-Control-Allow-Origin", "*");
-        response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-        
+        if (BrowserPairingCoordinator.TryNormalizeExtensionOrigin(origin, out var normalizedOrigin))
+            AddCorsHeaders(response, normalizedOrigin!);
+
         var json = JsonSerializer.Serialize(data, s_jsonOptions);
         var buffer = System.Text.Encoding.UTF8.GetBytes(json);
-        
+
         response.ContentLength64 = buffer.Length;
-        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+        await response.OutputStream.WriteAsync(buffer);
         response.Close();
     }
 
@@ -632,21 +755,21 @@ internal sealed class BrowserExtensionService : IDisposable
 
         if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
         {
-            _logger.LogWarning("Manual download rejected: Invalid URL format: {Url}", url);
+            _logger.LogWarning("Manual download rejected: invalid URL format");
             return false;
         }
 
         // 安全校验：仅允许 HTTPS（防止明文传输泄露敏感信息）
-        if (!uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
+        if (!NexusDownloadUrlPolicy.IsAllowed(uri))
         {
-            _logger.LogWarning("Manual download rejected: Non-HTTPS URL: {Url}", url);
+            _logger.LogWarning("Manual download rejected by URL policy: {Url}", RedactUriForLog(uri));
             return false;
         }
 
         // 从 URL 中提取文件名
         var filename = ExtractFilenameFromUrl(uri);
-        
-        _logger.LogInformation("Manual download added: {Filename} - {Url}", filename, url);
+
+        _logger.LogInformation("Manual download added: {Filename} - {Url}", filename, RedactUriForLog(uri));
 
         var downloadTask = new DownloadTask
         {
@@ -660,21 +783,18 @@ internal sealed class BrowserExtensionService : IDisposable
         SaveDownloadTasks();
 
         // 启动下载任务
-        _ = ProcessDownloadAsync(downloadTask, _cts?.Token ?? default)
-            .ContinueWith(t =>
+        ProcessDownloadAsync(downloadTask, _cts?.Token ?? default).Observe(
+            ex =>
             {
-                if (t.IsFaulted && t.Exception != null)
+                _logger.LogError(ex, "Unhandled exception in manual download for task {TaskId}", downloadTask.Id);
+                if (downloadTask.Status != DownloadStatus.Failed)
                 {
-                    _logger.LogError(t.Exception, "Unhandled exception in manual download for task {TaskId}", downloadTask.Id);
-                    if (downloadTask.Status != DownloadStatus.Failed)
-                    {
-                        downloadTask.Status = DownloadStatus.Failed;
-                        downloadTask.ErrorMessage = _localizationService["BrowserExt.DownloadError"];
-                        downloadTask.Speed = 0;
-                        downloadTask.EstimatedTimeRemaining = TimeSpan.Zero;
-                        DownloadFailed?.Invoke(downloadTask);
-                        SaveDownloadTasks();
-                    }
+                    downloadTask.Status = DownloadStatus.Failed;
+                    downloadTask.ErrorMessage = _localizationService["BrowserExt.DownloadError"];
+                    downloadTask.Speed = 0;
+                    downloadTask.EstimatedTimeRemaining = TimeSpan.Zero;
+                    DownloadFailed?.Invoke(downloadTask);
+                    SaveDownloadTasks();
                 }
             });
 
@@ -703,6 +823,8 @@ internal sealed class BrowserExtensionService : IDisposable
         return $"manual_download_{fileId}.zip";
     }
 
+    private static string RedactUriForLog(Uri uri) => uri.GetLeftPart(UriPartial.Path);
+
     /// <summary>
     /// 将下载任务保存到 JSON 文件，实现持久化
     /// </summary>
@@ -725,7 +847,8 @@ internal sealed class BrowserExtensionService : IDisposable
                 BytesDownloaded = t.BytesDownloaded,
                 TotalBytes = t.TotalBytes,
                 Progress = t.Progress,
-                ErrorMessage = t.ErrorMessage
+                ErrorMessage = t.ErrorMessage,
+                LocalFilePath = t.LocalFilePath
             }).ToList();
 
             var json = JsonSerializer.Serialize(data, s_jsonOptions);
@@ -771,7 +894,8 @@ internal sealed class BrowserExtensionService : IDisposable
                     BytesDownloaded = item.BytesDownloaded,
                     TotalBytes = item.TotalBytes,
                     Progress = item.Progress,
-                    ErrorMessage = status == DownloadStatus.Cancelled ? _localizationService["BrowserExt.AppRestarted"] : item.ErrorMessage
+                    ErrorMessage = status == DownloadStatus.Cancelled ? _localizationService["BrowserExt.AppRestarted"] : item.ErrorMessage,
+                    LocalFilePath = item.LocalFilePath
                 };
 
                 DownloadTasks.Add(task);
@@ -795,6 +919,16 @@ internal sealed class BrowserExtensionService : IDisposable
         public long Timestamp { get; set; }
     }
 
+    private sealed class PairRequest
+    {
+        [JsonPropertyName("code")]
+        public string Code { get; set; } = string.Empty;
+    }
+
+    private sealed class RequestBodyTooLargeException : Exception
+    {
+    }
+
     /// <summary>
     /// 下载任务持久化数据模型，用于 JSON 序列化/反序列化
     /// </summary>
@@ -816,5 +950,7 @@ internal sealed class BrowserExtensionService : IDisposable
         public double Progress { get; set; }
         [JsonPropertyName("errorMessage")]
         public string? ErrorMessage { get; set; }
+        [JsonPropertyName("localFilePath")]
+        public string? LocalFilePath { get; set; }
     }
 }

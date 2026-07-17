@@ -43,7 +43,7 @@
     <Color x:Key="AcrylicBackgroundFallbackColor">#CC1C1C1C</Color>
 
     <!-- Solid Color Brushes -->
-    <SolidColorBrush x:Key="SystemAccentBrush" Color="{StaticResource SystemAccentColor}"/>
+    <SolidColorBrush x:Key="SystemAccentBrush" Color="{DynamicResource SystemAccentColor}"/>
     <SolidColorBrush x:Key="SystemAccentLight1Brush" Color="{StaticResource SystemAccentColorLight1}"/>
     <SolidColorBrush x:Key="SystemAccentLight2Brush" Color="{StaticResource SystemAccentColorLight2}"/>
     <SolidColorBrush x:Key="SystemAccentLight3Brush" Color="{StaticResource SystemAccentColorLight3}"/>
@@ -51,34 +51,34 @@
     <SolidColorBrush x:Key="SystemAccentDark2Brush" Color="{StaticResource SystemAccentColorDark2}"/>
     <SolidColorBrush x:Key="SystemAccentDark3Brush" Color="{StaticResource SystemAccentColorDark3}"/>
 
-    <SolidColorBrush x:Key="NeutralBackgroundBrush" Color="{StaticResource NeutralBackgroundColor}"/>
-    <SolidColorBrush x:Key="NeutralBackgroundAltBrush" Color="{StaticResource NeutralBackgroundAltColor}"/>
-    <SolidColorBrush x:Key="NeutralBackgroundFillBrush" Color="{StaticResource NeutralBackgroundFillColor}"/>
+    <SolidColorBrush x:Key="NeutralBackgroundBrush" Color="{DynamicResource NeutralBackgroundColor}"/>
+    <SolidColorBrush x:Key="NeutralBackgroundAltBrush" Color="{DynamicResource NeutralBackgroundAltColor}"/>
+    <SolidColorBrush x:Key="NeutralBackgroundFillBrush" Color="{DynamicResource NeutralBackgroundFillColor}"/>
     <SolidColorBrush x:Key="NeutralBackgroundFillSecondaryBrush" Color="{StaticResource NeutralBackgroundFillColorSecondary}"/>
-    <SolidColorBrush x:Key="NeutralForegroundBrush" Color="{StaticResource NeutralForegroundColor}"/>
+    <SolidColorBrush x:Key="NeutralForegroundBrush" Color="{DynamicResource NeutralForegroundColor}"/>
     <SolidColorBrush x:Key="NeutralForegroundSecondaryBrush" Color="{StaticResource NeutralForegroundColorSecondary}"/>
     <SolidColorBrush x:Key="NeutralForegroundTertiaryBrush" Color="{StaticResource NeutralForegroundColorTertiary}"/>
     <SolidColorBrush x:Key="NeutralForegroundDisabledBrush" Color="{StaticResource NeutralForegroundColorDisabled}"/>
-    <SolidColorBrush x:Key="NeutralBorderBrush" Color="{StaticResource NeutralBorderColor}"/>
+    <SolidColorBrush x:Key="NeutralBorderBrush" Color="{DynamicResource NeutralBorderColor}"/>
     <SolidColorBrush x:Key="NeutralBorderStrongBrush" Color="{StaticResource NeutralBorderColorStrong}"/>
-    <SolidColorBrush x:Key="NeutralStrokeBrush" Color="{StaticResource NeutralStrokeColor}"/>
+    <SolidColorBrush x:Key="NeutralStrokeBrush" Color="{DynamicResource NeutralStrokeColor}"/>
     <SolidColorBrush x:Key="NeutralStrokeAlternateBrush" Color="{StaticResource NeutralStrokeColorAlternate}"/>
 
-    <SolidColorBrush x:Key="LayerBackgroundBrush" Color="{StaticResource LayerBackgroundColor}"/>
-    <SolidColorBrush x:Key="LayerBackgroundFillBrush" Color="{StaticResource LayerBackgroundFillColor}"/>
-    <SolidColorBrush x:Key="LayerAltBackgroundBrush" Color="{StaticResource LayerAltBackgroundColor}"/>
+    <SolidColorBrush x:Key="LayerBackgroundBrush" Color="{DynamicResource LayerBackgroundColor}"/>
+    <SolidColorBrush x:Key="LayerBackgroundFillBrush" Color="{DynamicResource LayerBackgroundFillColor}"/>
+    <SolidColorBrush x:Key="LayerAltBackgroundBrush" Color="{DynamicResource LayerAltBackgroundColor}"/>
 
-    <SolidColorBrush x:Key="MicaBackgroundBrush" Color="{StaticResource MicaBackgroundColor}"/>
-    <SolidColorBrush x:Key="MicaBorderBrush" Color="{StaticResource MicaBorderColor}"/>
+    <SolidColorBrush x:Key="MicaBackgroundBrush" Color="{DynamicResource MicaBackgroundColor}"/>
+    <SolidColorBrush x:Key="MicaBorderBrush" Color="{DynamicResource MicaBorderColor}"/>
 
     <!-- Semantic Colors -->
     <Color x:Key="DangerColor">#C42B1C</Color>
     <Color x:Key="SuccessColor">#107C10</Color>
     <Color x:Key="WarningColor">#FFB900</Color>
 
-    <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}"/>
-    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
-    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource DangerColor}"/>
+    <SolidColorBrush x:Key="SuccessBrush" Color="{DynamicResource SuccessColor}"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource WarningColor}"/>
 
     <!-- Gradient Brushes for Depth Effects -->
     <LinearGradientBrush x:Key="MicaTopHintGradient" StartPoint="0,0" EndPoint="0,1">
@@ -137,7 +137,7 @@
 
     <!-- Glow Effect for Accent Elements -->
     <DropShadowEffect x:Key="AccentGlow"
-                      Color="{StaticResource SystemAccentColor}"
+                      Color="{DynamicResource SystemAccentColor}"
                       Direction="0"
                       ShadowDepth="0"
                       BlurRadius="12"
@@ -145,7 +145,7 @@
 
     <!-- Soft Ambient Glow -->
     <DropShadowEffect x:Key="AmbientGlow"
-                      Color="{StaticResource SystemAccentColor}"
+                      Color="{DynamicResource SystemAccentColor}"
                       Direction="0"
                       ShadowDepth="0"
                       BlurRadius="20"

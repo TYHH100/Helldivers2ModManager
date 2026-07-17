@@ -70,6 +70,7 @@ internal sealed class VersionCheckRepository
     public async Task SaveAllAsync(string storageDirectory,
         Dictionary<Guid, (ModVersionStatus Status, uint GameVersion, DateTime LastChecked, DateTime ModLastWriteTimeUtc)> results)
     {
+        _databaseService.EnsureWritable(storageDirectory);
         await _writeLock.WaitAsync();
         try
         {
@@ -127,6 +128,7 @@ internal sealed class VersionCheckRepository
     /// </summary>
     public async Task DeleteByGuidAsync(string storageDirectory, Guid guid)
     {
+        _databaseService.EnsureWritable(storageDirectory);
         await _writeLock.WaitAsync();
         try
         {
@@ -169,6 +171,7 @@ internal sealed class VersionCheckRepository
     /// <param name="lastWriteTimeUtc">exe 的最后写入时间</param>
     public async Task UpdateGameExeLastWriteTimeAsync(string storageDirectory, DateTime lastWriteTimeUtc)
     {
+        _databaseService.EnsureWritable(storageDirectory);
         await _writeLock.WaitAsync();
         try
         {

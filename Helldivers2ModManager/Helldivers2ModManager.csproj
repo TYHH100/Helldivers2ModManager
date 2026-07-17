@@ -13,13 +13,22 @@
 		<PlatformTarget>x64</PlatformTarget>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<ProductName>Helldivers 2 Mod Manager</ProductName>
-		<ProductVersion>1.5.0</ProductVersion>
-		<AssemblyVersion>1.5.0</AssemblyVersion>
-		<FileVersion>1.5.0</FileVersion>
+		<ProductVersion>2.0.0</ProductVersion>
+		<AssemblyVersion>2.0.0</AssemblyVersion>
+		<FileVersion>2.0.0</FileVersion>
 		<PublishSingleFile>true</PublishSingleFile>
 		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
 		<ExcludeSevenZipAssemblies>true</ExcludeSevenZipAssemblies>
+		<!-- Compatibility baseline for untouched v1.5 WPF code. New Core,
+		     Infrastructure and test projects keep the full analyzer set enabled.
+		     See docs/analyzer-baseline.md for scope and removal criteria. -->
+		<NoWarn>$(NoWarn);CA1001;CA1304;CA1305;CA1309;CA1310;CA1311;CA1720;CA1822;CA1835;CA1848;CA1859;CA1860;CA1861;CA1866;CA1869;CA1870;CA2016;CA2254</NoWarn>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Helldivers2ModManager.Core\Helldivers2ModManager.Core.csproj" />
+		<ProjectReference Include="..\Helldivers2ModManager.Infrastructure\Helldivers2ModManager.Infrastructure.csproj" />
+	</ItemGroup>
 
 	<ItemGroup>
 	  <Resource Include="Resources\Fonts\FS Sinclair Bold.otf" />
@@ -38,7 +47,6 @@
 		<PackageReference Include="CommunityToolkit.Common" Version="8.4.2" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="gong-wpf-dragdrop" Version="4.0.0" />
-		<PackageReference Include="MdXaml" Version="1.27.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.8" />
 	</ItemGroup>

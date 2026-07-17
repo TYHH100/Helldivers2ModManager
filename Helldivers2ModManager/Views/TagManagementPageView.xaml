@@ -10,7 +10,7 @@
 	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:TagManagementPageViewModel}"
-	  d:Background="{StaticResource MicaBackgroundBrush}"
+	  d:Background="{DynamicResource MicaBackgroundBrush}"
 	  d:DesignWidth="1000"
 	  d:DesignHeight="700"
 	  Title="{Binding Title}">
@@ -97,7 +97,7 @@
 											   Text="{Binding Name}"
 											   FontSize="16"
 											   FontWeight="SemiBold"
-											   Foreground="{StaticResource NeutralForegroundBrush}"
+											   Foreground="{DynamicResource NeutralForegroundBrush}"
 											   VerticalAlignment="Center"/>
 
 									<!-- Buttons -->
@@ -106,6 +106,7 @@
 												Grid.RowSpan="2"
 												Orientation="Horizontal">
 										<Button Command="{Binding DataContext.ChangeColorCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+												AutomationProperties.Name="{loc:Loc DashboardPage.ChangeColor}"
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
 												Margin="0 0 8 0"
@@ -113,6 +114,7 @@
 											<TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
 										</Button>
 										<Button Command="{Binding DataContext.RenameTagCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+												AutomationProperties.Name="{loc:Loc TagManagementPage.RenameTitle}"
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
 												Margin="0 0 8 0"
@@ -120,11 +122,12 @@
                                             <TextBlock Text="&#xE8AC;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
 										</Button>
 										<Button Command="{Binding DataContext.DeleteTagCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+												AutomationProperties.Name="{loc:Loc TagManagementPage.DeleteTag}"
 												CommandParameter="{Binding}"
 												Style="{StaticResource FluentIconButton}"
 												ToolTip="{loc:Loc TagManagementPage.DeleteTag}">
 											<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="16"
-                                                       Foreground="{StaticResource DangerBrush}"/>
+                                                       Foreground="{DynamicResource DangerBrush}"/>
 										</Button>
 									</StackPanel>
 								</Grid>

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [test, "refactor/**"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hd2mmt_nexus-download-interceptor/package-lock.json
+      - name: Restore
+        run: dotnet restore Helldivers2ModManager.sln
+      - name: Build
+        run: dotnet build Helldivers2ModManager.sln --configuration Release --no-restore
+      - name: Test
+        run: dotnet test Helldivers2ModManager.Tests/Helldivers2ModManager.Tests.csproj --configuration Release --no-build
+      - name: Extension tests
+        working-directory: hd2mmt_nexus-download-interceptor
+        run: |
+          npm ci --ignore-scripts
+          npm test
+      - name: Windows UI localization tests
+        env:
+          HD2MM_RUN_UI_TESTS: "1"
+          HD2MM_APP_PATH: ${{ github.workspace }}\Helldivers2ModManager\bin\Release\net8.0-windows\win-x64\Helldivers2ModManager.exe
+          HD2MM_ENABLE_PSEUDO_LOCALIZATION: "1"
+        run: dotnet test Helldivers2ModManager.UiTests/Helldivers2ModManager.UiTests.csproj --configuration Release --no-build
+      - name: Upload UI failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ui-test-failures
+          path: Helldivers2ModManager.UiTests/bin/Release/net8.0-windows/TestResults/UiFailures
+          if-no-files-found: ignore
+      - name: Verify formatting errors
+        run: dotnet format Helldivers2ModManager.sln style --verify-no-changes --no-restore --severity error
+      - name: Validate release metadata and safety defaults
+        shell: pwsh
+        run: .\scripts\validate-release.ps1 -Channel stable -Version 2.0.0

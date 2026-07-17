@@ -114,6 +114,7 @@ internal sealed class FileHashRepository
         Guid modGuid,
         Dictionary<string, (string fileHash, long fileSize, DateTime lastModified)> hashes)
     {
+        _databaseService.EnsureWritable(storageDirectory);
         if (hashes.Count == 0)
             return;
 
@@ -171,6 +172,7 @@ internal sealed class FileHashRepository
     /// <param name="modGuid">mod 的 Guid</param>
     public async Task DeleteForModAsync(string storageDirectory, Guid modGuid)
     {
+        _databaseService.EnsureWritable(storageDirectory);
         await _writeLock.WaitAsync();
         try
         {

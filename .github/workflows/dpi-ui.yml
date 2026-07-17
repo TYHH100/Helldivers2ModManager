@@ -1,0 +1,35 @@
+name: Windows DPI UI matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      dpi_scale:
+        description: "The scale configured on the self-hosted Windows runner"
+        required: true
+        type: choice
+        options: ["1", "1.25", "1.5", "2"]
+
+jobs:
+  dpi-ui:
+    # Runner labels must correspond to machines configured to 100/125/150/200%.
+    # The script verifies the actual WPF DpiScale; it does not fake DPI with a transform.
+    runs-on: [self-hosted, windows, "dpi-${{ inputs.dpi_scale }}"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore and build
+        run: |
+          dotnet restore Helldivers2ModManager.sln
+          dotnet build Helldivers2ModManager.sln --configuration Release --no-restore
+      - name: Run actual WPF DPI test
+        shell: powershell
+        run: .\scripts\run-dpi-ui-test.ps1 -ExpectedScale ([double]"${{ inputs.dpi_scale }}") -FullMatrix
+      - name: Upload DPI failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpi-ui-failures-${{ inputs.dpi_scale }}
+          path: Helldivers2ModManager.UiTests/bin/Release/net8.0-windows/TestResults/UiFailures
+          if-no-files-found: ignore

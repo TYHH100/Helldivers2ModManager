@@ -19,7 +19,7 @@ namespace Helldivers2ModManager.Exceptions.Nexus
             ErrorType = errorType;
         }
 
-        public NexusApiException(string message, int statusCode, string? errorType, Exception innerException) 
+        public NexusApiException(string message, int statusCode, string? errorType, Exception innerException)
             : base(message, innerException)
         {
             StatusCode = statusCode;
@@ -31,13 +31,13 @@ namespace Helldivers2ModManager.Exceptions.Nexus
     {
         public string ModId { get; }
 
-        public NexusModNotFoundException(string modId) 
+        public NexusModNotFoundException(string modId)
             : base($"Mod with ID '{modId}' not found.", 404, "NotFound")
         {
             ModId = modId;
         }
 
-        public NexusModNotFoundException(string modId, Exception innerException) 
+        public NexusModNotFoundException(string modId, Exception innerException)
             : base($"Mod with ID '{modId}' not found.", 404, "NotFound", innerException)
         {
             ModId = modId;
@@ -46,17 +46,17 @@ namespace Helldivers2ModManager.Exceptions.Nexus
 
     internal class NexusApiKeyInvalidException : NexusApiException
     {
-        public NexusApiKeyInvalidException() 
+        public NexusApiKeyInvalidException()
             : base("Invalid or missing API Key. Please check your API Key configuration.", 403, "Unauthorized")
         {
         }
 
-        public NexusApiKeyInvalidException(string message) 
+        public NexusApiKeyInvalidException(string message)
             : base(message, 403, "Unauthorized")
         {
         }
 
-        public NexusApiKeyInvalidException(string message, Exception innerException) 
+        public NexusApiKeyInvalidException(string message, Exception innerException)
             : base(message, 403, "Unauthorized", innerException)
         {
         }
@@ -66,18 +66,18 @@ namespace Helldivers2ModManager.Exceptions.Nexus
     {
         public TimeSpan? RetryAfter { get; }
 
-        public NexusRateLimitException() 
+        public NexusRateLimitException()
             : base("Rate limit exceeded. Please try again later.", 429, "RateLimit")
         {
         }
 
-        public NexusRateLimitException(TimeSpan retryAfter) 
+        public NexusRateLimitException(TimeSpan retryAfter)
             : base($"Rate limit exceeded. Please retry after {retryAfter.TotalSeconds} seconds.", 429, "RateLimit")
         {
             RetryAfter = retryAfter;
         }
 
-        public NexusRateLimitException(string message, Exception innerException) 
+        public NexusRateLimitException(string message, Exception innerException)
             : base(message, 429, "RateLimit", innerException)
         {
         }
@@ -87,13 +87,13 @@ namespace Helldivers2ModManager.Exceptions.Nexus
     {
         public IReadOnlyList<string> Errors { get; }
 
-        public NexusValidationException(IReadOnlyList<string> errors) 
+        public NexusValidationException(IReadOnlyList<string> errors)
             : base("Validation failed. Please check your request parameters.", 422, "Validation")
         {
             Errors = errors;
         }
 
-        public NexusValidationException(string message, IReadOnlyList<string> errors) 
+        public NexusValidationException(string message, IReadOnlyList<string> errors)
             : base(message, 422, "Validation")
         {
             Errors = errors;

@@ -12,7 +12,7 @@
 	  xmlns:cvms="clr-namespace:Helldivers2ModManager.ViewModels.Create"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:CreatePageViewModel}"
-	  d:Background="{StaticResource MicaBackgroundBrush}"
+	  d:Background="{DynamicResource MicaBackgroundBrush}"
 	  d:DesignWidth="800"
 	  d:DesignHeight="600"
 	  Title="{Binding Title}">
@@ -34,7 +34,7 @@
 
 		<!-- 编辑模式切换 -->
 		<Border Grid.Row="1"
-				Background="{StaticResource NeutralBackgroundFillBrush}"
+				Background="{DynamicResource NeutralBackgroundFillBrush}"
 				CornerRadius="6"
 				Padding="8 6"
 				Margin="0 0 0 12"
@@ -94,6 +94,7 @@
 					</TextBlock>
 				</StackPanel>
 				<Button Grid.Column="2"
+						AutomationProperties.Name="{loc:Loc CreatePage.CloseHint}"
 						Command="{Binding DismissBannerCommand}"
 						Style="{StaticResource FluentIconButton}"
 						ToolTip="{loc:Loc CreatePage.CloseHint}"
@@ -127,85 +128,14 @@
 					CornerRadius="8"
 					Padding="24">
 				<StackPanel>
-					<!-- 模组名称 -->
-					<TextBlock Text="{loc:Loc CreatePage.Name}"
-							   FontSize="16"
-							   FontWeight="SemiBold"
-							   Foreground="{StaticResource NeutralForegroundBrush}"/>
-					<TextBlock Text="{loc:Loc CreatePage.NameDesc}"
-							   FontSize="13"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   Margin="0 4 0 8"/>
-					<TextBox Text="{Binding ModName, UpdateSourceTrigger=PropertyChanged}"
-							 FontSize="14"
-							 Padding="8 6"
-							 Margin="0 0 0 16"/>
-
-					<!-- 模组描述 -->
-					<TextBlock Text="{loc:Loc CreatePage.Description}"
-							   FontSize="16"
-							   FontWeight="SemiBold"
-							   Foreground="{StaticResource NeutralForegroundBrush}"/>
-					<TextBlock Text="{loc:Loc CreatePage.DescriptionDesc}"
-							   FontSize="13"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   Margin="0 4 0 8"/>
-					<TextBox Text="{Binding ModDescription, UpdateSourceTrigger=PropertyChanged}"
-							 FontSize="14"
-							 AcceptsReturn="True"
-							 TextWrapping="Wrap"
-							 MinHeight="60"
-							 Padding="8 6"
-							 Margin="0 0 0 16"/>
-
-					<!-- 模组图标 -->
-					<TextBlock Text="{loc:Loc CreatePage.Icon}"
-							   FontSize="16"
-							   FontWeight="SemiBold"
-							   Foreground="{StaticResource NeutralForegroundBrush}"/>
-					<TextBlock Text="{loc:Loc CreatePage.IconDesc}"
-							   FontSize="13"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   Margin="0 4 0 8"/>
-					<Grid Margin="0 0 0 16">
-						<Grid.ColumnDefinitions>
-							<ColumnDefinition Width="Auto"/>
-							<ColumnDefinition Width="*"/>
-							<ColumnDefinition Width="Auto"/>
-						</Grid.ColumnDefinitions>
-						<!-- 图标预览 -->
-						<Border Grid.Column="0"
-								Width="48"
-								Height="48"
-								CornerRadius="6"
-								Background="#20FFFFFF"
-								Margin="0 0 12 0"
-								VerticalAlignment="Center">
-							<Image Source="{Binding IconPreview}"
-								   Stretch="Uniform"
-								   VerticalAlignment="Center"
-								   HorizontalAlignment="Center"/>
-						</Border>
-						<TextBox Grid.Column="1"
-								 Text="{Binding IconPath, UpdateSourceTrigger=PropertyChanged}"
-								 FontSize="14"
-								 Padding="8 6"
-								 VerticalAlignment="Center"/>
-						<Button Grid.Column="2"
-								Content="{loc:Loc CreatePage.BrowseIcon}"
-								Style="{StaticResource FluentSecondaryButton}"
-								Command="{Binding BrowseIconCommand}"
-								Margin="8 0 0 0"
-								Padding="16 8"
-								VerticalAlignment="Center"/>
-					</Grid>
+					<local:ManifestEditorControl/>
 
 					<!-- 源目录 -->
 					<TextBlock Text="{loc:Loc CreatePage.SourceDir}"
 							   FontSize="16"
 							   FontWeight="SemiBold"
-							   Foreground="{StaticResource NeutralForegroundBrush}"/>
-					<TextBlock Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Foreground="{DynamicResource NeutralForegroundBrush}"/>
+					<TextBlock Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 							   FontSize="13"
 							   Margin="0 4 0 8">
 						<Run Text="{loc:Loc CreatePage.SourceDirDesc1}"/>
@@ -235,21 +165,21 @@
 					<TextBlock Text="{loc:Loc CreatePage.Options}"
 							   FontSize="16"
 							   FontWeight="SemiBold"
-							   Foreground="{StaticResource NeutralForegroundBrush}"
+							   Foreground="{DynamicResource NeutralForegroundBrush}"
 							   Margin="0 0 0 4"/>
 					<TextBlock Text="{loc:Loc CreatePage.OptionsDesc}"
 							   FontSize="13"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 							   Margin="0 0 0 4"/>
 
 					<!-- 拖拽排序提示 -->
-					<Border Background="{StaticResource NeutralBackgroundFillBrush}"
+					<Border Background="{DynamicResource NeutralBackgroundFillBrush}"
 							CornerRadius="4"
 							Padding="8 4"
 							Margin="0 0 0 8">
 						<TextBlock Text="{loc:Loc CreatePage.DragHint}"
 								   FontSize="12"
-								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 								   HorizontalAlignment="Center"/>
 					</Border>
 
@@ -263,7 +193,7 @@
 								<Border Style="{StaticResource FluentSettingsCard}"
 										Margin="0 0 0 8"
 										Padding="16"
-										BorderBrush="{StaticResource NeutralForegroundSecondaryBrush}"
+										BorderBrush="{DynamicResource NeutralForegroundSecondaryBrush}"
 										BorderThickness="1"
 										CornerRadius="6">
 									<StackPanel>
@@ -277,9 +207,10 @@
 												   Text="{loc:Loc CreatePage.OptionTitle}"
 												   FontSize="14"
 												   FontWeight="SemiBold"
-												   Foreground="{StaticResource NeutralForegroundBrush}"
+												   Foreground="{DynamicResource NeutralForegroundBrush}"
 												   VerticalAlignment="Center"/>
 											<Button Grid.Column="1"
+													AutomationProperties.Name="{loc:Loc CreatePage.DeleteOption}"
 													Style="{StaticResource FluentIconButton}"
 													Command="{Binding DataContext.RemoveOptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
 													CommandParameter="{Binding}"
@@ -310,17 +241,17 @@
 											</Border>
 											<!-- 选项名称、描述、Include 路径 -->
 											<StackPanel Grid.Column="1">
-												<TextBlock Text="{loc:Loc CreatePage.OptionName}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+												<TextBlock Text="{loc:Loc CreatePage.OptionName}" FontSize="12" Foreground="{DynamicResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 											<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
 													 FontSize="14"
 													 Padding="4 2"
 													 Margin="0 0 0 6"/>
-											<TextBlock Text="{loc:Loc CreatePage.OptionDesc}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+											<TextBlock Text="{loc:Loc CreatePage.OptionDesc}" FontSize="12" Foreground="{DynamicResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 												<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
 														 FontSize="13"
 														 Padding="4 2"
 														 Margin="0 0 0 6"/>
-												<TextBlock Text="{loc:Loc CreatePage.OptionInclude}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+												<TextBlock Text="{loc:Loc CreatePage.OptionInclude}" FontSize="12" Foreground="{DynamicResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 												<Grid Margin="0 0 0 6">
 													<Grid.ColumnDefinitions>
 														<ColumnDefinition Width="*"/>
@@ -331,7 +262,8 @@
 															 FontSize="12"
 															 Padding="4 2"
 															 VerticalAlignment="Center"/>
-													<Button Grid.Column="1"
+																	<Button Grid.Column="1"
+																			AutomationProperties.Name="{loc:Loc CreatePage.DeleteSubOption}"
 															Content="{loc:Loc CreatePage.OptionBrowse}"
 															Style="{StaticResource FluentSecondaryButton}"
 															Command="{Binding BrowseIncludeCommand}"
@@ -342,7 +274,7 @@
 												<!-- 选项图标选择 -->
 												<TextBlock Text="{loc:Loc CreatePage.OptionIcon}"
 														   FontSize="12"
-														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+														   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 														   Margin="0 0 2 2"/>
 												<Grid Margin="0 0 0 6">
 													<Grid.ColumnDefinitions>
@@ -369,7 +301,7 @@
 										<TextBlock Text="{loc:Loc CreatePage.SubOptions}"
 												   FontSize="13"
 												   FontWeight="SemiBold"
-												   Foreground="{StaticResource NeutralForegroundBrush}"
+												   Foreground="{DynamicResource NeutralForegroundBrush}"
 												   VerticalAlignment="Center"
 												   Margin="0 4 0 4"/>
 
@@ -396,10 +328,11 @@
 																	   Text="{loc:Loc CreatePage.SubOptionTitle}"
 																	   FontSize="12"
 																	   FontWeight="SemiBold"
-																	   Foreground="{StaticResource NeutralForegroundBrush}"
+																	   Foreground="{DynamicResource NeutralForegroundBrush}"
 																	   VerticalAlignment="Center"/>
-															<Button Grid.Column="1"
-																	Style="{StaticResource FluentIconButton}"
+																	<Button Grid.Column="1"
+																				AutomationProperties.Name="{loc:Loc CreatePage.DeleteSubOption}"
+																				Style="{StaticResource FluentIconButton}"
 																	Command="{Binding DataContext.RemoveSubOptionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
 																	CommandParameter="{Binding}"
 																	ToolTip="{loc:Loc CreatePage.DeleteSubOption}"
@@ -427,18 +360,18 @@
 																</Border>
 																<!-- 子选项名称、描述、Include 路径 -->
 																<StackPanel Grid.Column="1">
-																	<TextBlock Text="{loc:Loc CreatePage.SubOptionName}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																	<TextBlock Text="{loc:Loc CreatePage.SubOptionName}" FontSize="11" Foreground="{DynamicResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 																	<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
 																			 FontSize="13"
 																			 FontWeight="SemiBold"
 																			 Padding="4 2"
 																			 Margin="0 0 0 4"/>
-																	<TextBlock Text="{loc:Loc CreatePage.SubOptionDesc}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																	<TextBlock Text="{loc:Loc CreatePage.SubOptionDesc}" FontSize="11" Foreground="{DynamicResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 																	<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
 																			 FontSize="12"
 																			 Padding="4 2"
 																			 Margin="0 0 0 4"/>
-																	<TextBlock Text="{loc:Loc CreatePage.SubOptionInclude}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+																	<TextBlock Text="{loc:Loc CreatePage.SubOptionInclude}" FontSize="11" Foreground="{DynamicResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
 																	<Grid>
 																		<Grid.ColumnDefinitions>
 																			<ColumnDefinition Width="*"/>
@@ -460,7 +393,7 @@
 																	<!-- 子选项图标选择 -->
 																	<TextBlock Text="{loc:Loc CreatePage.SubOptionIcon}"
 																			   FontSize="11"
-																			   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+																			   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 																			   Margin="0 0 2 2"/>
 																	<Grid Margin="0 0 0 4">
 																		<Grid.ColumnDefinitions>

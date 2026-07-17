@@ -3,10 +3,11 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using GongSolutions.Wpf.DragDrop;
 using Helldivers2ModManager.Components;
+using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
-using Helldivers2ModManager.Services.Nexus;
 using Helldivers2ModManager.Stores;
+using Helldivers2ModManager.Core.UI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
@@ -39,13 +40,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private static readonly ProcessStartInfo s_githubStartInfo = new("https://github.com/teutinsa/Helldivers2ModManager") { UseShellExecute = true };
     private static readonly ProcessStartInfo s_githubForkStartInfo = new("https://github.com/TYHH100/Helldivers2ModManager") { UseShellExecute = true };
     private readonly ILogger<DashboardPageViewModel> _logger;
-    private readonly Lazy<NavigationStore> _navStore;
+    private readonly INavigationService _navigationService;
     private readonly EditModStore _editModStore;
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
     private readonly ProfileService _profileService;
     private readonly ProfileSaveCoordinator _profileSaveCoordinator;
-    private readonly INexusModsService _nexusModsService;
     private readonly VersionCheckRepository _versionCheckRepository;
     private readonly ModHashService _modHashService;
     private ObservableCollection<ModViewModel> _mods;
@@ -53,9 +53,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly SearchFilterService _searchFilterService;
     private readonly SortService _sortService;
     private readonly VersionCheckViewModel _versionCheckVm;
+    private readonly BatchRepairCoordinator _batchRepairCoordinator;
+    private readonly RepairDisclaimerService _repairDisclaimerService;
     private readonly LocalizationService _localizationService;
     private readonly BackgroundTaskService _backgroundTaskService;
+    private readonly IBackgroundTaskRunner _backgroundTaskRunner;
+    private readonly IDialogService _dialogService;
     private readonly ModGroupService _modGroupService;
+    private readonly ModViewModelFactory _modViewModelFactory;
+    private readonly Dictionary<Guid, ModViewModel> _modViewModelsById = [];
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -73,7 +79,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// <summary>
     /// 选中数量文本（如 "已选 2 项"）
     /// </summary>
-    public string SelectionCountText => _mods is null ? "" : $"{_localizationService["DashboardPage.AlreadySelectedPrefix"]}{_modGroupService.FilterModViewModels(_mods).Count(static vm => vm.IsSelected)}{_localizationService["DashboardPage.SelectedCountSuffix"]}";
+    public string SelectionCountText => _mods is null
+        ? ""
+        : _localizationService.Format("DashboardPage.SelectionCount", new { count = _modGroupService.FilterModViewModels(_mods).Count(static vm => vm.IsSelected) });
 
     /// <summary>
     /// 排序功能是否在设置中启用
@@ -120,40 +128,48 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     public DashboardPageViewModel(
         ILogger<DashboardPageViewModel> logger,
-        IServiceProvider provider,
+        INavigationService navigationService,
         SettingsService settingsService,
         ModService modService,
         ProfileService profileService,
         ProfileSaveCoordinator profileSaveCoordinator,
         EditModStore editModStore,
-        INexusModsService nexusModsService,
         VersionCheckRepository versionCheckRepository,
         ModHashService modHashService,
         SearchFilterService searchFilterService,
         SortService sortService,
         VersionCheckViewModel versionCheckVm,
+        BatchRepairCoordinator batchRepairCoordinator,
+        RepairDisclaimerService repairDisclaimerService,
         LocalizationService localizationService,
         BackgroundTaskService backgroundTaskService,
+        IBackgroundTaskRunner backgroundTaskRunner,
+        IDialogService dialogService,
         ModGroupService modGroupService,
+        ModViewModelFactory modViewModelFactory,
         ModGroupSidebarViewModel groupSidebar)
     {
         _logger = logger;
-        _navStore = new(provider.GetRequiredService<NavigationStore>);
+        _navigationService = navigationService;
         _editModStore = editModStore;
         _settingsService = settingsService;
         _modService = modService;
         _profileService = profileService;
         _profileSaveCoordinator = profileSaveCoordinator;
-        _nexusModsService = nexusModsService;
         _versionCheckRepository = versionCheckRepository;
         _modHashService = modHashService;
         _searchFilterService = searchFilterService;
         _sortService = sortService;
         _versionCheckVm = versionCheckVm;
+        _batchRepairCoordinator = batchRepairCoordinator;
+        _repairDisclaimerService = repairDisclaimerService;
         _versionCheckVm.PropertyChanged += VersionCheckVm_PropertyChanged;
         _localizationService = localizationService;
         _backgroundTaskService = backgroundTaskService;
+        _backgroundTaskRunner = backgroundTaskRunner;
+        _dialogService = dialogService;
         _modGroupService = modGroupService;
+        _modViewModelFactory = modViewModelFactory;
         GroupSidebar = groupSidebar;
         GroupSidebar.Configure(GetSelectedModData, () => _mods?.Select(static vm => vm.Data) ?? [], SelectGroupAsync, UpdateGroupedView);
 
@@ -218,13 +234,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             return;
 
         snapshot ??= CaptureProfileSnapshot();
+        IProgressDialogSession? progressDialog = null;
         if (showProgress)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
-            {
-                Title = _localizationService["DashboardPage.SavingModConfig"],
-                Message = _localizationService["SettingsPage.PleaseWait"]
-            });
+            progressDialog = await _dialogService.OpenProgressAsync(
+                new ProgressDialogRequest(
+                    _localizationService["DashboardPage.SavingModConfig"],
+                    _localizationService["SettingsPage.PleaseWait"]),
+                CancellationToken.None);
         }
 
         try
@@ -233,8 +250,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
         finally
         {
-            if (showProgress)
-                WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            if (progressDialog is not null)
+                await progressDialog.CloseAsync(CancellationToken.None);
         }
     }
 
@@ -340,11 +357,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _logger.LogInformation("Initializing dashboard...");
 
         _logger.LogInformation("Loading settings...");
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-        {
-            Title = _localizationService["SettingsPage.LoadingSettings"],
-            Message = _localizationService["SettingsPage.PleaseWait"],
-        });
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                _localizationService["SettingsPage.LoadingSettings"],
+                _localizationService["SettingsPage.PleaseWait"]),
+            CancellationToken.None);
         try
         {
             if (!await _settingsService.InitAsync(false))
@@ -353,16 +370,18 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         catch (Exception ex)
         {
             _logger.LogError(ex, "Loading settings failed");
-            WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-            {
-                Title = _localizationService["SettingsPage.LoadSettingsFailed"],
-                Message = _localizationService["DashboardPage.GoToSettings"],
-                Confirm = _navStore.Value.Navigate<SettingsPageViewModel>,
-            });
+            if (await _dialogService.ShowAsync(
+                new DialogRequest(
+                    _localizationService["SettingsPage.LoadSettingsFailed"],
+                    _localizationService["DashboardPage.GoToSettings"]),
+                CancellationToken.None))
+                _navigationService.Navigate(typeof(SettingsPageViewModel));
             return;
         }
         _logger.LogInformation("Settings loaded successfully");
-        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+        progressDialog.Report(new ProgressDialogRequest(
+            _localizationService["DashboardPage.LoadingMods"],
+            _localizationService["SettingsPage.PleaseWait"]));
 
         // 将用户设置的日志级别同步到 App.Current，FileLogger 依赖此值进行过滤
         App.Current.LogLevel = _settingsService.LogLevel;
@@ -371,12 +390,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         if (!_settingsService.Validate())
         {
             _logger.LogError("Settings invalid");
-            WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-            {
-                Title = _localizationService["DashboardPage.SettingsInvalid"],
-                Message = _localizationService["DashboardPage.GoToSettings"],
-                Confirm = _navStore.Value.Navigate<SettingsPageViewModel>,
-            });
+            if (await _dialogService.ShowAsync(
+                new DialogRequest(
+                    _localizationService["DashboardPage.SettingsInvalid"],
+                    _localizationService["DashboardPage.GoToSettings"]),
+                CancellationToken.None))
+                _navigationService.Navigate(typeof(SettingsPageViewModel));
             return;
         }
         _logger.LogInformation("Settings valid");
@@ -388,31 +407,29 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         catch (Exception ex)
         {
             _logger.LogError(ex, "Flushing pending profile state before dashboard load failed");
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = $"{_localizationService["DashboardPage.LoadConfigFailed"]}\n\n{ex}",
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("DashboardPage.LoadConfigFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                CancellationToken.None);
             return;
         }
 
         _logger.LogInformation("Loading mods...");
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-        {
-            Title = _localizationService["DashboardPage.LoadingMods"],
-            Message = _localizationService["SettingsPage.PleaseWait"],
-        });
+        progressDialog.Report(new ProgressDialogRequest(
+            _localizationService["DashboardPage.LoadingMods"],
+            _localizationService["SettingsPage.PleaseWait"]));
         ModProblem[] problems;
         try
         {
-            problems = await Task.Run(() => _modService.Init(_settingsService));
+            problems = await _modService.InitAsync(_settingsService, CancellationToken.None);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Loading mods failed");
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = $"{_localizationService["DashboardPage.LoadModsFailed"]}\n\n{ex}",
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("DashboardPage.LoadModsFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                CancellationToken.None);
             return;
         }
         _modService.ModAdded += ModService_ModAdded;
@@ -422,14 +439,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _logger.LogWarning("Loaded mods with {} problems", problems.Length);
         else
             _logger.LogInformation("Mods loaded successfully");
-        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-
         _logger.LogInformation("Loading profile...");
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-        {
-            Title = _localizationService["DashboardPage.LoadingConfig"],
-            Message = _localizationService["SettingsPage.PleaseWait"],
-        });
+        progressDialog.Report(new ProgressDialogRequest(
+            _localizationService["DashboardPage.LoadingConfig"],
+            _localizationService["SettingsPage.PleaseWait"]));
         IReadOnlyList<ModData>? result;
         try
         {
@@ -439,17 +452,17 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         catch (Exception ex)
         {
             _logger.LogError(ex, "Loading profile failed");
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = $"{_localizationService["DashboardPage.LoadConfigFailed"]}\n\n{ex}",
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("DashboardPage.LoadConfigFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                CancellationToken.None);
             return;
         }
-        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+        await progressDialog.CloseAsync(CancellationToken.None);
         _logger.LogInformation("Profile loaded successfully");
 
         _logger.LogInformation("Applying profile");
-        var modViewModels = result.Select(data => _modService.GetOrCreateModViewModel(data, _logger, _settingsService, _nexusModsService)).ToList();
+        var modViewModels = result.Select(GetOrCreateModViewModel).ToList();
         foreach (var vm in modViewModels)
         {
             vm.OptionsChanged += ModViewModel_OptionsChanged;
@@ -469,7 +482,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         UpdateView();
 
         if (problems.Length > 0)
-            ShowProblems(problems, _localizationService["DashboardPage.LoadProblemsPrefix"], false, true);
+            await ShowDashboardMessageAsync(
+                BuildProblems(problems, _localizationService["DashboardPage.LoadProblemsPrefix"], true),
+                MessageDialogSeverity.Warning,
+                CancellationToken.None);
 
         // 从数据库加载已缓存的版本检测结果，避免每次启动都需要全量扫描
         _versionCheckVm.LoadCachedResults(_mods);
@@ -485,15 +501,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 ? _localizationService["DashboardPage.VersionCheckAutoGameExeMsg"]
                 : _localizationService["DashboardPage.VersionCheckAutoModMsg"];
             _logger.LogInformation("{Message}", message);
-            _ = RunVersionCheckCompatibilityAsync(false);
+            RunVersionCheckCompatibilityAsync(false).Observe(
+                ex => _logger.LogError(ex, "Automatic version compatibility check failed"));
         }
 
 #if DEBUG && FALSE
-		ShowProblems(Enum.GetValues<ModProblemKind>().Select(static k => new ModProblem { Directory = new DirectoryInfo(@"C:\ModStorage\Test"), Kind = k }), "Problem test:", true);
+	BuildProblems(Enum.GetValues<ModProblemKind>().Select(static k => new ModProblem { Directory = new DirectoryInfo(@"C:\ModStorage\Test"), Kind = k }), "Problem test:");
 #endif
     }
 
-    private void ShowProblems(IEnumerable<ModProblem> problems, string prefix, bool error, bool isInit = false)
+    private string BuildProblems(IEnumerable<ModProblem> problems, string prefix, bool isInit = false)
     {
         var sb = new StringBuilder();
         sb.AppendLine(prefix);
@@ -516,10 +533,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     ModProblemKind.OutOfSupportManifest => $"{_localizationService["DashboardPage.OutOfSupportManifest"]}{App.Version}{_localizationService["DashboardPage.VersionNotSupported"]}",
                     ModProblemKind.Duplicate => _localizationService["DashboardPage.DuplicateGuid"],
                     ModProblemKind.InvalidPath => e.ExtraData is not null
-                        ? $"{_localizationService["DashboardPage.InvalidPathPrefix"]}{e.ExtraData}{_localizationService["DashboardPage.InvalidPathSuffix"]}"
+                        ? _localizationService.Format("DashboardPage.InvalidPathMessage", new { path = e.ExtraData })
                         : _localizationService["DashboardPage.InvalidPathError"],
                     ModProblemKind.CantReadArchive => e.ExtraData is not null
-                        ? $"{_localizationService["DashboardPage.CantReadArchivePrefix"]}{e.ExtraData}"
+                        ? _localizationService.Format("DashboardPage.CantReadArchiveMessage", new { message = e.ExtraData })
                         : _localizationService["DashboardPage.CantReadArchive"],
                     _ => throw new NotImplementedException()
                 };
@@ -547,7 +564,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     ModProblemKind.EmptySubOptions => _localizationService["DashboardPage.EmptySubOptions"],
                     ModProblemKind.EmptyIncludes => _localizationService["DashboardPage.EmptyIncludes"],
                     ModProblemKind.InvalidImagePath => w.ExtraData is not null
-                        ? $"{_localizationService["DashboardPage.InvalidImagePathPrefix"]}{w.ExtraData}{_localizationService["DashboardPage.InvalidImagePathSuffix"]}"
+                        ? _localizationService.Format("DashboardPage.InvalidImagePathMessage", new { path = w.ExtraData })
                         : _localizationService["DashboardPage.InvalidImagePathError"],
                     ModProblemKind.EmptyImagePath => _localizationService["DashboardPage.EmptyImagePath"],
                     _ => throw new NotImplementedException()
@@ -556,21 +573,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             }
         }
 
-        if (error)
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = sb.ToString(),
-            });
-        else
-            WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
-            {
-                Message = sb.ToString(),
-            });
+        return sb.ToString();
     }
 
     private void ModService_ModAdded(ModData mod)
     {
-        var vm = _modService.GetOrCreateModViewModel(mod, _logger, _settingsService, _nexusModsService);
+        var vm = GetOrCreateModViewModel(mod);
         vm.OptionsChanged += ModViewModel_OptionsChanged;
         vm.PropertyChanged += ModViewModel_PropertyChanged;
         vm.VersionCheckRefreshed += ModViewModel_VersionCheckRefreshed;
@@ -581,12 +589,20 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         UpdateView();
     }
 
-    private async void OnModAdded(ModData mod)
+    private void OnModAdded(ModData mod)
     {
-        await _versionCheckVm.CheckSingleModOnAddAsync(mod, _mods);
-        // 通知 UI 属性变更
-        OnPropertyChanged(nameof(VersionCheckSummary));
-        OnPropertyChanged(nameof(HasVersionCheckResult));
+        _backgroundTaskRunner.RunAsync(
+            _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
+            async (_, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await _versionCheckVm.CheckSingleModOnAddAsync(mod, _mods);
+                OnPropertyChanged(nameof(VersionCheckSummary));
+                OnPropertyChanged(nameof(HasVersionCheckResult));
+                return Core.Operations.OperationResult.Success();
+            },
+            CancellationToken.None).Observe(
+                ex => _logger.LogError(ex, "Failed to supervise automatic mod version check"));
     }
 
     private void ModService_ModRemoved(ModData mod)
@@ -599,6 +615,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             vm.PropertyChanged -= ModViewModel_PropertyChanged;
             vm.VersionCheckRefreshed -= ModViewModel_VersionCheckRefreshed;
             _mods.Remove(vm);
+            _modViewModelsById.Remove(vm.Guid);
+            vm.Dispose();
             _modGroupService.CaptureGroupState(_modGroupService.SelectedGroup.Id, _modGroupService.FilterMods(_mods.Select(static vm => vm.Data)));
             GroupSidebar.RefreshSelectionProperties();
             UpdateView();
@@ -607,7 +625,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private void ModViewModel_VersionCheckRefreshed(object? sender, EventArgs e)
     {
-        _ = _versionCheckVm.RefreshAfterSingleModCheckAsync(_mods);
+        _versionCheckVm.RefreshAfterSingleModCheckAsync(_mods).Observe(
+            ex => _logger.LogError(ex, "Failed to refresh version check summary"));
     }
 
     private void ModViewModel_OptionsChanged()
@@ -708,7 +727,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             int idx = _orderedItems.IndexOf(sep);
             sep.DisplayIndex = idx >= 0 ? idx : -1;
         }
-        _ = _settingsService.SaveAsync();
+        _settingsService.SaveAsync().Observe(
+            ex => _logger.LogError(ex, "Failed to persist separator order"));
     }
 
     /// <summary>
@@ -787,64 +807,60 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
-    Task BatchDelete()
+    async Task BatchDelete(CancellationToken cancellationToken)
     {
         var selected = _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected).ToArray();
         if (selected.Length == 0)
-            return Task.CompletedTask;
+            return;
 
-        var deleteMessage = _settingsService.DeleteToRecycleBin
-            ? _localizationService["DashboardPage.RecycleBinConfirm"]
-            : _localizationService["DashboardPage.PermanentDeleteConfirm"];
+        var confirmKey = _settingsService.DeleteToRecycleBin
+            ? "DashboardPage.BatchDeleteRecycleConfirm"
+            : "DashboardPage.BatchDeletePermanentConfirm";
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+        if (!await _dialogService.ShowAsync(
+            new DialogRequest(
+                _localizationService["DashboardPage.BatchDeleteTitle"],
+                _localizationService.Format(confirmKey, new { count = selected.Length })),
+            cancellationToken))
+            return;
+
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                _localizationService["DashboardPage.BatchDeleteProgress"],
+                _localizationService["SettingsPage.PleaseWait"]),
+            cancellationToken);
+
+        try
         {
-            Title = _localizationService["DashboardPage.BatchDeleteTitle"],
-            Message = $"{_localizationService["DashboardPage.BatchDeleteConfirm"].Replace("{count}", selected.Length.ToString())}{deleteMessage}",
-            Confirm = async () =>
+            foreach (var vm in selected)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-                {
-                    Title = _localizationService["DashboardPage.BatchDeleteProgress"],
-                    Message = _localizationService["SettingsPage.PleaseWait"]
-                });
-
-                try
-                {
-                    foreach (var vm in selected)
-                    {
-                        vm.IsSelected = false;
-                        await _modService.RemoveAsync(vm.Data);
-                    }
-
-                    // 批量删除后同步更新数据库：直接删除这些模组对应的记录
-                    if (!_settingsService.IsReadonly)
-                    {
-                        var guids = selected.Select(static vm => vm.Guid).ToList();
-                        await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, guids);
-                        await _modGroupService.RemoveModsFromAllGroupsAsync(guids);
-                        // 同时删除这些模组的版本检测记录
-                        foreach (var guid in guids)
-                            await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, guid);
-                    }
-
-                    WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, _localizationService["DashboardPage.BatchDeleteFailed2"]);
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-                    {
-                        Message = $"{_localizationService["DashboardPage.BatchDeleteFailed"]}{ex.Message}"
-                    });
-                }
-
-                OnPropertyChanged(nameof(HasSelection));
-                OnPropertyChanged(nameof(SelectionCountText));
+                vm.IsSelected = false;
+                await _modService.RemoveAsync(vm.Data);
             }
-        });
 
-        return Task.CompletedTask;
+            if (!_settingsService.IsReadonly)
+            {
+                var guids = selected.Select(static vm => vm.Guid).ToList();
+                await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, guids);
+                await _modGroupService.RemoveModsFromAllGroupsAsync(guids);
+                foreach (var guid in guids)
+                    await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, guid);
+            }
+
+            await progressDialog.CloseAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, _localizationService["DashboardPage.BatchDeleteFailed2"]);
+            await progressDialog.CloseAsync(CancellationToken.None);
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("DashboardPage.BatchDeleteFailedMessage", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                CancellationToken.None);
+        }
+
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectionCountText));
     }
 
     [RelayCommand]
@@ -865,7 +881,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// 批量打标签 —— 为所有选中的模组统一设置标签
     /// </summary>
     [RelayCommand]
-    void BatchAddTags()
+    async Task BatchAddTags(CancellationToken cancellationToken)
     {
         var selected = _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected).ToArray();
         if (selected.Length == 0 || !_settingsService.Initialized)
@@ -873,34 +889,44 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         // 使用第一个选中模组的标签作为初始选择状态（方便用户基于现有标签增减）
         var initialTagIds = selected[0].Data.TagIds.ToList();
-        var selectableTags = _settingsService.Tags.Select(t => new TagSelectionItem(t, initialTagIds.Contains(t.Id))).ToList();
-
-        WeakReferenceMessenger.Default.Send(new MessageBoxTagSelectionMessage
+        var options = _settingsService.Tags.Select(tag => new ChecklistDialogOption(
+            tag.Id.ToString(),
+            tag.Name,
+            tag.Color,
+            initialTagIds.Contains(tag.Id))).ToArray();
+        var selectedTagIds = await _dialogService.SelectManyAsync(
+            new ChecklistDialogRequest(
+                _localizationService["DashboardPage.BatchTagTitle"],
+                _localizationService.Format("DashboardPage.BatchTagMessage", new { count = selected.Length }),
+                options),
+            cancellationToken);
+        if (selectedTagIds is null)
+            return;
+        if (_settingsService.IsReadonly)
         {
-            Title = _localizationService["DashboardPage.BatchTagTitle"],
-            Message = $"{_localizationService["DashboardPage.BatchTagPrefix"]}{selected.Length}{_localizationService["DashboardPage.BatchTagSuffix"]}",
-            Tags = selectableTags,
-            Confirm = (selectedTags) =>
-            {
-                if (_settingsService.IsReadonly)
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.BatchTagReadonly"] });
-                    return;
-                }
+            await ShowDashboardMessageAsync(
+                _localizationService["DashboardPage.BatchTagReadonly"],
+                MessageDialogSeverity.Error,
+                cancellationToken);
+            return;
+        }
 
-                var newTagIds = selectedTags.Select(static t => t.Tag.Id).ToList();
-                foreach (var vm in selected)
-                {
-                    vm.Data.TagIds = newTagIds;
-                }
-                RequestProfileSave();
-                WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = $"{_localizationService["DashboardPage.BatchTagUpdatedPrefix"]}{selected.Length}{_localizationService["DashboardPage.BatchTagUpdatedSuffix"]}" });
-            }
-        });
+        var newTagIds = selectedTagIds
+            .Select(static id => Guid.TryParse(id, out var value) ? (Guid?)value : null)
+            .Where(static id => id.HasValue)
+            .Select(static id => id!.Value)
+            .ToList();
+        foreach (var vm in selected)
+            vm.Data.TagIds = newTagIds;
+        RequestProfileSave();
+        await ShowDashboardMessageAsync(
+            _localizationService.Format("DashboardPage.BatchTagUpdated", new { count = selected.Length }),
+            MessageDialogSeverity.Information,
+            cancellationToken);
     }
 
     [RelayCommand]
-    void AddModsToGroup(ModViewModel? source = null)
+    async Task AddModsToGroup(ModViewModel? source, CancellationToken cancellationToken)
     {
         if (!_settingsService.Initialized)
             return;
@@ -910,234 +936,236 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             : _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected).ToArray();
         if (selected.Length == 0)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["ModGroup.NoSelectedMods"] });
+            await ShowDashboardMessageAsync(
+                _localizationService["ModGroup.NoSelectedMods"],
+                MessageDialogSeverity.Error,
+                cancellationToken);
             return;
         }
 
-        var groups = _modGroupService.Groups.Where(static group => !group.IsDefault).Cast<object>().ToArray();
+        var groups = _modGroupService.Groups.Where(static group => !group.IsDefault).ToArray();
         if (groups.Length == 0)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["ModGroup.NoCustomGroups"] });
+            await ShowDashboardMessageAsync(
+                _localizationService["ModGroup.NoCustomGroups"],
+                MessageDialogSeverity.Error,
+                cancellationToken);
             return;
         }
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
-        {
-            Title = _localizationService["ModGroup.AddToGroupTitle"],
-            Message = _localizationService["ModGroup.AddToGroupMessage"].Replace("{count}", selected.Length.ToString()),
-            Options = groups,
-            Confirm = option =>
-            {
-                if (option is not ModGroup group)
-                    return;
-
-                _ = AddModsToGroupAsync(group, selected);
-            }
-        });
+        var groupNames = groups.Select(static group => group.Name).ToArray();
+        var selectedName = await _dialogService.SelectAsync(
+            new SelectionDialogRequest(
+                _localizationService["ModGroup.AddToGroupTitle"],
+                _localizationService.Format("ModGroup.AddToGroupMessage", new { count = selected.Length }),
+                groupNames),
+            cancellationToken);
+        var group = groups.FirstOrDefault(candidate => string.Equals(candidate.Name, selectedName, StringComparison.Ordinal));
+        if (group is not null)
+            await AddModsToGroupAsync(group, selected, cancellationToken);
     }
 
-    private async Task AddModsToGroupAsync(ModGroup group, ModViewModel[] selected)
+    private async Task AddModsToGroupAsync(ModGroup group, ModViewModel[] selected, CancellationToken cancellationToken)
     {
         try
         {
             await _modGroupService.AddModsToGroupAsync(group.Id, selected.Select(static vm => vm.Data));
             GroupSidebar.RefreshSelectionProperties();
-            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
-            {
-                Message = _localizationService["ModGroup.AddedToGroup"].Replace("{count}", selected.Length.ToString()).Replace("{name}", group.Name)
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("ModGroup.AddedToGroup", new { count = selected.Length, name = group.Name }),
+                MessageDialogSeverity.Information,
+                cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "加入分组失败");
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = ex.Message });
+            await ShowDashboardMessageAsync(ex.Message, MessageDialogSeverity.Error, cancellationToken);
         }
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
-        async Task Add(string? filePath = null)
+    async Task Add(string? filePath, CancellationToken cancellationToken)
+    {
+        // 支持单文件路径传入（如拖拽场景）或批量文件选择
+        List<string> selectedFiles = [];
+
+        if (filePath is not null)
         {
-            // 支持单文件路径传入（如拖拽场景）或批量文件选择
-            List<string> selectedFiles = [];
-
-            if (filePath is not null)
+            selectedFiles.Add(filePath);
+        }
+        else
+        {
+            var dialog = new OpenFileDialog
             {
-                selectedFiles.Add(filePath);
-            }
-            else
-            {
-                var dialog = new OpenFileDialog
-                {
-                    CheckFileExists = true,
-                    CheckPathExists = true,
-                    InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
-                    Filter = _localizationService["Common.FileFilterArchive"],
-                    Multiselect = true,
-                    Title = _localizationService["DashboardPage.AddModDialogTitle"]
-                };
+                CheckFileExists = true,
+                CheckPathExists = true,
+                InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
+                Filter = _localizationService["Common.FileFilterArchive"],
+                Multiselect = true,
+                Title = _localizationService["DashboardPage.AddModDialogTitle"]
+            };
 
-                if (!(dialog.ShowDialog() ?? false))
-                    return;
-
-                selectedFiles.AddRange(dialog.FileNames);
-            }
-
-            if (selectedFiles.Count == 0)
+            if (!(dialog.ShowDialog() ?? false))
                 return;
 
-            // 单文件时使用原有提示文案，多文件时显示进度
-            var isBatch = selectedFiles.Count > 1;
-            var totalFiles = selectedFiles.Count;
-            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
+            selectedFiles.AddRange(dialog.FileNames);
+        }
+
+        if (selectedFiles.Count == 0)
+            return;
+
+        // 单文件时使用原有提示文案，多文件时显示进度
+        var isBatch = selectedFiles.Count > 1;
+        var totalFiles = selectedFiles.Count;
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                isBatch ? _localizationService.Format("DashboardPage.BatchAddProgressTitle", new { current = 0, total = totalFiles }) : _localizationService["DashboardPage.AddSingleProgress"],
+                isBatch ? _localizationService.Format("DashboardPage.BatchAddWaitMsg", new { total = totalFiles }) : _localizationService["SettingsPage.PleaseWait"]),
+            cancellationToken);
+
+        var backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypeImport"],
+            isBatch ? _localizationService.Format("DashboardPage.BatchAddWaitMsg", new { total = totalFiles }) : Path.GetFileName(selectedFiles[0]));
+        _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
+
+        try
+        {
+            var allProblems = new List<ModProblem>();
+            int successCount = 0;
+            int failCount = 0;
+
+            for (int i = 0; i < selectedFiles.Count; i++)
             {
-                Title = isBatch ? _localizationService["DashboardPage.BatchAddProgressTitle"].Replace("{current}", "0").Replace("{total}", totalFiles.ToString()) : _localizationService["DashboardPage.AddSingleProgress"],
-                Message = isBatch ? _localizationService["DashboardPage.BatchAddWaitMsg"].Replace("{total}", totalFiles.ToString()) : _localizationService["SettingsPage.PleaseWait"]
-            });
-
-            var backgroundTask = _backgroundTaskService.Add(
-                _localizationService["BackgroundTasksPage.TaskTypeImport"],
-                isBatch ? _localizationService["DashboardPage.BatchAddWaitMsg"].Replace("{total}", totalFiles.ToString()) : Path.GetFileName(selectedFiles[0]));
-            _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
-
-            try
-            {
-                var allProblems = new List<ModProblem>();
-                int successCount = 0;
-                int failCount = 0;
-
-                for (int i = 0; i < selectedFiles.Count; i++)
-                {
-                    // 批量模式下更新进度提示（含剩余数量）
-                    if (isBatch)
-                    {
-                        var remainingCount = totalFiles - i - 1;
-                        var description = remainingCount > 0
-                            ? _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", Path.GetFileName(selectedFiles[i])).Replace("{remaining}", remainingCount.ToString())
-                            : _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", Path.GetFileName(selectedFiles[i])).Replace("{remaining}", "?");
-                        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-                        {
-                            Title = _localizationService["DashboardPage.BatchAddProgressTitle"].Replace("{current}", (i + 1).ToString()).Replace("{total}", totalFiles.ToString()),
-                            Message = description
-                        });
-                        _backgroundTaskService.Update(backgroundTask, description, (double)i / totalFiles, false);
-                    }
-                    else
-                    {
-                        _backgroundTaskService.Update(backgroundTask, Path.GetFileName(selectedFiles[i]), (double)i / totalFiles, false);
-                    }
-
-                    // 创建嵌套压缩包处理进度回调，用于在处理嵌套压缩包时更新UI进度显示
-                    var currentBatchIndex = i;
-                    var currentFileName = selectedFiles[i];
-                    Action<int, int, string> nestedProgress = (nestedIndex, nestedTotal, nestedFileName) =>
-                    {
-                        var nestedDescription = _localizationService["DashboardPage.BatchAddProcessing"].Replace("{file}", nestedFileName).Replace("{remaining}", (nestedTotal - nestedIndex - 1).ToString());
-                        // 根据是否为批量导入模式，组合显示外层批量进度和内层嵌套进度
-                        if (isBatch)
-                        {
-                            // 批量导入 + 嵌套处理：显示双层进度
-                            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-                            {
-                                Title = _localizationService["DashboardPage.BatchAddNestedTitle"].Replace("{current}", (currentBatchIndex + 1).ToString()).Replace("{total}", totalFiles.ToString()).Replace("{nested}", (nestedIndex + 1).ToString()).Replace("{nestedTotal}", nestedTotal.ToString()),
-                                Message = nestedDescription
-                            });
-                        }
-                        else
-                        {
-                            // 单文件 + 嵌套处理：显示嵌套进度
-                            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-                            {
-                                Title = _localizationService["DashboardPage.BatchAddNestedProgress"].Replace("{current}", (nestedIndex + 1).ToString()).Replace("{total}", nestedTotal.ToString()),
-                                Message = nestedDescription
-                            });
-                        }
-
-                        var outerProgress = (double)currentBatchIndex / totalFiles;
-                        var nestedRatio = nestedTotal > 0 ? (double)(nestedIndex + 1) / nestedTotal : 0;
-                        _backgroundTaskService.Update(backgroundTask, nestedDescription, outerProgress + nestedRatio / totalFiles, false);
-                    };
-
-                    try
-                    {
-                        var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(selectedFiles[i]), nestedProgress);
-                        if (problems.Length > 0)
-                        {
-                            allProblems.AddRange(problems);
-                            if (problems.Any(static p => p.IsError))
-                                failCount++;
-                            else
-                                successCount++;
-                        }
-                        else
-                        {
-                            successCount++;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to add mod: {File}", selectedFiles[i]);
-                        // 使用 CantReadArchive 表示读取/解压失败，ExtraData 存储异常信息
-                        allProblems.Add(new ModProblem
-                        {
-                            Directory = new DirectoryInfo(Path.GetDirectoryName(selectedFiles[i]) ?? ""),
-                            Kind = ModProblemKind.CantReadArchive,
-                            ExtraData = $"{Path.GetFileName(selectedFiles[i])}: {ex.Message}"
-                        });
-                        failCount++;
-                    }
-                }
-
-                _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.ImportComplete"].Replace("{success}", successCount.ToString()).Replace("{fail}", failCount.ToString()));
-
-                // 汇总结果
+                // 批量模式下更新进度提示（含剩余数量）
                 if (isBatch)
                 {
-                    if (failCount == 0 && allProblems.Count == 0)
-                    {
-                        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-                        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
-                        {
-                            Message = _localizationService["DashboardPage.BatchAddSuccess"].Replace("{count}", successCount.ToString())
-                        });
-                    }
-                    else if (allProblems.Count > 0)
-                    {
-                        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-                        var error = allProblems.Any(static p => p.IsError);
-                        var prefix = error
-                            ? _localizationService["DashboardPage.BatchAddDoneErrors"].Replace("{success}", successCount.ToString()).Replace("{fail}", failCount.ToString())
-                            : _localizationService["DashboardPage.BatchAddDoneWarnings"].Replace("{count}", successCount.ToString());
-                        ShowProblems([.. allProblems], prefix, error);
-                    }
+                    var remainingCount = totalFiles - i - 1;
+                    var description = remainingCount > 0
+                        ? _localizationService.Format("DashboardPage.BatchAddProcessing", new { file = Path.GetFileName(selectedFiles[i]), remaining = remainingCount })
+                        : _localizationService.Format("DashboardPage.BatchAddProcessing", new { file = Path.GetFileName(selectedFiles[i]), remaining = "?" });
+                    progressDialog.Report(new ProgressDialogRequest(
+                        _localizationService.Format("DashboardPage.BatchAddProgressTitle", new { current = i + 1, total = totalFiles }),
+                        description));
+                    _backgroundTaskService.Update(backgroundTask, description, (double)i / totalFiles, false);
                 }
                 else
                 {
-                    // 单文件模式保持原有行为
-                    if (allProblems.Count > 0)
+                    _backgroundTaskService.Update(backgroundTask, Path.GetFileName(selectedFiles[i]), (double)i / totalFiles, false);
+                }
+
+                // 创建嵌套压缩包处理进度回调，用于在处理嵌套压缩包时更新UI进度显示
+                var currentBatchIndex = i;
+                var currentFileName = selectedFiles[i];
+                Action<int, int, string> nestedProgress = (nestedIndex, nestedTotal, nestedFileName) =>
+                {
+                    var nestedDescription = _localizationService.Format("DashboardPage.BatchAddProcessing", new { file = nestedFileName, remaining = nestedTotal - nestedIndex - 1 });
+                    // 根据是否为批量导入模式，组合显示外层批量进度和内层嵌套进度
+                    if (isBatch)
                     {
-                        var error = allProblems.Any(static p => p.IsError);
-                        var prefix = error
-                            ? _localizationService["DashboardPage.AddSingleError"]
-                            : _localizationService["DashboardPage.AddSingleWarning"];
-                        ShowProblems([.. allProblems], prefix, error);
+                        // 批量导入 + 嵌套处理：显示双层进度
+                        progressDialog.Report(new ProgressDialogRequest(
+                            _localizationService.Format("DashboardPage.BatchAddNestedTitle", new { current = currentBatchIndex + 1, total = totalFiles, nested = nestedIndex + 1, nestedTotal }),
+                            nestedDescription));
                     }
                     else
-                        WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+                    {
+                        // 单文件 + 嵌套处理：显示嵌套进度
+                        progressDialog.Report(new ProgressDialogRequest(
+                            _localizationService.Format("DashboardPage.BatchAddNestedProgress", new { current = nestedIndex + 1, total = nestedTotal }),
+                            nestedDescription));
+                    }
+
+                    var outerProgress = (double)currentBatchIndex / totalFiles;
+                    var nestedRatio = nestedTotal > 0 ? (double)(nestedIndex + 1) / nestedTotal : 0;
+                    _backgroundTaskService.Update(backgroundTask, nestedDescription, outerProgress + nestedRatio / totalFiles, false);
+                };
+
+                try
+                {
+                    var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(selectedFiles[i]), nestedProgress);
+                    if (problems.Length > 0)
+                    {
+                        allProblems.AddRange(problems);
+                        if (problems.Any(static p => p.IsError))
+                            failCount++;
+                        else
+                            successCount++;
+                    }
+                    else
+                    {
+                        successCount++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to add mod: {File}", selectedFiles[i]);
+                    // 使用 CantReadArchive 表示读取/解压失败，ExtraData 存储异常信息
+                    allProblems.Add(new ModProblem
+                    {
+                        Directory = new DirectoryInfo(Path.GetDirectoryName(selectedFiles[i]) ?? ""),
+                        Kind = ModProblemKind.CantReadArchive,
+                        ExtraData = $"{Path.GetFileName(selectedFiles[i])}: {ex.Message}"
+                    });
+                    failCount++;
                 }
             }
-            catch (Exception ex)
+
+            _backgroundTaskService.Complete(backgroundTask, _localizationService.Format("BackgroundTasksPage.ImportComplete", new { success = successCount, fail = failCount }));
+
+            // 汇总结果
+            if (isBatch)
             {
-                _logger.LogError(ex, "Failed to add mod");
-                _backgroundTaskService.Fail(backgroundTask, ex.Message);
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
+                if (failCount == 0 && allProblems.Count == 0)
                 {
-                    Message = ex.Message
-                });
+                    await progressDialog.CloseAsync(cancellationToken);
+                    await ShowDashboardMessageAsync(
+                        _localizationService.Format("DashboardPage.BatchAddSuccess", new { count = successCount }),
+                        MessageDialogSeverity.Information,
+                        cancellationToken);
+                }
+                else if (allProblems.Count > 0)
+                {
+                    await progressDialog.CloseAsync(cancellationToken);
+                    var error = allProblems.Any(static p => p.IsError);
+                    var prefix = error
+                        ? _localizationService.Format("DashboardPage.BatchAddDoneErrors", new { success = successCount, fail = failCount })
+                        : _localizationService.Format("DashboardPage.BatchAddDoneWarnings", new { count = successCount });
+                    await ShowDashboardMessageAsync(
+                        BuildProblems([.. allProblems], prefix),
+                        error ? MessageDialogSeverity.Error : MessageDialogSeverity.Warning,
+                        CancellationToken.None);
+                }
+            }
+            else
+            {
+                // 单文件模式保持原有行为
+                if (allProblems.Count > 0)
+                {
+                    await progressDialog.CloseAsync(cancellationToken);
+                    var error = allProblems.Any(static p => p.IsError);
+                    var prefix = error
+                        ? _localizationService["DashboardPage.AddSingleError"]
+                        : _localizationService["DashboardPage.AddSingleWarning"];
+                    await ShowDashboardMessageAsync(
+                        BuildProblems([.. allProblems], prefix),
+                        error ? MessageDialogSeverity.Error : MessageDialogSeverity.Warning,
+                        CancellationToken.None);
+                }
+                else
+                    await progressDialog.CloseAsync(cancellationToken);
             }
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add mod");
+            _backgroundTaskService.Fail(backgroundTask, ex.Message);
+            await progressDialog.CloseAsync(CancellationToken.None);
+            await ShowDashboardMessageAsync(ex.Message, MessageDialogSeverity.Error, CancellationToken.None);
+        }
+    }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
-    async Task UpdateMod(ModViewModel vm)
+    async Task UpdateMod(ModViewModel vm, CancellationToken cancellationToken)
     {
         var dialog = new OpenFileDialog
         {
@@ -1146,18 +1174,17 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Download"),
             Filter = _localizationService["Common.FileFilterArchive"],
             Multiselect = false,
-            Title = $"{_localizationService["DashboardPage.UpdateModDialogPrefix"]}{vm.Name}{_localizationService["DashboardPage.UpdateModDialogSuffix"]}"
+            Title = _localizationService.Format("DashboardPage.UpdateModDialogTitle", new { modName = vm.Name })
         };
 
         if (!(dialog.ShowDialog() ?? false))
             return;
 
-        // 发送初始进度消息，显示更新进度UI
-        WeakReferenceMessenger.Default.Send(new MessageBoxUpdateProgressMessage
-        {
-            Title = _localizationService["DashboardPage.UpdateModProgress"],
-            ModName = vm.Name
-        });
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                _localizationService["DashboardPage.UpdateModProgress"],
+                vm.Name),
+            cancellationToken);
 
         var backgroundTask = _backgroundTaskService.Add(
             _localizationService["BackgroundTasksPage.TaskTypeUpdate"],
@@ -1165,22 +1192,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         try
         {
+            string? completionMessage = null;
             // 创建进度报告回调，将服务层进度映射为UI消息
             var progress = new Progress<UpdateProgressInfo>(info =>
             {
                 if (info.IsCompleted)
                 {
-                    // 更新完成，发送完成消息
-                    WeakReferenceMessenger.Default.Send(new MessageBoxUpdateProgressUpdateMessage
-                    {
-                        IsCompleted = true
-                    });
-
-                    // 显示统计信息
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
-                    {
-                        Message = info.Message ?? _localizationService["DashboardPage.UpdateModDone"]
-                    });
+                    completionMessage = info.Message ?? _localizationService["DashboardPage.UpdateModDone"];
                     _backgroundTaskService.Complete(backgroundTask, info.Message ?? _localizationService["DashboardPage.UpdateModDone"]);
                 }
                 else
@@ -1188,16 +1206,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     var taskProgress = info.TotalCount > 0
                         ? (double)info.ProcessedCount / info.TotalCount
                         : 0;
-                    WeakReferenceMessenger.Default.Send(new MessageBoxUpdateProgressUpdateMessage
-                    {
-                        PhaseText = info.Message,
-                        CurrentFile = info.CurrentFile,
-                        ProcessedCount = info.ProcessedCount,
-                        TotalCount = info.TotalCount,
-                        NeedUpdateCount = info.NeedUpdateCount,
-                        CacheHits = info.CacheHits,
-                        Progress = taskProgress
-                    });
+                    progressDialog.Report(new ProgressDialogRequest(
+                        _localizationService["DashboardPage.UpdateModProgress"],
+                        info.Message ?? vm.Name,
+                        info.CurrentFile));
                     _backgroundTaskService.Update(backgroundTask, info.Message, taskProgress, info.TotalCount <= 0);
                 }
             });
@@ -1205,17 +1217,22 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             await _modService.UpdateModFromArchiveAsync(vm.Data, new FileInfo(dialog.FileName), progress);
 
             // 更新后保存状态到数据库，确保 EnabledOptions/SelectedOptions 与新清单同步
-            await SaveProfileNowAsync();
+            await SaveProfileNowAsync(false);
+            await progressDialog.CloseAsync(cancellationToken);
+            await ShowDashboardMessageAsync(
+                completionMessage ?? _localizationService["DashboardPage.UpdateModDone"],
+                MessageDialogSeverity.Information,
+                cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update mod \"{}\"", vm.Name);
             _backgroundTaskService.Fail(backgroundTask, ex.Message);
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = $"{_localizationService["DashboardPage.UpdateModFailed"]}{ex.Message}"
-            });
+            await progressDialog.CloseAsync(CancellationToken.None);
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("DashboardPage.UpdateModFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                CancellationToken.None);
         }
     }
 
@@ -1227,7 +1244,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand]
     void Create()
     {
-        _navStore.Value.Navigate<CreatePageViewModel>();
+        _navigationService.Navigate(typeof(CreatePageViewModel));
     }
 
     [RelayCommand]
@@ -1242,7 +1259,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     {
         await SaveProfileNowAsync();
 
-        _navStore.Value.Navigate<TagManagementPageViewModel>();
+        _navigationService.Navigate(typeof(TagManagementPageViewModel));
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
@@ -1250,7 +1267,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     {
         await SaveProfileNowAsync();
 
-        _navStore.Value.Navigate<SettingsPageViewModel>();
+        _navigationService.Navigate(typeof(SettingsPageViewModel));
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
@@ -1258,26 +1275,26 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     {
         await SaveProfileNowAsync();
 
-        _navStore.Value.Navigate<DeploymentOrderPageViewModel>();
+        _navigationService.Navigate(typeof(DeploymentOrderPageViewModel));
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
-    async Task Purge()
+    async Task Purge(CancellationToken cancellationToken)
     {
         if (!_settingsService.Initialized || string.IsNullOrEmpty(_settingsService.GameDirectory))
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-            {
-                Message = _localizationService["DashboardPage.PurgeNoGameDir"]
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService["DashboardPage.PurgeNoGameDir"],
+                MessageDialogSeverity.Error,
+                cancellationToken);
             return;
         }
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
-        {
-            Title = _localizationService["DashboardPage.PurgeProgress"],
-            Message = _localizationService["SettingsPage.PleaseWait"]
-        });
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                _localizationService["DashboardPage.PurgeProgress"],
+                _localizationService["SettingsPage.PleaseWait"]),
+            cancellationToken);
 
         var backgroundTask = _backgroundTaskService.Add(
             _localizationService["BackgroundTasksPage.TaskTypePurge"],
@@ -1295,7 +1312,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
         finally
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            await progressDialog.CloseAsync(CancellationToken.None);
         }
     }
 
@@ -1345,22 +1362,22 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
-    async Task Deploy()
+    async Task Deploy(CancellationToken cancellationToken)
     {
         if (!_settingsService.Initialized || string.IsNullOrEmpty(_settingsService.GameDirectory))
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-            {
-                Message = _localizationService["DashboardPage.DeployNoGameDir"]
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService["DashboardPage.DeployNoGameDir"],
+                MessageDialogSeverity.Error,
+                cancellationToken);
             return;
         }
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
-        {
-            Title = _localizationService["DashboardPage.DeployProgress"],
-            Message = _localizationService["SettingsPage.PleaseWait"]
-        });
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                _localizationService["DashboardPage.DeployProgress"],
+                _localizationService["SettingsPage.PleaseWait"]),
+            cancellationToken);
 
         var snapshot = CaptureProfileSnapshot();
         var deploymentMods = GetDeploymentMods(snapshot);
@@ -1376,39 +1393,41 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
             _backgroundTaskService.Complete(backgroundTask, _localizationService["DashboardPage.DeploySuccess"]);
 
-            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
-            {
-                Message = _localizationService["DashboardPage.DeploySuccess"]
-            });
+            await progressDialog.CloseAsync(cancellationToken);
+            await ShowDashboardMessageAsync(
+                _localizationService["DashboardPage.DeploySuccess"],
+                MessageDialogSeverity.Information,
+                cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unknown deployment error");
             _backgroundTaskService.Fail(backgroundTask, ex.Message);
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-            {
-                Message = ex.Message
-            });
+            await progressDialog.CloseAsync(CancellationToken.None);
+            await ShowDashboardMessageAsync(ex.Message, MessageDialogSeverity.Error, CancellationToken.None);
         }
     }
 
     [RelayCommand]
-    async Task RescanMods()
+    async Task RescanMods(CancellationToken cancellationToken)
     {
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
-        {
-            Title = _localizationService["DashboardPage.RescanMods"],
-            Message = _localizationService["SettingsPage.PleaseWait"]
-        });
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                _localizationService["DashboardPage.RescanMods"],
+                _localizationService["SettingsPage.PleaseWait"]),
+            cancellationToken);
 
         try
         {
             var problems = _modService.RescanMods();
 
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            await progressDialog.CloseAsync(cancellationToken);
 
             if (problems.Length > 0)
-                ShowProblems(problems, _localizationService["DashboardPage.RescanProblemsPrefix"], false, true);
+                await ShowDashboardMessageAsync(
+                    BuildProblems(problems, _localizationService["DashboardPage.RescanProblemsPrefix"], true),
+                    MessageDialogSeverity.Warning,
+                    CancellationToken.None);
 
             RebuildOrderedItems();
             UpdateView();
@@ -1418,19 +1437,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 await SaveProfileNowAsync(false);
             }
 
-            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
-            {
-                Message = _localizationService["DashboardPage.RescanComplete"]
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService["DashboardPage.RescanComplete"],
+                MessageDialogSeverity.Information,
+                cancellationToken);
         }
         catch (Exception ex)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            await progressDialog.CloseAsync(CancellationToken.None);
             _logger.LogError(ex, "Rescan mods failed");
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-            {
-                Message = ex.Message
-            });
+            await ShowDashboardMessageAsync(ex.Message, MessageDialogSeverity.Error, CancellationToken.None);
         }
     }
 
@@ -1453,30 +1469,27 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     [RelayCommand]
-    void Remove(ModViewModel modVm)
+    async Task Remove(ModViewModel modVm, CancellationToken cancellationToken)
     {
-        var deleteMessage = _settingsService.DeleteToRecycleBin
-            ? _localizationService["DashboardPage.RecycleBinConfirm"]
-            : _localizationService["DashboardPage.PermanentDeleteConfirm"];
-        
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-        {
-            Title = _localizationService["DashboardPage.DeleteConfirmTitle"],
-            Message = $"{_localizationService["DashboardPage.DeleteConfirmPrefix"]}{modVm.Name}{_localizationService["DashboardPage.DeleteConfirmSuffix"]}{deleteMessage}",
-            Confirm = () =>
-            {
-                _ = DeleteModAsync(modVm);
-            }
-        });
+        if (!await _dialogService.ShowAsync(
+            new DialogRequest(
+                _localizationService["DashboardPage.DeleteConfirmTitle"],
+                _localizationService.Format(
+                _settingsService.DeleteToRecycleBin ? "DashboardPage.DeleteRecycleConfirm" : "DashboardPage.DeletePermanentConfirm",
+                new { modName = modVm.Name })),
+            cancellationToken))
+            return;
+
+        await DeleteModAsync(modVm, cancellationToken);
     }
 
-    private async Task DeleteModAsync(ModViewModel modVm)
+    private async Task DeleteModAsync(ModViewModel modVm, CancellationToken cancellationToken)
     {
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
-        {
-            Title = _localizationService["DashboardPage.DeleteModProgress"],
-            Message = _localizationService["SettingsPage.PleaseWait"]
-        });
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                _localizationService["DashboardPage.DeleteModProgress"],
+                _localizationService["SettingsPage.PleaseWait"]),
+            cancellationToken);
 
         var backgroundTask = _backgroundTaskService.Add(
             _localizationService["BackgroundTasksPage.TaskTypeDelete"],
@@ -1495,17 +1508,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, modVm.Guid);
             }
 
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-            _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.DeleteComplete"].Replace("{name}", modVm.Name));
+            await progressDialog.CloseAsync(cancellationToken);
+            _backgroundTaskService.Complete(backgroundTask, _localizationService.Format("BackgroundTasksPage.DeleteComplete", new { name = modVm.Name }));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unknown mod removal error");
             _backgroundTaskService.Fail(backgroundTask, ex.Message);
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-            {
-                Message = ex.Message
-            });
+            await progressDialog.CloseAsync(CancellationToken.None);
+            await ShowDashboardMessageAsync(ex.Message, MessageDialogSeverity.Error, CancellationToken.None);
         }
     }
 
@@ -1564,7 +1575,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     [RelayCommand]
-    void OpenFileLocation(ModViewModel modVm)
+    async Task OpenFileLocation(ModViewModel modVm, CancellationToken cancellationToken)
     {
         try
         {
@@ -1573,77 +1584,83 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open file location for mod {ModName}", modVm.Name);
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-            {
-                Message = $"{_localizationService["DashboardPage.OpenFileLocationFailed"]}{ex.Message}"
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("DashboardPage.OpenFileLocationFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                cancellationToken);
         }
     }
 
     [RelayCommand]
-    void EditName(ModViewModel modVm)
+    async Task EditName(ModViewModel modVm, CancellationToken cancellationToken)
     {
         try
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+            var newName = await _dialogService.PromptAsync(
+                new InputDialogRequest(
+                    _localizationService["DashboardPage.EditNameTitle"],
+                    _localizationService["DashboardPage.EditNameMsg"],
+                    modVm.Name,
+                    64),
+                cancellationToken);
+            if (newName is null)
+                return;
+            if (string.IsNullOrWhiteSpace(newName))
             {
-                Title = _localizationService["DashboardPage.EditNameTitle"],
-                Message = _localizationService["DashboardPage.EditNameMsg"],
-                MaxLength = 64,
-                InitialText = modVm.Name,
-                Confirm = (newName) =>
-                {
-                    if (string.IsNullOrWhiteSpace(newName))
-                    {
-                        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.EditNameEmptyError"] });
-                        return;
-                    }
-
-                    modVm.Data.UpdateManifestName(newName);
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.EditNameUpdated"] });
-                }
-            });
+                await ShowDashboardMessageAsync(
+                    _localizationService["DashboardPage.EditNameEmptyError"],
+                    MessageDialogSeverity.Error,
+                    cancellationToken);
+                return;
+            }
+            modVm.Data.UpdateManifestName(newName);
+            await ShowDashboardMessageAsync(
+                _localizationService["DashboardPage.EditNameUpdated"],
+                MessageDialogSeverity.Information,
+                cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to edit mod name for mod {ModName}", modVm.Name);
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-            {
-                Message = $"{_localizationService["DashboardPage.EditNameFailed"]}{ex.Message}"
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("DashboardPage.EditNameFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                cancellationToken);
         }
     }
 
     [RelayCommand]
-    void EditDescription(ModViewModel modVm)
+    async Task EditDescription(ModViewModel modVm, CancellationToken cancellationToken)
     {
         try
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
-            {
-                Title = _localizationService["DashboardPage.EditDescTitle"],
-                Message = _localizationService["DashboardPage.EditDescMsg"],
-                MaxLength = 1024,
-                InitialText = modVm.Description,
-                Confirm = (newDescription) =>
-                {
-                    modVm.Data.UpdateManifestDescription(newDescription);
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.EditDescUpdated"] });
-                }
-            });
+            var newDescription = await _dialogService.PromptAsync(
+                new InputDialogRequest(
+                    _localizationService["DashboardPage.EditDescTitle"],
+                    _localizationService["DashboardPage.EditDescMsg"],
+                    modVm.Description,
+                    1024),
+                cancellationToken);
+            if (newDescription is null)
+                return;
+            modVm.Data.UpdateManifestDescription(newDescription);
+            await ShowDashboardMessageAsync(
+                _localizationService["DashboardPage.EditDescUpdated"],
+                MessageDialogSeverity.Information,
+                cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to edit mod description for mod {ModName}", modVm.Name);
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-            {
-                Message = $"{_localizationService["DashboardPage.EditDescFailed"]}{ex.Message}"
-            });
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("DashboardPage.EditDescFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                cancellationToken);
         }
     }
 
     [RelayCommand]
-    async Task EditImage(ModViewModel modVm)
+    async Task EditImage(ModViewModel modVm, CancellationToken cancellationToken)
     {
         var dialog = new OpenFileDialog
         {
@@ -1655,11 +1672,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         if (dialog.ShowDialog() ?? false)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
-            {
-                Title = _localizationService["DashboardPage.EditImageProgress"],
-                Message = _localizationService["SettingsPage.PleaseWait"]
-            });
+            await using var progressDialog = await _dialogService.OpenProgressAsync(
+                new ProgressDialogRequest(
+                    _localizationService["DashboardPage.EditImageProgress"],
+                    _localizationService["SettingsPage.PleaseWait"]),
+                cancellationToken);
 
             try
             {
@@ -1671,21 +1688,22 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
                 modVm.LoadIcon();
 
-                await SaveProfileNowAsync();
+                await SaveProfileNowAsync(false);
 
-                WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-                WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
-                {
-                    Message = _localizationService["DashboardPage.EditImageSuccess"]
-                });
+                await progressDialog.CloseAsync(cancellationToken);
+                await ShowDashboardMessageAsync(
+                    _localizationService["DashboardPage.EditImageSuccess"],
+                    MessageDialogSeverity.Information,
+                    cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to edit image for mod {ModName}", modVm.Name);
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
-                {
-                    Message = $"{_localizationService["DashboardPage.EditImageFailed"]}{ex.Message}"
-                });
+                await progressDialog.CloseAsync(CancellationToken.None);
+                await ShowDashboardMessageAsync(
+                    _localizationService.Format("DashboardPage.EditImageFailed", new { message = ex.Message }),
+                    MessageDialogSeverity.Error,
+                    CancellationToken.None);
             }
         }
     }
@@ -1703,14 +1721,23 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     void Edit(ModViewModel vm)
     {
         _editModStore.CurrentMod = vm;
-        _navStore.Value.Navigate<EditPageViewModel>();
+        _navigationService.Navigate(typeof(EditPageViewModel));
     }
 
     [RelayCommand]
     void EditManifest(ModViewModel vm)
     {
         _editModStore.CurrentMod = vm;
-        _navStore.Value.Navigate<ManifestEditPageViewModel>();
+        _navigationService.Navigate(typeof(ManifestEditPageViewModel));
+    }
+
+    internal bool TryOpenFirstManifestForUiTest()
+    {
+        if (!Initialized || _mods.Count == 0)
+            return false;
+        _editModStore.CurrentMod = _mods[0];
+        _navigationService.Navigate(typeof(ManifestEditPageViewModel), root: true);
+        return true;
     }
 
     /// <summary>
@@ -1719,120 +1746,150 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// Shows memory usage warning for high-compression options on large mods.
     /// </summary>
     [RelayCommand]
-    void ExportMod(ModViewModel vm)
+    async Task ExportMod(ModViewModel vm, CancellationToken cancellationToken)
     {
         var modDir = vm.Data.Directory;
 
-        // Step 1: Show format/compression selection dialog (5 gears)
-        WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
-        {
-            Title = _localizationService["DashboardPage.ExportTitle"],
-            Message = _localizationService["DashboardPage.ExportMsg"],
-            Options = new List<object>
+        var opt = await _dialogService.SelectAsync(
+            new SelectionDialogRequest(
+                _localizationService["DashboardPage.ExportTitle"],
+                _localizationService["DashboardPage.ExportMsg"],
+                new List<string>
             {
                 _localizationService["DashboardPage.ExportZip"],
                 _localizationService["DashboardPage.Export7zFast"],
                 _localizationService["DashboardPage.Export7zStandard"],
                 _localizationService["DashboardPage.Export7zHigh"],
                 _localizationService["DashboardPage.Export7zUltra"]
-            },
-            Confirm = (selectedOption) =>
-            {
-                var opt = selectedOption.ToString()!;
-                var is7z = opt.StartsWith("7z", StringComparison.OrdinalIgnoreCase);
+            }),
+            cancellationToken);
+        if (opt is null)
+            return;
 
-                // Parse compression level
-                SharpSevenZip.CompressionLevel level;
-                string dictSize;
-                bool isHighMemory;
-                string levelName;
+        var is7z = opt.StartsWith("7z", StringComparison.OrdinalIgnoreCase);
 
-                if (opt == _localizationService["DashboardPage.Export7zFast"])    { level = SharpSevenZip.CompressionLevel.Fast;   dictSize = "8m";  isHighMemory = false; levelName = "Fast"; }
-                else if (opt == _localizationService["DashboardPage.Export7zHigh"]) { level = SharpSevenZip.CompressionLevel.High;   dictSize = "64m"; isHighMemory = true;  levelName = "High"; }
-                else if (opt == _localizationService["DashboardPage.Export7zUltra"])   { level = SharpSevenZip.CompressionLevel.Ultra;  dictSize = "128m"; isHighMemory = true;  levelName = "Ultra"; }
-                else                             { level = SharpSevenZip.CompressionLevel.Normal; dictSize = "32m"; isHighMemory = false; levelName = "Normal"; }
+        // Parse compression level
+        SharpSevenZip.CompressionLevel level;
+        string dictSize;
+        bool isHighMemory;
+        string levelName;
 
-                // Step 2: Show save file dialog
-                var dialog = new SaveFileDialog
-                {
-                    Title = _localizationService["DashboardPage.ExportSaveDialog"],
-                    FileName = $"{vm.Name}.{(is7z ? "7z" : "zip")}",
-                    Filter = is7z ? _localizationService["Common.FileFilter7z"] : _localizationService["Common.FileFilterZip"],
-                };
+        if (opt == _localizationService["DashboardPage.Export7zFast"]) { level = SharpSevenZip.CompressionLevel.Fast; dictSize = "8m"; isHighMemory = false; levelName = "Fast"; }
+        else if (opt == _localizationService["DashboardPage.Export7zHigh"]) { level = SharpSevenZip.CompressionLevel.High; dictSize = "64m"; isHighMemory = true; levelName = "High"; }
+        else if (opt == _localizationService["DashboardPage.Export7zUltra"]) { level = SharpSevenZip.CompressionLevel.Ultra; dictSize = "128m"; isHighMemory = true; levelName = "Ultra"; }
+        else { level = SharpSevenZip.CompressionLevel.Normal; dictSize = "32m"; isHighMemory = false; levelName = "Normal"; }
 
-                if (dialog.ShowDialog() != true)
-                    return;
+        // Step 2: Show save file dialog
+        var dialog = new SaveFileDialog
+        {
+            Title = _localizationService["DashboardPage.ExportSaveDialog"],
+            FileName = $"{vm.Name}.{(is7z ? "7z" : "zip")}",
+            Filter = is7z ? _localizationService["Common.FileFilter7z"] : _localizationService["Common.FileFilterZip"],
+        };
 
-                // Step 3: Calculate total mod size
-                var excludedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        if (dialog.ShowDialog() != true)
+            return;
+
+        // Step 3: Calculate total mod size
+        var excludedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"
                 };
 
-                long totalSize = 0;
-                foreach (var f in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
-                {
-                    if (!excludedExtensions.Contains(f.Extension))
-                        totalSize += f.Length;
-                }
+        long totalSize = 0;
+        foreach (var f in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
+        {
+            if (!excludedExtensions.Contains(f.Extension))
+                totalSize += f.Length;
+        }
 
-                // Step 4: Warn if > 1GB and high-memory compression
-                if (isHighMemory && totalSize > 1024L * 1024 * 1024)
-                {
-                    var sizeText = totalSize >= 1024L * 1024 * 1024 * 1024
-                        ? $"{totalSize / (1024.0 * 1024 * 1024 * 1024):F2} TB"
-                        : $"{totalSize / (1024.0 * 1024 * 1024):F2} GB";
+        // Step 4: Warn if > 1GB and high-memory compression
+        if (isHighMemory && totalSize > 1024L * 1024 * 1024)
+        {
+            var sizeText = totalSize >= 1024L * 1024 * 1024 * 1024
+                ? $"{totalSize / (1024.0 * 1024 * 1024 * 1024):F2} TB"
+                : $"{totalSize / (1024.0 * 1024 * 1024):F2} GB";
 
-                    var dictDesc = dictSize switch
-                    {
-                        "64m" => "64MB",
-                        "128m" => "128MB",
-                        _ => dictSize
-                    };
+            var dictDesc = dictSize switch
+            {
+                "64m" => "64MB",
+                "128m" => "128MB",
+                _ => dictSize
+            };
 
-                    WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-                    {
-                        Title = _localizationService["DashboardPage.ExportMemoryWarning"],
-                        Message = $"{_localizationService["DashboardPage.ExportMemoryMsgPrefix"]}{sizeText}{_localizationService["DashboardPage.ExportMemoryMsgMid"]}{levelName}{_localizationService["DashboardPage.ExportMemoryMsgCompression"]}{dictDesc}{_localizationService["DashboardPage.ExportMemoryMsgSuffix"]}",
-                        Confirm = () => DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, excludedExtensions),
-                        Abort = () => { }
-                    });
-                }
-                else
-                {
-                    DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, excludedExtensions);
-                }
-            }
-        });
+            if (!await _dialogService.ShowAsync(
+                new DialogRequest(
+                    _localizationService["DashboardPage.ExportMemoryWarning"],
+                    _localizationService.Format("DashboardPage.ExportMemoryMessage", new { size = sizeText, level = levelName, dictionary = dictDesc })),
+                cancellationToken))
+                return;
+
+            await DoExportAsync(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, excludedExtensions, cancellationToken);
+        }
+        else
+        {
+            await DoExportAsync(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, excludedExtensions, cancellationToken);
+        }
+    }
+
+    private ModViewModel GetOrCreateModViewModel(ModData mod)
+    {
+        if (_modViewModelsById.TryGetValue(mod.Manifest.Guid, out var existing))
+            return existing;
+
+        var created = _modViewModelFactory.Create(mod);
+        _modViewModelsById.Add(mod.Manifest.Guid, created);
+        return created;
     }
 
     /// <summary>
     /// Execute the actual export with the chosen format and settings.
     /// Shows a real-time progress dialog with compression speed and ratio.
     /// </summary>
-    private void DoExport(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
-        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions)
+    private async Task DoExportAsync(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
+        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions,
+        CancellationToken cancellationToken)
     {
-        // Show progress dialog on UI thread
-        WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressMessage
-        {
-            Title = $"{_localizationService["DashboardPage.ExportSaveDialog"]} - {vm.Name}"
-        });
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                $"{_localizationService["DashboardPage.ExportSaveDialog"]} - {vm.Name}",
+                _localizationService["SettingsPage.PleaseWait"]),
+            cancellationToken);
 
         var backgroundTask = _backgroundTaskService.Add(
             _localizationService["BackgroundTasksPage.TaskTypeExport"],
             vm.Name);
         _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
 
-        // Run export on background thread to keep UI responsive
-        Task.Run(() => DoExportAsync(vm, modDir, outputPath, is7z, level, dictSize, levelName, excludedExtensions, backgroundTask));
+        try
+        {
+            await Task.Run(
+                () => DoExportCore(
+                    vm, modDir, outputPath, is7z, level, dictSize, levelName,
+                    excludedExtensions, backgroundTask, progressDialog, cancellationToken),
+                cancellationToken);
+            await progressDialog.CloseAsync(cancellationToken);
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("BackgroundTasksPage.ExportComplete", new { name = vm.Name }),
+                MessageDialogSeverity.Information,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await progressDialog.CloseAsync(CancellationToken.None);
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("DashboardPage.ExportError", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                CancellationToken.None);
+        }
     }
 
     /// <summary>
     /// Background export with real-time progress reporting.
     /// </summary>
-    private void DoExportAsync(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
-        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions, BackgroundTaskItem backgroundTask)
+    private void DoExportCore(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
+        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions,
+        BackgroundTaskItem backgroundTask, IProgressDialogSession progressDialog, CancellationToken cancellationToken)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         long lastUpdateBytes = 0;
@@ -1886,16 +1943,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             }
             catch { }
 
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressUpdateMessage
-                {
-                    Progress = progress,
-                    CurrentFile = currentFile,
-                    SpeedText = speedText,
-                    RatioText = ratioText,
-                });
-            });
+            progressDialog.Report(new ProgressDialogRequest(
+                _localizationService["DashboardPage.ExportSaveDialog"],
+                string.Join(" ", new[] { speedText, ratioText }.Where(static value => !string.IsNullOrWhiteSpace(value))),
+                currentFile));
             _backgroundTaskService.Update(backgroundTask, currentFile, progress, false);
         }
 
@@ -1961,13 +2012,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
                 foreach (var file in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (excludedExtensions.Contains(file.Extension))
                         continue;
 
                     currentFile = file.Name;
                     var relativePath = Path.GetRelativePath(modDir.FullName, file.FullName);
                     var entry = archive.CreateEntryFromFile(file.FullName, relativePath, System.IO.Compression.CompressionLevel.Optimal);
-                    
+
                     // Approximate progress by file count / total input size
                     totalWritten += file.Length;
                     var progress = totalInputSize > 0 ? Math.Min((double)totalWritten / totalInputSize, 1.0) : 0;
@@ -1979,26 +2031,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 _logger.LogInformation("Exported mod \"{Name}\" to {Path} (ZIP standard)", vm.Name, outputPath);
             }
 
-            // Signal completion - keep final stats visible with OK button
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressUpdateMessage { IsCompleted = true });
-            });
-            _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.ExportComplete"].Replace("{name}", vm.Name));
-            // Don't auto-close - user clicks OK to dismiss and see final ratio/speed
+            _backgroundTaskService.Complete(backgroundTask, _localizationService.Format("BackgroundTasksPage.ExportComplete", new { name = vm.Name }));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to export mod");
             _backgroundTaskService.Fail(backgroundTask, ex.Message);
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-                WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
-                {
-                    Message = $"{_localizationService["DashboardPage.ExportError"]}{ex.Message}"
-                });
-            });
+            throw;
         }
     }
 
@@ -2031,53 +2070,68 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     [RelayCommand]
-    void DownloadFromNexus()
+    async Task DownloadFromNexus(CancellationToken cancellationToken)
     {
-        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.NexusDownloadInfo"] });
-        
-        _navStore.Value.Navigate<NexusDownloadPageViewModel>();
+        await _dialogService.ShowMessageAsync(
+            new MessageDialogRequest(
+                _localizationService["MessageBox.Info"],
+                _localizationService["DashboardPage.NexusDownloadInfo"]),
+            cancellationToken);
+
+        _navigationService.Navigate(typeof(NexusDownloadPageViewModel));
     }
 
     [RelayCommand]
     void ShowDownloadProgress()
     {
-        _navStore.Value.Navigate<DownloadProgressViewModel>();
+        _navigationService.Navigate(typeof(DownloadProgressViewModel));
     }
 
     [RelayCommand]
     void ShowBackgroundTasks()
     {
-        _navStore.Value.Navigate<BackgroundTasksPageViewModel>();
+        _navigationService.Navigate(typeof(BackgroundTasksPageViewModel));
     }
 
     [RelayCommand]
-    void EditModTags(ModViewModel modVm)
+    async Task EditModTags(ModViewModel modVm, CancellationToken cancellationToken)
     {
         if (modVm == null || !_settingsService.Initialized)
             return;
 
         var selectedTagIds = modVm.Data.TagIds.ToList();
-        var selectableTags = _settingsService.Tags.Select(t => new TagSelectionItem(t, selectedTagIds.Contains(t.Id))).ToList();
+        var options = _settingsService.Tags.Select(tag => new ChecklistDialogOption(
+            tag.Id.ToString(),
+            tag.Name,
+            tag.Color,
+            selectedTagIds.Contains(tag.Id))).ToArray();
+        var newTagIds = await _dialogService.SelectManyAsync(
+            new ChecklistDialogRequest(
+                _localizationService["DashboardPage.EditTagsTitle"],
+                _localizationService["DashboardPage.EditTagsMsg"],
+                options),
+            cancellationToken);
+        if (newTagIds is null)
+            return;
+        if (_settingsService.IsReadonly)
+        {
+            await ShowDashboardMessageAsync(
+                _localizationService["DashboardPage.BatchTagReadonly"],
+                MessageDialogSeverity.Error,
+                cancellationToken);
+            return;
+        }
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxTagSelectionMessage
-            {
-                Title = _localizationService["DashboardPage.EditTagsTitle"],
-                Message = _localizationService["DashboardPage.EditTagsMsg"],
-                Tags = selectableTags,
-                Confirm = (selectedTags) =>
-                {
-                    if (!_settingsService.IsReadonly)
-                    {
-                        modVm.Data.TagIds = selectedTags.Select(t => t.Tag.Id).ToList();
-                        RequestProfileSave();
-                        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.EditTagsUpdated"] });
-                    }
-                    else
-                    {
-                        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.BatchTagReadonly"] });
-                    }
-                }
-            });
+        modVm.Data.TagIds = newTagIds
+            .Select(static id => Guid.TryParse(id, out var value) ? (Guid?)value : null)
+            .Where(static id => id.HasValue)
+            .Select(static id => id!.Value)
+            .ToList();
+        RequestProfileSave();
+        await ShowDashboardMessageAsync(
+            _localizationService["DashboardPage.EditTagsUpdated"],
+            MessageDialogSeverity.Information,
+            cancellationToken);
     }
 
     public IReadOnlyList<ModTag> AllTags => _settingsService.Initialized ? _settingsService.Tags : [];
@@ -2094,7 +2148,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// 创建新的分隔符
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanCreateSeparator))]
-    void CreateSeparator()
+    async Task CreateSeparator(CancellationToken cancellationToken)
     {
         if (!_settingsService.Initialized || _settingsService.IsReadonly)
             return;
@@ -2108,81 +2162,81 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         };
         _settingsService.Separators.Add(separator);
         RebuildOrderedItems();
-        _ = _settingsService.SaveAsync();
+        await _settingsService.SaveAsync(cancellationToken);
     }
 
     /// <summary>
     /// 重命名分隔符
     /// </summary>
     [RelayCommand]
-    void RenameSeparator(ModSeparator separator)
+    async Task RenameSeparator(ModSeparator separator, CancellationToken cancellationToken)
     {
         if (separator == null || _settingsService.IsReadonly)
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+        var newName = await _dialogService.PromptAsync(
+            new InputDialogRequest(
+                _localizationService["DashboardPage.RenameSeparatorTitle"],
+                _localizationService["DashboardPage.RenameSeparatorMsg"],
+                separator.Name,
+                32),
+            cancellationToken);
+        if (newName is null)
+            return;
+        if (string.IsNullOrWhiteSpace(newName))
         {
-            Title = _localizationService["DashboardPage.RenameSeparatorTitle"],
-            Message = _localizationService["DashboardPage.RenameSeparatorMsg"],
-            MaxLength = 32,
-            InitialText = separator.Name,
-            Confirm = (newName) =>
-            {
-                if (string.IsNullOrWhiteSpace(newName))
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["DashboardPage.RenameSeparatorEmptyError"] });
-                    return;
-                }
-                separator.Name = newName;
-                OnPropertyChanged(nameof(Mods));
-                _ = _settingsService.SaveAsync();
-            }
-        });
+            await ShowDashboardMessageAsync(
+                _localizationService["DashboardPage.RenameSeparatorEmptyError"],
+                MessageDialogSeverity.Error,
+                cancellationToken);
+            return;
+        }
+        separator.Name = newName;
+        OnPropertyChanged(nameof(Mods));
+        await _settingsService.SaveAsync(cancellationToken);
     }
 
     /// <summary>
     /// 更改分隔符颜色
     /// </summary>
     [RelayCommand]
-    void ChangeSeparatorColor(ModSeparator separator)
+    async Task ChangeSeparatorColor(ModSeparator separator, CancellationToken cancellationToken)
     {
         if (separator == null || _settingsService.IsReadonly)
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxColorPickerMessage
-        {
-            Title = _localizationService["DashboardPage.ChangeSeparatorColorTitle"],
-            Message = $"{_localizationService["DashboardPage.ChangeSeparatorColorPrefix"]}{separator.Name}{_localizationService["DashboardPage.ChangeSeparatorColorSuffix"]}",
-            CurrentColor = separator.Color,
-            Confirm = (selectedColor) =>
-            {
-                separator.Color = selectedColor;
-                OnPropertyChanged(nameof(Mods));
-                _ = _settingsService.SaveAsync();
-            }
-        });
+        var selectedColor = await _dialogService.PickColorAsync(
+            new ColorDialogRequest(
+                _localizationService["DashboardPage.ChangeSeparatorColorTitle"],
+                _localizationService.Format("DashboardPage.ChangeSeparatorColorMessage", new { name = separator.Name }),
+                separator.Color),
+            cancellationToken);
+        if (selectedColor is null)
+            return;
+        separator.Color = selectedColor;
+        OnPropertyChanged(nameof(Mods));
+        await _settingsService.SaveAsync(cancellationToken);
     }
 
     /// <summary>
     /// 删除分隔符
     /// </summary>
     [RelayCommand]
-    void DeleteSeparator(ModSeparator separator)
+    async Task DeleteSeparator(ModSeparator separator)
     {
         if (separator == null || _settingsService.IsReadonly)
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-        {
-            Title = _localizationService["DashboardPage.DeleteSeparatorHint"],
-            Message = $"{_localizationService["DashboardPage.DeleteSeparatorPrefix"]}{separator.Name}{_localizationService["DashboardPage.DeleteSeparatorSuffix"]}",
-            Confirm = () =>
-            {
-                _settingsService.Separators.Remove(separator);
-                RebuildOrderedItems();
-                _ = _settingsService.SaveAsync();
-            }
-        });
+        if (!await _dialogService.ShowAsync(
+            new DialogRequest(
+                _localizationService["DashboardPage.DeleteSeparatorHint"],
+                _localizationService.Format("DashboardPage.DeleteSeparatorMessage", new { name = separator.Name })),
+            CancellationToken.None))
+            return;
+
+        _settingsService.Separators.Remove(separator);
+        RebuildOrderedItems();
+        await _settingsService.SaveAsync();
     }
 
     protected override void OnDispose()
@@ -2203,9 +2257,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 vm.OptionsChanged -= ModViewModel_OptionsChanged;
                 vm.PropertyChanged -= ModViewModel_PropertyChanged;
                 vm.VersionCheckRefreshed -= ModViewModel_VersionCheckRefreshed;
+                vm.Dispose();
             }
             _orderedItems.Clear();
             _mods.Clear();
+            _modViewModelsById.Clear();
         }
     }
 }

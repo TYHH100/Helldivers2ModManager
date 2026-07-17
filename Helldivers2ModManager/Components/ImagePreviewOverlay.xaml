@@ -4,6 +4,7 @@
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 			 mc:Ignorable="d"
 			 d:DesignHeight="600"
 			 d:DesignWidth="800"
@@ -14,8 +15,8 @@
 			 KeyDown="Overlay_KeyDown"
 			 IsVisibleChanged="Overlay_IsVisibleChanged">
 	<Border Style="{StaticResource FluentMessageDialog}"
-			MaxWidth="800"
-			MaxHeight="600"
+			MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ProportionalDoubleConverter}, ConverterParameter=0.9}"
+			MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ProportionalDoubleConverter}, ConverterParameter=0.85}"
 			VerticalAlignment="Center"
 			HorizontalAlignment="Center"
 			MouseLeftButtonDown="Border_MouseLeftButtonDown">
@@ -27,7 +28,9 @@
 
 			<!-- Close Button -->
 			<Button Grid.Row="0"
+					AutomationProperties.Name="{loc:Loc MainWindow.Close}"
 					Style="{StaticResource FluentIconButton}"
+					ToolTip="{loc:Loc MainWindow.Close}"
 					Click="CloseButton_Click"
 					HorizontalAlignment="Right"
 					Margin="0 0 0 8">

@@ -4,13 +4,40 @@ using System.IO;
 
 namespace Helldivers2ModManager.Services;
 
-internal sealed partial class VersionCheckService
+/// <summary>
+/// Coordinates companion-file recovery without coupling the workflow to the
+/// version-check service. Resource reconstruction remains supplied by the
+/// legacy reader through a narrow delegate until that reader is extracted.
+/// </summary>
+internal sealed class CompanionRecoveryCoordinator
 {
-    private sealed record PreparedCompanionRecovery(
-        CompanionRecoveryItem Item,
-        string TemporaryPath);
+    private sealed record PreparedRecovery(CompanionRecoveryItem Item, string TemporaryPath);
 
-    public async Task<CompanionRecoveryPlan> CreateCompanionRecoveryPlanAsync(
+    private readonly ILogger _logger;
+    private readonly SettingsService _settingsService;
+    private readonly Func<DirectoryInfo?> _getGameDataDirectory;
+    private readonly Func<FileInfo, Task<PatchFileAnalysis>> _analyzePatch;
+    private readonly Func<FileInfo, string, CancellationToken, Task<bool>> _canBuildGameCompanion;
+    private readonly Func<FileInfo, string, string, CancellationToken, Task<bool>> _writeGameCompanion;
+    private readonly SemaphoreSlim _recoverySemaphore = new(1, 1);
+
+    public CompanionRecoveryCoordinator(
+        ILogger logger,
+        SettingsService settingsService,
+        Func<DirectoryInfo?> getGameDataDirectory,
+        Func<FileInfo, Task<PatchFileAnalysis>> analyzePatch,
+        Func<FileInfo, string, CancellationToken, Task<bool>> canBuildGameCompanion,
+        Func<FileInfo, string, string, CancellationToken, Task<bool>> writeGameCompanion)
+    {
+        _logger = logger;
+        _settingsService = settingsService;
+        _getGameDataDirectory = getGameDataDirectory;
+        _analyzePatch = analyzePatch;
+        _canBuildGameCompanion = canBuildGameCompanion;
+        _writeGameCompanion = writeGameCompanion;
+    }
+
+    public async Task<CompanionRecoveryPlan> CreatePlanAsync(
         DirectoryInfo modDirectory,
         CancellationToken cancellationToken = default)
     {
@@ -24,38 +51,30 @@ internal sealed partial class VersionCheckService
         foreach (var patchFile in patchFiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var analysis = await AnalyzeSinglePatchFileStructureAsync(patchFile);
+            var analysis = await _analyzePatch(patchFile);
             if (analysis.RequiresGpuResources && !analysis.HasGpuResources)
             {
-                items.Add(await CreateCompanionRecoveryItemAsync(
-                    modDirectory,
-                    patchFile,
-                    ".gpu_resources",
-                    cancellationToken));
+                items.Add(await CreateItemAsync(modDirectory, patchFile, ".gpu_resources", cancellationToken));
             }
             if (analysis.RequiresStream && !analysis.HasStream)
             {
-                items.Add(await CreateCompanionRecoveryItemAsync(
-                    modDirectory,
-                    patchFile,
-                    ".stream",
-                    cancellationToken));
+                items.Add(await CreateItemAsync(modDirectory, patchFile, ".stream", cancellationToken));
             }
         }
 
         return new CompanionRecoveryPlan { Items = items };
     }
 
-    public async Task<CompanionRecoveryResult> RecoverCompanionFilesAsync(
+    public async Task<CompanionRecoveryResult> RecoverAsync(
         DirectoryInfo modDirectory,
         CancellationToken cancellationToken = default)
     {
-        await _repairSemaphore.WaitAsync(cancellationToken);
-        var prepared = new List<PreparedCompanionRecovery>();
+        await _recoverySemaphore.WaitAsync(cancellationToken);
+        var prepared = new List<PreparedRecovery>();
         var committed = new List<string>();
         try
         {
-            var plan = await CreateCompanionRecoveryPlanAsync(modDirectory, cancellationToken);
+            var plan = await CreatePlanAsync(modDirectory, cancellationToken);
             if (!plan.CanRecover)
             {
                 var reasons = plan.Items
@@ -80,29 +99,27 @@ internal sealed partial class VersionCheckService
                     Path.GetDirectoryName(item.CompanionPath)!,
                     "." + Path.GetFileName(item.CompanionPath) + ".hd2mm-recover-" +
                     Guid.NewGuid().ToString("N") + ".tmp");
+
                 if (item.SourceKind == CompanionRecoverySourceKind.ExactPatchCopy)
                 {
                     if (string.IsNullOrWhiteSpace(item.SourcePath) || !File.Exists(item.SourcePath))
                         throw new FileNotFoundException("The exact companion source is no longer available.", item.SourcePath);
-                    await CopyFileDurablyAsync(item.SourcePath, temporaryPath, cancellationToken);
+                    await ModBackupService.CopyFileDurablyAsync(item.SourcePath, temporaryPath, cancellationToken);
                 }
                 else if (item.SourceKind == CompanionRecoverySourceKind.CurrentGameBundles)
                 {
-                    var recipe = await TryBuildGameCompanionRecipeAsync(
-                        new FileInfo(item.PatchPath),
-                        item.Suffix,
-                        includePayloads: true,
-                        cancellationToken);
-                    if (recipe is null)
+                    if (!await _writeGameCompanion(
+                            new FileInfo(item.PatchPath), item.Suffix, temporaryPath, cancellationToken))
+                    {
                         throw new InvalidDataException("Current game resources no longer provide an exact companion reconstruction.");
-                    await WriteGameCompanionRecipeAsync(recipe, temporaryPath, cancellationToken);
+                    }
                 }
                 else
                 {
                     throw new InvalidDataException("The recovery source is not supported.");
                 }
 
-                prepared.Add(new PreparedCompanionRecovery(item, temporaryPath));
+                prepared.Add(new PreparedRecovery(item, temporaryPath));
             }
 
             foreach (var item in prepared)
@@ -111,15 +128,13 @@ internal sealed partial class VersionCheckService
                 committed.Add(item.Item.CompanionPath);
             }
 
-            foreach (var patchPath in prepared
-                         .Select(item => item.Item.PatchPath)
+            foreach (var patchPath in prepared.Select(item => item.Item.PatchPath)
                          .Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                var validation = await AnalyzeSinglePatchFileStructureAsync(new FileInfo(patchPath));
+                var validation = await _analyzePatch(new FileInfo(patchPath));
                 if ((validation.RequiresGpuResources && !validation.HasGpuResources) ||
                     (validation.RequiresStream && !validation.HasStream) ||
-                    !validation.GpuResourceBoundsValid ||
-                    !validation.StreamBoundsValid)
+                    !validation.GpuResourceBoundsValid || !validation.StreamBoundsValid)
                 {
                     throw new InvalidDataException($"Recovered companion validation failed for {Path.GetFileName(patchPath)}.");
                 }
@@ -136,29 +151,25 @@ internal sealed partial class VersionCheckService
         {
             _logger.LogError(ex, "Failed to recover companion files in {ModDirectory}", modDirectory.FullName);
             foreach (var path in committed.AsEnumerable().Reverse())
-                TryDeleteFile(path);
+                ModBackupService.TryDeleteFile(path);
             return new CompanionRecoveryResult { ErrorMessage = ex.Message };
         }
         finally
         {
             foreach (var item in prepared)
-                TryDeleteFile(item.TemporaryPath);
-            _repairSemaphore.Release();
+                ModBackupService.TryDeleteFile(item.TemporaryPath);
+            _recoverySemaphore.Release();
         }
     }
 
-    private async Task<CompanionRecoveryItem> CreateCompanionRecoveryItemAsync(
+    private async Task<CompanionRecoveryItem> CreateItemAsync(
         DirectoryInfo modDirectory,
         FileInfo patchFile,
         string suffix,
         CancellationToken cancellationToken)
     {
         var companionPath = patchFile.FullName + suffix;
-        var exactSource = await FindExactCompanionSourceAsync(
-            modDirectory,
-            patchFile,
-            suffix,
-            cancellationToken);
+        var exactSource = await FindExactSourceAsync(modDirectory, patchFile, suffix, cancellationToken);
         if (exactSource is not null)
         {
             return new CompanionRecoveryItem
@@ -175,12 +186,7 @@ internal sealed partial class VersionCheckService
             };
         }
 
-        var gameRecipe = await TryBuildGameCompanionRecipeAsync(
-            patchFile,
-            suffix,
-            includePayloads: false,
-            cancellationToken);
-        if (gameRecipe is not null)
+        if (await _canBuildGameCompanion(patchFile, suffix, cancellationToken))
         {
             return new CompanionRecoveryItem
             {
@@ -191,7 +197,7 @@ internal sealed partial class VersionCheckService
                 IsMissing = true,
                 CanRecover = true,
                 SourceKind = CompanionRecoverySourceKind.CurrentGameBundles,
-                SourcePath = gameRecipe.Description,
+                SourcePath = "Current game bundles",
                 Reason = "Every companion segment has an exact current-game resource match."
             };
         }
@@ -209,30 +215,26 @@ internal sealed partial class VersionCheckService
         };
     }
 
-    private async Task<string?> FindExactCompanionSourceAsync(
+    private async Task<string?> FindExactSourceAsync(
         DirectoryInfo modDirectory,
         FileInfo patchFile,
         string suffix,
         CancellationToken cancellationToken)
     {
-        var patchHash = await ComputeSha256Async(patchFile.FullName, cancellationToken);
-        foreach (var candidatePath in EnumerateExactPatchCandidates(modDirectory, patchFile))
+        var patchHash = await ModBackupService.ComputeSha256Async(patchFile.FullName, cancellationToken);
+        foreach (var candidatePath in EnumerateCandidates(modDirectory, patchFile))
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                if (!string.Equals(
-                        patchHash,
-                        await ComputeSha256Async(candidatePath, cancellationToken),
+                if (!string.Equals(patchHash,
+                        await ModBackupService.ComputeSha256Async(candidatePath, cancellationToken),
                         StringComparison.OrdinalIgnoreCase))
-                {
                     continue;
-                }
-
                 var sourceCompanion = candidatePath + suffix;
                 if (!File.Exists(sourceCompanion))
                     continue;
-                var validation = await AnalyzeSinglePatchFileStructureAsync(new FileInfo(candidatePath));
+                var validation = await _analyzePatch(new FileInfo(candidatePath));
                 var valid = suffix.Equals(".gpu_resources", StringComparison.OrdinalIgnoreCase)
                     ? validation.HasGpuResources && validation.GpuResourceBoundsValid
                     : validation.HasStream && validation.StreamBoundsValid;
@@ -247,16 +249,14 @@ internal sealed partial class VersionCheckService
         return null;
     }
 
-    private IEnumerable<string> EnumerateExactPatchCandidates(
-        DirectoryInfo modDirectory,
-        FileInfo patchFile)
+    private IEnumerable<string> EnumerateCandidates(DirectoryInfo modDirectory, FileInfo patchFile)
     {
         var roots = new List<(string Path, SearchOption SearchOption)>();
         if (_settingsService.Initialized && !string.IsNullOrWhiteSpace(_settingsService.StorageDirectory))
             roots.Add((_settingsService.StorageDirectory, SearchOption.AllDirectories));
         if (modDirectory.Parent is not null)
             roots.Add((modDirectory.Parent.FullName, SearchOption.AllDirectories));
-        var gameData = GetConfiguredGameDataDirectory();
+        var gameData = _getGameDataDirectory();
         if (gameData is not null)
             roots.Add((gameData.FullName, SearchOption.TopDirectoryOnly));
 
@@ -266,25 +266,20 @@ internal sealed partial class VersionCheckService
             if (!Directory.Exists(root.Path))
                 continue;
             IEnumerable<string> candidates;
-            try
-            {
-                candidates = Directory.EnumerateFiles(root.Path, patchFile.Name, root.SearchOption);
-            }
-            catch
-            {
-                continue;
-            }
-
+            try { candidates = Directory.EnumerateFiles(root.Path, patchFile.Name, root.SearchOption); }
+            catch { continue; }
             foreach (var candidate in candidates)
             {
                 var fullPath = Path.GetFullPath(candidate);
-                if (string.Equals(fullPath, patchFile.FullName, StringComparison.OrdinalIgnoreCase) ||
-                    !seen.Add(fullPath))
-                {
+                if (string.Equals(fullPath, patchFile.FullName, StringComparison.OrdinalIgnoreCase) || !seen.Add(fullPath))
                     continue;
-                }
                 yield return fullPath;
             }
         }
     }
+
+    private static bool IsMainPatchFile(string fileName) =>
+        fileName.EndsWith(".patch", StringComparison.OrdinalIgnoreCase) ||
+        fileName.EndsWith(".patch_0", StringComparison.OrdinalIgnoreCase) ||
+        fileName.Equals("data", StringComparison.OrdinalIgnoreCase);
 }

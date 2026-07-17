@@ -74,7 +74,7 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
         }
     }
 
-	private List<Guid> _tagIds = [];
+    private List<Guid> _tagIds = [];
     public List<Guid> TagIds
     {
         get => _tagIds;

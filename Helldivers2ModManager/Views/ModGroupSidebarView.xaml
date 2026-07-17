@@ -18,15 +18,15 @@
                 <TextBlock Text="{loc:Loc ModGroup.SidebarTitle}"
                            FontSize="18"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource NeutralForegroundBrush}"
+                           Foreground="{DynamicResource NeutralForegroundBrush}"
                            Margin="0 0 0 12"/>
                 <TextBlock Text="{loc:Loc ModGroup.CurrentGroup}"
                            FontSize="12"
-                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                           Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"/>
                 <TextBlock Text="{Binding SelectedGroupName}"
                            FontSize="14"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource SystemAccentBrush}"
+                           Foreground="{DynamicResource SystemAccentBrush}"
                            TextTrimming="CharacterEllipsis"
                            Margin="0 2 0 12"/>
             </StackPanel>
@@ -70,7 +70,7 @@
                                                TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding ModGuids.Count}"
-                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
                                                Margin="8 0 0 0"/>
                                 </Grid>
                             </Button>

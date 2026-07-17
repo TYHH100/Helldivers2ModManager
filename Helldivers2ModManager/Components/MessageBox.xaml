@@ -18,7 +18,8 @@
 			VerticalAlignment="Center"
 			HorizontalAlignment="Center"
 			MinWidth="320"
-			MaxWidth="640">
+			MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ProportionalDoubleConverter}, ConverterParameter=0.9}"
+			MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ProportionalDoubleConverter}, ConverterParameter=0.85}">
 		<Grid>
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto"/>
@@ -58,7 +59,7 @@
 					<TextBlock x:Name="message"
 							   FontSize="14"
 							   FontFamily="Segoe UI Variable Text"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 							   TextWrapping="Wrap"/>
 				</ScrollViewer>
 
@@ -77,45 +78,21 @@
 						  FontSize="14"
 						  Visibility="Collapsed"/>
 
-				<!-- Export Progress Info (速度/压缩率) -->
-				<StackPanel Grid.Row="3"
-							x:Name="exportProgressPanel"
-							Margin="0 -8 0 16"
-							Visibility="Collapsed">
-					<TextBlock x:Name="exportCurrentFile"
-							   FontSize="12"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   TextTrimming="CharacterEllipsis"
-							   Margin="0 0 0 4"/>
-					<Grid>
-						<Grid.ColumnDefinitions>
-							<ColumnDefinition Width="*"/>
-							<ColumnDefinition Width="Auto"/>
-						</Grid.ColumnDefinitions>
-						<TextBlock x:Name="exportSpeedText"
-								   Grid.Column="0"
-								   FontSize="12"
-								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
-						<TextBlock x:Name="exportRatioText"
-								   Grid.Column="1"
-								   FontSize="12"
-								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
-					</Grid>
-				</StackPanel>
-
 				<!-- Update Progress Info (哈希检查/文件更新进度) -->
-				<StackPanel Grid.Row="4"
+				<StackPanel Grid.Row="3"
 							x:Name="updateProgressPanel"
 							Margin="0 -8 0 16"
 							Visibility="Collapsed">
 					<TextBlock x:Name="updatePhaseText"
 							   FontSize="13"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 							   Margin="0 0 0 6"
-							   TextTrimming="CharacterEllipsis"/>
+							   TextWrapping="Wrap"/>
 					<TextBlock x:Name="updateCurrentFile"
+							   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+							   AutomationProperties.Name="{Binding Text, RelativeSource={RelativeSource Self}}"
 							   FontSize="12"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 							   TextTrimming="CharacterEllipsis"
 							   Margin="0 0 0 4"/>
 					<Grid>
@@ -126,11 +103,11 @@
 						<TextBlock x:Name="updateFileCount"
 								   Grid.Column="0"
 								   FontSize="12"
-								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+								   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"/>
 						<TextBlock x:Name="updateNeedUpdateCount"
 								   Grid.Column="1"
 								   FontSize="12"
-								   Foreground="{StaticResource SystemAccentBrush}"
+								   Foreground="{DynamicResource SystemAccentBrush}"
 								   FontWeight="SemiBold"/>
 					</Grid>
 				</StackPanel>
@@ -209,12 +186,12 @@
 											   Foreground="White"
 											   FontSize="13"
 											   FontWeight="SemiBold"
-											   TextTrimming="CharacterEllipsis"/>
+											   TextWrapping="Wrap"/>
 									<TextBlock Text="{Binding Description}"
-											   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+											   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 											   FontSize="11"
 											   FontFamily="Cascadia Mono, Consolas"
-											   TextTrimming="CharacterEllipsis"/>
+											   TextWrapping="Wrap"/>
 								</StackPanel>
 							</Grid>
 						</DataTemplate>
@@ -259,7 +236,8 @@
 						<TextBox x:Name="colorInputBox"
 								 TextChanged="ColorInputBox_TextChanged"
 								 Style="{StaticResource FluentTextBox}"
-								 Width="140"
+								 MinWidth="140"
+								 MaxWidth="320"
 								 FontFamily="Consolas"
 								 FontSize="13"
 								 VerticalAlignment="Center"/>
@@ -320,9 +298,9 @@
 			<!-- Button Area -->
 			<Grid Grid.Row="2">
 				<!-- Cancel/OK Buttons -->
-				<StackPanel x:Name="okCancelStack"
-							Orientation="Horizontal"
-							HorizontalAlignment="Right">
+				<WrapPanel x:Name="okCancelStack"
+						   Orientation="Horizontal"
+						   HorizontalAlignment="Right">
 					<Button x:Name="cancelButton"
 							Content="{loc:Loc Common.Cancel}"
 							Style="{StaticResource FluentSecondaryButton}"
@@ -335,22 +313,24 @@
 							Click="OkButton_Click"
 							Padding="16 8"
 							Visibility="Hidden"/>
-				</StackPanel>
+				</WrapPanel>
 
 				<!-- Yes/No Buttons -->
-				<StackPanel x:Name="yesNoStack"
-							Orientation="Horizontal"
-							HorizontalAlignment="Right"
-							Visibility="Hidden">
-                    <Button Content="{loc:Loc MessageBox.Yes}"
+				<WrapPanel x:Name="yesNoStack"
+						   Orientation="Horizontal"
+						   HorizontalAlignment="Right"
+						   Visibility="Hidden">
+                    <Button x:Name="yesButton"
+                            Content="{loc:Loc MessageBox.Yes}"
 							Style="{StaticResource FluentPrimaryButton}"
 							Click="YesButton_Click"	
 							Padding="16 8"/>
-                    <Button Content="{loc:Loc MessageBox.No}"
+                    <Button x:Name="noButton"
+                            Content="{loc:Loc MessageBox.No}"
 							Style="{StaticResource FluentSecondaryButton}"
 							Click="NoButton_Click"
 							Padding="16 8"/>
-				</StackPanel>
+				</WrapPanel>
 
 				<!-- Progress Bar -->
 				<StackPanel x:Name="progressPanel"
@@ -358,13 +338,13 @@
 					<TextBlock x:Name="progressStep"
 							   Margin="0 0 0 8"
 							   FontSize="12"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   TextTrimming="CharacterEllipsis"/>
+							   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
+							   TextWrapping="Wrap"/>
 					<ProgressBar x:Name="progress"
 								 IsIndeterminate="True"
 								 Height="4"
-								 Foreground="{StaticResource SystemAccentBrush}"
-								 Background="{StaticResource NeutralBackgroundFillBrush}"
+								 Foreground="{DynamicResource SystemAccentBrush}"
+								 Background="{DynamicResource NeutralBackgroundFillBrush}"
 								 BorderThickness="0"
 								 Visibility="Hidden"/>
 				</StackPanel>

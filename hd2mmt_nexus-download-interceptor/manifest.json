@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HD2MMT Nexus Download Interceptor",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "拦截Nexus Mods下载链接并发送到Helldivers 2 Mod Manager进行管理",
   "author": "TYHH100",
   "homepage_url": "https://github.com/TYHH100/Helldivers2ModManager/tree/test",
@@ -15,10 +15,8 @@
   ],
   "host_permissions": [
     "*://files.nexus-cdn.com/*",
-    "*://*.nexusmods.com/*"
-  ],
-  "optional_host_permissions": [
-    "http://*/*"
+    "*://*.nexusmods.com/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "scripts": ["background.js"],

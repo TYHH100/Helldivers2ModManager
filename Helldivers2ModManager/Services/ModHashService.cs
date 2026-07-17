@@ -1,4 +1,6 @@
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Core.Operations;
+using Helldivers2ModManager.Core.UI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -10,26 +12,26 @@ namespace Helldivers2ModManager.Services;
 /// </summary>
 public sealed class HashMigrationProgress
 {
-	/// <summary>是否正在进行迁移</summary>
-	public bool IsMigrating { get; init; }
+    /// <summary>是否正在进行迁移</summary>
+    public bool IsMigrating { get; init; }
 
-	/// <summary>当前正在处理的模组名称</summary>
-	public string? CurrentModName { get; init; }
+    /// <summary>当前正在处理的模组名称</summary>
+    public string? CurrentModName { get; init; }
 
-	/// <summary>已完成的模组数</summary>
-	public int CompletedCount { get; init; }
+    /// <summary>已完成的模组数</summary>
+    public int CompletedCount { get; init; }
 
-	/// <summary>模组总数</summary>
-	public int TotalCount { get; init; }
+    /// <summary>模组总数</summary>
+    public int TotalCount { get; init; }
 
-	/// <summary>计算失败的模组数</summary>
-	public int FailedCount { get; init; }
+    /// <summary>计算失败的模组数</summary>
+    public int FailedCount { get; init; }
 
-	/// <summary>当前状态描述文本</summary>
-	public string? Message { get; init; }
+    /// <summary>当前状态描述文本</summary>
+    public string? Message { get; init; }
 
-	/// <summary>是否迁移已完成</summary>
-	public bool IsCompleted => TotalCount > 0 && CompletedCount + FailedCount >= TotalCount;
+    /// <summary>是否迁移已完成</summary>
+    public bool IsCompleted => TotalCount > 0 && CompletedCount + FailedCount >= TotalCount;
 }
 
 /// <summary>
@@ -47,430 +49,497 @@ public sealed class HashMigrationProgress
 [RegisterService(ServiceLifetime.Singleton)]
 internal sealed class ModHashService
 {
-	/// <summary>
-	/// SQLite user_version 值，用于标记数据库迁移状态。
-	/// 0 = 初始状态 / 未执行哈希迁移
-	/// 1 = 已完成哈希迁移（所有现有模组的哈希值已存储）
-	/// </summary>
-	private const int HashMigrationVersion = 1;
+    /// <summary>
+    /// SQLite user_version 值，用于标记数据库迁移状态。
+    /// 0 = 初始状态 / 未执行哈希迁移
+    /// 1 = 已完成哈希迁移（所有现有模组的哈希值已存储）
+    /// </summary>
+    private const int HashMigrationVersion = 1;
 
-	/// <summary>
-	/// 后台哈希计算的最大并发数，防止同时计算大量文件的哈希导致磁盘 IO 饱和
-	/// </summary>
-	private const int MaxConcurrentComputations = 2;
+    /// <summary>
+    /// 后台哈希计算的最大并发数，防止同时计算大量文件的哈希导致磁盘 IO 饱和
+    /// </summary>
+    private const int MaxConcurrentComputations = 2;
 
-	private readonly ILogger<ModHashService> _logger;
-	private readonly FileHashRepository _fileHashRepository;
-	private readonly DatabaseService _databaseService;
-	private readonly LocalizationService _localizationService;
-	private readonly BackgroundTaskService _backgroundTaskService;
-	private SettingsService? _settingsService;
+    private readonly ILogger<ModHashService> _logger;
+    private readonly FileHashRepository _fileHashRepository;
+    private readonly DatabaseService _databaseService;
+    private readonly LocalizationService _localizationService;
+    private readonly IBackgroundTaskRunner _backgroundTaskRunner;
+    private readonly BackgroundTaskService _backgroundTaskService;
+    private SettingsService? _settingsService;
 
-	/// <summary>
-	/// 控制后台哈希计算并发数的信号量
-	/// </summary>
-	private readonly SemaphoreSlim _computationSemaphore = new(MaxConcurrentComputations, MaxConcurrentComputations);
+    /// <summary>
+    /// 控制后台哈希计算并发数的信号量
+    /// </summary>
+    private readonly SemaphoreSlim _computationSemaphore = new(MaxConcurrentComputations, MaxConcurrentComputations);
 
-	/// <summary>
-	/// 跟踪正在执行哈希计算的任务，防止同一模组的重复计算
-	/// </summary>
-	private readonly ConcurrentDictionary<Guid, Task> _activeComputations = new();
+    /// <summary>
+    /// 跟踪正在执行哈希计算的任务，防止同一模组的重复计算
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, Task> _activeComputations = new();
 
-	/// <summary>
-	/// 哈希迁移进度变化事件，在后台迁移过程中定期触发，供 UI 层订阅显示进度。
-	/// 回调在后台线程中执行，订阅者需自行 Dispatch 到 UI 线程。
-	/// </summary>
-	public event Action<HashMigrationProgress>? MigrationProgressChanged;
+    /// <summary>
+    /// 哈希迁移进度变化事件，在后台迁移过程中定期触发，供 UI 层订阅显示进度。
+    /// 回调在后台线程中执行，订阅者需自行 Dispatch 到 UI 线程。
+    /// </summary>
+    public event Action<HashMigrationProgress>? MigrationProgressChanged;
 
-	public ModHashService(
-		ILogger<ModHashService> logger,
-		FileHashRepository fileHashRepository,
-		DatabaseService databaseService,
-		LocalizationService localizationService,
-		BackgroundTaskService backgroundTaskService)
-	{
-		_logger = logger;
-		_fileHashRepository = fileHashRepository;
-		_databaseService = databaseService;
-		_localizationService = localizationService;
-		_backgroundTaskService = backgroundTaskService;
-	}
+    public ModHashService(
+        ILogger<ModHashService> logger,
+        FileHashRepository fileHashRepository,
+        DatabaseService databaseService,
+        LocalizationService localizationService,
+        IBackgroundTaskRunner backgroundTaskRunner,
+        BackgroundTaskService backgroundTaskService)
+    {
+        _logger = logger;
+        _fileHashRepository = fileHashRepository;
+        _databaseService = databaseService;
+        _localizationService = localizationService;
+        _backgroundTaskRunner = backgroundTaskRunner;
+        _backgroundTaskService = backgroundTaskService;
+    }
 
-	/// <summary>
-	/// 初始化服务，注入延迟绑定的 SettingsService
-	/// </summary>
-	public void Init(SettingsService settingsService)
-	{
-		_settingsService = settingsService;
-	}
+    /// <summary>
+    /// 初始化服务，注入延迟绑定的 SettingsService
+    /// </summary>
+    public void Init(SettingsService settingsService)
+    {
+        _settingsService = settingsService;
+    }
 
-	/// <summary>
-	/// 为单个模组的所有文件计算 SHA-256 哈希值并存储到数据库。
-	/// 
-	/// 使用 ComputeDirectoryHashesWithCacheAsync，自动利用现有缓存跳过未变化文件的计算。
-	/// 完成后将新计算的哈希值持久化到 file_hashes 表中。
-	/// 
-	/// 此方法异步执行但不等待完成（fire-and-forget），通过 _activeComputations 字典去重，
-	/// 确保同一模组不会同时有多个计算任务在运行。
-	/// </summary>
-	/// <param name="mod">要计算哈希的模组数据</param>
-	public void ComputeAndStoreForModAsync(ModData mod)
-	{
-		if (_settingsService is null)
-		{
-			_logger.LogWarning("ModHashService not initialized, skipping hash computation for mod \"{Name}\"", mod.Manifest.Name);
-			return;
-		}
+    /// <summary>
+    /// 为单个模组的所有文件计算 SHA-256 哈希值并存储到数据库。
+    ///
+    /// 使用 ComputeDirectoryHashesWithCacheAsync，自动利用现有缓存跳过未变化文件的计算。
+    /// 完成后将新计算的哈希值持久化到 file_hashes 表中。
+    ///
+    /// 此方法把计算排入统一后台任务运行器，通过 _activeComputations 字典去重，
+    /// 确保同一模组不会同时有多个计算任务在运行。
+    /// </summary>
+    /// <param name="mod">要计算哈希的模组数据</param>
+    public void QueueComputeAndStoreForMod(ModData mod)
+    {
+        if (_settingsService is null)
+        {
+            _logger.LogWarning("ModHashService not initialized, skipping hash computation for mod \"{Name}\"", mod.Manifest.Name);
+            return;
+        }
 
-		// 去重：如果同一模组已有正在执行的计算任务，则跳过
-		if (_activeComputations.ContainsKey(mod.Manifest.Guid))
-		{
-			_logger.LogDebug("Hash computation already in progress for mod \"{Name}\", skipping duplicate request", mod.Manifest.Name);
-			return;
-		}
+        try
+        {
+            _databaseService.EnsureWritable(_settingsService.StorageDirectory);
+        }
+        catch (DatabaseReadOnlyException ex)
+        {
+            _logger.LogWarning(ex, "Skipping hash persistence while the database is read-only");
+            return;
+        }
 
-		// 启动后台任务，不阻塞调用方
-		var task = Task.Run(async () =>
-		{
-			var backgroundTask = _backgroundTaskService.Add(
-				_localizationService["BackgroundTasksPage.TaskTypeHash"],
-				_localizationService["ModHashService.FingerprintSingleProgress"].Replace("{name}", mod.Manifest.Name));
+        // The start gate makes TryAdd authoritative: a losing duplicate never starts file I/O.
+        var startGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var task = RunTrackedComputationAsync(mod, _settingsService.StorageDirectory, startGate.Task);
+        if (!_activeComputations.TryAdd(mod.Manifest.Guid, task))
+        {
+            startGate.SetResult(false);
+            _logger.LogDebug(
+                "Hash computation already in progress for mod \"{Name}\", skipping duplicate request",
+                mod.Manifest.Name);
+            return;
+        }
+        startGate.SetResult(true);
+    }
 
-			await _computationSemaphore.WaitAsync();
-			try
-			{
-				_logger.LogInformation("Computing file hashes for mod \"{Name}\" ({Guid})", mod.Manifest.Name, mod.Manifest.Guid);
+    private async Task RunTrackedComputationAsync(
+        ModData mod,
+        string storageDirectory,
+        Task<bool> startGate)
+    {
+        if (!await startGate)
+            return;
+        try
+        {
+            await _backgroundTaskRunner.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypeHash"],
+                async (progress, cancellationToken) =>
+                {
+                    progress.Report(new Core.Operations.OperationProgress(
+                        "Hashing",
+                        0,
+                        1,
+                        mod.Manifest.Name,
+                        _localizationService.Format(
+                            "ModHashService.FingerprintSingleProgress",
+                            new { name = mod.Manifest.Name })));
+                    await _computationSemaphore.WaitAsync(cancellationToken);
+                    try
+                    {
+                        _logger.LogInformation(
+                            "Computing file hashes for mod \"{Name}\" ({Guid})",
+                            mod.Manifest.Name,
+                            mod.Manifest.Guid);
+                        await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
+                            mod.Directory,
+                            mod.Manifest.Guid,
+                            _fileHashRepository,
+                            storageDirectory);
+                        _logger.LogInformation("File hashes computed and stored for mod \"{Name}\"", mod.Manifest.Name);
+                        progress.Report(new Core.Operations.OperationProgress(
+                            "Hashing",
+                            1,
+                            1,
+                            mod.Manifest.Name,
+                            _localizationService.Format(
+                                "ModHashService.FingerprintSingleReady",
+                                new { name = mod.Manifest.Name })));
+                        return OperationResult.Success();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "Failed to compute file hashes for mod \"{Name}\" ({Guid})",
+                            mod.Manifest.Name,
+                            mod.Manifest.Guid);
+                        return OperationResult.Failure("ModHash.ComputeFailed", ex.Message);
+                    }
+                    finally
+                    {
+                        _computationSemaphore.Release();
+                    }
+                },
+                CancellationToken.None);
+        }
+        finally
+        {
+            _activeComputations.TryRemove(mod.Manifest.Guid, out _);
+        }
+    }
 
-				// 使用带缓存的哈希计算，自动利用已有缓存并更新变更部分
-				await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
-					mod.Directory,
-					mod.Manifest.Guid,
-					_fileHashRepository,
-					_settingsService.StorageDirectory);
+    /// <summary>
+    /// 模组更新后重新计算哈希值。
+    /// 先删除旧的哈希记录，再为当前文件重新计算并存储。
+    /// </summary>
+    /// <param name="mod">已更新的模组数据</param>
+    public async Task RecomputeForUpdatedModAsync(ModData mod)
+    {
+        if (_settingsService is null)
+        {
+            _logger.LogWarning("ModHashService not initialized, skipping hash recomputation for mod \"{Name}\"", mod.Manifest.Name);
+            return;
+        }
 
-				_logger.LogInformation("File hashes computed and stored for mod \"{Name}\"", mod.Manifest.Name);
-				_backgroundTaskService.Complete(
-					backgroundTask,
-					_localizationService["ModHashService.FingerprintSingleReady"].Replace("{name}", mod.Manifest.Name));
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Failed to compute file hashes for mod \"{Name}\" ({Guid})", mod.Manifest.Name, mod.Manifest.Guid);
-				_backgroundTaskService.Fail(backgroundTask, ex.Message);
-			}
-			finally
-			{
-				_computationSemaphore.Release();
-				_activeComputations.TryRemove(mod.Manifest.Guid, out _);
-			}
-		});
+        // 先取消正在进行的旧任务（如果有）
+        if (_activeComputations.TryRemove(mod.Manifest.Guid, out var existingTask))
+        {
+            try
+            {
+                _logger.LogDebug("Cancelling existing hash computation for mod \"{Name}\" before recomputation", mod.Manifest.Name);
+                await existingTask;
+            }
+            catch
+            {
+                // 忽略旧任务的异常
+            }
+        }
 
-		_activeComputations[mod.Manifest.Guid] = task;
-	}
+        await _computationSemaphore.WaitAsync();
+        try
+        {
+            _logger.LogInformation("Deleting old hash records and recomputing for updated mod \"{Name}\"", mod.Manifest.Name);
 
-	/// <summary>
-	/// 模组更新后重新计算哈希值。
-	/// 先删除旧的哈希记录，再为当前文件重新计算并存储。
-	/// </summary>
-	/// <param name="mod">已更新的模组数据</param>
-	public async Task RecomputeForUpdatedModAsync(ModData mod)
-	{
-		if (_settingsService is null)
-		{
-			_logger.LogWarning("ModHashService not initialized, skipping hash recomputation for mod \"{Name}\"", mod.Manifest.Name);
-			return;
-		}
+            // 删除旧哈希记录
+            await _fileHashRepository.DeleteForModAsync(_settingsService.StorageDirectory, mod.Manifest.Guid);
 
-		// 先取消正在进行的旧任务（如果有）
-		if (_activeComputations.TryRemove(mod.Manifest.Guid, out var existingTask))
-		{
-			try
-			{
-				_logger.LogDebug("Cancelling existing hash computation for mod \"{Name}\" before recomputation", mod.Manifest.Name);
-				await existingTask;
-			}
-			catch
-			{
-				// 忽略旧任务的异常
-			}
-		}
+            // 重新计算并存储新哈希值（不使用缓存，因为文件已全部更新）
+            await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
+                mod.Directory,
+                mod.Manifest.Guid,
+                _fileHashRepository,
+                _settingsService.StorageDirectory);
 
-		await _computationSemaphore.WaitAsync();
-		try
-		{
-			_logger.LogInformation("Deleting old hash records and recomputing for updated mod \"{Name}\"", mod.Manifest.Name);
+            _logger.LogInformation("File hashes recomputed and stored for updated mod \"{Name}\"", mod.Manifest.Name);
+        }
+        catch (DatabaseReadOnlyException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to recompute file hashes for updated mod \"{Name}\"", mod.Manifest.Name);
+        }
+        finally
+        {
+            _computationSemaphore.Release();
+        }
+    }
 
-			// 删除旧哈希记录
-			await _fileHashRepository.DeleteForModAsync(_settingsService.StorageDirectory, mod.Manifest.Guid);
+    /// <summary>
+    /// 删除指定模组的文件哈希缓存记录
+    /// </summary>
+    /// <param name="mod">要清理哈希记录的模组</param>
+    public async Task DeleteForModAsync(ModData mod)
+    {
+        if (_settingsService is null)
+        {
+            _logger.LogWarning("ModHashService not initialized, skipping hash deletion for mod \"{Name}\"", mod.Manifest.Name);
+            return;
+        }
 
-			// 重新计算并存储新哈希值（不使用缓存，因为文件已全部更新）
-			await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
-				mod.Directory,
-				mod.Manifest.Guid,
-				_fileHashRepository,
-				_settingsService.StorageDirectory);
+        // 等待该模组的后台哈希计算任务完成，释放文件句柄
+        // 避免后续删除模组目录时因文件被占用而提示"文件正在使用"
+        if (_activeComputations.TryRemove(mod.Manifest.Guid, out var existingTask))
+        {
+            _logger.LogDebug("Waiting for ongoing hash computation to complete before deleting records for mod \"{Name}\"", mod.Manifest.Name);
+            try
+            {
+                await existingTask;
+            }
+            catch
+            {
+                // 忽略计算任务中的异常（已由后台任务运行器记录并转换为失败结果）
+            }
+        }
 
-			_logger.LogInformation("File hashes recomputed and stored for updated mod \"{Name}\"", mod.Manifest.Name);
-		}
-		catch (Exception ex)
-		{
-			_logger.LogError(ex, "Failed to recompute file hashes for updated mod \"{Name}\"", mod.Manifest.Name);
-		}
-		finally
-		{
-			_computationSemaphore.Release();
-		}
-	}
+        try
+        {
+            await _fileHashRepository.DeleteForModAsync(_settingsService.StorageDirectory, mod.Manifest.Guid);
+            _logger.LogDebug("Hash records deleted for mod \"{Name}\"", mod.Manifest.Name);
+        }
+        catch (DatabaseReadOnlyException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete hash records for mod \"{Name}\"", mod.Manifest.Name);
+        }
+    }
 
-	/// <summary>
-	/// 删除指定模组的文件哈希缓存记录
-	/// </summary>
-	/// <param name="mod">要清理哈希记录的模组</param>
-	public async Task DeleteForModAsync(ModData mod)
-	{
-		if (_settingsService is null)
-		{
-			_logger.LogWarning("ModHashService not initialized, skipping hash deletion for mod \"{Name}\"", mod.Manifest.Name);
-			return;
-		}
+    /// <summary>
+    /// 版本升级迁移：为所有现有模组计算并存储 SHA-256 文件哈希值。
+    ///
+    /// 通过 SQLite PRAGMA user_version 跟踪迁移状态：
+    /// - 检查当前 user_version，若小于 HashMigrationVersion(1)，则执行迁移
+    /// - 迁移完成后设置 user_version = HashMigrationVersion
+    ///
+    /// 迁移过程使用信号量控制并发数，避免大量计算导致磁盘 IO 饱和。
+    /// 单个模组计算失败不会影响其他模组的迁移。
+    /// </summary>
+    /// <param name="mods">所有现有的模组列表</param>
+    public async Task MigrateExistingModsAsync(
+        IEnumerable<ModData> mods,
+        CancellationToken cancellationToken = default)
+    {
+        if (_settingsService is null)
+        {
+            _logger.LogWarning("ModHashService not initialized, skipping hash migration");
+            return;
+        }
 
-		// 等待该模组的后台哈希计算任务完成，释放文件句柄
-		// 避免后续删除模组目录时因文件被占用而提示"文件正在使用"
-		if (_activeComputations.TryRemove(mod.Manifest.Guid, out var existingTask))
-		{
-			_logger.LogDebug("Waiting for ongoing hash computation to complete before deleting records for mod \"{Name}\"", mod.Manifest.Name);
-			try
-			{
-				await existingTask;
-			}
-			catch
-			{
-				// 忽略计算任务中的异常（已在 ComputeAndStoreForModAsync 中记录）
-			}
-		}
+        var storageDir = _settingsService.StorageDirectory;
+        try
+        {
+            _databaseService.EnsureWritable(storageDir);
+        }
+        catch (DatabaseReadOnlyException ex)
+        {
+            _logger.LogWarning(ex, "Skipping hash migration while the database is read-only");
+            return;
+        }
+        var currentVersion = GetMigrationVersion(storageDir);
 
-		try
-		{
-			await _fileHashRepository.DeleteForModAsync(_settingsService.StorageDirectory, mod.Manifest.Guid);
-			_logger.LogDebug("Hash records deleted for mod \"{Name}\"", mod.Manifest.Name);
-		}
-		catch (Exception ex)
-		{
-			_logger.LogError(ex, "Failed to delete hash records for mod \"{Name}\"", mod.Manifest.Name);
-		}
-	}
+        if (currentVersion >= HashMigrationVersion)
+        {
+            _logger.LogDebug("Hash migration already completed (version {Version}), skipping", currentVersion);
+            return;
+        }
 
-	/// <summary>
-	/// 版本升级迁移：为所有现有模组计算并存储 SHA-256 文件哈希值。
-	/// 
-	/// 通过 SQLite PRAGMA user_version 跟踪迁移状态：
-	/// - 检查当前 user_version，若小于 HashMigrationVersion(1)，则执行迁移
-	/// - 迁移完成后设置 user_version = HashMigrationVersion
-	/// 
-	/// 迁移过程使用信号量控制并发数，避免大量计算导致磁盘 IO 饱和。
-	/// 单个模组计算失败不会影响其他模组的迁移。
-	/// </summary>
-	/// <param name="mods">所有现有的模组列表</param>
-	public async Task MigrateExistingModsAsync(IEnumerable<ModData> mods)
-	{
-		if (_settingsService is null)
-		{
-			_logger.LogWarning("ModHashService not initialized, skipping hash migration");
-			return;
-		}
+        // 收集所有模组为列表
+        var modList = mods.ToList();
+        if (modList.Count == 0)
+        {
+            _logger.LogInformation("No mods to migrate, setting migration version to {Version}", HashMigrationVersion);
+            SetMigrationVersion(storageDir, HashMigrationVersion);
+            return;
+        }
 
-		var storageDir = _settingsService.StorageDirectory;
-		var currentVersion = GetMigrationVersion(storageDir);
+        _logger.LogInformation(
+            "Starting hash migration from version {CurrentVersion} to {TargetVersion} for {Count} mods",
+            currentVersion, HashMigrationVersion, modList.Count);
 
-		if (currentVersion >= HashMigrationVersion)
-		{
-			_logger.LogDebug("Hash migration already completed (version {Version}), skipping", currentVersion);
-			return;
-		}
+        // 通知 UI：迁移开始
+        MigrationProgressChanged?.Invoke(new HashMigrationProgress
+        {
+            IsMigrating = true,
+            TotalCount = modList.Count,
+            Message = _localizationService.Format("ModHashService.ComputingFingerprints", new { count = modList.Count })
+        });
+        var backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypeHash"],
+            _localizationService.Format("ModHashService.ComputingFingerprints", new { count = modList.Count }));
+        _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
 
-		// 收集所有模组为列表
-		var modList = mods.ToList();
-		if (modList.Count == 0)
-		{
-			_logger.LogInformation("No mods to migrate, setting migration version to {Version}", HashMigrationVersion);
-			SetMigrationVersion(storageDir, HashMigrationVersion);
-			return;
-		}
+        var migratedCount = 0;
+        var failedCount = 0;
 
-		_logger.LogInformation(
-			"Starting hash migration from version {CurrentVersion} to {TargetVersion} for {Count} mods",
-			currentVersion, HashMigrationVersion, modList.Count);
+        foreach (var mod in modList)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // 每处理一个模组，通知 UI 更新进度
+            MigrationProgressChanged?.Invoke(new HashMigrationProgress
+            {
+                IsMigrating = true,
+                CurrentModName = mod.Manifest.Name,
+                CompletedCount = migratedCount + failedCount,
+                TotalCount = modList.Count,
+                FailedCount = failedCount,
+                Message = _localizationService.Format("ModHashService.FingerprintProgress", new
+                {
+                    current = migratedCount + failedCount + 1,
+                    total = modList.Count,
+                    name = mod.Manifest.Name
+                })
+            });
+            _backgroundTaskService.Update(
+                backgroundTask,
+                _localizationService.Format("ModHashService.FingerprintProgress", new
+                {
+                    current = migratedCount + failedCount + 1,
+                    total = modList.Count,
+                    name = mod.Manifest.Name
+                }),
+                (double)(migratedCount + failedCount) / modList.Count,
+                false);
 
-		// 通知 UI：迁移开始
-		MigrationProgressChanged?.Invoke(new HashMigrationProgress
-		{
-			IsMigrating = true,
-			TotalCount = modList.Count,
-			Message = _localizationService["ModHashService.ComputingFingerprints"].Replace("{count}", modList.Count.ToString())
-		});
-		var backgroundTask = _backgroundTaskService.Add(
-			_localizationService["BackgroundTasksPage.TaskTypeHash"],
-			_localizationService["ModHashService.ComputingFingerprints"].Replace("{count}", modList.Count.ToString()));
-		_backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
+            // 注册到 _activeComputations，确保 DeleteForModAsync 能等待迁移完成后再删除目录
+            // 避免迁移读取大文件时因文件被占用而导致删除失败
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _activeComputations[mod.Manifest.Guid] = tcs.Task;
 
-		var migratedCount = 0;
-		var failedCount = 0;
+            try
+            {
+                await _computationSemaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    _logger.LogDebug("Migrating hashes for mod \"{Name}\" ({Index}/{Total})",
+                        mod.Manifest.Name, migratedCount + failedCount + 1, modList.Count);
 
-		foreach (var mod in modList)
-		{
-			// 每处理一个模组，通知 UI 更新进度
-			MigrationProgressChanged?.Invoke(new HashMigrationProgress
-			{
-				IsMigrating = true,
-				CurrentModName = mod.Manifest.Name,
-				CompletedCount = migratedCount + failedCount,
-				TotalCount = modList.Count,
-				FailedCount = failedCount,
-				Message = _localizationService["ModHashService.FingerprintProgress"]
-					.Replace("{current}", (migratedCount + failedCount + 1).ToString())
-					.Replace("{total}", modList.Count.ToString())
-					.Replace("{name}", mod.Manifest.Name)
-			});
-			_backgroundTaskService.Update(
-				backgroundTask,
-				_localizationService["ModHashService.FingerprintProgress"]
-					.Replace("{current}", (migratedCount + failedCount + 1).ToString())
-					.Replace("{total}", modList.Count.ToString())
-					.Replace("{name}", mod.Manifest.Name),
-				(double)(migratedCount + failedCount) / modList.Count,
-				false);
+                    await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
+                        mod.Directory,
+                        mod.Manifest.Guid,
+                        _fileHashRepository,
+                        storageDir);
 
-			// 注册到 _activeComputations，确保 DeleteForModAsync 能等待迁移完成后再删除目录
-			// 避免迁移读取大文件时因文件被占用而导致删除失败
-			var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-			_activeComputations[mod.Manifest.Guid] = tcs.Task;
+                    migratedCount++;
+                }
+                catch (Exception ex)
+                {
+                    failedCount++;
+                    _logger.LogError(ex, "Failed to migrate hashes for mod \"{Name}\" ({Guid}), continuing with remaining mods",
+                        mod.Manifest.Name, mod.Manifest.Guid);
+                }
+                finally
+                {
+                    _computationSemaphore.Release();
+                }
+            }
+            finally
+            {
+                // 通知等待者：该模组的哈希计算已全部完成，文件句柄已释放
+                tcs.TrySetResult();
+                _activeComputations.TryRemove(mod.Manifest.Guid, out _);
+                _backgroundTaskService.Update(backgroundTask, progress: (double)(migratedCount + failedCount) / modList.Count, isIndeterminate: false);
+            }
+        }
 
-			try
-			{
-				await _computationSemaphore.WaitAsync();
-				try
-				{
-					_logger.LogDebug("Migrating hashes for mod \"{Name}\" ({Index}/{Total})",
-						mod.Manifest.Name, migratedCount + failedCount + 1, modList.Count);
+        // 迁移完成后更新版本号
+        SetMigrationVersion(storageDir, HashMigrationVersion);
 
-					await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
-						mod.Directory,
-						mod.Manifest.Guid,
-						_fileHashRepository,
-						storageDir);
+        // 通知 UI：迁移完成
+        MigrationProgressChanged?.Invoke(new HashMigrationProgress
+        {
+            IsMigrating = false,
+            CompletedCount = migratedCount,
+            TotalCount = modList.Count,
+            FailedCount = failedCount,
+            Message = failedCount > 0
+                ? _localizationService.Format("ModHashService.FingerprintDone", new { success = migratedCount, fail = failedCount })
+                : _localizationService.Format("ModHashService.FingerprintReady", new { count = migratedCount })
+        });
+        _backgroundTaskService.Complete(
+            backgroundTask,
+            failedCount > 0
+                ? _localizationService.Format("ModHashService.FingerprintDone", new { success = migratedCount, fail = failedCount })
+                : _localizationService.Format("ModHashService.FingerprintReady", new { count = migratedCount }));
 
-					migratedCount++;
-				}
-				catch (Exception ex)
-				{
-					failedCount++;
-					_logger.LogError(ex, "Failed to migrate hashes for mod \"{Name}\" ({Guid}), continuing with remaining mods",
-						mod.Manifest.Name, mod.Manifest.Guid);
-				}
-				finally
-				{
-					_computationSemaphore.Release();
-				}
-			}
-			finally
-			{
-				// 通知等待者：该模组的哈希计算已全部完成，文件句柄已释放
-				tcs.TrySetResult();
-				_activeComputations.TryRemove(mod.Manifest.Guid, out _);
-				_backgroundTaskService.Update(backgroundTask, progress: (double)(migratedCount + failedCount) / modList.Count, isIndeterminate: false);
-			}
-		}
+        _logger.LogInformation(
+            "Hash migration completed: {Migrated} mods migrated, {Failed} mods failed, migration version set to {Version}",
+            migratedCount, failedCount, HashMigrationVersion);
+    }
 
-		// 迁移完成后更新版本号
-		SetMigrationVersion(storageDir, HashMigrationVersion);
+    /// <summary>
+    /// 获取数据库迁移版本号
+    /// </summary>
+    private int GetMigrationVersion(string storageDirectory)
+    {
+        try
+        {
+            using var connection = _databaseService.OpenConnection(storageDirectory);
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA user_version;";
+            var result = cmd.ExecuteScalar();
+            return Convert.ToInt32(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read migration version, assuming 0");
+            return 0;
+        }
+    }
 
-		// 通知 UI：迁移完成
-		MigrationProgressChanged?.Invoke(new HashMigrationProgress
-		{
-			IsMigrating = false,
-			CompletedCount = migratedCount,
-			TotalCount = modList.Count,
-			FailedCount = failedCount,
-			Message = failedCount > 0
-				? _localizationService["ModHashService.FingerprintDone"]
-					.Replace("{success}", migratedCount.ToString())
-					.Replace("{fail}", failedCount.ToString())
-				: _localizationService["ModHashService.FingerprintReady"]
-					.Replace("{count}", migratedCount.ToString())
-		});
-		_backgroundTaskService.Complete(
-			backgroundTask,
-			failedCount > 0
-				? _localizationService["ModHashService.FingerprintDone"]
-					.Replace("{success}", migratedCount.ToString())
-					.Replace("{fail}", failedCount.ToString())
-				: _localizationService["ModHashService.FingerprintReady"]
-					.Replace("{count}", migratedCount.ToString()));
+    /// <summary>
+    /// 设置数据库迁移版本号
+    /// </summary>
+    private void SetMigrationVersion(string storageDirectory, int version)
+    {
+        _databaseService.EnsureWritable(storageDirectory);
+        try
+        {
+            using var connection = _databaseService.OpenConnection(storageDirectory);
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"PRAGMA user_version = {version};";
+            cmd.ExecuteNonQuery();
+            _logger.LogDebug("Migration version set to {Version}", version);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to set migration version to {Version}", version);
+        }
+    }
 
-		_logger.LogInformation(
-			"Hash migration completed: {Migrated} mods migrated, {Failed} mods failed, migration version set to {Version}",
-			migratedCount, failedCount, HashMigrationVersion);
-	}
+    /// <summary>
+    /// 强制重新计算所有模组的文件哈希值（由用户在设置页面手动触发）。
+    /// 先重置迁移版本号，再执行完整的哈希迁移流程。
+    /// 迁移进度通过 <see cref="MigrationProgressChanged"/> 事件报告。
+    /// </summary>
+    /// <param name="mods">所有现有模组列表</param>
+    public async Task ForceRecomputeAllAsync(IEnumerable<ModData> mods)
+    {
+        if (_settingsService is null)
+        {
+            _logger.LogWarning("ModHashService not initialized, skipping force recompute");
+            return;
+        }
 
-	/// <summary>
-	/// 获取数据库迁移版本号
-	/// </summary>
-	private int GetMigrationVersion(string storageDirectory)
-	{
-		try
-		{
-			using var connection = _databaseService.OpenConnection(storageDirectory);
-			using var cmd = connection.CreateCommand();
-			cmd.CommandText = "PRAGMA user_version;";
-			var result = cmd.ExecuteScalar();
-			return Convert.ToInt32(result);
-		}
-		catch (Exception ex)
-		{
-			_logger.LogWarning(ex, "Failed to read migration version, assuming 0");
-			return 0;
-		}
-	}
+        var storageDir = _settingsService.StorageDirectory;
+        _databaseService.EnsureWritable(storageDir);
+        _logger.LogInformation("Force recomputing all file hashes (resetting migration version)");
 
-	/// <summary>
-	/// 设置数据库迁移版本号
-	/// </summary>
-	private void SetMigrationVersion(string storageDirectory, int version)
-	{
-		try
-		{
-			using var connection = _databaseService.OpenConnection(storageDirectory);
-			using var cmd = connection.CreateCommand();
-			cmd.CommandText = $"PRAGMA user_version = {version};";
-			cmd.ExecuteNonQuery();
-			_logger.LogDebug("Migration version set to {Version}", version);
-		}
-		catch (Exception ex)
-		{
-			_logger.LogError(ex, "Failed to set migration version to {Version}", version);
-		}
-	}
+        // 先将迁移版本号重置为 0，使 MigrateExistingModsAsync 重新执行完整的哈希计算流程
+        SetMigrationVersion(storageDir, 0);
 
-	/// <summary>
-	/// 强制重新计算所有模组的文件哈希值（由用户在设置页面手动触发）。
-	/// 先重置迁移版本号，再执行完整的哈希迁移流程。
-	/// 迁移进度通过 <see cref="MigrationProgressChanged"/> 事件报告。
-	/// </summary>
-	/// <param name="mods">所有现有模组列表</param>
-	public async Task ForceRecomputeAllAsync(IEnumerable<ModData> mods)
-	{
-		if (_settingsService is null)
-		{
-			_logger.LogWarning("ModHashService not initialized, skipping force recompute");
-			return;
-		}
-
-		var storageDir = _settingsService.StorageDirectory;
-		_logger.LogInformation("Force recomputing all file hashes (resetting migration version)");
-
-		// 先将迁移版本号重置为 0，使 MigrateExistingModsAsync 重新执行完整的哈希计算流程
-		SetMigrationVersion(storageDir, 0);
-
-		await MigrateExistingModsAsync(mods);
-	}
+        await MigrateExistingModsAsync(mods);
+    }
 }

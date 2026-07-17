@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
 using System.IO;
+using Helldivers2ModManager.Core.Compatibility;
 
 namespace Helldivers2ModManager.ViewModels;
 
@@ -38,6 +39,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     private readonly SettingsService _settingsService;
     private readonly LocalizationService _localizationService;
     private readonly BackgroundTaskService _backgroundTaskService;
+    private readonly IVersionCheckCoordinator _versionCheckCoordinator;
 
     [ObservableProperty]
     private bool _isCheckingVersion;
@@ -68,7 +70,8 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         ModService modService,
         SettingsService settingsService,
         LocalizationService localizationService,
-        BackgroundTaskService backgroundTaskService)
+        BackgroundTaskService backgroundTaskService,
+        IVersionCheckCoordinator versionCheckCoordinator)
     {
         _logger = logger;
         _versionCheckService = versionCheckService;
@@ -77,6 +80,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         _settingsService = settingsService;
         _localizationService = localizationService;
         _backgroundTaskService = backgroundTaskService;
+        _versionCheckCoordinator = versionCheckCoordinator;
     }
 
     /// <summary>
@@ -186,7 +190,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 return;
 
             _logger.LogInformation("New mod \"{Name}\", checking version compatibility...", mod.Manifest.Name);
-            var result = await _versionCheckService.CheckSingleModAsync(mod);
+            var result = await CheckSingleModWithCoordinatorAsync(mod, CancellationToken.None);
             if (result is not null)
             {
                 var vm = mods.FirstOrDefault(v => v.Guid == mod.Manifest.Guid);
@@ -199,7 +203,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
 
                 VersionCheckSummary = result.Status == ModVersionStatus.Incompatible
                     ? $"{_localizationService["VersionCheck.IncompatibleFound"]}{mod.Manifest.Name}"
-                    : $"{_localizationService["VersionCheck.NewModPrefix"]}{mod.Manifest.Name}{_localizationService["VersionCheck.NewModSuffix"]}";
+                    : _localizationService.Format("VersionCheck.NewModComplete", new { modName = mod.Manifest.Name });
                 OnPropertyChanged(nameof(HasVersionCheckResult));
             }
         }
@@ -237,8 +241,8 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             if (cached.Count > 0)
             {
                 VersionCheckSummary = IncompatibleModCount > 0
-                    ? _localizationService["VersionCheck.IncompatibleCached"].Replace("{IncompatibleModCount}", IncompatibleModCount.ToString())
-                    : _localizationService["VersionCheck.AllCompatibleCached"].Replace("{CompatibleModCount}", CompatibleModCount.ToString());
+                    ? _localizationService.Format("VersionCheck.IncompatibleCached", new { IncompatibleModCount })
+                    : _localizationService.Format("VersionCheck.AllCompatibleCached", new { CompatibleModCount });
                 OnPropertyChanged(nameof(HasVersionCheckResult));
             }
 
@@ -315,7 +319,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         var changedMods = GetNewOrChangedMods(mods).ToList();
         if (changedMods.Count > 0)
         {
-            VersionCheckSummary = _localizationService["VersionCheck.CheckingChanged"].Replace("{changedModCount}", changedMods.Count.ToString());
+            VersionCheckSummary = _localizationService.Format("VersionCheck.CheckingChanged", new { changedModCount = changedMods.Count });
             for (var i = 0; i < changedMods.Count; i++)
             {
                 var vm = changedMods[i];
@@ -325,7 +329,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                     changedMods.Count > 0 ? (double)i / changedMods.Count : 1,
                     false);
 
-                var result = await _versionCheckService.CheckSingleModAsync(vm.Data);
+                var result = await CheckSingleModWithCoordinatorAsync(vm.Data, CancellationToken.None);
                 if (result is not null)
                 {
                     vm.GameUnitVersion = result.GameVersion;
@@ -340,6 +344,65 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                     false);
             }
         }
+    }
+
+    private async Task<ModVersionCheckResult> CheckSingleModWithCoordinatorAsync(
+        ModData mod,
+        CancellationToken cancellationToken)
+    {
+        var patchFiles = mod.Directory
+            .EnumerateFiles("*", SearchOption.AllDirectories)
+            .Where(static file => file.Name.Contains(".patch_", StringComparison.OrdinalIgnoreCase))
+            .Where(static file => !file.Name.Contains(".hd2mm-repair-", StringComparison.OrdinalIgnoreCase))
+            .Where(static file => !file.Name.Contains(".hd2mm-backup", StringComparison.OrdinalIgnoreCase))
+            .Where(static file => !file.Name.EndsWith(".gpu_resources", StringComparison.OrdinalIgnoreCase))
+            .Where(static file => !file.Name.EndsWith(".stream", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (patchFiles.Length == 0)
+        {
+            return new ModVersionCheckResult
+            {
+                Status = ModVersionStatus.Unknown,
+                LastChecked = DateTime.Now
+            };
+        }
+
+        var gameDataDirectory = Path.Combine(_settingsService.GameDirectory, "data");
+        var results = new List<CompatibilityResult>(patchFiles.Length);
+        foreach (var patchFile in patchFiles)
+        {
+            results.Add(await _versionCheckCoordinator.CheckAsync(
+                patchFile.FullName,
+                gameDataDirectory,
+                cancellationToken));
+        }
+
+        var state = results.Any(static result => result.State == CompatibilityState.Incompatible)
+            ? ModVersionStatus.Incompatible
+            : results.All(static result => result.State == CompatibilityState.Compatible)
+                ? ModVersionStatus.Compatible
+                : ModVersionStatus.Unknown;
+        var referenceVersions = results
+            .SelectMany(static result => result.ReferenceVersions?.Values ?? [])
+            .Distinct()
+            .ToArray();
+        var observations = results
+            .SelectMany(static result => result.Observations ?? [])
+            .Select(static observation => new PatchUnitInfo
+            {
+                FileName = Path.GetFileName(observation.PatchPath),
+                FileId = observation.FileId,
+                Version = observation.Version,
+                DataSize = observation.DataSize
+            });
+
+        return new ModVersionCheckResult
+        {
+            Status = state,
+            GameVersion = referenceVersions.Length == 1 ? referenceVersions[0] : 0,
+            LastChecked = DateTime.Now,
+            PatchUnits = new ObservableCollection<PatchUnitInfo>(observations)
+        };
     }
 
     private void UpdateStatistics(ObservableCollection<ModViewModel> mods)
@@ -362,11 +425,11 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     {
         if (IncompatibleModCount > 0)
         {
-            VersionCheckSummary = _localizationService["VersionCheck.IncompatibleFoundMsg"].Replace("{IncompatibleModCount}", IncompatibleModCount.ToString());
+            VersionCheckSummary = _localizationService.Format("VersionCheck.IncompatibleFoundMsg", new { IncompatibleModCount });
         }
         else if (CompatibleModCount > 0)
         {
-            VersionCheckSummary = _localizationService["VersionCheck.AllCompatible"].Replace("{CompatibleModCount}", CompatibleModCount.ToString());
+            VersionCheckSummary = _localizationService.Format("VersionCheck.AllCompatible", new { CompatibleModCount });
         }
         else
         {

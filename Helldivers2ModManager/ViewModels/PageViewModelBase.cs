@@ -4,27 +4,27 @@ namespace Helldivers2ModManager.ViewModels;
 
 internal abstract class PageViewModelBase : ObservableObject, IDisposable
 {
-	public abstract string Title { get; }
+    public abstract string Title { get; }
 
-	private bool _disposed;
+    private bool _disposed;
 
-	public void Dispose()
-	{
-		Dispose(true);
-		GC.SuppressFinalize(this);
-	}
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
 
-	protected virtual void Dispose(bool disposing)
-	{
-		if (_disposed) return;
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
 
-		if (disposing)
-		{
-			OnDispose();
-		}
+        if (disposing)
+        {
+            OnDispose();
+        }
 
-		_disposed = true;
-	}
+        _disposed = true;
+    }
 
-	protected virtual void OnDispose() { }
+    protected virtual void OnDispose() { }
 }

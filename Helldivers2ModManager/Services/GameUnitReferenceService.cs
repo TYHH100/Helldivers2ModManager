@@ -4,35 +4,36 @@ using System.IO;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using Helldivers2ModManager.Core.Compatibility;
 
 namespace Helldivers2ModManager.Services;
 
-internal sealed partial class VersionCheckService
+internal sealed class GameUnitReferenceService
 {
     private const byte DsarCompressionNone = 0;
     private const byte DsarCompressionLz4 = 3;
     private const byte DsarChunkStart = 2;
     private const int MaxBundleResourceBytes = 64 * 1024 * 1024;
+    private const long UnitTypeId = unchecked((long)16187218042980615487UL);
+    private const int PatchHeaderMagic = unchecked((int)0xF0000011);
+    private const int HeaderSize = 72;
+    private const int TypeEntrySize = 32;
+    private const int FileEntrySize = 80;
+    private readonly ILogger _logger;
+    private readonly SettingsService _settingsService;
+    private readonly LocalizationService _localizationService;
     private readonly SemaphoreSlim _gameReferenceSemaphore = new(1, 1);
     private GameUnitReferenceIndex? _gameReferenceIndex;
 
-    private sealed record DsarChunk(
-        ulong UncompressedOffset,
-        ulong CompressedOffset,
-        int UncompressedSize,
-        int CompressedSize,
-        byte Compression,
-        byte Flags);
-
-    private sealed record BundleInfo(
-        string Path,
-        DsarChunk[] Chunks,
-        Dictionary<ulong, int> ChunkByOffset);
-
-    private sealed record PackageItem(
-        ulong ArchiveOffset,
-        ulong BundleOffset,
-        byte BundleIndex);
+    public GameUnitReferenceService(
+        ILogger logger,
+        SettingsService settingsService,
+        LocalizationService localizationService)
+    {
+        _logger = logger;
+        _settingsService = settingsService;
+        _localizationService = localizationService;
+    }
 
     private sealed record GameUnitLocator(
         string PackageName,
@@ -50,26 +51,7 @@ internal sealed partial class VersionCheckService
         public HashSet<long> AmbiguousUnitIds { get; } = [];
     }
 
-    private sealed class GameUnitReferenceLookup
-    {
-        public Dictionary<long, GameUnitReferenceData> References { get; } = [];
-        public HashSet<long> MissingUnitIds { get; } = [];
-        public HashSet<long> AmbiguousUnitIds { get; } = [];
-        public string? ErrorMessage { get; init; }
-    }
-
-    private sealed class GameUnitReferenceData
-    {
-        public required long FileId { get; init; }
-        public required uint Version { get; init; }
-        public required byte[] LodGroupData { get; init; }
-        public required uint[] MeshIds { get; init; }
-        public uint GpuSize { get; init; }
-        public required string PackageName { get; init; }
-        public string Signature => $"{Version:X8}:{Convert.ToHexString(SHA256.HashData(LodGroupData))}";
-    }
-
-    private async Task<GameUnitReferenceLookup> GetGameUnitReferencesAsync(
+    internal async Task<GameUnitReferenceLookup> GetGameUnitReferencesAsync(
         IReadOnlyCollection<long> unitIds)
     {
         var dataDirectory = GetConfiguredGameDataDirectory();
@@ -162,6 +144,48 @@ internal sealed partial class VersionCheckService
         {
             _gameReferenceSemaphore.Release();
         }
+    }
+
+    internal async Task<GameReferenceSnapshot> GetCoreGameReferencesAsync(
+        string gameDataDirectory,
+        IReadOnlyCollection<long> unitIds,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var configuredDirectory = GetConfiguredGameDataDirectory();
+        if (configuredDirectory is null ||
+            !string.Equals(
+                Path.GetFullPath(gameDataDirectory).TrimEnd(Path.DirectorySeparatorChar),
+                configuredDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return new GameReferenceSnapshot(
+                ReferenceSource.Unavailable,
+                null,
+                new Dictionary<long, GameUnitReference>(),
+                "Reference.GameDataUnavailable");
+        }
+
+        var lookup = await GetGameUnitReferencesAsync(unitIds).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!string.IsNullOrWhiteSpace(lookup.ErrorMessage))
+        {
+            return new GameReferenceSnapshot(
+                ReferenceSource.Unavailable,
+                null,
+                new Dictionary<long, GameUnitReference>(),
+                "Reference.GameDataReadFailed");
+        }
+
+        var fingerprintSeed = _gameReferenceIndex?.CacheKey ?? configuredDirectory.FullName;
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintSeed)));
+        var references = lookup.References.ToDictionary(
+            static pair => pair.Key,
+            static pair => new GameUnitReference(pair.Key, pair.Value.Version, pair.Value.Signature));
+        return new GameReferenceSnapshot(
+            ReferenceSource.CurrentGameFiles,
+            fingerprint,
+            references);
     }
 
     private DirectoryInfo? GetConfiguredGameDataDirectory()
@@ -382,7 +406,7 @@ internal sealed partial class VersionCheckService
         };
     }
 
-    private static uint[] ReadUnitMeshIds(byte[] unitData, int declaredLength)
+    internal static uint[] ReadUnitMeshIds(byte[] unitData, int declaredLength)
     {
         if (declaredLength < 0x68)
             return [];
@@ -405,7 +429,7 @@ internal sealed partial class VersionCheckService
         return result;
     }
 
-    private static byte[] DecodeDsarFile(string path)
+    internal static byte[] DecodeDsarFile(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         var chunks = ReadDsarChunkTable(stream);
@@ -420,7 +444,7 @@ internal sealed partial class VersionCheckService
         return output.ToArray();
     }
 
-    private static BundleInfo LoadBundleInfo(string path)
+    internal static BundleInfo LoadBundleInfo(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         var chunks = ReadDsarChunkTable(stream);
@@ -470,7 +494,7 @@ internal sealed partial class VersionCheckService
         return chunks;
     }
 
-    private static byte[] ReadBundleResource(
+    internal static byte[] ReadBundleResource(
         BundleInfo bundle,
         ulong startOffset,
         int maxBytes)
@@ -517,7 +541,7 @@ internal sealed partial class VersionCheckService
         return decoded;
     }
 
-    private static string ReadNullTerminatedString(byte[] data, uint offset)
+    internal static string ReadNullTerminatedString(byte[] data, uint offset)
     {
         if (offset >= data.Length)
             return string.Empty;

@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Components;
+using Helldivers2ModManager.Core.UI;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Models.Nexus;
 using Helldivers2ModManager.Services;
@@ -26,6 +27,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     private readonly INexusModsService _nexusModsService;
     private readonly LocalizationService _localizationService;
     private readonly VersionCheckService _versionCheckService;
+    private readonly IDialogService _dialogService;
 
     public Guid Guid => _mod.Manifest.Guid;
 
@@ -82,11 +84,20 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     /// </summary>
     public string LastCheckDisplayText => LastVersionCheck == default
         ? ""
-        : string.Format(_localizationService["DashboardPage.LastCheckFormat"], LastVersionCheck);
+        : _localizationService.Format("DashboardPage.LastCheckFormat", new { time = LastVersionCheck });
+
+    public string VersionStatusDisplayText => _localizationService.Format(
+        "DashboardPage.VersionStatus",
+        new { status = GetVersionStatusText(VersionStatus) });
 
     partial void OnLastVersionCheckChanged(DateTime value)
     {
         OnPropertyChanged(nameof(LastCheckDisplayText));
+    }
+
+    partial void OnVersionStatusChanged(ModVersionStatus value)
+    {
+        OnPropertyChanged(nameof(VersionStatusDisplayText));
     }
 
     /// <summary>
@@ -214,7 +225,14 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     private readonly ModData _mod;
 
-    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService, INexusModsService nexusModsService, LocalizationService localizationService, VersionCheckService versionCheckService)
+    public ModViewModel(
+        ModData mod,
+        ILogger logger,
+        SettingsService settingsService,
+        INexusModsService nexusModsService,
+        LocalizationService localizationService,
+        VersionCheckService versionCheckService,
+        IDialogService dialogService)
     {
         _mod = mod;
         _logger = logger;
@@ -222,8 +240,10 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         _nexusModsService = nexusModsService;
         _localizationService = localizationService;
         _versionCheckService = versionCheckService;
+        _dialogService = dialogService;
 
         _mod.PropertyChanged += ModData_PropertyChanged;
+        _localizationService.LocaleChanged += LocalizationService_LocaleChanged;
 
         switch (_mod.Manifest.Version)
         {
@@ -232,24 +252,40 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
                 break;
 
             case ManifestVersion.V1:
-            {
-                var manifest = (V1ModManifest)_mod.Manifest;                    
-                if (manifest.Options is null)
+                {
+                    var manifest = (V1ModManifest)_mod.Manifest;
+                    if (manifest.Options is null)
+                        break;
+                    Options = new ModOptionViewModel[manifest.Options.Count];
+                    for (int i = 0; i < manifest.Options.Count; i++)
+                        Options[i] = new ModOptionViewModel(this, i);
                     break;
-                Options = new ModOptionViewModel[manifest.Options.Count];
-                for (int i = 0; i < manifest.Options.Count; i++)
-                    Options[i] = new ModOptionViewModel(this, i);
-                break;
-            }
-            
+                }
+
             case ManifestVersion.V2:
                 throw new NotSupportedException();
-            
+
             default:
                 throw new NotImplementedException();
         }
 
         LoadIcon();
+    }
+
+    private string GetVersionStatusText(ModVersionStatus status) => status switch
+    {
+        ModVersionStatus.Compatible => _localizationService["Converters.Compatible"],
+        ModVersionStatus.Incompatible => _localizationService["Converters.Incompatible"],
+        ModVersionStatus.Unknown => _localizationService["Converters.UnableToConfirm"],
+        ModVersionStatus.Checking => _localizationService["Converters.Checking"],
+        ModVersionStatus.Error => _localizationService["Converters.CheckFailed"],
+        _ => _localizationService["Converters.Unknown"]
+    };
+
+    private void LocalizationService_LocaleChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(LastCheckDisplayText));
+        OnPropertyChanged(nameof(VersionStatusDisplayText));
     }
 
     private void ModData_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -271,18 +307,18 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
                     break;
 
                 case ManifestVersion.V1:
-                {
-                    var manifest = (V1ModManifest)_mod.Manifest;
-                    if (manifest.Options is null)
                     {
-                        Options = null;
+                        var manifest = (V1ModManifest)_mod.Manifest;
+                        if (manifest.Options is null)
+                        {
+                            Options = null;
+                            break;
+                        }
+                        Options = new ModOptionViewModel[manifest.Options.Count];
+                        for (int i = 0; i < manifest.Options.Count; i++)
+                            Options[i] = new ModOptionViewModel(this, i);
                         break;
                     }
-                    Options = new ModOptionViewModel[manifest.Options.Count];
-                    for (int i = 0; i < manifest.Options.Count; i++)
-                        Options[i] = new ModOptionViewModel(this, i);
-                    break;
-                }
             }
             OnPropertyChanged(nameof(Options));
             OnPropertyChanged(nameof(LegacyOptions));
@@ -384,10 +420,10 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             NexusModInfo = mod;
 
             var updateInfo = await _nexusModsService.CheckForUpdatesAsync(nexusData.ModId.ToString(), nexusData.Version);
-            
+
             if (updateInfo.HasUpdate)
             {
-                NexusUpdateStatus = _localizationService["ModViewModel.UpdateAvailable"].Replace("{version}", updateInfo.LatestVersion);
+                NexusUpdateStatus = _localizationService.Format("ModViewModel.UpdateAvailable", new { version = updateInfo.LatestVersion });
             }
             else
             {
@@ -397,7 +433,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to check for updates for mod {ModName}", Name);
-            NexusUpdateStatus = _localizationService["ModViewModel.CheckFailed"].Replace("{message}", ex.Message);
+            NexusUpdateStatus = _localizationService.Format("ModViewModel.CheckFailed", new { message = ex.Message });
         }
         finally
         {
@@ -406,18 +442,15 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void OpenNexusPage()
+    public async Task OpenNexusPage(CancellationToken cancellationToken)
     {
         var nexusData = GetNexusData();
         if (nexusData == null || nexusData.ModId == 0)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
-            {
-                Message = _localizationService["ModViewModel.NoNexusData"]
-            });
+            await ShowInfoAsync(_localizationService["ModViewModel.NoNexusData"], cancellationToken);
             return;
         }
-        
+
         var url = $"https://www.nexusmods.com/helldivers2/mods/{nexusData.ModId}";
         try
         {
@@ -430,10 +463,9 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open Nexus page for mod {ModName}", Name);
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = _localizationService["ModViewModel.OpenNexusFailed"].Replace("{message}", ex.Message)
-            });
+            await ShowErrorAsync(
+                _localizationService.Format("ModViewModel.OpenNexusFailed", new { message = ex.Message }),
+                cancellationToken);
         }
     }
 
@@ -441,15 +473,12 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     /// 显示版本兼容性详细信息
     /// </summary>
     [RelayCommand]
-    public async Task ShowVersionDetail()
+    public async Task ShowVersionDetail(CancellationToken cancellationToken)
     {
         // 从未检查过时提示用户
         if (VersionStatus == ModVersionStatus.Unknown && LastVersionCheck == default)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
-            {
-                Message = _localizationService["ModViewModel.NoVersionCheckHint"]
-            });
+            await ShowInfoAsync(_localizationService["ModViewModel.NoVersionCheckHint"], cancellationToken);
             return;
         }
 
@@ -463,7 +492,11 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             _ => _localizationService["Converters.Unknown"]
         };
 
-        var detailResult = await _versionCheckService.CheckSingleModAsync(_mod, GameUnitVersion == 0 ? null : GameUnitVersion, includeDetailedAnalysis: true);
+        var detailResult = await _versionCheckService.CheckSingleModAsync(
+            _mod,
+            GameUnitVersion == 0 ? null : GameUnitVersion,
+            includeDetailedAnalysis: true,
+            cancellationToken);
         if (detailResult is not null)
         {
             GameUnitVersion = detailResult.GameVersion;
@@ -490,10 +523,10 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         var sb = new StringBuilder();
 
         // 标题行
-        sb.AppendLine(_localizationService["ModViewModel.VersionInfoHeader"].Replace("{name}", Name));
-        sb.AppendLine(_localizationService["ModViewModel.VersionStatusLabel"].Replace("{status}", statusText));
-        sb.AppendLine(_localizationService["ModViewModel.VersionUnitLabel"].Replace("{unit}", $"0x{effectiveGameVersion:X8} ({effectiveGameVersion})"));
-        sb.AppendLine(_localizationService["ModViewModel.VersionTimeLabel"].Replace("{time}", LastVersionCheck.ToString("yyyy-MM-dd HH:mm:ss")));
+        sb.AppendLine(_localizationService.Format("ModViewModel.VersionInfoHeader", new { name = Name }));
+        sb.AppendLine(_localizationService.Format("ModViewModel.VersionStatusLabel", new { status = statusText }));
+        sb.AppendLine(_localizationService.Format("ModViewModel.VersionUnitLabel", new { unit = $"0x{effectiveGameVersion:X8} ({effectiveGameVersion})" }));
+        sb.AppendLine(_localizationService.Format("ModViewModel.VersionTimeLabel", new { time = LastVersionCheck }));
         sb.AppendLine();
 
         // Patch Units 部分
@@ -615,12 +648,22 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             Analysis = detailedAnalysis ?? new ModDetailedAnalysis(),
             FullReport = sb.ToString(),
             ModDirectory = _mod.Directory,
-            RefreshAsync = ShowVersionDetail
+            RefreshAsync = () => ShowVersionDetail(CancellationToken.None)
         });
 
         if (detailResult is not null)
             VersionCheckRefreshed?.Invoke(this, EventArgs.Empty);
     }
+
+    private Task ShowInfoAsync(string message, CancellationToken cancellationToken) =>
+        _dialogService.ShowMessageAsync(
+            new MessageDialogRequest(_localizationService["MessageBox.Info"], message),
+            cancellationToken);
+
+    private Task ShowErrorAsync(string message, CancellationToken cancellationToken) =>
+        _dialogService.ShowMessageAsync(
+            new MessageDialogRequest(_localizationService["MessageBox.Error"], message, MessageDialogSeverity.Error),
+            cancellationToken);
 
     public bool HasNexusData => GetNexusData() != null && GetNexusData()!.ModId != 0;
 
@@ -636,5 +679,6 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _mod.PropertyChanged -= ModData_PropertyChanged;
+        _localizationService.LocaleChanged -= LocalizationService_LocaleChanged;
     }
 }

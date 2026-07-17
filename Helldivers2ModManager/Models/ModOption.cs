@@ -7,15 +7,15 @@ namespace Helldivers2ModManager.Models;
 internal sealed class ModOption : IJsonSerializable<ModOption>
 {
     public required string Name { get; init; }
-    
+
     public string Description { get; init; } = string.Empty;
-    
+
     public IReadOnlyList<string>? Include { get; init; }
-    
+
     public string? Image { get; init; }
-    
+
     public IReadOnlyList<ModSubOption>? SubOptions { get; init; }
-    
+
     public static ModOption Deserialize(JsonElement root, ILogger? logger = null)
     {
         var name = root.GetProperty<string>(nameof(Name));

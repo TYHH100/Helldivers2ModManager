@@ -17,80 +17,80 @@ namespace Helldivers2ModManager.Extensions;
 [MarkupExtensionReturnType(typeof(string))]
 internal sealed class LocExtension : MarkupExtension
 {
-	/// <summary>
-	/// 本地化键名，格式为 "页面/模块名.键名"（如 "DashboardPage.SearchWatermark"）。
-	/// </summary>
-	public string Key { get; set; } = string.Empty;
+    /// <summary>
+    /// 本地化键名，格式为 "页面/模块名.键名"（如 "DashboardPage.SearchWatermark"）。
+    /// </summary>
+    public string Key { get; set; } = string.Empty;
 
-	/// <summary>
-	/// 当键不存在时的备用文本（默认为空，显示 "[Key]" 占位符）。
-	/// </summary>
-	public string Fallback { get; set; } = string.Empty;
+    /// <summary>
+    /// 当键不存在时的备用文本（默认为空，显示 "[Key]" 占位符）。
+    /// </summary>
+    public string Fallback { get; set; } = string.Empty;
 
-	public LocExtension() { }
+    public LocExtension() { }
 
-	public LocExtension(string key)
-	{
-		Key = key;
-	}
+    public LocExtension(string key)
+    {
+        Key = key;
+    }
 
-	public override object ProvideValue(IServiceProvider serviceProvider)
-	{
-		// 设计模式下返回键名
-		if (DesignerProperties.GetIsInDesignMode(new DependencyObject()))
-			return $"[{Key}]";
+    public override object ProvideValue(IServiceProvider serviceProvider)
+    {
+        // 设计模式下返回键名
+        if (DesignerProperties.GetIsInDesignMode(new DependencyObject()))
+            return $"[{Key}]";
 
-		if (string.IsNullOrEmpty(Key))
-			return string.Empty;
+        if (string.IsNullOrEmpty(Key))
+            return string.Empty;
 
-		var service = GetLocalizationService();
-		if (service is null)
-			return $"[{Key}]";
+        var service = GetLocalizationService();
+        if (service is null)
+            return $"[{Key}]";
 
-		// 创建一个绑定到 LocalizationService 的索引器
-		// 使用 Binding 的 Path 语法 "[Key]" 访问索引器
-		var binding = new System.Windows.Data.Binding
-		{
-			Path = new PropertyPath($"Item[{Key}]"),
-			Source = service,
-			Mode = System.Windows.Data.BindingMode.OneWay,
-			FallbackValue = $"[{Key}]",
-			TargetNullValue = $"[{Key}]"
-		};
+        // 创建一个绑定到 LocalizationService 的索引器
+        // 使用 Binding 的 Path 语法 "[Key]" 访问索引器
+        var binding = new System.Windows.Data.Binding
+        {
+            Path = new PropertyPath($"Item[{Key}]"),
+            Source = service,
+            Mode = System.Windows.Data.BindingMode.OneWay,
+            FallbackValue = $"[{Key}]",
+            TargetNullValue = $"[{Key}]"
+        };
 
-		// 使用绑定机制返回，实现语言切换自动更新
-		return binding.ProvideValue(serviceProvider);
-	}
+        // 使用绑定机制返回，实现语言切换自动更新
+        return binding.ProvideValue(serviceProvider);
+    }
 
-	/// <summary>
-	/// 在运行时从 App.Host 获取本地化服务实例（缓存）。
-	/// </summary>
-	private static LocalizationService? s_service;
-	private static readonly object s_lock = new();
+    /// <summary>
+    /// 在运行时从 App.Host 获取本地化服务实例（缓存）。
+    /// </summary>
+    private static LocalizationService? s_service;
+    private static readonly object s_lock = new();
 
-	private static LocalizationService? GetLocalizationService()
-	{
-		if (s_service is not null)
-			return s_service;
+    private static LocalizationService? GetLocalizationService()
+    {
+        if (s_service is not null)
+            return s_service;
 
-		lock (s_lock)
-		{
-			if (s_service is not null)
-				return s_service;
+        lock (s_lock)
+        {
+            if (s_service is not null)
+                return s_service;
 
-			try
-			{
-				if (Application.Current is App app && app.Host is not null)
-				{
-					s_service = app.Host.Services.GetService(typeof(LocalizationService)) as LocalizationService;
-				}
-			}
-			catch
-			{
-				// 初始化阶段服务可能尚未就绪
-			}
-		}
+            try
+            {
+                if (Application.Current is App app && app.Host is not null)
+                {
+                    s_service = app.Host.Services.GetService(typeof(LocalizationService)) as LocalizationService;
+                }
+            }
+            catch
+            {
+                // 初始化阶段服务可能尚未就绪
+            }
+        }
 
-		return s_service;
-	}
+        return s_service;
+    }
 }

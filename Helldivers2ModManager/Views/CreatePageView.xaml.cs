@@ -4,8 +4,8 @@ namespace Helldivers2ModManager.Views;
 
 internal partial class CreatePageView : Page
 {
-	public CreatePageView()
-	{
-		InitializeComponent();
-	}
+    public CreatePageView()
+    {
+        InitializeComponent();
+    }
 }

@@ -9,18 +9,7 @@ internal sealed class ModSeparator
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    public string Name { get; set; } = GetDefaultName();
-
-    private static string GetDefaultName()
-    {
-        try
-        {
-            if (System.Windows.Application.Current is App app)
-                return (app.Host?.Services?.GetService(typeof(Services.LocalizationService)) as Services.LocalizationService)?["DashboardPage.DefaultSeparatorName"] ?? "新分隔符";
-        }
-        catch { }
-        return "新分隔符";
-    }
+    public string Name { get; set; } = string.Empty;
 
     public string Color { get; set; } = "#FF3B82F6";
 

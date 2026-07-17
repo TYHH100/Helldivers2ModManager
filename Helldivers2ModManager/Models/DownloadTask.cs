@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -8,6 +9,7 @@ public enum DownloadStatus
 {
     Pending,
     Downloading,
+    AwaitingImport,
     Completed,
     Failed,
     Cancelled
@@ -41,6 +43,9 @@ public sealed partial class DownloadTask : ObservableObject
 
     [ObservableProperty]
     private string? _errorMessage;
+
+    [ObservableProperty]
+    private string? _localFilePath;
 
     /// <summary>
     /// 当前下载速度（字节/秒）
@@ -80,11 +85,7 @@ public sealed partial class DownloadTask : ObservableObject
         {
             if (EstimatedTimeRemaining == TimeSpan.Zero || EstimatedTimeRemaining == TimeSpan.MaxValue)
                 return string.Empty;
-            if (EstimatedTimeRemaining.TotalHours >= 1)
-                return $"{(int)EstimatedTimeRemaining.TotalHours}时{EstimatedTimeRemaining.Minutes}分";
-            if (EstimatedTimeRemaining.TotalMinutes >= 1)
-                return $"{(int)EstimatedTimeRemaining.TotalMinutes}分{EstimatedTimeRemaining.Seconds}秒";
-            return $"{EstimatedTimeRemaining.Seconds}秒";
+            return EstimatedTimeRemaining.ToString("g", CultureInfo.CurrentCulture);
         }
     }
 

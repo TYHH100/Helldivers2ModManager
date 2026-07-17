@@ -8,7 +8,7 @@
 	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:NexusDownloadPageViewModel}"
-	  d:Background="{StaticResource MicaBackgroundBrush}"
+	  d:Background="{DynamicResource MicaBackgroundBrush}"
 	  d:DesignWidth="1000"
 	  d:DesignHeight="700"
 	  Title="{Binding Title}">
@@ -27,7 +27,8 @@
 				<ColumnDefinition Width="Auto"/>
 			</Grid.ColumnDefinitions>
 			
-			<Button Grid.Column="0"
+				<Button Grid.Column="0"
+					AutomationProperties.Name="{loc:Loc Common.Back}"
 					Command="{Binding GoBackCommand}"
 					Style="{StaticResource FluentIconButton}"
 					Margin="0 0 12 0">
@@ -76,7 +77,7 @@
 						</Grid>
 						<TextBlock Text="{Binding StatusMessage}"
 								   FontSize="12"
-								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 								   Margin="0 8 0 0"/>
 					</StackPanel>
 				</Border>
@@ -101,7 +102,7 @@
 								<Border Grid.Column="0"
 										Width="64"
 										Height="64"
-										Background="{StaticResource NeutralBackgroundFillBrush}"
+										Background="{DynamicResource NeutralBackgroundFillBrush}"
 										CornerRadius="4">
 									<Image Source="{Binding SelectedMod.PictureUrl}"
 										   Stretch="UniformToFill"/>
@@ -111,16 +112,16 @@
 									<TextBlock Text="{Binding SelectedMod.Name}"
 											   FontSize="18"
 											   FontWeight="SemiBold"
-											   Foreground="{StaticResource NeutralForegroundBrush}"
+											   Foreground="{DynamicResource NeutralForegroundBrush}"
 											   TextWrapping="Wrap"/>
 									<TextBlock Text="{Binding SelectedMod.Author}"
 											   FontSize="14"
-											   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+											   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 											   Margin="0 4 0 0"
 											   Visibility="{Binding SelectedMod.Author, Converter={StaticResource NullToVisibilityConverter}}"/>
 									<TextBlock Text="{Binding SelectedMod.Summary}"
 											   FontSize="13"
-											   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+											   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 											   Margin="0 8 0 0"
 											   TextWrapping="Wrap"
 											   Visibility="{Binding SelectedMod.Summary, Converter={StaticResource NullToVisibilityConverter}}"/>
@@ -130,7 +131,7 @@
 							<TextBlock Text="{loc:Loc NexusDownloadPage.DownloadFiles}"
 									   FontSize="14"
 									   FontWeight="SemiBold"
-									   Foreground="{StaticResource NeutralForegroundBrush}"
+									   Foreground="{DynamicResource NeutralForegroundBrush}"
 									   Margin="0 12 0 8"/>
 							
 							<ListBox ItemsSource="{Binding ModFiles}"
@@ -148,10 +149,10 @@
 												<TextBlock Text="{Binding Name}"
 														   FontSize="14"
 														   FontWeight="SemiBold"
-														   Foreground="{StaticResource NeutralForegroundBrush}"/>
+														   Foreground="{DynamicResource NeutralForegroundBrush}"/>
 												<TextBlock Text="{Binding Version}"
 														   FontSize="12"
-														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+														   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 														   Margin="0 2 0 0"
 														   Visibility="{Binding Version, Converter={StaticResource NullToVisibilityConverter}}"/>
 											</StackPanel>
@@ -159,11 +160,11 @@
 														HorizontalAlignment="Right">
 												<TextBlock Text="{Binding SizeBytes, Converter={StaticResource BytesToSizeConverter}}"
 														   FontSize="12"
-														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+														   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 														   Visibility="{Binding SizeBytes, Converter={StaticResource NullToVisibilityConverter}}"/>
 												<TextBlock Text="{Binding UploadedAt, StringFormat='{}{0:yyyy-MM-dd}'}"
 														   FontSize="11"
-														   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+														   Foreground="{DynamicResource NeutralForegroundTertiaryBrush}"
 														   Visibility="{Binding UploadedAt, Converter={StaticResource NullToVisibilityConverter}}"/>
 											</StackPanel>
 										</Grid>
@@ -193,7 +194,7 @@
 									Visibility="{Binding SelectedMod, Converter={StaticResource InverseNullToVisibilityConverter}}">
 							<TextBlock Text="{loc:Loc NexusDownloadPage.EmptyHint}"
 									   FontSize="14"
-									   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+									   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 									   HorizontalAlignment="Center"
 									   Padding="0 20"/>
 						</StackPanel>

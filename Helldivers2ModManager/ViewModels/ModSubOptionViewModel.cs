@@ -9,39 +9,39 @@ namespace Helldivers2ModManager.ViewModels;
 
 internal sealed class ModSubOptionViewModel(ModViewModel vm, int idx, int subIdx) : ObservableObject
 {
-	public string Name => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Name;
+    public string Name => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Name;
 
-	public string Description => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Description;
+    public string Description => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Description;
 
-	public Visibility ImageVisibility => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Image is not null ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ImageVisibility => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Image is not null ? Visibility.Visible : Visibility.Collapsed;
 
-	public ImageSource? Image
-	{
-		get
-		{
-			var path = ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Image;
-			if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
-				return null;
-			try
-			{
-				var fullPath = Path.Combine(_vm.Data.Directory.FullName, path);
-				if (!File.Exists(fullPath))
-					return null;
-				var bmp = new BitmapImage();
-				bmp.BeginInit();
-				bmp.UriSource = new Uri(fullPath);
-				bmp.CacheOption = BitmapCacheOption.OnLoad;
-				bmp.EndInit();
-				return bmp;
-			}
-			catch
-			{
-				return null;
-			}
-		}
-	}
+    public ImageSource? Image
+    {
+        get
+        {
+            var path = ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Image;
+            if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
+                return null;
+            try
+            {
+                var fullPath = Path.Combine(_vm.Data.Directory.FullName, path);
+                if (!File.Exists(fullPath))
+                    return null;
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(fullPath);
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.EndInit();
+                return bmp;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
 
-	private readonly ModViewModel _vm = vm;
-	private readonly int _idx = idx;
-	private readonly int _subIdx = subIdx;
+    private readonly ModViewModel _vm = vm;
+    private readonly int _idx = idx;
+    private readonly int _subIdx = subIdx;
 }

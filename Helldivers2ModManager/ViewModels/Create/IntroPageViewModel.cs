@@ -2,8 +2,8 @@
 
 internal sealed class IntroPageViewModel : WizardViewModelBase
 {
-	public override bool IsValid()
-	{
-		return true;
-	}
+    public override bool IsValid()
+    {
+        return true;
+    }
 }

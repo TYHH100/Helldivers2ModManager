@@ -49,7 +49,7 @@ internal sealed class PatchUnitInfo
     /// Unit 版本号（从二进制数据偏移 0x2C 处读取的 4 字节 uint32）
     /// </summary>
     public uint Version { get; init; }
-    
+
     /// <summary>
     /// Unit 资源数据大小（字节）
     /// </summary>

@@ -33,9 +33,9 @@
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="16 8"/>
         <Setter Property="Margin" Value="4"/>
@@ -65,7 +65,7 @@
                         </Border>
                         <Border x:Name="HighlightLayer"
                                 Background="Transparent"
-                                BorderBrush="{StaticResource SystemAccentBrush}"
+                                BorderBrush="{DynamicResource SystemAccentBrush}"
                                 BorderThickness="2"
                                 CornerRadius="4"
                                 Opacity="0"/>
@@ -77,12 +77,12 @@
                     <ControlTemplate.Triggers>
                         <!-- Hover State -->
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
                             <Setter TargetName="HighlightLayer" Property="Opacity" Value="0.8"/>
                         </Trigger>
                         <!-- Pressed State -->
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundBrush}"/>
                             <Setter TargetName="BackgroundLayer" Property="RenderTransform">
                                 <Setter.Value>
                                     <ScaleTransform ScaleX="0.98" ScaleY="0.98"/>
@@ -91,8 +91,8 @@
                         </Trigger>
                         <!-- Disabled State -->
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundDisabledBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
                             <Setter TargetName="BackgroundLayer" Property="Opacity" Value="0.5"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -103,8 +103,8 @@
 
     <!-- Primary Accent Button -->
     <Style x:Key="FluentPrimaryButton" TargetType="Button" BasedOn="{StaticResource FluentButtonBase}">
-        <Setter Property="Background" Value="{StaticResource SystemAccentBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SystemAccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -116,7 +116,7 @@
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="4">
                             <Border.Effect>
-                                <DropShadowEffect Color="{StaticResource SystemAccentColor}"
+                                <DropShadowEffect Color="{DynamicResource SystemAccentColor}"
                                                   Direction="270"
                                                   ShadowDepth="0"
                                                   BlurRadius="12"
@@ -135,7 +135,7 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource SystemAccentLight1Brush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource SystemAccentLight1Brush}"/>
                             <Setter TargetName="BackgroundLayer" Property="Effect">
                                 <Setter.Value>
                                     <DropShadowEffect Color="{StaticResource SystemAccentColorLight1}"
@@ -147,7 +147,7 @@
                             </Setter>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource SystemAccentDark1Brush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource SystemAccentDark1Brush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="#7D7D7D"/>
@@ -163,7 +163,7 @@
     <!-- Secondary/Outline Button -->
     <Style x:Key="FluentSecondaryButton" TargetType="Button" BasedOn="{StaticResource FluentButtonBase}">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderStrongBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderStrongBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -180,15 +180,15 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-                            <Setter TargetName="BackgroundLayer" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
-                            <Setter TargetName="BackgroundLayer" Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundDisabledBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -285,15 +285,15 @@
     <!-- Remove/Delete Button -->
     <Style x:Key="RemoveButton" TargetType="Button" BasedOn="{StaticResource FluentDangerButton}">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
-        <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
                 <Setter Property="Background" Value="#40C42B1C"/>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-                <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
                 <Setter Property="Foreground" Value="White"/>
             </Trigger>
         </Style.Triggers>
@@ -308,7 +308,7 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -319,14 +319,14 @@
                                 CornerRadius="18"
                                 Opacity="0"/>
                         <Ellipse x:Name="HighlightEllipse"
-                                 Fill="{StaticResource SystemAccentBrush}"
+                                 Fill="{DynamicResource SystemAccentBrush}"
                                  Opacity="0"/>
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
                             <Setter TargetName="BackgroundLayer" Property="Opacity" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
@@ -347,13 +347,13 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12 10"/>
-        <Setter Property="CaretBrush" Value="{StaticResource SystemAccentBrush}"/>
-        <Setter Property="SelectionBrush" Value="{StaticResource SystemAccentBrush}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource SystemAccentBrush}"/>
+        <Setter Property="SelectionBrush" Value="{DynamicResource SystemAccentBrush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
@@ -365,7 +365,7 @@
                                 CornerRadius="4"
                                 MinHeight="36"/>
                         <Border x:Name="FocusBorder"
-                                BorderBrush="{StaticResource SystemAccentBrush}"
+                                BorderBrush="{DynamicResource SystemAccentBrush}"
                                 BorderThickness="2"
                                 CornerRadius="4"
                                 Opacity="0"/>
@@ -375,7 +375,7 @@
                         <!-- 占位提示文字，Text为空且Tag非空时显示 -->
                         <TextBlock x:Name="PlaceholderText"
                                    Text="{TemplateBinding Tag}"
-                                   Foreground="{StaticResource NeutralForegroundDisabledBrush}"
+                                   Foreground="{DynamicResource NeutralForegroundDisabledBrush}"
                                    Margin="{TemplateBinding Padding}"
                                    VerticalAlignment="Center"
                                    IsHitTestVisible="False"
@@ -383,15 +383,15 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{StaticResource NeutralBorderStrongBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{DynamicResource NeutralBorderStrongBrush}"/>
                         </Trigger>
                         <Trigger Property="IsFocused" Value="True">
                             <Setter TargetName="FocusBorder" Property="Opacity" Value="1"/>
-                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
-                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundDisabledBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{DynamicResource NeutralBackgroundBrush}"/>
                         </Trigger>
                         <!-- Text为空时显示占位文字 -->
                         <Trigger Property="Text" Value="">
@@ -415,13 +415,13 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12 10"/>
-        <Setter Property="CaretBrush" Value="{StaticResource SystemAccentBrush}"/>
-        <Setter Property="SelectionBrush" Value="{StaticResource SystemAccentBrush}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource SystemAccentBrush}"/>
+        <Setter Property="SelectionBrush" Value="{DynamicResource SystemAccentBrush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="PasswordBox">
@@ -433,7 +433,7 @@
                                 CornerRadius="4"
                                 MinHeight="36"/>
                         <Border x:Name="FocusBorder"
-                                BorderBrush="{StaticResource SystemAccentBrush}"
+                                BorderBrush="{DynamicResource SystemAccentBrush}"
                                 BorderThickness="2"
                                 CornerRadius="4"
                                 Opacity="0"/>
@@ -443,15 +443,15 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{StaticResource NeutralBorderStrongBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{DynamicResource NeutralBorderStrongBrush}"/>
                         </Trigger>
                         <Trigger Property="IsFocused" Value="True">
                             <Setter TargetName="FocusBorder" Property="Opacity" Value="1"/>
-                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
-                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundDisabledBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{DynamicResource NeutralBackgroundBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -468,9 +468,9 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderStrongBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderStrongBrush}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -503,20 +503,20 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="CheckBorder" Property="Background" Value="{StaticResource SystemAccentBrush}"/>
-                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource SystemAccentBrush}"/>
+                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                             <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="CheckBorder" Property="Background" Value="{StaticResource SystemAccentDark1Brush}"/>
+                            <Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource SystemAccentDark1Brush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
-                            <Setter TargetName="CheckBorder" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
-                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundDisabledBrush}"/>
+                            <Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource NeutralBackgroundBrush}"/>
+                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -533,9 +533,9 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderStrongBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderStrongBrush}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -570,20 +570,20 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="RadioBorder" Property="Background" Value="{StaticResource SystemAccentBrush}"/>
-                            <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="RadioBorder" Property="Background" Value="{DynamicResource SystemAccentBrush}"/>
+                            <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                             <Setter TargetName="RadioMark" Property="Visibility" Value="Visible"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="RadioBorder" Property="Background" Value="{StaticResource SystemAccentDark1Brush}"/>
+                            <Setter TargetName="RadioBorder" Property="Background" Value="{DynamicResource SystemAccentDark1Brush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
-                            <Setter TargetName="RadioBorder" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
-                            <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundDisabledBrush}"/>
+                            <Setter TargetName="RadioBorder" Property="Background" Value="{DynamicResource NeutralBackgroundBrush}"/>
+                            <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -600,9 +600,9 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12 10"/>
         <Setter Property="MinHeight" Value="36"/>
@@ -634,7 +634,7 @@
                                                 <Path x:Name="Arrow"
                                                       Grid.Column="1"
                                                       Data="M0,0 L4,5 L8,0"
-                                                      Stroke="{StaticResource NeutralForegroundBrush}"
+                                                      Stroke="{DynamicResource NeutralForegroundBrush}"
                                                       StrokeThickness="2"
                                                       HorizontalAlignment="Center"
                                                       VerticalAlignment="Center"/>
@@ -643,10 +643,10 @@
                                     </Grid>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource NeutralBorderStrongBrush}"/>
+                                            <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource NeutralBorderStrongBrush}"/>
                                         </Trigger>
                                         <Trigger Property="IsChecked" Value="True">
-                                            <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                            <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                                             <Setter TargetName="Arrow" Property="Data" Value="M0,5 L4,0 L8,5"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
@@ -669,8 +669,8 @@
                                     MinWidth="{TemplateBinding ActualWidth}"
                                     MaxHeight="{TemplateBinding MaxDropDownHeight}"
                                     Margin="0 4 0 0"
-                                    Background="{StaticResource NeutralBackgroundAltBrush}"
-                                    BorderBrush="{StaticResource NeutralBorderBrush}"
+                                    Background="{DynamicResource NeutralBackgroundAltBrush}"
+                                    BorderBrush="{DynamicResource NeutralBorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="4"
                                     Effect="{StaticResource ShadowElevationLevel2}">
@@ -682,7 +682,7 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundDisabledBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -695,7 +695,7 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Padding" Value="12 8"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -710,10 +710,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{DynamicResource SystemAccentBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -729,14 +729,14 @@
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
-        <Setter Property="Foreground" Value="{StaticResource SystemAccentBrush}"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SystemAccentBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
                     <Grid>
                         <Border Height="4"
-                                Background="{StaticResource NeutralBackgroundFillBrush}"
+                                Background="{DynamicResource NeutralBackgroundFillBrush}"
                                 CornerRadius="2"
                                 VerticalAlignment="Center"/>
                         <Track x:Name="PART_Track">
@@ -758,7 +758,7 @@
                                             <Ellipse x:Name="ThumbEllipse"
                                                      Width="20"
                                                      Height="20"
-                                                     Fill="{StaticResource SystemAccentBrush}"
+                                                     Fill="{DynamicResource SystemAccentBrush}"
                                                      Cursor="Hand">
                                                 <Ellipse.Effect>
                                                     <DropShadowEffect Color="Black"
@@ -769,10 +769,10 @@
                                             </Ellipse>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="ThumbEllipse" Property="Fill" Value="{StaticResource SystemAccentLight1Brush}"/>
+                                                    <Setter TargetName="ThumbEllipse" Property="Fill" Value="{DynamicResource SystemAccentLight1Brush}"/>
                                                 </Trigger>
                                                 <Trigger Property="IsDragging" Value="True">
-                                                    <Setter TargetName="ThumbEllipse" Property="Fill" Value="{StaticResource SystemAccentDark1Brush}"/>
+                                                    <Setter TargetName="ThumbEllipse" Property="Fill" Value="{DynamicResource SystemAccentDark1Brush}"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
@@ -810,7 +810,7 @@
                 <ControlTemplate TargetType="ScrollBar">
                     <Grid>
                         <Border x:Name="TrackBackground"
-                                Background="{StaticResource NeutralBackgroundFillBrush}"
+                                Background="{DynamicResource NeutralBackgroundFillBrush}"
                                 CornerRadius="4"
                                 Opacity="0.3"/>
                         <Track x:Name="PART_Track" IsDirectionReversed="True">
@@ -828,7 +828,7 @@
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
                                             <Border x:Name="ThumbBorder"
-                                                    Background="{StaticResource NeutralBorderStrongBrush}"
+                                                    Background="{DynamicResource NeutralBorderStrongBrush}"
                                                     CornerRadius="4"
                                                     Margin="1">
                                                 <Border.Effect>
@@ -840,10 +840,10 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource SystemAccentBrush}"/>
+                                                    <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource SystemAccentBrush}"/>
                                                 </Trigger>
                                                 <Trigger Property="IsDragging" Value="True">
-                                                    <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource SystemAccentDark1Brush}"/>
+                                                    <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource SystemAccentDark1Brush}"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
@@ -924,9 +924,9 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundAltBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundAltBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12 8"/>
         <Setter Property="HasDropShadow" Value="True"/>
@@ -956,8 +956,8 @@
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="4"/>
         <Setter Property="Template">
@@ -980,7 +980,7 @@
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Padding" Value="12 8"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -995,10 +995,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="BackgroundBorder" Property="Background" Value="{DynamicResource SystemAccentBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1011,8 +1011,8 @@
     <!-- ============================================ -->
 
     <Style x:Key="FluentCard" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource LayerBackgroundBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralStrokeBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource LayerBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralStrokeBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Padding" Value="16"/>
@@ -1021,8 +1021,8 @@
 
     <!-- Elevated Card -->
     <Style x:Key="FluentElevatedCard" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource LayerBackgroundFillBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource LayerBackgroundFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Padding" Value="16"/>

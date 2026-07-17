@@ -14,7 +14,7 @@ internal static class ModManifest
         AllowTrailingCommas = true,
         CommentHandling = JsonCommentHandling.Skip,
     };
-    
+
     public static IModManifest DeserializeFromDirectory(DirectoryInfo dir, ILogger? logger = null)
     {
         foreach (var file in dir.EnumerateFiles())
@@ -22,7 +22,7 @@ internal static class ModManifest
                 return DeserializeFromFile(file, logger);
         throw new FileNotFoundException($"Could not find file `manifest.json` in `{dir.FullName}`!");
     }
-    
+
     public static IModManifest DeserializeFromFile(FileInfo file, ILogger? logger = null)
     {
         using var stream = file.OpenRead();
@@ -34,7 +34,7 @@ internal static class ModManifest
     {
         var root = doc.RootElement;
         var version = ManifestVersion.Legacy;
-        
+
         if (root.TryGetProperty(nameof(IModManifest.Version), JsonValueKind.Number, out var prop))
         {
             if (prop.TryGetInt32(out var value))
@@ -45,10 +45,10 @@ internal static class ModManifest
                     _ => throw new UnknownManifestVersionException()
                 };
             else
-                {
-                    logger?.LogWarning($"Could not convert value of property \"{nameof(IModManifest.Version)}\" to `{typeof(int).Name}`! Automatically converting to v1.");
-                    version = ManifestVersion.V1;
-                }
+            {
+                logger?.LogWarning($"Could not convert value of property \"{nameof(IModManifest.Version)}\" to `{typeof(int).Name}`! Automatically converting to v1.");
+                version = ManifestVersion.V1;
+            }
         }
 
         return version switch
@@ -87,14 +87,14 @@ internal static class ModManifest
             };
 
         return new LegacyModManifest
-		{
-			Guid = Guid.NewGuid(),
-			Name = dir.Name,
-			Description = "A locally imported mod.",
+        {
+            Guid = Guid.NewGuid(),
+            Name = dir.Name,
+            Description = "A locally imported mod.",
             Options = dirs.Select(static d => d.Name).ToArray(),
-			IconPath = iconPath,
-		};
-	}
+            IconPath = iconPath,
+        };
+    }
 
     private static string? SelectBestIcon(List<FileInfo> imageFiles, string[] priorityNames, ILogger? logger)
     {

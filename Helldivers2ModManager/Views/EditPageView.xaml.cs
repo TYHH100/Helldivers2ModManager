@@ -7,17 +7,17 @@ namespace Helldivers2ModManager.Views;
 
 internal partial class EditPageView : Page
 {
-	public EditPageView()
-	{
-		InitializeComponent();
-	}
+    public EditPageView()
+    {
+        InitializeComponent();
+    }
 
-	private void OptionImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-	{
-		if (sender is Image image && image.Source != null)
-		{
-			var viewModel = DataContext as EditPageViewModel;
-			viewModel?.ShowImagePreviewCommand.Execute(image.Source);
-		}
-	}
+    private void OptionImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Image image && image.Source != null)
+        {
+            var viewModel = DataContext as EditPageViewModel;
+            viewModel?.ShowImagePreviewCommand.Execute(image.Source);
+        }
+    }
 }

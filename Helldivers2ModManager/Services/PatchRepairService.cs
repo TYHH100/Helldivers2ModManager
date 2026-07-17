@@ -6,9 +6,43 @@ using System.Runtime.InteropServices;
 
 namespace Helldivers2ModManager.Services;
 
-internal sealed partial class VersionCheckService
+internal sealed class PatchRepairService
 {
-    private readonly SemaphoreSlim _repairSemaphore = new(1, 1);
+    private const long UnitTypeId = unchecked((long)16187218042980615487UL);
+    private const int PatchHeaderMagic = unchecked((int)0xF0000011);
+    private const int HeaderSize = 72;
+    private const int TypeEntrySize = 32;
+    private const int FileEntrySize = 80;
+    private readonly ILogger _logger;
+    private readonly LocalizationService _localizationService;
+    private readonly Func<string, int, PatchTocEntry, FileStream, LocalizationService, Task<UnitResourceDetail>> _analyzeUnit;
+    private readonly Func<FileInfo, FileStream> _openPatch;
+    private readonly Func<FileStream, long, byte[], Task<bool>> _readAt;
+    private readonly Action<IReadOnlyList<PatchTocEntry>, long, long, PatchFileAnalysis> _validateMainRanges;
+    private readonly Action<FileInfo, IReadOnlyList<PatchTocEntry>, PatchFileAnalysis> _validateCompanion;
+    private readonly Func<ulong, uint, long, bool> _isRangeInBounds;
+    private readonly Func<string, bool> _isMainPatchFile;
+    public PatchRepairService(
+        ILogger logger,
+        LocalizationService localizationService,
+        Func<string, int, PatchTocEntry, FileStream, LocalizationService, Task<UnitResourceDetail>> analyzeUnit,
+        Func<FileInfo, FileStream> openPatch,
+        Func<FileStream, long, byte[], Task<bool>> readAt,
+        Action<IReadOnlyList<PatchTocEntry>, long, long, PatchFileAnalysis> validateMainRanges,
+        Action<FileInfo, IReadOnlyList<PatchTocEntry>, PatchFileAnalysis> validateCompanion,
+        Func<ulong, uint, long, bool> isRangeInBounds,
+        Func<string, bool> isMainPatchFile)
+    {
+        _logger = logger;
+        _localizationService = localizationService;
+        _analyzeUnit = analyzeUnit;
+        _openPatch = openPatch;
+        _readAt = readAt;
+        _validateMainRanges = validateMainRanges;
+        _validateCompanion = validateCompanion;
+        _isRangeInBounds = isRangeInBounds;
+        _isMainPatchFile = isMainPatchFile;
+    }
 
     private readonly record struct RepairTocEntry(
         PatchTocEntry Toc,
@@ -32,17 +66,24 @@ internal sealed partial class VersionCheckService
         public required string BackupPath { get; init; }
     }
 
-    public async Task<ModRepairPlan> CreateRepairPlanAsync(DirectoryInfo modDirectory)
+    public async Task<ModRepairPlan> CreateRepairPlanAsync(
+        DirectoryInfo modDirectory,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var actions = new List<PatchRepairAction>();
         var blockers = new List<string>();
         var patchFiles = modDirectory.GetFiles("*", SearchOption.AllDirectories)
-            .Where(f => IsMainPatchFile(f.Name))
+            .Where(f => _isMainPatchFile(f.Name))
             .ToArray();
 
         foreach (var patchFile in patchFiles)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             await InspectPatchForRepairsAsync(patchFile, actions, blockers);
+        }
 
+        cancellationToken.ThrowIfCancellationRequested();
         return new ModRepairPlan
         {
             Actions = actions,
@@ -50,119 +91,7 @@ internal sealed partial class VersionCheckService
         };
     }
 
-    public async Task<ModRepairResult> RepairModAsync(DirectoryInfo modDirectory)
-    {
-        await _repairSemaphore.WaitAsync();
-        var prepared = new List<PreparedRepair>();
-        var committed = new List<PreparedRepair>();
-        try
-        {
-            // Rebuild the plan under the repair lock so UI data cannot become a stale write plan.
-            var plan = await CreateRepairPlanAsync(modDirectory);
-            if (!plan.CanRepair)
-            {
-                return new ModRepairResult
-                {
-                    ErrorMessage = plan.BlockingReasons.Count > 0
-                        ? string.Join(Environment.NewLine, plan.BlockingReasons)
-                        : _localizationService["VersionCheckRepair.NothingToRepair"]
-                };
-            }
-
-            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-            foreach (var fileGroup in plan.Actions.GroupBy(a => a.PatchFilePath, StringComparer.OrdinalIgnoreCase))
-            {
-                var originalPath = fileGroup.Key;
-                var originalFile = new FileInfo(originalPath);
-                var temporaryPath = Path.Combine(
-                    originalFile.DirectoryName!,
-                    "." + originalFile.Name + ".hd2mm-repair-" + Guid.NewGuid().ToString("N") + ".tmp");
-                var backupPath = CreateBackupPath(originalFile, stamp);
-
-                prepared.Add(new PreparedRepair
-                {
-                    OriginalPath = originalPath,
-                    TemporaryPath = temporaryPath,
-                    BackupPath = backupPath
-                });
-
-                File.Copy(originalPath, temporaryPath, false);
-                await ApplyRepairActionsAsync(temporaryPath, fileGroup.OrderBy(a => a.Offset).ToList());
-
-                var validation = await AnalyzeSinglePatchFileStructureAsync(
-                    new FileInfo(temporaryPath),
-                    originalFile);
-                if (!IsRepairValidationSuccessful(validation, allowLegacyLayoutIssues: true))
-                {
-                    throw new InvalidDataException(_localizationService["VersionCheckRepair.ValidationFailed"]
-                        .Replace("{file}", originalFile.Name));
-                }
-
-            }
-
-
-            foreach (var item in prepared)
-            {
-                File.Replace(item.TemporaryPath, item.OriginalPath, item.BackupPath, true);
-                committed.Add(item);
-            }
-
-            foreach (var item in prepared)
-            {
-                var actionCount = plan.Actions.Count(action => string.Equals(
-                    action.PatchFilePath,
-                    item.OriginalPath,
-                    StringComparison.OrdinalIgnoreCase));
-                await TryWriteBackupMetadataAsync(
-                    item.BackupPath,
-                    item.OriginalPath,
-                    ModBackupRepairKind.SafeMetadata,
-                    actionCount);
-            }
-
-            return new ModRepairResult
-            {
-                Success = true,
-                AppliedActionCount = plan.ActionCount,
-                BackupPaths = prepared.Select(p => p.BackupPath).ToList()
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to repair mod patch metadata in {Directory}", modDirectory.FullName);
-            foreach (var item in committed.AsEnumerable().Reverse())
-            {
-                try
-                {
-                    File.Copy(item.BackupPath, item.OriginalPath, true);
-                }
-                catch (Exception rollbackException)
-                {
-                    _logger.LogCritical(rollbackException, "Failed to roll back repaired patch {Patch}", item.OriginalPath);
-                }
-            }
-
-            return new ModRepairResult { ErrorMessage = ex.Message };
-        }
-        finally
-        {
-            foreach (var item in prepared)
-            {
-                try
-                {
-                    if (File.Exists(item.TemporaryPath))
-                        File.Delete(item.TemporaryPath);
-                }
-                catch (Exception cleanupException)
-                {
-                    _logger.LogWarning(cleanupException, "Failed to remove repair temp file {File}", item.TemporaryPath);
-                }
-            }
-            _repairSemaphore.Release();
-        }
-    }
-
-    private async Task InspectPatchForRepairsAsync(
+    internal async Task InspectPatchForRepairsAsync(
         FileInfo patchFile,
         List<PatchRepairAction> actions,
         List<string> blockers,
@@ -170,9 +99,9 @@ internal sealed partial class VersionCheckService
     {
         try
         {
-            await using var stream = OpenPatchReadStream(patchFile);
+            await using var stream = _openPatch(patchFile);
             var header = new byte[HeaderSize];
-            if (!await ReadAtAsync(stream, 0, header) ||
+            if (!await _readAt(stream, 0, header) ||
                 MemoryMarshal.Read<int>(header.AsSpan(0, 4)) != PatchHeaderMagic)
             {
                 AddRepairBlocker(blockers, patchFile, "invalid patch header");
@@ -200,7 +129,7 @@ internal sealed partial class VersionCheckService
             for (var i = 0; i < numTypes; i++)
             {
                 var typeOffset = HeaderSize + (long)i * TypeEntrySize;
-                if (!await ReadAtAsync(stream, typeOffset, typeBuffer))
+                if (!await _readAt(stream, typeOffset, typeBuffer))
                 {
                     AddRepairBlocker(blockers, patchFile, "type table cannot be read");
                     return;
@@ -221,7 +150,7 @@ internal sealed partial class VersionCheckService
             for (var i = 0; i < numFiles; i++)
             {
                 var tableOffset = fileEntriesOffset + (long)i * FileEntrySize;
-                if (!await ReadAtAsync(stream, tableOffset, entryBuffer))
+                if (!await _readAt(stream, tableOffset, entryBuffer))
                 {
                     AddRepairBlocker(blockers, patchFile, "file table cannot be read");
                     return;
@@ -358,7 +287,7 @@ internal sealed partial class VersionCheckService
             }
 
             var rangeAnalysis = new PatchFileAnalysis();
-            ValidateMainDataRanges(virtualEntries, stream.Length, tableEnd, rangeAnalysis);
+            _validateMainRanges(virtualEntries, stream.Length, tableEnd, rangeAnalysis);
             if (!rangeAnalysis.MainDataBoundsValid)
             {
                 AddRepairBlocker(blockers, patchFile, "resource payload ranges overlap or exceed the patch after reconstruction");
@@ -366,7 +295,7 @@ internal sealed partial class VersionCheckService
             }
 
             var companionAnalysis = new PatchFileAnalysis();
-            ValidateCompanionFiles(companionSource ?? patchFile, virtualEntries, companionAnalysis);
+            _validateCompanion(companionSource ?? patchFile, virtualEntries, companionAnalysis);
             if ((companionAnalysis.RequiresGpuResources && !companionAnalysis.HasGpuResources) ||
                 (companionAnalysis.RequiresStream && !companionAnalysis.HasStream) ||
                 !companionAnalysis.GpuResourceBoundsValid ||
@@ -383,7 +312,7 @@ internal sealed partial class VersionCheckService
                 if (toc.TypeId != UnitTypeId)
                     continue;
 
-                var detail = await AnalyzeUnitResourceDeepAsync(
+                var detail = await _analyzeUnit(
                     patchFile.Name, i + 1, toc, stream, _localizationService);
                 if (!detail.UnitDataInBounds)
                 {
@@ -419,7 +348,7 @@ internal sealed partial class VersionCheckService
                 }
 
                 var repairedEntry = toc with { TocSize = expectedSize };
-                var repairedDetail = await AnalyzeUnitResourceDeepAsync(
+                var repairedDetail = await _analyzeUnit(
                     patchFile.Name, i + 1, repairedEntry, stream, _localizationService);
                 if (!repairedDetail.UnitDataInBounds ||
                     !repairedDetail.DeclaredSizeMatchesInternal ||
@@ -444,7 +373,7 @@ internal sealed partial class VersionCheckService
             }
 
             var repairedRangeAnalysis = new PatchFileAnalysis();
-            ValidateMainDataRanges(virtualEntries, stream.Length, tableEnd, repairedRangeAnalysis);
+            _validateMainRanges(virtualEntries, stream.Length, tableEnd, repairedRangeAnalysis);
             if (!repairedRangeAnalysis.MainDataBoundsValid)
                 AddRepairBlocker(blockers, patchFile, "proposed metadata would overlap resource payloads");
         }
@@ -493,7 +422,7 @@ internal sealed partial class VersionCheckService
         }
     }
 
-    private static bool TryInferInvalidMainOffsets(
+    private bool TryInferInvalidMainOffsets(
         FileInfo patchFile,
         IReadOnlyList<RepairTocEntry> entries,
         PatchTocEntry[] virtualEntries,
@@ -507,7 +436,7 @@ internal sealed partial class VersionCheckService
         for (var i = 0; i < virtualEntries.Length; i++)
         {
             var entry = virtualEntries[i];
-            if (!IsRangeInBounds(entry.TocOffset, entry.TocSize, fileLength) ||
+            if (!_isRangeInBounds(entry.TocOffset, entry.TocSize, fileLength) ||
                 (entry.TocSize > 0 && entry.TocOffset < (ulong)tableEnd))
             {
                 invalidIndices.Add(i);
@@ -590,7 +519,7 @@ internal sealed partial class VersionCheckService
         return true;
     }
 
-    private static async Task ApplyRepairActionsAsync(
+    internal static async Task ApplyRepairActionsAsync(
         string temporaryPath,
         IReadOnlyList<PatchRepairAction> actions)
     {
@@ -632,7 +561,7 @@ internal sealed partial class VersionCheckService
         stream.Flush(true);
     }
 
-    private static bool IsRepairValidationSuccessful(
+    internal static bool IsRepairValidationSuccessful(
         PatchFileAnalysis analysis,
         bool allowLegacyLayoutIssues = false)
     {
@@ -653,7 +582,7 @@ internal sealed partial class VersionCheckService
                    (allowLegacyLayoutIssues || !u.LayoutFormatChecked || u.LayoutFormatValid));
     }
 
-    private static string CreateBackupPath(FileInfo patchFile, string stamp)
+    internal static string CreateBackupPath(FileInfo patchFile, string stamp)
     {
         var backupName = patchFile.Name.Replace(
             ".patch_",

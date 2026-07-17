@@ -22,7 +22,7 @@
 			<LineBreak/>
 			<Run Text="{loc:Loc CreateWizard.IntroNext}"
 				 FontWeight="SemiBold"
-				 Foreground="{StaticResource SystemAccentBrush}"/>
+				 Foreground="{DynamicResource SystemAccentBrush}"/>
 		</TextBlock>
 	</StackPanel>
 </Page>

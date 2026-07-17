@@ -40,7 +40,7 @@
                         <TextBlock Grid.Column="0" Text="&#xE9F5;" FontFamily="Segoe Fluent Icons" FontSize="22" Foreground="#6a9fd8" Margin="0 0 12 0" VerticalAlignment="Top"/>
 
                         <StackPanel Grid.Column="1">
-                            <TextBlock Text="{Binding Name}" FontSize="14" Foreground="White" Margin="0 0 0 4" />
+							<TextBlock Text="{Binding Name}" TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource NeutralForegroundBrush}" Margin="0 0 0 4" />
 
                             <Border Background="#3a3a5a" CornerRadius="3" Height="6" Margin="0 0 0 4" ClipToBounds="True">
                                 <Grid>
@@ -65,12 +65,12 @@
                                 </Grid>
                             </Border>
 
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding Description}" FontSize="12" Foreground="#888" />
+							<WrapPanel Orientation="Horizontal">
+								<TextBlock Text="{Binding Description}" TextWrapping="Wrap" FontSize="12" Foreground="#888" />
                                 <TextBlock Text="{Binding ProgressText}" FontSize="12" Foreground="#888" Margin="12 0 0 0" />
-                            </StackPanel>
+							</WrapPanel>
 
-                            <TextBlock Text="{Binding ErrorMessage}" FontSize="12" Foreground="#f44336" Margin="0 4 0 0"
+							<TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" FontSize="12" Foreground="#f44336" Margin="0 4 0 0"
                                        Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}" />
                         </StackPanel>
 
@@ -98,7 +98,8 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <Button Grid.Column="0"
+                    <Button Grid.Column="0"
+                        AutomationProperties.Name="{loc:Loc Common.Back}"
                         Command="{Binding GoBackCommand}"
                         Style="{StaticResource FluentIconButton}"
                         Margin="4,3,0,4" HorizontalAlignment="Left" Width="36">
@@ -110,7 +111,8 @@
 
                 <TextBlock Grid.Column="1" Text="{loc:Loc BackgroundTasksPage.Title}" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0 8 0 8" />
 
-                <Button Grid.Column="2"
+                    <Button Grid.Column="2"
+                        AutomationProperties.Name="{loc:Loc BackgroundTasksPage.ClearCompleted}"
                         Command="{Binding ClearCompletedCommand}"
                         IsEnabled="{Binding HasCompletedTasks}"
                         Style="{StaticResource FluentIconButton}"
@@ -121,11 +123,16 @@
             </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel>
-                <ItemsControl ItemsSource="{Binding Tasks}" ItemTemplate="{StaticResource BackgroundTaskTemplate}">
-                    <ItemsControl.Style>
-                        <Style TargetType="ItemsControl">
+		<ListBox Grid.Row="1"
+				 ItemsSource="{Binding Tasks}"
+				 ItemTemplate="{StaticResource BackgroundTaskTemplate}"
+				 ItemContainerStyle="{StaticResource VirtualizedTaskListItemStyle}"
+				 Background="Transparent"
+				 BorderThickness="0"
+				 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+				 ScrollViewer.VerticalScrollBarVisibility="Auto">
+			<ListBox.Style>
+				<Style TargetType="ListBox" BasedOn="{StaticResource VirtualizedListStyle}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Tasks.Count}" Value="0">
                                     <Setter Property="Template">
@@ -141,9 +148,7 @@
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </ItemsControl.Style>
-                </ItemsControl>
-            </StackPanel>
-        </ScrollViewer>
+			</ListBox.Style>
+		</ListBox>
     </Grid>
 </UserControl>

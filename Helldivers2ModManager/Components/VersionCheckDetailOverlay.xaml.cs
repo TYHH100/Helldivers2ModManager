@@ -1,11 +1,15 @@
 using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Extensions;
+using Helldivers2ModManager.Core.UI;
+using Helldivers2ModManager.Core.Compatibility;
 using Helldivers2ModManager.Services;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.Extensions.Logging;
 
 namespace Helldivers2ModManager.Components;
 
@@ -20,6 +24,7 @@ internal sealed class VersionCheckDetailMessage
     public required string FullReport { get; init; }
     public required DirectoryInfo ModDirectory { get; init; }
     public required Func<Task> RefreshAsync { get; init; }
+    public bool IsUiTestSample { get; init; }
 }
 
 internal sealed class VersionCheckDiagnosticIssue
@@ -72,10 +77,17 @@ internal sealed class BackupHistoryItemViewData
 
 internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<VersionCheckDetailMessage>
 {
+    private static WeakReference<VersionCheckDetailOverlay>? s_current;
     private const int MaxVisibleIssues = 50;
-    private readonly LocalizationService? _localizationService;
-    private readonly VersionCheckService? _versionCheckService;
-    private readonly RepairDisclaimerService? _repairDisclaimerService;
+    private LocalizationService? _localizationService;
+    private VersionCheckService? _versionCheckService;
+    private RepairDisclaimerService? _repairDisclaimerService;
+    private IDialogService? _dialogService;
+    private IClipboardService? _clipboardService;
+    private IRepairPlanner? _repairPlanner;
+    private IRepairExecutor? _repairExecutor;
+    private ICompanionRecoveryService? _companionRecoveryService;
+    private ILogger<VersionCheckDetailOverlay>? _logger;
     private VersionCheckDetailMessage? _currentMessage;
     private ModRepairPlan? _repairPlan;
     private AssistedModRepairPlan? _automaticLodPlan;
@@ -90,25 +102,33 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
     public VersionCheckDetailOverlay()
     {
         InitializeComponent();
+        s_current = new WeakReference<VersionCheckDetailOverlay>(this);
         WeakReferenceMessenger.Default.Register<VersionCheckDetailMessage>(this);
+    }
 
-        if (Application.Current is App app &&
-            app.Host?.Services?.GetService(typeof(LocalizationService)) is LocalizationService localizationService)
-        {
-            _localizationService = localizationService;
-        }
+    internal static VersionCheckDetailOverlay? Current =>
+        s_current is not null && s_current.TryGetTarget(out var current) ? current : null;
 
-        if (Application.Current is App currentApp &&
-            currentApp.Host?.Services?.GetService(typeof(VersionCheckService)) is VersionCheckService versionCheckService)
-        {
-            _versionCheckService = versionCheckService;
-        }
-
-        if (Application.Current is App disclaimerApp &&
-            disclaimerApp.Host?.Services?.GetService(typeof(RepairDisclaimerService)) is RepairDisclaimerService disclaimerService)
-        {
-            _repairDisclaimerService = disclaimerService;
-        }
+    internal void Configure(
+        LocalizationService localizationService,
+        VersionCheckService versionCheckService,
+        RepairDisclaimerService repairDisclaimerService,
+        IDialogService dialogService,
+        IRepairPlanner repairPlanner,
+        IRepairExecutor repairExecutor,
+        ICompanionRecoveryService companionRecoveryService,
+        IClipboardService clipboardService,
+        ILogger<VersionCheckDetailOverlay> logger)
+    {
+        _localizationService = localizationService;
+        _versionCheckService = versionCheckService;
+        _repairDisclaimerService = repairDisclaimerService;
+        _dialogService = dialogService;
+        _repairPlanner = repairPlanner;
+        _repairExecutor = repairExecutor;
+        _companionRecoveryService = companionRecoveryService;
+        _clipboardService = clipboardService;
+        _logger = logger;
     }
 
     public void Receive(VersionCheckDetailMessage message)
@@ -133,8 +153,124 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         DataContext = BuildViewData(message);
         Visibility = Visibility.Visible;
         Focus();
-        _ = LoadRepairPlanAsync(message);
-        _ = LoadBackupHistoryAsync(message);
+        if (message.IsUiTestSample)
+        {
+            backupHistoryLoading.Visibility = Visibility.Collapsed;
+            backupHistorySummary.Text = L(
+                "VersionCheckBackup.None",
+                "No HD2MM repair backups were found for this mod.");
+            backupHistoryExpander.IsExpanded = true;
+            technicalDetailsExpander.IsExpanded = true;
+            return;
+        }
+        LoadRepairPlanAsync(message).Observe(
+            ex => _logger?.LogError(ex, "Failed to supervise repair plan loading"));
+        LoadBackupHistoryAsync(message).Observe(
+            ex => _logger?.LogError(ex, "Failed to supervise backup history loading"));
+    }
+
+    internal void ShowUiTestSample()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("HD2MM_RUN_UI_TESTS"), "1", StringComparison.Ordinal))
+            throw new InvalidOperationException("UI test samples are only available in UI test mode.");
+
+        var fileName = "very_long_localization_layout_sample_filename_0123456789abcdef.patch_999";
+        var unitDetails = new List<UnitResourceDetail>
+        {
+            new()
+            {
+                FileName = fileName,
+                EntryIndex = 1,
+                FileId = 0x123456789,
+                Version = 0xA4CD20,
+                DataSize = 128,
+                EndingOffset = 512,
+                ExpectedDataSize = 520,
+                DeclaredSizeMatchesInternal = false,
+                IsTruncated = true,
+                UnitDataInBounds = false,
+                LODGroupInBounds = false,
+                LayoutFormatChecked = true,
+                LayoutFormatValid = false,
+                LayoutFormatIssueCount = 3,
+                Warning = "The declared Unit data range exceeds the patch boundary and contains several legacy layout entries."
+            },
+            new()
+            {
+                FileName = fileName,
+                EntryIndex = 2,
+                FileId = 0x223456789,
+                Version = 0xA4CD21,
+                DataSize = 256,
+                EndingOffset = 400,
+                ExpectedDataSize = 408,
+                DeclaredSizeMatchesInternal = false,
+                UnitDataInBounds = true,
+                LODGroupInBounds = false,
+                Warning = "The LOD group extends beyond the Unit data declared by the table of contents."
+            }
+        };
+        var patch = new PatchFileAnalysis
+        {
+            FileName = fileName,
+            FileSize = 4_294_967_296,
+            HealthStatus = PatchHealthStatus.Corrupted,
+            NumTypes = 4,
+            NumFiles = 18,
+            TotalResources = 16,
+            TypeDistributionValid = false,
+            TypeDistributionIssueCount = 2,
+            HeaderValid = false,
+            FileEntriesInBounds = false,
+            MainDataBoundsValid = false,
+            MainDataIssueCount = 3,
+            EntryIndicesValid = false,
+            EntryIndexIssueCount = 2,
+            RequiresGpuResources = true,
+            HasGpuResources = false,
+            RequiresStream = true,
+            HasStream = false,
+            GpuResourceBoundsValid = false,
+            GpuResourceIssueCount = 4,
+            GpuAlignmentIssueCount = 2,
+            StreamBoundsValid = false,
+            StreamIssueCount = 3,
+            StreamAlignmentIssueCount = 1,
+            UnitDetails = unitDetails,
+            Message = "The patch header, resource table, and companion-file ranges contain multiple structural problems."
+        };
+        var analysis = new ModDetailedAnalysis
+        {
+            PatchFiles = [patch],
+            HasStructuralIssues = true,
+            HasCompanionFileIssues = true,
+            HasUnitStructuralIssues = true,
+            HasGpuResourceIssues = true,
+            HasStreamResourceIssues = true,
+            TotalPatchFiles = 1,
+            FilesWithUnits = 1,
+            WarningFileCount = 0,
+            CorruptedFileCount = 1
+        };
+        var directory = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "TestStorage", "Mods", "UiTestMod"));
+        Receive(new VersionCheckDetailMessage
+        {
+            ModName = "A deliberately very long mod name used to verify localized version detail layout",
+            Status = ModVersionStatus.Incompatible,
+            GameVersion = 0xA4CD36,
+            LastChecked = DateTime.UtcNow,
+            PatchUnits =
+            [
+                new PatchUnitInfo { FileName = fileName, FileId = 0x123456789, Version = 0xA4CD20, DataSize = 128 },
+                new PatchUnitInfo { FileName = fileName, FileId = 0x223456789, Version = 0xA4CD21, DataSize = 256 }
+            ],
+            Analysis = analysis,
+            FullReport = "Compatibility reference: current game files\nConfidence: high\nStructural issues: multiple\n" +
+                         "This intentionally long technical report verifies horizontal scrolling without clipping localized status text.",
+            ModDirectory = directory,
+            RefreshAsync = static () => Task.CompletedTask,
+            IsUiTestSample = true
+        });
     }
 
     private async Task LoadRepairPlanAsync(VersionCheckDetailMessage message)
@@ -156,8 +292,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             if (recoveryPlan.MissingCount > 0)
             {
                 recoveryButtonText.Text = recoveryPlan.CanRecover
-                    ? L("VersionCheckRecovery.Button", "Recover {count} companion file(s)")
-                        .Replace("{count}", recoveryPlan.RecoverableCount.ToString())
+                    ? F("VersionCheckRecovery.Button", "Recover {count} companion file(s)", new { count = recoveryPlan.RecoverableCount })
                     : L("VersionCheckRecovery.Unavailable", "No reliable companion source");
                 return;
             }
@@ -170,8 +305,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             if (plan.CanRepair)
             {
                 _useGameReferences = false;
-                repairButtonText.Text = L("VersionCheckDetail.RepairButton", "Repair {count} issue(s)")
-                    .Replace("{count}", plan.ActionCount.ToString());
+                repairButtonText.Text = F("VersionCheckDetail.RepairButton", "Repair {count} issue(s)", new { count = plan.ActionCount });
                 return;
             }
 
@@ -185,16 +319,15 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             if (automaticLodPlan.CanRepair)
             {
                 _useGameReferences = true;
-                repairButtonText.Text = L("VersionCheckDetail.AutomaticRepairButton", "Automatically repair {count} Unit(s)")
-                    .Replace("{count}", automaticLodPlan.ActionCount.ToString());
+                repairButtonText.Text = F("VersionCheckDetail.AutomaticRepairButton", "Automatically repair {count} Unit(s)", new { count = automaticLodPlan.ActionCount });
             }
         }
         catch (Exception ex)
         {
-            repairStatus.Text = L(
-                    "VersionCheckDetail.RepairPlanFailed",
-                    "Failed to load repair options: {message}")
-                .Replace("{message}", ex.Message);
+            repairStatus.Text = F(
+                "VersionCheckDetail.RepairPlanFailed",
+                "Failed to load repair options: {message}",
+                new { message = ex.Message });
             repairStatus.Visibility = Visibility.Visible;
         }
         finally
@@ -227,12 +360,15 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                 .ToList();
             backupHistorySummary.Text = history.Entries.Count == 0
                 ? L("VersionCheckBackup.None", "No HD2MM repair backups were found for this mod.")
-                : L(
-                        "VersionCheckBackup.Summary",
-                        "{count} backup(s), {restorable} restorable, {invalid} invalid.")
-                    .Replace("{count}", history.Entries.Count.ToString())
-                    .Replace("{restorable}", history.RestorableCount.ToString())
-                    .Replace("{invalid}", history.InvalidCount.ToString());
+                : F(
+                    "VersionCheckBackup.Summary",
+                    "{count} backup(s), {restorable} restorable, {invalid} invalid.",
+                    new
+                    {
+                        count = history.Entries.Count,
+                        restorable = history.RestorableCount,
+                        invalid = history.InvalidCount
+                    });
             cleanBackupsButton.IsEnabled = history.Entries
                 .GroupBy(entry => entry.OriginalPath, StringComparer.OrdinalIgnoreCase)
                 .Any(group => group.Count() > 3);
@@ -241,10 +377,10 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         {
             if (ReferenceEquals(_currentMessage, message))
             {
-                backupHistorySummary.Text = L(
-                        "VersionCheckBackup.LoadFailed",
-                        "Failed to load backup history: {message}")
-                    .Replace("{message}", ex.Message);
+                backupHistorySummary.Text = F(
+                    "VersionCheckBackup.LoadFailed",
+                    "Failed to load backup history: {message}",
+                    new { message = ex.Message });
             }
         }
         finally
@@ -257,8 +393,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
     private BackupHistoryItemViewData BuildBackupHistoryItem(ModBackupEntry entry)
     {
         var status = !entry.CanRestore
-            ? L("VersionCheckBackup.Invalid", "Cannot restore: {message}")
-                .Replace("{message}", entry.ValidationMessage)
+            ? F("VersionCheckBackup.Invalid", "Cannot restore: {message}", new { message = entry.ValidationMessage })
             : entry.CurrentMatchesBackup
                 ? L("VersionCheckBackup.MatchesCurrent", "Current patch already matches this backup.")
                 : !entry.CurrentExists
@@ -269,14 +404,17 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             : entry.CurrentMatchesBackup
                 ? GetBrush("WarningBrush", Colors.Goldenrod)
                 : GetBrush("SuccessBrush", Colors.ForestGreen);
-        var detail = L(
-                "VersionCheckBackup.ItemDetail",
-                "{time} | {kind} | {actions} action(s) | {size} | SHA-256 {hash}")
-            .Replace("{time}", entry.CreatedLocal.ToString("yyyy-MM-dd HH:mm:ss"))
-            .Replace("{kind}", GetBackupKindLabel(entry.RepairKind))
-            .Replace("{actions}", entry.ActionCount.ToString())
-            .Replace("{size}", FormatFileSize(entry.BackupSize))
-            .Replace("{hash}", entry.BackupSha256.Length >= 12 ? entry.BackupSha256[..12] : "-");
+        var detail = F(
+            "VersionCheckBackup.ItemDetail",
+            "{time} | {kind} | {actions} action(s) | {size} | SHA-256 {hash}",
+            new
+            {
+                time = entry.CreatedLocal.ToString("yyyy-MM-dd HH:mm:ss"),
+                kind = GetBackupKindLabel(entry.RepairKind),
+                actions = entry.ActionCount,
+                size = FormatFileSize(entry.BackupSize),
+                hash = entry.BackupSha256.Length >= 12 ? entry.BackupSha256[..12] : "-"
+            });
         return new BackupHistoryItemViewData
         {
             Entry = entry,
@@ -350,13 +488,11 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         string summary;
         if (truncatedCount > 0)
         {
-            summary = L("VersionCheckDetail.SummaryTruncated", "{count} Unit resource(s) are truncated by their TOC size.")
-                .Replace("{count}", truncatedCount.ToString());
+            summary = F("VersionCheckDetail.SummaryTruncated", "{count} Unit resource(s) are truncated by their TOC size.", new { count = truncatedCount });
         }
         else if (message.Analysis.CorruptedFileCount > 0)
         {
-            summary = L("VersionCheckDetail.SummaryCorrupted", "{count} patch file(s) contain structural damage.")
-                .Replace("{count}", message.Analysis.CorruptedFileCount.ToString());
+            summary = F("VersionCheckDetail.SummaryCorrupted", "{count} patch file(s) contain structural damage.", new { count = message.Analysis.CorruptedFileCount });
         }
         else if (message.Status == ModVersionStatus.Incompatible)
         {
@@ -386,11 +522,11 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             UnitCount = unitCount,
             TotalIssueCount = issues.Count,
             HealthyUnitSummary = healthyUnits > 0
-                ? L("VersionCheckDetail.HealthyUnits", "{count} Unit(s) passed structural checks").Replace("{count}", healthyUnits.ToString())
+                ? F("VersionCheckDetail.HealthyUnits", "{count} Unit(s) passed structural checks", new { count = healthyUnits })
                 : string.Empty,
             VisibleIssues = issues.Take(MaxVisibleIssues).ToList(),
             HiddenIssueSummary = hiddenCount > 0
-                ? L("VersionCheckDetail.HiddenIssues", "{count} more issue(s) are available in technical details.").Replace("{count}", hiddenCount.ToString())
+                ? F("VersionCheckDetail.HiddenIssues", "{count} more issue(s) are available in technical details.", new { count = hiddenCount })
                 : string.Empty,
             IssuesVisibility = issues.Count > 0 ? Visibility.Visible : Visibility.Collapsed,
             NoIssuesVisibility = issues.Count == 0 ? Visibility.Visible : Visibility.Collapsed,
@@ -417,10 +553,10 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                 Brush = danger,
                 Title = L("VersionCheckDetail.VersionMismatchTitle", "Unit version mismatch"),
                 FileName = string.Empty,
-                Description = L("VersionCheckDetail.VersionMismatchDescription", "{count} Unit(s) use {versions}; reference is {reference}.")
-                    .Replace("{count}", versionMismatches.Count.ToString())
-                    .Replace("{versions}", versions)
-                    .Replace("{reference}", $"0x{message.GameVersion:X8}")
+                Description = F(
+                    "VersionCheckDetail.VersionMismatchDescription",
+                    "{count} Unit(s) use {versions}; reference is {reference}.",
+                    new { count = versionMismatches.Count, versions, reference = $"0x{message.GameVersion:X8}" })
             });
         }
 
@@ -437,14 +573,18 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                     {
                         Icon = "\uE7BA",
                         Brush = danger,
-                        Title = L("VersionCheckDetail.UnitTruncatedTitle", "Unit #{index} data is truncated")
-                            .Replace("{index}", unit.EntryIndex.ToString()),
+                        Title = F("VersionCheckDetail.UnitTruncatedTitle", "Unit #{index} data is truncated", new { index = unit.EntryIndex }),
                         FileName = patch.FileName,
-                        Description = L("VersionCheckDetail.UnitTruncatedDescription", "TOC declares {declared} bytes, internal size is {expected}; {difference} bytes are missing. ID {fileId}")
-                            .Replace("{declared}", unit.DataSize.ToString())
-                            .Replace("{expected}", unit.ExpectedDataSize.ToString())
-                            .Replace("{difference}", Math.Max(0, unit.ExpectedDataSize - unit.DataSize).ToString())
-                            .Replace("{fileId}", $"0x{unit.FileId:X16}")
+                        Description = F(
+                            "VersionCheckDetail.UnitTruncatedDescription",
+                            "TOC declares {declared} bytes, internal size is {expected}; {difference} bytes are missing. ID {fileId}",
+                            new
+                            {
+                                declared = unit.DataSize,
+                                expected = unit.ExpectedDataSize,
+                                difference = Math.Max(0, unit.ExpectedDataSize - unit.DataSize),
+                                fileId = $"0x{unit.FileId:X16}"
+                            })
                     });
                 }
                 else if (!unit.DeclaredSizeMatchesInternal)
@@ -453,13 +593,12 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                     {
                         Icon = "\uE7BA",
                         Brush = warning,
-                        Title = L("VersionCheckDetail.UnitSizeMismatchTitle", "Unit #{index} size mismatch")
-                            .Replace("{index}", unit.EntryIndex.ToString()),
+                        Title = F("VersionCheckDetail.UnitSizeMismatchTitle", "Unit #{index} size mismatch", new { index = unit.EntryIndex }),
                         FileName = patch.FileName,
-                        Description = L("VersionCheckDetail.UnitSizeMismatchDescription", "TOC declares {declared} bytes; internal size is {expected}. ID {fileId}")
-                            .Replace("{declared}", unit.DataSize.ToString())
-                            .Replace("{expected}", unit.ExpectedDataSize.ToString())
-                            .Replace("{fileId}", $"0x{unit.FileId:X16}")
+                        Description = F(
+                            "VersionCheckDetail.UnitSizeMismatchDescription",
+                            "TOC declares {declared} bytes; internal size is {expected}. ID {fileId}",
+                            new { declared = unit.DataSize, expected = unit.ExpectedDataSize, fileId = $"0x{unit.FileId:X16}" })
                     });
                 }
 
@@ -492,19 +631,19 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         if (!patch.HeaderValid || !patch.FileEntriesInBounds)
             AddSimpleIssue(issues, danger, patch.FileName, "VersionCheckDetail.HeaderIssueTitle", "Invalid patch header or TOC", patch.Message);
         if (!patch.TypeDistributionValid)
-            AddSimpleIssue(issues, danger, patch.FileName, "VersionCheckDetail.TypeTableTitle", "Resource type table is inconsistent", L("VersionCheckDetail.TypeTableDescription", "The type table does not match the {count} actual file entries.").Replace("{count}", patch.NumFiles.ToString()));
+            AddSimpleIssue(issues, danger, patch.FileName, "VersionCheckDetail.TypeTableTitle", "Resource type table is inconsistent", F("VersionCheckDetail.TypeTableDescription", "The type table does not match the {count} actual file entries.", new { count = patch.NumFiles }));
         if (!patch.MainDataBoundsValid)
-            AddSimpleIssue(issues, danger, patch.FileName, "VersionCheckDetail.MainBoundsTitle", "Main resource data is out of bounds", L("VersionCheckDetail.MainBoundsDescription", "{count} invalid or overlapping range(s).").Replace("{count}", patch.MainDataIssueCount.ToString()));
+            AddSimpleIssue(issues, danger, patch.FileName, "VersionCheckDetail.MainBoundsTitle", "Main resource data is out of bounds", F("VersionCheckDetail.MainBoundsDescription", "{count} invalid or overlapping range(s).", new { count = patch.MainDataIssueCount }));
         if (!patch.EntryIndicesValid)
-            AddSimpleIssue(issues, warning, patch.FileName, "VersionCheckDetail.EntryIndexTitle", "TOC entry indices are not sequential", L("VersionCheckDetail.EntryIndexDescription", "{count} invalid index value(s).").Replace("{count}", patch.EntryIndexIssueCount.ToString()));
+            AddSimpleIssue(issues, warning, patch.FileName, "VersionCheckDetail.EntryIndexTitle", "TOC entry indices are not sequential", F("VersionCheckDetail.EntryIndexDescription", "{count} invalid index value(s).", new { count = patch.EntryIndexIssueCount }));
         if (patch.RequiresGpuResources && !patch.HasGpuResources)
             AddSimpleIssue(issues, danger, patch.FileName, "VersionCheckDetail.MissingGpuTitle", "Required GPU resource file is missing", L("VersionCheckDetail.MissingGpuDescription", "The patch contains non-zero GPU resource references."));
         if (patch.RequiresStream && !patch.HasStream)
             AddSimpleIssue(issues, danger, patch.FileName, "VersionCheckDetail.MissingStreamTitle", "Required stream file is missing", L("VersionCheckDetail.MissingStreamDescription", "The patch contains non-zero stream resource references."));
         if (!patch.GpuResourceBoundsValid || patch.GpuAlignmentIssueCount > 0)
-            AddSimpleIssue(issues, patch.GpuResourceBoundsValid ? warning : danger, patch.FileName, "VersionCheckDetail.GpuIssueTitle", "GPU resource range problem", L("VersionCheckDetail.ResourceRangeDescription", "Out of bounds: {bounds}; misaligned: {alignment}.").Replace("{bounds}", patch.GpuResourceIssueCount.ToString()).Replace("{alignment}", patch.GpuAlignmentIssueCount.ToString()));
+            AddSimpleIssue(issues, patch.GpuResourceBoundsValid ? warning : danger, patch.FileName, "VersionCheckDetail.GpuIssueTitle", "GPU resource range problem", F("VersionCheckDetail.ResourceRangeDescription", "Out of bounds: {bounds}; misaligned: {alignment}.", new { bounds = patch.GpuResourceIssueCount, alignment = patch.GpuAlignmentIssueCount }));
         if (!patch.StreamBoundsValid || patch.StreamAlignmentIssueCount > 0)
-            AddSimpleIssue(issues, patch.StreamBoundsValid ? warning : danger, patch.FileName, "VersionCheckDetail.StreamIssueTitle", "stream resource range problem", L("VersionCheckDetail.ResourceRangeDescription", "Out of bounds: {bounds}; misaligned: {alignment}.").Replace("{bounds}", patch.StreamIssueCount.ToString()).Replace("{alignment}", patch.StreamAlignmentIssueCount.ToString()));
+            AddSimpleIssue(issues, patch.StreamBoundsValid ? warning : danger, patch.FileName, "VersionCheckDetail.StreamIssueTitle", "stream resource range problem", F("VersionCheckDetail.ResourceRangeDescription", "Out of bounds: {bounds}; misaligned: {alignment}.", new { bounds = patch.StreamIssueCount, alignment = patch.StreamAlignmentIssueCount }));
     }
 
     private void AddSimpleIssue(List<VersionCheckDiagnosticIssue> issues, Brush brush, string fileName, string titleKey, string titleFallback, string? description)
@@ -530,17 +669,34 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         return _localizationService?.Get(key, fallback) ?? fallback;
     }
 
-    private bool EnsureRepairDisclaimerAccepted(Action continuation)
+    private string F(string key, string fallback, object arguments)
+    {
+        if (_localizationService is null)
+            return fallback;
+        return _localizationService.Format(key, arguments);
+    }
+
+    private Task ShowErrorAsync(string message)
+    {
+        if (_dialogService is null)
+            return Task.CompletedTask;
+
+        return _dialogService.ShowMessageAsync(
+            new MessageDialogRequest(
+                L("MessageBox.Error", "Error"),
+                message,
+                MessageDialogSeverity.Error),
+            CancellationToken.None);
+    }
+
+    private async Task<bool> EnsureRepairDisclaimerAcceptedAsync()
     {
         if (_repairDisclaimerService is not null)
-            return _repairDisclaimerService.ContinueOrRequest(continuation);
+            return await _repairDisclaimerService.EnsureAcceptedAsync(CancellationToken.None);
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-        {
-            Message = L(
-                "VersionCheckDisclaimer.SettingsUnavailable",
-                "Repair settings are unavailable. Restart HD2MM and try again.")
-        });
+        await ShowErrorAsync(L(
+            "VersionCheckDisclaimer.SettingsUnavailable",
+            "Repair settings are unavailable. Restart HD2MM and try again."));
         return false;
     }
 
@@ -586,28 +742,30 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
     }
 
 
-    private void RecoveryButton_Click(object sender, RoutedEventArgs e)
+    private async void RecoveryButton_Click(object sender, RoutedEventArgs e)
     {
         if (_companionRecoveryPlan?.CanRecover != true)
             return;
 
-        if (!EnsureRepairDisclaimerAccepted(() => RecoveryButton_Click(sender, e)))
+        if (!await EnsureRepairDisclaimerAcceptedAsync())
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-        {
-            Title = L("VersionCheckRecovery.ConfirmTitle", "Recover missing companion files"),
-            Message = L(
+        if (_dialogService is null || !await _dialogService.ShowAsync(
+            new DialogRequest(
+                L("VersionCheckRecovery.ConfirmTitle", "Recover missing companion files"),
+                F(
                     "VersionCheckRecovery.ConfirmMessage",
-                    "HD2MM will recover {count} companion file(s) from byte-verified sources, stage them in temporary files, and commit only after bounds validation. Continue?")
-                .Replace("{count}", _companionRecoveryPlan.RecoverableCount.ToString()),
-            Confirm = () => _ = ExecuteCompanionRecoveryAsync()
-        });
+                    "HD2MM will recover {count} companion file(s) from byte-verified sources, stage them in temporary files, and commit only after bounds validation. Continue?",
+                    new { count = _companionRecoveryPlan.RecoverableCount })),
+            CancellationToken.None))
+            return;
+
+        await ExecuteCompanionRecoveryAsync();
     }
 
     private async Task ExecuteCompanionRecoveryAsync()
     {
-        if (_versionCheckService is null || _currentMessage is null ||
+        if (_companionRecoveryService is null || _currentMessage is null ||
             _companionRecoveryPlan?.CanRecover != true)
         {
             return;
@@ -621,21 +779,19 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         repairProgress.Visibility = Visibility.Visible;
         try
         {
-            var result = await _versionCheckService.RecoverCompanionFilesAsync(message.ModDirectory);
-            if (!result.Success)
+            var result = await _companionRecoveryService.RecoverAsync(
+                message.ModDirectory.FullName,
+                CancellationToken.None);
+            if (!result.IsSuccess)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-                {
-                    Message = L("VersionCheckRecovery.Failed", "Companion recovery failed: {message}")
-                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
-                });
+                await ShowErrorAsync(F("VersionCheckRecovery.Failed", "Companion recovery failed: {message}", new { message = result.ErrorMessage ?? result.ErrorCode ?? L("Converters.Unknown", "Unknown") }));
                 return;
             }
 
-            repairStatus.Text = L(
-                    "VersionCheckRecovery.Success",
-                    "Recovered {count} companion file(s).")
-                .Replace("{count}", result.RecoveredCount.ToString());
+            repairStatus.Text = F(
+                "VersionCheckRecovery.Success",
+                "Recovered {count} companion file(s).",
+                new { count = result.Value });
             repairStatus.Visibility = Visibility.Visible;
             await message.RefreshAsync();
             if (ReferenceEquals(_currentMessage, message))
@@ -643,11 +799,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         }
         catch (Exception ex)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = L("VersionCheckRecovery.Failed", "Companion recovery failed: {message}")
-                    .Replace("{message}", ex.Message)
-            });
+            await ShowErrorAsync(F("VersionCheckRecovery.Failed", "Companion recovery failed: {message}", new { message = ex.Message }));
         }
         finally
         {
@@ -658,17 +810,17 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             }
         }
     }
-    private void RepairButton_Click(object sender, RoutedEventArgs e)
+    private async void RepairButton_Click(object sender, RoutedEventArgs e)
     {
         if (_currentMessage is null)
             return;
 
-        if (!EnsureRepairDisclaimerAccepted(() => RepairButton_Click(sender, e)))
+        if (!await EnsureRepairDisclaimerAcceptedAsync())
             return;
 
         if (_useGameReferences)
         {
-            ShowAutomaticRepairConfirmation();
+            await ShowAutomaticRepairConfirmation();
             return;
         }
 
@@ -677,34 +829,36 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         if (actionCount == 0)
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-        {
-            Title = L("VersionCheckDetail.RepairConfirmTitle", "Repair mod"),
-            Message = L(
+        if (_dialogService is null || !await _dialogService.ShowAsync(
+            new DialogRequest(
+                L("VersionCheckDetail.RepairConfirmTitle", "Repair mod"),
+                F(
                     "VersionCheckDetail.RepairConfirmMessage",
-                    "HD2MM will back up {files} patch file(s), apply {count} verified metadata repair(s), and validate the result before replacing the originals.")
-                .Replace("{files}", fileCount.ToString())
-                .Replace("{count}", actionCount.ToString()),
-            Confirm = () => _ = ExecuteRepairAsync(false, null, null)
-        });
+                    "HD2MM will back up {files} patch file(s), apply {count} verified metadata repair(s), and validate the result before replacing the originals.",
+                    new { files = fileCount, count = actionCount })),
+            CancellationToken.None))
+            return;
+
+        await ExecuteRepairAsync(false, null, null);
     }
 
-    private void ShowAutomaticRepairConfirmation()
+    private async Task ShowAutomaticRepairConfirmation()
     {
         if (_automaticLodPlan?.CanRepair != true)
             return;
 
         var plan = _automaticLodPlan;
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-        {
-            Title = L("VersionCheckDetail.AutomaticRepairTitle", "Automatically repair mod"),
-            Message = L(
+        if (_dialogService is null || !await _dialogService.ShowAsync(
+            new DialogRequest(
+                L("VersionCheckDetail.AutomaticRepairTitle", "Automatically repair mod"),
+                F(
                     "VersionCheckDetail.AutomaticRepairConfirm",
-                    "HD2MM analyzed the Unit mesh and GPU structure. It will preserve mod LOD for {preserve} Unit(s), use current game LOD for {game} Unit(s), back up the patch files, and validate the rebuilt result before replacement.")
-                .Replace("{preserve}", plan.AutomaticPreserveUnitCount.ToString())
-                .Replace("{game}", plan.AutomaticGameLodUnitCount.ToString()),
-            Confirm = () => _ = ExecuteRepairAsync(true, null, null)
-        });
+                    "HD2MM analyzed the Unit mesh and GPU structure. It will preserve mod LOD for {preserve} Unit(s), use current game LOD for {game} Unit(s), back up the patch files, and validate the rebuilt result before replacement.",
+                    new { preserve = plan.AutomaticPreserveUnitCount, game = plan.AutomaticGameLodUnitCount })),
+            CancellationToken.None))
+            return;
+
+        await ExecuteRepairAsync(true, null, null);
     }
 
     private async void AdvancedRepairButton_Click(object sender, RoutedEventArgs e)
@@ -712,7 +866,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         if (_versionCheckService is null || _currentMessage is null)
             return;
 
-        if (!EnsureRepairDisclaimerAccepted(() => AdvancedRepairButton_Click(sender, e)))
+        if (!await EnsureRepairDisclaimerAcceptedAsync())
             return;
 
         var message = _currentMessage;
@@ -730,15 +884,11 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             if (!ReferenceEquals(_currentMessage, message))
                 return;
 
-            ShowLodStrategySelection();
+            await ShowLodStrategySelectionAsync();
         }
         catch (Exception ex)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = L("VersionCheckDetail.AdvancedRepairFailed", "Failed to load advanced repair strategies: {message}")
-                    .Replace("{message}", ex.Message)
-            });
+            await ShowErrorAsync(F("VersionCheckDetail.AdvancedRepairFailed", "Failed to load advanced repair strategies: {message}", new { message = ex.Message }));
         }
         finally
         {
@@ -750,7 +900,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         }
     }
 
-    private void ShowLodStrategySelection()
+    private async Task ShowLodStrategySelectionAsync()
     {
         var options = new List<LodStrategyOption>();
         var selectableUnitCount = _gameLodPlan?.Actions
@@ -762,46 +912,46 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         {
             options.Add(new LodStrategyOption(
                 null,
-                L("VersionCheckDetail.LodStrategyPerUnit", "Choose per Unit manually ({count} selectable)")
-                    .Replace("{count}", selectableUnitCount.ToString())));
+                F("VersionCheckDetail.LodStrategyPerUnit", "Choose per Unit manually ({count} selectable)", new { count = selectableUnitCount })));
         }
         if (_gameLodPlan?.CanRepair == true)
         {
             options.Add(new LodStrategyOption(
                 AssistedLodStrategy.UseGameReference,
-                L("VersionCheckDetail.LodStrategyGameReference", "Use current game LOD (standard, {count} Unit(s))")
-                    .Replace("{count}", _gameLodPlan.ActionCount.ToString())));
+                F("VersionCheckDetail.LodStrategyGameReference", "Use current game LOD (standard, {count} Unit(s))", new { count = _gameLodPlan.ActionCount })));
         }
         if (_preserveLodPlan?.CanRepair == true)
         {
             options.Add(new LodStrategyOption(
                 AssistedLodStrategy.PreserveMod,
-                L("VersionCheckDetail.LodStrategyPreserveMod", "Preserve mod LOD (custom models, {count} Unit(s))")
-                    .Replace("{count}", _preserveLodPlan.ActionCount.ToString())));
+                F("VersionCheckDetail.LodStrategyPreserveMod", "Preserve mod LOD (custom models, {count} Unit(s))", new { count = _preserveLodPlan.ActionCount })));
         }
         if (options.Count == 0)
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
-        {
-            Title = L("VersionCheckDetail.LodStrategyTitle", "Choose Unit LOD strategy"),
-            Message = L(
-                "VersionCheckDetail.LodStrategyMessage",
-                "LOD compatibility can differ between Units in the same patch. Per-Unit selection is the safest option. Game LOD can prevent preview crashes but may hide custom models; preserving mod LOD keeps custom models but an obsolete group can crash the preview. Every repair creates a backup."),
-            Options = options,
-            Confirm = selected =>
-            {
-                if (selected is not LodStrategyOption option)
-                    return;
-                if (option.Strategy is AssistedLodStrategy strategy)
-                    _ = ExecuteRepairAsync(true, strategy, null);
-                else
-                    ShowUnitLodSelection();
-            }
-        });
+        if (_dialogService is null)
+            return;
+
+        var labels = options.Select(static option => option.Label).ToArray();
+        var selected = await _dialogService.SelectAsync(
+            new SelectionDialogRequest(
+                L("VersionCheckDetail.LodStrategyTitle", "Choose Unit LOD strategy"),
+                L(
+                    "VersionCheckDetail.LodStrategyMessage",
+                    "LOD compatibility can differ between Units in the same patch. Per-Unit selection is the safest option. Game LOD can prevent preview crashes but may hide custom models; preserving mod LOD keeps custom models but an obsolete group can crash the preview. Every repair creates a backup."),
+                labels),
+            CancellationToken.None);
+        if (selected is null)
+            return;
+
+        var option = options.FirstOrDefault(item => string.Equals(item.Label, selected, StringComparison.Ordinal));
+        if (option?.Strategy is AssistedLodStrategy strategy)
+            await ExecuteRepairAsync(true, strategy, null);
+        else if (option is not null)
+            await ShowUnitLodSelectionAsync();
     }
 
-    private void ShowUnitLodSelection()
+    private async Task ShowUnitLodSelectionAsync()
     {
         var candidates = _gameLodPlan?.Actions
             .Where(action => action.LodDataDiffers)
@@ -810,18 +960,20 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             {
                 var first = group.First();
                 var title = string.IsNullOrWhiteSpace(first.FriendlyName)
-                    ? L("VersionCheckDetail.UnitSelectionUnnamed", "Unit {id}")
-                        .Replace("{id}", $"0x{(ulong)first.FileId:X16}")
+                    ? F("VersionCheckDetail.UnitSelectionUnnamed", "Unit {id}", new { id = $"0x{(ulong)first.FileId:X16}" })
                     : first.FriendlyName;
                 var lodSizes = string.Join(", ", group
                     .Select(action => $"{action.CurrentLodSize}->{action.ReferenceLodSize}")
                     .Distinct(StringComparer.Ordinal));
-                var description = L(
-                        "VersionCheckDetail.UnitSelectionDescription",
-                        "{occurrences} patch entry(s) | LOD {lodSizes} | ID {id}")
-                    .Replace("{occurrences}", group.Count().ToString())
-                    .Replace("{lodSizes}", lodSizes)
-                    .Replace("{id}", $"0x{(ulong)first.FileId:X16}");
+                var description = F(
+                    "VersionCheckDetail.UnitSelectionDescription",
+                    "{occurrences} patch entry(s) | LOD {lodSizes} | ID {id}",
+                    new
+                    {
+                        occurrences = group.Count(),
+                        lodSizes,
+                        id = $"0x{(ulong)first.FileId:X16}"
+                    });
                 return new ChecklistSelectionItem
                 {
                     Value = first.FileId,
@@ -835,19 +987,30 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         if (candidates.Count == 0)
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxChecklistMessage
-        {
-            Title = L("VersionCheckDetail.UnitSelectionTitle", "Choose Units that keep mod LOD"),
-            Message = L(
-                "VersionCheckDetail.UnitSelectionMessage",
-                "Checked Units preserve the mod LOD; unchecked Units use current game LOD. Equal LOD sizes can still contain incompatible data. If the mod was already converted entirely to game LOD, restore its HD2MM backup before using this screen."),
-            Items = candidates,
-            Confirm = selected =>
-            {
-                var preserveIds = selected.Select(item => item.Value).ToHashSet();
-                _ = ExecuteRepairAsync(true, null, preserveIds);
-            }
-        });
+        if (_dialogService is null)
+            return;
+
+        var selected = await _dialogService.SelectManyAsync(
+            new ChecklistDialogRequest(
+                L("VersionCheckDetail.UnitSelectionTitle", "Choose Units that keep mod LOD"),
+                L(
+                    "VersionCheckDetail.UnitSelectionMessage",
+                    "Checked Units preserve the mod LOD; unchecked Units use current game LOD. Equal LOD sizes can still contain incompatible data. If the mod was already converted entirely to game LOD, restore its HD2MM backup before using this screen."),
+                candidates.Select(item => new ChecklistDialogOption(
+                    item.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    item.Title,
+                    item.Description,
+                    item.IsSelected)).ToArray()),
+            CancellationToken.None);
+        if (selected is null)
+            return;
+
+        var preserveIds = selected
+            .Select(static value => long.TryParse(value, out var id) ? (long?)id : null)
+            .Where(static value => value.HasValue)
+            .Select(static value => value!.Value)
+            .ToHashSet();
+        await ExecuteRepairAsync(true, null, preserveIds);
     }
     private async Task ExecuteRepairAsync(
         bool useGameReferences,
@@ -889,7 +1052,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             ModRepairResult result;
             if (!useGameReferences)
             {
-                result = await _versionCheckService.RepairModAsync(message.ModDirectory);
+                result = await ExecuteSafeMetadataRepairAsync(message);
             }
             else if (usesAutomaticLod)
             {
@@ -910,24 +1073,23 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
 
             if (!result.Success)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-                {
-                    Message = L("VersionCheckDetail.RepairFailed", "Repair failed: {message}")
-                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
-                });
+                await ShowErrorAsync(F("VersionCheckDetail.RepairFailed", "Repair failed: {message}", new { message = result.ErrorMessage ?? L("Converters.Unknown", "Unknown") }));
                 return;
             }
 
             await message.RefreshAsync();
             repairStatus.Text = useGameReferences
                 ? usesAutomaticLod
-                    ? L(
+                    ? F(
                         "VersionCheckDetail.AutomaticRepairSuccess",
-                        "Automatically updated {count} Unit(s): preserved mod LOD for {preserve}, used game LOD for {game}. Original files were kept as backups.")
-                    .Replace("{count}", result.AppliedActionCount.ToString())
-                    .Replace("{preserve}", (_automaticLodPlan?.AutomaticPreserveUnitCount ?? 0).ToString())
-                    .Replace("{game}", (_automaticLodPlan?.AutomaticGameLodUnitCount ?? 0).ToString())
-                    : L(
+                        "Automatically updated {count} Unit(s): preserved mod LOD for {preserve}, used game LOD for {game}. Original files were kept as backups.",
+                        new
+                        {
+                            count = result.AppliedActionCount,
+                            preserve = _automaticLodPlan?.AutomaticPreserveUnitCount ?? 0,
+                            game = _automaticLodPlan?.AutomaticGameLodUnitCount ?? 0
+                        })
+                    : F(
                         usesMixedLod
                             ? "VersionCheckDetail.AssistedRepairSuccessMixedLod"
                             : usesGameLod
@@ -937,10 +1099,9 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                             ? "Updated {count} Unit(s) with per-Unit LOD choices. Original files were kept as backups."
                             : usesGameLod
                                 ? "Updated {count} Unit(s) with current game LOD data. Original files were kept as backups."
-                                : "Updated {count} Unit(s) while preserving mod LOD data. Original files were kept as backups.")
-                        .Replace("{count}", result.AppliedActionCount.ToString())
-                : L("VersionCheckDetail.RepairSuccess", "Repaired {count} issue(s). Original files were kept as backups.")
-                    .Replace("{count}", result.AppliedActionCount.ToString());
+                                : "Updated {count} Unit(s) while preserving mod LOD data. Original files were kept as backups.",
+                        new { count = result.AppliedActionCount })
+                : F("VersionCheckDetail.RepairSuccess", "Repaired {count} issue(s). Original files were kept as backups.", new { count = result.AppliedActionCount });
             repairStatus.Visibility = Visibility.Visible;
             ResetRepairPlans();
             if (ReferenceEquals(_currentMessage, message))
@@ -948,11 +1109,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         }
         catch (Exception ex)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = L("VersionCheckDetail.RepairFailed", "Repair failed: {message}")
-                    .Replace("{message}", ex.Message)
-            });
+            await ShowErrorAsync(F("VersionCheckDetail.RepairFailed", "Repair failed: {message}", new { message = ex.Message }));
         }
         finally
         {
@@ -964,7 +1121,49 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         }
     }
 
-    private void RestoreBackupButton_Click(object sender, RoutedEventArgs e)
+    private async Task<ModRepairResult> ExecuteSafeMetadataRepairAsync(VersionCheckDetailMessage message)
+    {
+        if (_repairPlanner is null || _repairExecutor is null)
+            return new ModRepairResult
+            {
+                ErrorMessage = L("VersionCheckRepair.ServicesUnavailable", "The transactional repair services are unavailable.")
+            };
+
+        var patchPaths = _repairPlan?.Actions
+            .Select(static action => action.PatchFilePath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? [];
+        if (patchPaths.Length == 0)
+            return new ModRepairResult { ErrorMessage = L("VersionCheckRepair.NothingToRepair", "Nothing to repair.") };
+
+        var plans = new List<RepairPlan>(patchPaths.Length);
+        foreach (var patchPath in patchPaths)
+        {
+            var planning = await _repairPlanner.PlanAsync(patchPath, CancellationToken.None);
+            if (!planning.IsSuccess || planning.Value is null)
+            {
+                return new ModRepairResult
+                {
+                    ErrorMessage = planning.ErrorMessage ?? planning.ErrorCode ?? "Repair planning failed."
+                };
+            }
+            plans.Add(planning.Value);
+        }
+
+        var execution = await _repairExecutor.ExecuteBatchAsync(plans, null, CancellationToken.None);
+        return execution.IsSuccess
+            ? new ModRepairResult
+            {
+                Success = true,
+                AppliedActionCount = plans.Sum(static plan => plan.Actions.Count)
+            }
+            : new ModRepairResult
+            {
+                ErrorMessage = execution.ErrorMessage ?? execution.ErrorCode
+            };
+    }
+
+    private async void RestoreBackupButton_Click(object sender, RoutedEventArgs e)
     {
         if (_currentMessage is null ||
             (sender as FrameworkElement)?.Tag is not ModBackupEntry entry ||
@@ -973,16 +1172,17 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             return;
         }
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-        {
-            Title = L("VersionCheckBackup.RestoreTitle", "Restore patch backup"),
-            Message = L(
+        if (_dialogService is null || !await _dialogService.ShowAsync(
+            new DialogRequest(
+                L("VersionCheckBackup.RestoreTitle", "Restore patch backup"),
+                F(
                     "VersionCheckBackup.RestoreConfirm",
-                    "Restore {file} from {time}? HD2MM will snapshot the current patch first, replace it atomically, and verify the restored SHA-256.")
-                .Replace("{file}", entry.OriginalFileName)
-                .Replace("{time}", entry.CreatedLocal.ToString("yyyy-MM-dd HH:mm:ss")),
-            Confirm = () => _ = ExecuteBackupRestoreAsync(entry)
-        });
+                    "Restore {file} from {time}? HD2MM will snapshot the current patch first, replace it atomically, and verify the restored SHA-256.",
+                    new { file = entry.OriginalFileName, time = entry.CreatedLocal.ToString("g") })),
+            CancellationToken.None))
+            return;
+
+        await ExecuteBackupRestoreAsync(entry);
     }
 
     private async Task ExecuteBackupRestoreAsync(ModBackupEntry entry)
@@ -1001,11 +1201,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                 entry.BackupPath);
             if (!result.Success)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-                {
-                    Message = L("VersionCheckBackup.RestoreFailed", "Backup restore failed: {message}")
-                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
-                });
+                await ShowErrorAsync(F("VersionCheckBackup.RestoreFailed", "Backup restore failed: {message}", new { message = result.ErrorMessage ?? L("Converters.Unknown", "Unknown") }));
                 return;
             }
 
@@ -1022,11 +1218,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         }
         catch (Exception ex)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = L("VersionCheckBackup.RestoreFailed", "Backup restore failed: {message}")
-                    .Replace("{message}", ex.Message)
-            });
+            await ShowErrorAsync(F("VersionCheckBackup.RestoreFailed", "Backup restore failed: {message}", new { message = ex.Message }));
         }
         finally
         {
@@ -1035,21 +1227,22 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         }
     }
 
-    private void DeleteBackupButton_Click(object sender, RoutedEventArgs e)
+    private async void DeleteBackupButton_Click(object sender, RoutedEventArgs e)
     {
         if (_currentMessage is null || (sender as FrameworkElement)?.Tag is not ModBackupEntry entry)
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-        {
-            Title = L("VersionCheckBackup.DeleteTitle", "Delete backup"),
-            Message = L(
+        if (_dialogService is null || !await _dialogService.ShowAsync(
+            new DialogRequest(
+                L("VersionCheckBackup.DeleteTitle", "Delete backup"),
+                F(
                     "VersionCheckBackup.DeleteConfirm",
-                    "Delete the backup of {file} from {time}? The final restorable backup for a patch is always protected.")
-                .Replace("{file}", entry.OriginalFileName)
-                .Replace("{time}", entry.CreatedLocal.ToString("yyyy-MM-dd HH:mm:ss")),
-            Confirm = () => _ = ExecuteBackupDeleteAsync(entry)
-        });
+                    "Delete the backup of {file} from {time}? The final restorable backup for a patch is always protected.",
+                    new { file = entry.OriginalFileName, time = entry.CreatedLocal.ToString("g") })),
+            CancellationToken.None))
+            return;
+
+        await ExecuteBackupDeleteAsync(entry);
     }
 
     private async Task ExecuteBackupDeleteAsync(ModBackupEntry entry)
@@ -1066,11 +1259,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                 entry.BackupPath);
             if (!result.Success)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-                {
-                    Message = L("VersionCheckBackup.DeleteFailed", "Backup deletion failed: {message}")
-                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
-                });
+                await ShowErrorAsync(F("VersionCheckBackup.DeleteFailed", "Backup deletion failed: {message}", new { message = result.ErrorMessage ?? L("Converters.Unknown", "Unknown") }));
                 return;
             }
 
@@ -1085,19 +1274,21 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         }
     }
 
-    private void CleanBackupsButton_Click(object sender, RoutedEventArgs e)
+    private async void CleanBackupsButton_Click(object sender, RoutedEventArgs e)
     {
         if (_currentMessage is null)
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-        {
-            Title = L("VersionCheckBackup.CleanTitle", "Clean old backups"),
-            Message = L(
+        if (_dialogService is null || !await _dialogService.ShowAsync(
+            new DialogRequest(
+                L("VersionCheckBackup.CleanTitle", "Clean old backups"),
+                L(
                 "VersionCheckBackup.CleanConfirm",
-                "Keep the newest three backups for each patch and delete older entries? At least one restorable backup is always retained."),
-            Confirm = () => _ = ExecuteBackupCleanupAsync()
-        });
+                "Keep the newest three backups for each patch and delete older entries? At least one restorable backup is always retained.")),
+            CancellationToken.None))
+            return;
+
+        await ExecuteBackupCleanupAsync();
     }
 
     private async Task ExecuteBackupCleanupAsync()
@@ -1112,18 +1303,14 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             var result = await _versionCheckService.CleanOldBackupsAsync(message.ModDirectory, 3);
             if (!result.Success)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-                {
-                    Message = L("VersionCheckBackup.CleanFailed", "Backup cleanup failed: {message}")
-                        .Replace("{message}", result.ErrorMessage ?? L("Converters.Unknown", "Unknown"))
-                });
+                await ShowErrorAsync(F("VersionCheckBackup.CleanFailed", "Backup cleanup failed: {message}", new { message = result.ErrorMessage ?? L("Converters.Unknown", "Unknown") }));
                 return;
             }
 
-            backupOperationStatus.Text = L(
-                    "VersionCheckBackup.CleanSuccess",
-                    "Deleted {count} old backup(s).")
-                .Replace("{count}", result.DeletedCount.ToString());
+            backupOperationStatus.Text = F(
+                "VersionCheckBackup.CleanSuccess",
+                "Deleted {count} old backup(s).",
+                new { count = result.DeletedCount });
             backupOperationStatus.Foreground = GetBrush("SuccessBrush", Colors.ForestGreen);
             await LoadBackupHistoryAsync(message);
         }
@@ -1137,7 +1324,9 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
     {
         try
         {
-            Clipboard.SetText(_fullReport);
+            if (_clipboardService is null)
+                return;
+            await _clipboardService.SetTextAsync(_fullReport, CancellationToken.None);
             copyStatus.Visibility = Visibility.Visible;
             await Task.Delay(1600);
             copyStatus.Visibility = Visibility.Collapsed;

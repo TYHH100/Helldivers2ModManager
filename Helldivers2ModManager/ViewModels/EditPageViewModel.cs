@@ -16,65 +16,65 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class EditPageViewModel : PageViewModelBase
 {
-	public override string Title => _localizationService["EditPage.Title"];
+    public override string Title => _localizationService["EditPage.Title"];
 
-	public ModViewModel? EditMod => _editModStore.CurrentMod;
+    public ModViewModel? EditMod => _editModStore.CurrentMod;
 
-	private readonly NavigationStore _navStore;
-	private readonly EditModStore _editModStore;
-	private readonly ProfileSaveCoordinator _profileSaveCoordinator;
-	private readonly ModService _modService;
-	private readonly LocalizationService _localizationService;
+    private readonly NavigationStore _navStore;
+    private readonly EditModStore _editModStore;
+    private readonly ProfileSaveCoordinator _profileSaveCoordinator;
+    private readonly ModService _modService;
+    private readonly LocalizationService _localizationService;
 
-	public EditPageViewModel(NavigationStore navStore, EditModStore editModStore,
-		ProfileSaveCoordinator profileSaveCoordinator, ModService modService,
-		LocalizationService localizationService)
-	{
-		_navStore = navStore;
-		_editModStore = editModStore;
-		_profileSaveCoordinator = profileSaveCoordinator;
-		_modService = modService;
-		_localizationService = localizationService;
+    public EditPageViewModel(NavigationStore navStore, EditModStore editModStore,
+        ProfileSaveCoordinator profileSaveCoordinator, ModService modService,
+        LocalizationService localizationService)
+    {
+        _navStore = navStore;
+        _editModStore = editModStore;
+        _profileSaveCoordinator = profileSaveCoordinator;
+        _modService = modService;
+        _localizationService = localizationService;
 
-		_localizationService.PropertyChanged += (_, _) =>
-		{
-			OnPropertyChanged(nameof(Title));
-		};
-	}
+        _localizationService.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(Title));
+        };
+    }
 
-	[RelayCommand]
-	async Task Done()
-	{
-		// 在退出编辑前保存当前 Mod 配置到数据库，避免导航回 Dashboard 时数据丢失
-		try
-		{
-			await _profileSaveCoordinator.SaveCurrentAsync(_modService.Mods);
-		}
-		catch (Exception ex)
-		{
-			System.Diagnostics.Debug.WriteLine($"{_localizationService["EditPage.SaveFailed"]}{ex.Message}");
-		}
+    [RelayCommand]
+    async Task Done()
+    {
+        // 在退出编辑前保存当前 Mod 配置到数据库，避免导航回 Dashboard 时数据丢失
+        try
+        {
+            await _profileSaveCoordinator.SaveCurrentAsync(_modService.Mods);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"{_localizationService["EditPage.SaveFailed"]}{ex.Message}");
+        }
 
-		_editModStore.CurrentMod = null;
-		_navStore.Navigate<DashboardPageViewModel>();
-	}
+        _editModStore.CurrentMod = null;
+        _navStore.Navigate<DashboardPageViewModel>();
+    }
 
-	[RelayCommand]
-	void Cancel()
-	{
-		_editModStore.CurrentMod = null;
-		_navStore.Navigate<DashboardPageViewModel>();
-	}
+    [RelayCommand]
+    void Cancel()
+    {
+        _editModStore.CurrentMod = null;
+        _navStore.Navigate<DashboardPageViewModel>();
+    }
 
-	[RelayCommand]
-	void ShowImagePreview(ImageSource imageSource)
-	{
-		WeakReferenceMessenger.Default.Send(new ImagePreviewShowMessage { ImageSource = imageSource });
-	}
+    [RelayCommand]
+    void ShowImagePreview(ImageSource imageSource)
+    {
+        WeakReferenceMessenger.Default.Send(new ImagePreviewShowMessage { ImageSource = imageSource });
+    }
 
-	[RelayCommand]
-	void HideImagePreview()
-	{
-		WeakReferenceMessenger.Default.Send(new ImagePreviewHideMessage());
-	}
+    [RelayCommand]
+    void HideImagePreview()
+    {
+        WeakReferenceMessenger.Default.Send(new ImagePreviewHideMessage());
+    }
 }

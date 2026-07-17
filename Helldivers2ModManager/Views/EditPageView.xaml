@@ -9,7 +9,7 @@
 	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:EditPageViewModel}"
-	  d:Background="{StaticResource MicaBackgroundBrush}"
+	  d:Background="{DynamicResource MicaBackgroundBrush}"
 	  d:DesignWidth="800"
 	  d:DesignHeight="600"
 	  Title="{Binding Title}">
@@ -42,7 +42,7 @@
 								Margin="0 0 0 12">
 							<TextBlock Text="{loc:Loc EditPage.PreviewHint}"
 									   FontSize="12"
-									   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+									   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 									   HorizontalAlignment="Center"/>
 						</Border>
 						<ItemsControl ItemsSource="{Binding EditMod.Options}">
@@ -87,10 +87,10 @@
 											<TextBlock Text="{Binding Name}"
 													   FontSize="16"
 													   FontWeight="SemiBold"
-													   Foreground="{StaticResource NeutralForegroundBrush}"/>
+													   Foreground="{DynamicResource NeutralForegroundBrush}"/>
 											<TextBlock Text="{Binding Description}"
 													   FontSize="13"
-													   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+													   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 													   TextWrapping="Wrap"
 													   Margin="0 4 0 0"/>
 										</StackPanel>
@@ -141,10 +141,10 @@
 															<TextBlock Text="{Binding Name}"
 																	   FontSize="14"
 																	   FontWeight="SemiBold"
-																	   Foreground="{StaticResource NeutralForegroundBrush}"/>
+																	   Foreground="{DynamicResource NeutralForegroundBrush}"/>
 															<TextBlock Text="{Binding Description}"
 																	   FontSize="12"
-																	   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+																	   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 																	   TextWrapping="Wrap"/>
 														</StackPanel>
 													</Grid>

@@ -34,7 +34,7 @@ namespace Helldivers2ModManager.Services.Nexus
                 Timeout = TimeSpan.FromSeconds(TimeoutSeconds)
             };
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            
+
             _v1HttpClient = new HttpClient
             {
                 BaseAddress = new Uri(V1BaseAddress),
@@ -96,7 +96,7 @@ namespace Helldivers2ModManager.Services.Nexus
                 catch (HttpRequestException ex) when (retryCount < MaxRetryCount)
                 {
                     retryCount++;
-                    _logger.LogWarning("Network error on attempt {RetryCount}/{MaxRetryCount}: {Message}", 
+                    _logger.LogWarning("Network error on attempt {RetryCount}/{MaxRetryCount}: {Message}",
                         retryCount, MaxRetryCount, ex.Message);
                     await Task.Delay(delay, cancellationToken);
                     delay = TimeSpan.FromSeconds(delay.TotalSeconds * 2);
@@ -104,14 +104,14 @@ namespace Helldivers2ModManager.Services.Nexus
                 catch (OperationCanceledException) when (retryCount < MaxRetryCount)
                 {
                     retryCount++;
-                    _logger.LogWarning("Request canceled on attempt {RetryCount}/{MaxRetryCount}", 
+                    _logger.LogWarning("Request canceled on attempt {RetryCount}/{MaxRetryCount}",
                         retryCount, MaxRetryCount);
                     await Task.Delay(delay, cancellationToken);
                     delay = TimeSpan.FromSeconds(delay.TotalSeconds * 2);
                 }
             }
         }
-        
+
         private async Task<T> GetV1Async<T>(string path, CancellationToken cancellationToken = default)
         {
             GuardInitialized();
@@ -139,7 +139,7 @@ namespace Helldivers2ModManager.Services.Nexus
                 catch (HttpRequestException ex) when (retryCount < MaxRetryCount)
                 {
                     retryCount++;
-                    _logger.LogWarning("Network error on attempt {RetryCount}/{MaxRetryCount}: {Message}", 
+                    _logger.LogWarning("Network error on attempt {RetryCount}/{MaxRetryCount}: {Message}",
                         retryCount, MaxRetryCount, ex.Message);
                     await Task.Delay(delay, cancellationToken);
                     delay = TimeSpan.FromSeconds(delay.TotalSeconds * 2);
@@ -147,7 +147,7 @@ namespace Helldivers2ModManager.Services.Nexus
                 catch (OperationCanceledException) when (retryCount < MaxRetryCount)
                 {
                     retryCount++;
-                    _logger.LogWarning("Request canceled on attempt {RetryCount}/{MaxRetryCount}", 
+                    _logger.LogWarning("Request canceled on attempt {RetryCount}/{MaxRetryCount}",
                         retryCount, MaxRetryCount);
                     await Task.Delay(delay, cancellationToken);
                     delay = TimeSpan.FromSeconds(delay.TotalSeconds * 2);
@@ -158,34 +158,34 @@ namespace Helldivers2ModManager.Services.Nexus
         public async Task<string> DownloadFileAsync(string gameDomain, string modId, string fileId, string savePath, CancellationToken cancellationToken = default)
         {
             GuardInitialized();
-            
+
             // 使用 V1 API 端点获取下载链接
             var path = $"v1/games/{gameDomain}/mods/{modId}/files/{fileId}/download_link.json";
-            
+
             _logger.LogInformation("Getting download link for file {FileId} using V1 API", fileId);
-            
+
             // V1 API 直接返回包含 URL 的 JSON 对象
             var downloadLinkResponse = await GetV1Async<V1DownloadLinkResponse>(path, cancellationToken);
             var downloadUrl = downloadLinkResponse.URI;
-            
+
             _logger.LogInformation("Downloading file from {Url}", downloadUrl);
-            
+
             var directory = Path.GetDirectoryName(savePath);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
             }
-            
+
             using var downloadClient = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
             using var response = await downloadClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
-            
+
             using var fileStream = File.Create(savePath);
             await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
             await contentStream.CopyToAsync(fileStream, cancellationToken);
-            
+
             _logger.LogInformation("File downloaded successfully to {Path}", savePath);
-            
+
             return savePath;
         }
 
@@ -242,19 +242,19 @@ namespace Helldivers2ModManager.Services.Nexus
                 case 429:
                     var retryAfter = ParseRetryAfter(response);
                     _logger.LogError("Rate limit exceeded for {Path}", path);
-                    throw retryAfter.HasValue 
-                        ? new NexusRateLimitException(retryAfter.Value) 
+                    throw retryAfter.HasValue
+                        ? new NexusRateLimitException(retryAfter.Value)
                         : new NexusRateLimitException();
 
                 case >= 500:
-                    _logger.LogError("Server error ({StatusCode}) for {Path}: {Detail}", 
+                    _logger.LogError("Server error ({StatusCode}) for {Path}: {Detail}",
                         (int)response.StatusCode, path, detail);
                     throw new NexusApiException($"Server error: {detail}", (int)response.StatusCode, "ServerError");
 
                 default:
-                    _logger.LogError("Unexpected HTTP error ({StatusCode}) for {Path}: {Detail}", 
+                    _logger.LogError("Unexpected HTTP error ({StatusCode}) for {Path}: {Detail}",
                         (int)response.StatusCode, path, detail);
-                    throw new NexusApiException($"HTTP error {(int)response.StatusCode}: {detail}", 
+                    throw new NexusApiException($"HTTP error {(int)response.StatusCode}: {detail}",
                         (int)response.StatusCode, "Unknown");
             }
         }
@@ -316,23 +316,23 @@ namespace Helldivers2ModManager.Services.Nexus
                     PropertyNameCaseInsensitive = true,
                     AllowTrailingCommas = true,
                     ReadCommentHandling = JsonCommentHandling.Skip,
-                    Converters = 
+                    Converters =
                     {
                         new JsonStringEnumConverter(allowIntegerValues: true)
                     }
                 });
-                
+
                 if (result == null)
                 {
                     throw new JsonException($"Failed to deserialize JSON to {typeof(T).Name}: result was null");
                 }
-                
+
                 return result;
             }
             catch (JsonException ex)
             {
                 // 错误日志中也截断 JSON 内容
-                _logger.LogError(ex, "JSON deserialization failed for {TypeName} (length: {Length}). Content preview: {JsonPreview}", 
+                _logger.LogError(ex, "JSON deserialization failed for {TypeName} (length: {Length}). Content preview: {JsonPreview}",
                     typeof(T).Name, jsonLength, truncatedJson);
                 throw;
             }
@@ -350,7 +350,7 @@ namespace Helldivers2ModManager.Services.Nexus
         [JsonPropertyName("URI")]
         public string URI { get; set; } = string.Empty;
     }
-    
+
     internal sealed class V1DownloadLinkResponse
     {
         [JsonPropertyName("URI")]

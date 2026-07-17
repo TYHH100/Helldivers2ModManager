@@ -2,31 +2,49 @@ using CommunityToolkit.Mvvm.Input;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using System.Diagnostics;
 
 namespace Helldivers2ModManager.ViewModels;
 
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class HelpPageViewModel : PageViewModelBase
 {
-	public override string Title => _localizationService["MainWindow.Help"];
+    private static readonly ProcessStartInfo s_documentation = new(
+        "https://teutinsa.github.io/hd2mm-site/index.html")
+    {
+        UseShellExecute = true
+    };
+    private static readonly ProcessStartInfo s_issueTracker = new(
+        "https://github.com/TYHH100/Helldivers2ModManager/issues")
+    {
+        UseShellExecute = true
+    };
 
-	private readonly NavigationStore _navigationStore;
-	private readonly LocalizationService _localizationService;
+    public override string Title => _localizationService["MainWindow.Help"];
 
-	public HelpPageViewModel(NavigationStore navigationStore, LocalizationService localizationService)
-	{
-		_navigationStore = navigationStore;
-		_localizationService = localizationService;
+    private readonly NavigationStore _navigationStore;
+    private readonly LocalizationService _localizationService;
 
-		_localizationService.PropertyChanged += (_, _) =>
-		{
-			OnPropertyChanged(nameof(Title));
-		};
-	}
+    public HelpPageViewModel(NavigationStore navigationStore, LocalizationService localizationService)
+    {
+        _navigationStore = navigationStore;
+        _localizationService = localizationService;
 
-	[RelayCommand]
-	void Back()
-	{
-		_navigationStore.Navigate<DashboardPageViewModel>();
-	}
+        _localizationService.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(Title));
+        };
+    }
+
+    [RelayCommand]
+    void Back()
+    {
+        _navigationStore.Navigate<DashboardPageViewModel>();
+    }
+
+    [RelayCommand]
+    private static void OpenDocumentation() => Process.Start(s_documentation);
+
+    [RelayCommand]
+    private static void ReportIssue() => Process.Start(s_issueTracker);
 }

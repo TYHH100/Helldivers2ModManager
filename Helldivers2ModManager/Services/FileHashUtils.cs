@@ -8,12 +8,12 @@ namespace Helldivers2ModManager.Services;
 /// </summary>
 internal static class FileHashUtils
 {
-	private static LocalizationService? _localizationService;
+    private static LocalizationService? _localizationService;
 
-	internal static void Init(LocalizationService localizationService)
-	{
-		_localizationService = localizationService;
-	}
+    internal static void Init(LocalizationService localizationService)
+    {
+        _localizationService = localizationService;
+    }
     /// <summary>
     /// GPU 资源文件的 SHA-256 跳过阈值。
     /// 超过此大小的 .gpu_resources 文件跳过完整 SHA-256 计算，改用文件大小+修改时间的组合作为伪哈希。
@@ -97,7 +97,10 @@ internal static class FileHashUtils
             }
             catch (Exception ex) when (ex is not IOException)
             {
-                throw new IOException(_localizationService?["FileHashUtils.HashError"].Replace("{path}", relativePath).Replace("{message}", ex.Message) ?? $"无法计算文件「{relativePath}」的哈希值: {ex.Message}", ex);
+                throw new IOException(
+                    _localizationService?.Format("FileHashUtils.HashError", new { path = relativePath, message = ex.Message })
+                    ?? $"Unable to calculate a hash for {relativePath}: {ex.Message}",
+                    ex);
             }
         }
 
@@ -116,42 +119,42 @@ internal static class FileHashUtils
 	/// <param name="progress">进度报告回调：(已检查数, 总数, 当前文件相对路径, 缓存命中数)</param>
 	/// <returns>相对路径 → SHA-256哈希值的字典</returns>
 	public static async Task<Dictionary<string, string>> ComputeDirectoryHashesWithCacheAsync(
-		DirectoryInfo directory,
-		Guid modGuid,
-		FileHashRepository repo,
-		string storageDirectory,
-		IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress = null)
-	{
-		return await ComputeDirectoryHashesWithCacheInternalAsync(directory, modGuid, repo, storageDirectory, saveToDb: true, progress);
-	}
+        DirectoryInfo directory,
+        Guid modGuid,
+        FileHashRepository repo,
+        string storageDirectory,
+        IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress = null)
+    {
+        return await ComputeDirectoryHashesWithCacheInternalAsync(directory, modGuid, repo, storageDirectory, saveToDb: true, progress);
+    }
 
-	/// <summary>
-	/// 只读缓存版——优先从数据库读取有效缓存哈希，仅在缓存未命中时重新计算，
-	/// 但 <b>不</b> 将结果写回数据库。用于更新流程的阶段1（文件即将被替换，无需持久化中间状态）。
-	/// </summary>
-	/// <param name="directory">目标目录</param>
-	/// <param name="modGuid">mod 的 Guid</param>
-	/// <param name="repo">文件哈希仓储</param>
-	/// <param name="storageDirectory">存储目录</param>
-	/// <param name="progress">进度报告回调</param>
-	/// <returns>相对路径 → SHA-256哈希值的字典</returns>
-	public static async Task<Dictionary<string, string>> ComputeDirectoryHashesReadCacheAsync(
-		DirectoryInfo directory,
-		Guid modGuid,
-		FileHashRepository repo,
-		string storageDirectory,
-		IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress = null)
-	{
-		return await ComputeDirectoryHashesWithCacheInternalAsync(directory, modGuid, repo, storageDirectory, saveToDb: false, progress);
-	}
+    /// <summary>
+    /// 只读缓存版——优先从数据库读取有效缓存哈希，仅在缓存未命中时重新计算，
+    /// 但 <b>不</b> 将结果写回数据库。用于更新流程的阶段1（文件即将被替换，无需持久化中间状态）。
+    /// </summary>
+    /// <param name="directory">目标目录</param>
+    /// <param name="modGuid">mod 的 Guid</param>
+    /// <param name="repo">文件哈希仓储</param>
+    /// <param name="storageDirectory">存储目录</param>
+    /// <param name="progress">进度报告回调</param>
+    /// <returns>相对路径 → SHA-256哈希值的字典</returns>
+    public static async Task<Dictionary<string, string>> ComputeDirectoryHashesReadCacheAsync(
+        DirectoryInfo directory,
+        Guid modGuid,
+        FileHashRepository repo,
+        string storageDirectory,
+        IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress = null)
+    {
+        return await ComputeDirectoryHashesWithCacheInternalAsync(directory, modGuid, repo, storageDirectory, saveToDb: false, progress);
+    }
 
-	private static async Task<Dictionary<string, string>> ComputeDirectoryHashesWithCacheInternalAsync(
-		DirectoryInfo directory,
-		Guid modGuid,
-		FileHashRepository repo,
-		string storageDirectory,
-		bool saveToDb,
-		IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress)
+    private static async Task<Dictionary<string, string>> ComputeDirectoryHashesWithCacheInternalAsync(
+        DirectoryInfo directory,
+        Guid modGuid,
+        FileHashRepository repo,
+        string storageDirectory,
+        bool saveToDb,
+        IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress)
     {
         var files = directory.GetFiles("*", SearchOption.AllDirectories)
             .OrderBy(f => f.FullName)
@@ -205,7 +208,10 @@ internal static class FileHashUtils
             }
             catch (Exception ex) when (ex is not IOException)
             {
-                throw new IOException(_localizationService?["FileHashUtils.HashError"].Replace("{path}", relativePath).Replace("{message}", ex.Message) ?? $"无法计算文件「{relativePath}」的哈希值: {ex.Message}", ex);
+                throw new IOException(
+                    _localizationService?.Format("FileHashUtils.HashError", new { path = relativePath, message = ex.Message })
+                    ?? $"Unable to calculate a hash for {relativePath}: {ex.Message}",
+                    ex);
             }
         }
 

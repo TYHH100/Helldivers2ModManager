@@ -1,5 +1,4 @@
-using CommunityToolkit.Mvvm.Messaging;
-using Helldivers2ModManager.Components;
+using Helldivers2ModManager.Core.UI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -9,45 +8,40 @@ namespace Helldivers2ModManager.Services;
 internal sealed class RepairDisclaimerService(
     ILogger<RepairDisclaimerService> logger,
     SettingsService settingsService,
-    LocalizationService localizationService)
+    LocalizationService localizationService,
+    IDialogService dialogService)
 {
-    private bool _acceptancePending;
+    private readonly SemaphoreSlim _acceptanceLock = new(1, 1);
 
-    public bool ContinueOrRequest(Action continuation)
+    public async Task<bool> EnsureAcceptedAsync(CancellationToken cancellationToken)
     {
-        if (_acceptancePending)
-            return false;
-
         if (!settingsService.Initialized)
         {
-            ShowSaveError(localizationService["VersionCheckDisclaimer.SettingsUnavailable"]);
+            await ShowSaveErrorAsync(
+                localizationService["VersionCheckDisclaimer.SettingsUnavailable"],
+                cancellationToken);
             return false;
         }
 
         if (settingsService.RepairDisclaimerAccepted)
             return true;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-        {
-            Title = localizationService["VersionCheckDisclaimer.Title"],
-            Message = localizationService["VersionCheckDisclaimer.Message"],
-            Confirm = () => _ = AcceptAndContinueAsync(continuation)
-        });
-        return false;
-    }
+        if (!await dialogService.ShowAsync(
+            new DialogRequest(
+                localizationService["VersionCheckDisclaimer.Title"],
+                localizationService["VersionCheckDisclaimer.Message"]),
+            cancellationToken))
+            return false;
 
-    private async Task AcceptAndContinueAsync(Action continuation)
-    {
-        if (_acceptancePending)
-            return;
-
-        _acceptancePending = true;
-        var accepted = false;
+        await _acceptanceLock.WaitAsync(cancellationToken);
         try
         {
+            if (settingsService.RepairDisclaimerAccepted)
+                return true;
+
             settingsService.RepairDisclaimerAccepted = true;
             await settingsService.SaveAsync();
-            accepted = true;
+            return true;
         }
         catch (Exception ex)
         {
@@ -62,23 +56,19 @@ internal sealed class RepairDisclaimerService(
                 logger.LogWarning(rollbackException, "Failed to roll back repair disclaimer acceptance");
             }
 
-            ShowSaveError(ex.Message);
+            await ShowSaveErrorAsync(ex.Message, cancellationToken);
+            return false;
         }
         finally
         {
-            _acceptancePending = false;
+            _acceptanceLock.Release();
         }
-
-        if (accepted)
-            continuation();
     }
 
-    private void ShowSaveError(string message)
-    {
-        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-        {
-            Message = localizationService["VersionCheckDisclaimer.SaveFailed"]
-                .Replace("{message}", message)
-        });
-    }
+    private Task<bool> ShowSaveErrorAsync(string message, CancellationToken cancellationToken) =>
+        dialogService.ShowAsync(
+            new DialogRequest(
+                localizationService["MessageBox.Error"],
+                localizationService.Format("VersionCheckDisclaimer.SaveFailed", new { message })),
+            cancellationToken);
 }

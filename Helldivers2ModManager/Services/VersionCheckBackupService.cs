@@ -9,8 +9,25 @@ using System.Text.RegularExpressions;
 
 namespace Helldivers2ModManager.Services;
 
-internal sealed partial class VersionCheckService
+internal sealed class ModBackupService
 {
+    private readonly ILogger _logger;
+    private readonly LocalizationService _localizationService;
+    private readonly Func<FileInfo, FileInfo?, Task<PatchFileAnalysis>> _analyzePatch;
+    private readonly Func<FileInfo, List<PatchRepairAction>, List<string>, FileInfo?, Task> _inspectPatch;
+    private readonly SemaphoreSlim _repairSemaphore = new(1, 1);
+
+    public ModBackupService(
+        ILogger logger,
+        LocalizationService localizationService,
+        Func<FileInfo, FileInfo?, Task<PatchFileAnalysis>> analyzePatch,
+        Func<FileInfo, List<PatchRepairAction>, List<string>, FileInfo?, Task> inspectPatch)
+    {
+        _logger = logger;
+        _localizationService = localizationService;
+        _analyzePatch = analyzePatch;
+        _inspectPatch = inspectPatch;
+    }
     private static readonly Regex s_backupNamePattern = new(
         @"^(?<base>.+)\.patch-backup_(?<index>[^.]+)\.(?<stamp>\d{8}-\d{6})(?:-(?<sequence>\d+))?\.hd2mm-backup$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
@@ -63,7 +80,7 @@ internal sealed partial class VersionCheckService
             var entry = history.Entries.FirstOrDefault(candidate =>
                 string.Equals(candidate.BackupPath, Path.GetFullPath(backupPath), StringComparison.OrdinalIgnoreCase));
             if (entry is null)
-                return new ModBackupOperationResult { ErrorMessage = "The selected backup is not part of this mod." };
+                return new ModBackupOperationResult { ErrorMessage = _localizationService["VersionCheckBackup.NotPartOfMod"] };
             if (!entry.CanRestore)
                 return new ModBackupOperationResult { ErrorMessage = entry.ValidationMessage };
 
@@ -75,11 +92,11 @@ internal sealed partial class VersionCheckService
                 "." + originalFile.Name + ".hd2mm-restore-" + Guid.NewGuid().ToString("N") + ".tmp");
             await CopyFileDurablyAsync(entry.BackupPath, temporaryPath, cancellationToken);
 
-            var stagedAnalysis = await AnalyzeSinglePatchFileStructureAsync(
+            var stagedAnalysis = await _analyzePatch(
                 new FileInfo(temporaryPath),
                 originalFile);
             if (!await IsBackupRestorableAsync(new FileInfo(temporaryPath), originalFile, stagedAnalysis))
-                throw new InvalidDataException("The selected backup failed structural validation before restore.");
+                throw new InvalidDataException(_localizationService["VersionCheckBackup.StructuralValidationFailed"]);
 
             originalExisted = File.Exists(originalPath);
             if (originalExisted)
@@ -95,7 +112,7 @@ internal sealed partial class VersionCheckService
 
             var restoredHash = await ComputeSha256Async(originalPath, cancellationToken);
             if (!string.Equals(restoredHash, entry.BackupSha256, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("The restored file hash does not match the selected backup.");
+                throw new InvalidDataException(_localizationService["VersionCheckBackup.HashMismatch"]);
 
             if (rollbackPath is not null)
             {
@@ -155,19 +172,19 @@ internal sealed partial class VersionCheckService
             var entry = history.Entries.FirstOrDefault(candidate =>
                 string.Equals(candidate.BackupPath, fullPath, StringComparison.OrdinalIgnoreCase));
             if (entry is null)
-                return new ModBackupOperationResult { ErrorMessage = "The selected backup is not part of this mod." };
+                return new ModBackupOperationResult { ErrorMessage = _localizationService["VersionCheckBackup.NotPartOfMod"] };
 
             var sameFileBackups = history.Entries
                 .Where(candidate => string.Equals(candidate.OriginalPath, entry.OriginalPath, StringComparison.OrdinalIgnoreCase))
                 .ToList();
             if (sameFileBackups.Count <= 1)
-                return new ModBackupOperationResult { ErrorMessage = "The last backup for a patch cannot be deleted." };
+                return new ModBackupOperationResult { ErrorMessage = _localizationService["VersionCheckBackup.LastBackupProtected"] };
 
             var remainingRestorable = sameFileBackups.Count(candidate =>
                 !string.Equals(candidate.BackupPath, entry.BackupPath, StringComparison.OrdinalIgnoreCase) &&
                 candidate.CanRestore);
             if (entry.CanRestore && remainingRestorable == 0)
-                return new ModBackupOperationResult { ErrorMessage = "The last restorable backup for a patch cannot be deleted." };
+                return new ModBackupOperationResult { ErrorMessage = _localizationService["VersionCheckBackup.LastRestorableProtected"] };
 
             DeleteBackupFiles(entry);
             return new ModBackupOperationResult { Success = true, DeletedCount = 1 };
@@ -254,7 +271,7 @@ internal sealed partial class VersionCheckService
             var currentHash = currentExists
                 ? await ComputeSha256Async(originalPath, cancellationToken)
                 : string.Empty;
-            var analysis = await AnalyzeSinglePatchFileStructureAsync(
+            var analysis = await _analyzePatch(
                 backupFile,
                 new FileInfo(originalPath));
             var structurallyRestorable = await IsBackupRestorableAsync(
@@ -294,7 +311,7 @@ internal sealed partial class VersionCheckService
         }
     }
 
-    private async Task TryWriteBackupMetadataAsync(
+    internal async Task TryWriteBackupMetadataAsync(
         string backupPath,
         string repairedPath,
         ModBackupRepairKind repairKind,
@@ -349,7 +366,7 @@ internal sealed partial class VersionCheckService
 
         var actions = new List<PatchRepairAction>();
         var blockers = new List<string>();
-        await InspectPatchForRepairsAsync(backupFile, actions, blockers, companionSource);
+        await _inspectPatch(backupFile, actions, blockers, companionSource);
         return actions.Count > 0 && blockers.Count == 0;
     }
 
@@ -402,7 +419,7 @@ internal sealed partial class VersionCheckService
         return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task<string> ComputeSha256Async(
+    internal static async Task<string> ComputeSha256Async(
         string path,
         CancellationToken cancellationToken)
     {
@@ -416,7 +433,7 @@ internal sealed partial class VersionCheckService
         return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
     }
 
-    private static async Task CopyFileDurablyAsync(
+    internal static async Task CopyFileDurablyAsync(
         string sourcePath,
         string destinationPath,
         CancellationToken cancellationToken)
@@ -447,7 +464,7 @@ internal sealed partial class VersionCheckService
             File.Delete(entry.MetadataPath);
     }
 
-    private static void TryDeleteFile(string path)
+    internal static void TryDeleteFile(string path)
     {
         try
         {
@@ -457,5 +474,22 @@ internal sealed partial class VersionCheckService
         catch
         {
         }
+    }
+
+    private static string CreateBackupPath(FileInfo patchFile, string stamp)
+    {
+        var backupName = patchFile.Name.Replace(
+            ".patch_",
+            ".patch-backup_",
+            StringComparison.OrdinalIgnoreCase);
+        var candidate = Path.Combine(
+            patchFile.DirectoryName!,
+            $"{backupName}.{stamp}.hd2mm-backup");
+        var suffix = 1;
+        while (File.Exists(candidate))
+            candidate = Path.Combine(
+                patchFile.DirectoryName!,
+                $"{backupName}.{stamp}-{suffix++}.hd2mm-backup");
+        return candidate;
     }
 }

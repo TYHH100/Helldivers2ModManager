@@ -1,0 +1,13 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Color x:Key="ThemeWindowColor">#202020</Color>
+    <Color x:Key="ThemeSurfaceColor">#2D2D2D</Color>
+    <Color x:Key="ThemeTextColor">#FFFFFF</Color>
+    <Color x:Key="ThemeSecondaryTextColor">#B3B3B3</Color>
+    <Color x:Key="ThemeBorderColor">#5A5A5A</Color>
+    <SolidColorBrush x:Key="ThemeWindowBrush" Color="{DynamicResource ThemeWindowColor}"/>
+    <SolidColorBrush x:Key="ThemeSurfaceBrush" Color="{DynamicResource ThemeSurfaceColor}"/>
+    <SolidColorBrush x:Key="ThemeTextBrush" Color="{DynamicResource ThemeTextColor}"/>
+    <SolidColorBrush x:Key="ThemeSecondaryTextBrush" Color="{DynamicResource ThemeSecondaryTextColor}"/>
+    <SolidColorBrush x:Key="ThemeBorderBrush" Color="{DynamicResource ThemeBorderColor}"/>
+</ResourceDictionary>

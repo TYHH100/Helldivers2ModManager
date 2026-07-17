@@ -17,13 +17,12 @@ Helldivers2ModManager 是一个用于 Helldivers 2 游戏的模组管理器，�
 - **日志**: Microsoft.Extensions.Logging
 - **压缩**: SharpSevenZip 2.0.77（基于原生 7z.dll，支持大字典 LZMA）
 - **拖拽**: gong-wpf-dragdrop 4.0.0
-- **Markdown**: MdXaml 1.27.0
 - **数据库**: Microsoft.Data.Sqlite 9.0.8
 - **缓存**: Microsoft.Extensions.Caching.Memory 10.0.8
 - **通用工具**: CommunityToolkit.Common 8.4.2
 
 ### 1.3 当前版本
-- 版本: 1.4.1.0
+- 版本: 2.0.0
 
 ---
 
@@ -33,7 +32,8 @@ Helldivers2ModManager 是一个用于 Helldivers 2 游戏的模组管理器，�
 ```
 Helldivers2ModManager/
 ├── .github/                        # GitHub Actions
-│   └── workflows/main.yml
+│   ├── workflows/ci.yml
+│   └── workflows/build.yml
 ├── hd2mmt_nexus-download-interceptor/  # 浏览器扩展
 │   ├── _locales/zh/messages.json
 │   ├── icons/
@@ -723,7 +723,7 @@ dotnet publish Purger.csproj --configuration Release -r win-x64 --self-contained
 
 ### 6.3 CI/CD流程
 
-GitHub Actions 工作流 (`.github/workflows/main.yml`)：
+GitHub Actions 工作流：持续集成使用 `.github/workflows/ci.yml`，发布构建使用 `.github/workflows/build.yml`：
 - 触发条件: 推送匹配 `v*` 的 tag，或通过 `workflow_dispatch` 手动触发
 - 构建产物:
   - `Helldivers2ModManager.zip` - 主程序
@@ -767,7 +767,7 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 ## 8. 维护要点
 
 ### 8.1 版本管理
-- 当前版本: 1.4.1.0（`.csproj` 和 `App.xaml.cs` 一致）
+- 当前版本: 2.0.0（`.csproj` 和 `App.xaml.cs` 一致）
 - 版本号位置:
   - `App.xaml.cs` - `App.Version`
   - `Helldivers2ModManager.csproj` - `ProductVersion`, `AssemblyVersion`, `FileVersion`

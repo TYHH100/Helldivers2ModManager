@@ -278,7 +278,7 @@
             </DoubleAnimation.EasingFunction>
         </DoubleAnimation>
         <ColorAnimation Storyboard.TargetProperty="(Shape.Fill).(SolidColorBrush.Color)"
-                        To="{StaticResource SystemAccentColor}" Duration="0:0:0.15"/>
+                        To="{DynamicResource SystemAccentColor}" Duration="0:0:0.15"/>
     </Storyboard>
 
     <Storyboard x:Key="ToggleOff">

@@ -9,96 +9,96 @@ namespace Helldivers2ModManager;
 
 internal static class FileLoggerExtensions
 {
-	public static ILoggingBuilder AddFile(this ILoggingBuilder builder, string name)
-	{
-		builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, FileLoggerProvider>(provider => new FileLoggerProvider(name)));
-		return builder;
-	}
+    public static ILoggingBuilder AddFile(this ILoggingBuilder builder, string name)
+    {
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, FileLoggerProvider>(provider => new FileLoggerProvider(name)));
+        return builder;
+    }
 }
 
 [ProviderAlias("File")]
 internal sealed class FileLoggerProvider : ILoggerProvider
 {
-	private readonly FileStream _fileStream;
-	private readonly StreamWriter _stream;
-	private readonly object _lock = new();
+    private readonly FileStream _fileStream;
+    private readonly StreamWriter _stream;
+    private readonly object _lock = new();
 
-	public FileLoggerProvider(string name)
-	{
-		if (!Directory.Exists("logs"))
-			Directory.CreateDirectory("logs");
+    public FileLoggerProvider(string name)
+    {
+        if (!Directory.Exists("logs"))
+            Directory.CreateDirectory("logs");
 
-		_fileStream = new FileStream(Path.Combine("logs", $"{name}_{DateTime.UtcNow:dd-MM-yyyy_HH-mm-ss}.log"), FileMode.CreateNew, FileAccess.Write, FileShare.Read);
-		_stream = new StreamWriter(_fileStream);
-	}
+        _fileStream = new FileStream(Path.Combine("logs", $"{name}_{DateTime.UtcNow:dd-MM-yyyy_HH-mm-ss}.log"), FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+        _stream = new StreamWriter(_fileStream);
+    }
 
-	public ILogger CreateLogger(string categoryName)
-	{
-		return new FileLogger(categoryName, _stream, _lock);
-	}
+    public ILogger CreateLogger(string categoryName)
+    {
+        return new FileLogger(categoryName, _stream, _lock);
+    }
 
-	public void Dispose()
-	{
-		_stream.Dispose();
-	}
+    public void Dispose()
+    {
+        _stream.Dispose();
+    }
 }
 
 internal sealed class FileLogger(string name, StreamWriter stream, object lockObj) : ILogger
 {
-	private readonly string _name = name;
-	private readonly StreamWriter _stream = stream;
-	private readonly object _lock = lockObj;
+    private readonly string _name = name;
+    private readonly StreamWriter _stream = stream;
+    private readonly object _lock = lockObj;
 
-	public IDisposable? BeginScope<TState>(TState state) where TState : notnull
-	{
-		return null;
-	}
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+    {
+        return null;
+    }
 
-	public bool IsEnabled(LogLevel logLevel)
-	{
-		return logLevel != LogLevel.None && logLevel >= App.Current.LogLevel;
-	}
+    public bool IsEnabled(LogLevel logLevel)
+    {
+        return logLevel != LogLevel.None && logLevel >= App.Current.LogLevel;
+    }
 
-	public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-	{
-		if (!IsEnabled(logLevel))
-			return;
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        if (!IsEnabled(logLevel))
+            return;
 
-		ArgumentNullException.ThrowIfNull(formatter);
+        ArgumentNullException.ThrowIfNull(formatter);
 
-		var message = formatter.Invoke(state, exception);
-		if (string.IsNullOrEmpty(message))
-			return;
+        var message = formatter.Invoke(state, exception);
+        if (string.IsNullOrEmpty(message))
+            return;
 
-		var builder = new StringBuilder();
-		builder.Append('[');
-		builder.Append(DateTime.Now.ToString("HH:mm:ss"));
-		builder.Append("] ");
-		builder.Append(_name);
-		builder.Append(" -> ");
-		builder.Append(logLevel.ToString());
-		builder.Append(": ");
-		builder.Append(message);
+        var builder = new StringBuilder();
+        builder.Append('[');
+        builder.Append(DateTime.Now.ToString("HH:mm:ss"));
+        builder.Append("] ");
+        builder.Append(_name);
+        builder.Append(" -> ");
+        builder.Append(logLevel.ToString());
+        builder.Append(": ");
+        builder.Append(message);
 
-		if (exception is not null)
-		{
-			builder.AppendLine();
-			builder.Append('\t');
-			builder.Append(exception.GetType().Name);
-			builder.Append(": ");
-			builder.Append(exception.Message);
-			if (exception.StackTrace is not null)
-			{
-				builder.AppendLine();
-				builder.Append("\t\t");
-				builder.Append(exception.StackTrace?.ReplaceLineEndings($"{Environment.NewLine}\t\t"));
-			}
-		}
+        if (exception is not null)
+        {
+            builder.AppendLine();
+            builder.Append('\t');
+            builder.Append(exception.GetType().Name);
+            builder.Append(": ");
+            builder.Append(exception.Message);
+            if (exception.StackTrace is not null)
+            {
+                builder.AppendLine();
+                builder.Append("\t\t");
+                builder.Append(exception.StackTrace?.ReplaceLineEndings($"{Environment.NewLine}\t\t"));
+            }
+        }
 
-		lock (_lock)
-		{
-			_stream.WriteLine(builder.ToString());
-			_stream.Flush();
-		}
-	}
+        lock (_lock)
+        {
+            _stream.WriteLine(builder.ToString());
+            _stream.Flush();
+        }
+    }
 }

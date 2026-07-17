@@ -18,11 +18,11 @@
     <Style x:Key="FluentWindowStyle" TargetType="Window">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
-        <Setter Property="Background" Value="{StaticResource MicaBackgroundBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource MicaBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource MicaBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MicaBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
     </Style>
 
     <!-- ============================================ -->
@@ -34,7 +34,7 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
     </Style>
 
     <!-- ============================================ -->
@@ -47,7 +47,7 @@
         <Setter Property="Height" Value="32"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
         <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -61,11 +61,11 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
                             <Setter TargetName="BackgroundLayer" Property="Opacity" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -109,7 +109,7 @@
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding" Value="12 8"/>
@@ -126,7 +126,7 @@
                                 Opacity="0"/>
                         <Border x:Name="IndicatorBar"
                                 Width="3"
-                                Background="{StaticResource SystemAccentBrush}"
+                                Background="{DynamicResource SystemAccentBrush}"
                                 CornerRadius="2"
                                 HorizontalAlignment="Left"
                                 Margin="4 4 0 4"
@@ -136,11 +136,11 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
                             <Setter TargetName="BackgroundLayer" Property="Opacity" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -156,7 +156,7 @@
         <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="28"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
         <Setter Property="Margin" Value="0 0 0 8"/>
     </Style>
 
@@ -164,21 +164,21 @@
         <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="18"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
         <Setter Property="Margin" Value="0 16 0 4"/>
     </Style>
 
     <Style x:Key="FluentBodyText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundSecondaryBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundSecondaryBrush}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
 
     <Style x:Key="FluentCaptionText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundTertiaryBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundTertiaryBrush}"/>
     </Style>
 
     <!-- ============================================ -->
@@ -186,7 +186,7 @@
     <!-- ============================================ -->
 
     <Style x:Key="FluentDivider" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource NeutralStrokeBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralStrokeBrush}"/>
         <Setter Property="Height" Value="1"/>
         <Setter Property="Margin" Value="0 8"/>
     </Style>
@@ -198,8 +198,8 @@
     <Style x:Key="FluentProgressBar" TargetType="ProgressBar">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="Height" Value="4"/>
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-        <Setter Property="Foreground" Value="{StaticResource SystemAccentBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SystemAccentBrush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ProgressBar">
@@ -222,12 +222,12 @@
         <Setter Property="Width" Value="32"/>
         <Setter Property="Height" Value="32"/>
         <Setter Property="IsIndeterminate" Value="True"/>
-        <Setter Property="Foreground" Value="{StaticResource SystemAccentBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SystemAccentBrush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ProgressBar">
                     <Grid>
-                        <Ellipse Stroke="{StaticResource NeutralBackgroundFillBrush}"
+                        <Ellipse Stroke="{DynamicResource NeutralBackgroundFillBrush}"
                                  StrokeThickness="3"/>
                         <Ellipse Stroke="{TemplateBinding Foreground}"
                                  StrokeThickness="3"
@@ -261,8 +261,8 @@
     <!-- ============================================ -->
 
     <Style x:Key="FluentMessageDialog" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource NeutralBackgroundAltBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource NeutralBackgroundAltBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Padding" Value="24"/>
@@ -281,7 +281,7 @@
         <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundSecondaryBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundSecondaryBrush}"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
@@ -309,8 +309,8 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -323,8 +323,8 @@
     <!-- ============================================ -->
 
     <Style x:Key="FluentSettingsCard" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource LayerBackgroundBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralStrokeBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource LayerBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralStrokeBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="4"/>
         <Setter Property="Padding" Value="16"/>
@@ -336,8 +336,8 @@
     <!-- ============================================ -->
 
     <Style x:Key="FluentModCard" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource LayerBackgroundBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource NeutralStrokeBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource LayerBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource NeutralStrokeBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Padding" Value="16"/>
@@ -358,7 +358,7 @@
     <Style x:Key="FluentIcon" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"/>
         <Setter Property="FontSize" Value="16"/>
-        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
     </Style>
 
     <Style x:Key="FluentIconLarge" TargetType="TextBlock" BasedOn="{StaticResource FluentIcon}">

@@ -1,13 +1,12 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
-using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Exceptions.Nexus;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Models.Nexus;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Services.Nexus;
 using Helldivers2ModManager.Stores;
+using Helldivers2ModManager.Core.UI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -44,200 +43,212 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
 
     public bool CanDownload => SelectedFile != null && SelectedMod != null;
 
-    public string ModPageUrl => !string.IsNullOrEmpty(NexusUrl) && SelectedMod != null 
-        ? NexusUrl 
+    public string ModPageUrl => !string.IsNullOrEmpty(NexusUrl) && SelectedMod != null
+        ? NexusUrl
         : string.Empty;
 
     private readonly ILogger<NexusDownloadPageViewModel> _logger;
-    private readonly Lazy<NavigationStore> _navStore;
+    private readonly INavigationService _navigationService;
     private readonly INexusModsService _nexusModsService;
     private readonly ModService _modService;
     private readonly SettingsService _settingsService;
     private readonly LocalizationService _localizationService;
+    private readonly IDialogService _dialogService;
 
     public NexusDownloadPageViewModel(
         ILogger<NexusDownloadPageViewModel> logger,
-        IServiceProvider provider,
+        INavigationService navigationService,
         INexusModsService nexusModsService,
         ModService modService,
         SettingsService settingsService,
-        LocalizationService localizationService)
+        LocalizationService localizationService,
+        IDialogService dialogService)
     {
         _logger = logger;
-        _navStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
+        _navigationService = navigationService;
         _nexusModsService = nexusModsService;
         _modService = modService;
         _settingsService = settingsService;
         _localizationService = localizationService;
+        _dialogService = dialogService;
         _localizationService.PropertyChanged += (_, _) => OnPropertyChanged(nameof(Title));
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
-        private async Task FetchMod()
+    private async Task FetchMod(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(NexusUrl))
         {
-            if (string.IsNullOrWhiteSpace(NexusUrl))
+            await ShowMessageAsync(_localizationService["NexusDownloadPage.EnterUrl"], MessageDialogSeverity.Error, cancellationToken);
+            return;
+        }
+
+        var parsed = ParseNexusUrl(NexusUrl);
+        if (!parsed.HasValue)
+        {
+            await ShowMessageAsync(_localizationService["NexusDownloadPage.ParseFailed"], MessageDialogSeverity.Error, cancellationToken);
+            return;
+        }
+
+        var (gameDomain, modId) = parsed.Value;
+
+        if (!_nexusModsService.Initialized && !string.IsNullOrEmpty(_settingsService.NexusApiKey))
+        {
+            _nexusModsService.Init(_settingsService.NexusApiKey);
+        }
+
+        if (!_nexusModsService.Initialized)
+        {
+            await ShowMessageAsync(_localizationService["NexusDownloadPage.NoApiKey"], MessageDialogSeverity.Error, cancellationToken);
+            return;
+        }
+
+        IsLoading = true;
+        StatusMessage = _localizationService["NexusDownloadPage.Fetching"];
+
+        try
+        {
+            SelectedMod = await _nexusModsService.GetModAsync(gameDomain, modId);
+            ModFiles = await _nexusModsService.GetModFilesAsync(gameDomain, modId);
+
+            // 处理缺失的字段，给文件一个友好的默认名称
+            if (SelectedMod != null)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.EnterUrl"] });
-                return;
+                foreach (var file in ModFiles)
+                {
+                    if (string.IsNullOrEmpty(file.Name))
+                    {
+                        file.Name = !string.IsNullOrEmpty(file.Version)
+                            ? $"{SelectedMod.Name} v{file.Version}"
+                            : SelectedMod.Name;
+                    }
+                }
             }
+
+            if (ModFiles.Count == 0)
+            {
+                StatusMessage = _localizationService["NexusDownloadPage.NoFiles"];
+            }
+            else
+            {
+                SelectedFile = ModFiles.FirstOrDefault(f => f.IsPrimary == true) ?? ModFiles.FirstOrDefault();
+                StatusMessage = _localizationService.Format("NexusDownloadPage.Found", new { count = ModFiles.Count });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch mod from Nexus");
+            StatusMessage = _localizationService.Format("NexusDownloadPage.FetchFailed", new { message = ex.Message });
+            await ShowMessageAsync(
+                _localizationService.Format("NexusDownloadPage.FetchError", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                cancellationToken);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    private async Task DownloadAndImport(CancellationToken cancellationToken)
+    {
+        if (SelectedFile == null || SelectedMod == null)
+        {
+            await ShowMessageAsync(_localizationService["NexusDownloadPage.SelectFile"], MessageDialogSeverity.Error, cancellationToken);
+            return;
+        }
+
+        if (!_modService.Initialized || !_settingsService.Initialized)
+        {
+            await ShowMessageAsync(_localizationService["NexusDownloadPage.ServiceNotReady"], MessageDialogSeverity.Error, cancellationToken);
+            return;
+        }
+
+        IsDownloading = true;
+        StatusMessage = _localizationService["NexusDownloadPage.Downloading"];
+        string? downloadedPath = null;
+
+        try
+        {
+            var fileName = !string.IsNullOrEmpty(SelectedFile.Name)
+                ? SelectedFile.Name
+                : $"{SelectedMod.Name}.zip";
+            var tempPath = Path.Combine(_settingsService.TempDirectory, fileName);
 
             var parsed = ParseNexusUrl(NexusUrl);
             if (!parsed.HasValue)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.ParseFailed"] });
-                return;
+                throw new InvalidOperationException(_localizationService["NexusDownloadPage.ParseFailed"]);
             }
 
-            var (gameDomain, modId) = parsed.Value;
+            downloadedPath = await _nexusModsService.DownloadModFileAsync(
+                parsed.Value.GameDomain,
+                SelectedMod.GameScopedId,
+                SelectedFile.GameScopedId,
+                tempPath);
 
-            if (!_nexusModsService.Initialized && !string.IsNullOrEmpty(_settingsService.NexusApiKey))
+            StatusMessage = _localizationService["NexusDownloadPage.Importing"];
+
+            var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(downloadedPath));
+
+            if (problems.Length > 0)
             {
-                _nexusModsService.Init(_settingsService.NexusApiKey);
+                var hasError = problems.Any(p => p.IsError);
+                var prefix = hasError
+                    ? _localizationService["NexusDownloadPage.ImportProblems"]
+                    : _localizationService["NexusDownloadPage.ImportWarnings"];
+
+                await ShowProblemsAsync(problems, prefix, hasError, cancellationToken);
             }
-
-            if (!_nexusModsService.Initialized)
+            else
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.NoApiKey"] });
-                return;
-            }
-
-            IsLoading = true;
-            StatusMessage = _localizationService["NexusDownloadPage.Fetching"];
-
-            try
-            {
-                SelectedMod = await _nexusModsService.GetModAsync(gameDomain, modId);
-                ModFiles = await _nexusModsService.GetModFilesAsync(gameDomain, modId);
-
-                // 处理缺失的字段，给文件一个友好的默认名称
-                if (SelectedMod != null)
-                {
-                    foreach (var file in ModFiles)
-                    {
-                        if (string.IsNullOrEmpty(file.Name))
-                        {
-                            file.Name = !string.IsNullOrEmpty(file.Version) 
-                                ? $"{SelectedMod.Name} v{file.Version}" 
-                                : SelectedMod.Name;
-                        }
-                    }
-                }
-
-                if (ModFiles.Count == 0)
-                {
-                    StatusMessage = _localizationService["NexusDownloadPage.NoFiles"];
-                }
-                else
-                {
-                    SelectedFile = ModFiles.FirstOrDefault(f => f.IsPrimary == true) ?? ModFiles.FirstOrDefault();
-                    StatusMessage = $"{_localizationService["NexusDownloadPage.FoundPrefix"]}{ModFiles.Count}{_localizationService["NexusDownloadPage.FoundSuffix"]}";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to fetch mod from Nexus");
-                StatusMessage = $"{_localizationService["NexusDownloadPage.FetchFailedPrefix"]}{ex.Message}";
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = $"{_localizationService["NexusDownloadPage.FetchError"]}{ex.Message}" });
-            }
-            finally
-            {
-                IsLoading = false;
+                StatusMessage = _localizationService["NexusDownloadPage.ImportSuccess"];
+                await ShowMessageAsync(
+                    _localizationService.Format("NexusDownloadPage.ImportSuccessMessage", new { modName = SelectedMod.Name }),
+                    MessageDialogSeverity.Information,
+                    cancellationToken);
+                _navigationService.Navigate(typeof(DashboardPageViewModel), root: true);
             }
         }
-
-    [RelayCommand(AllowConcurrentExecutions = false)]
-        private async Task DownloadAndImport()
+        catch (NexusPremiumRequiredException)
         {
-            if (SelectedFile == null || SelectedMod == null)
-            {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.SelectFile"] });
-                return;
-            }
-
-            if (!_modService.Initialized || !_settingsService.Initialized)
-            {
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.ServiceNotReady"] });
-                return;
-            }
-
-            IsDownloading = true;
-            StatusMessage = _localizationService["NexusDownloadPage.Downloading"];
-            string? downloadedPath = null;
-
-            try
-            {
-                var fileName = !string.IsNullOrEmpty(SelectedFile.Name) 
-                    ? SelectedFile.Name 
-                    : $"{SelectedMod.Name}.zip";
-                var tempPath = Path.Combine(_settingsService.TempDirectory, fileName);
-                
-                var parsed = ParseNexusUrl(NexusUrl);
-                if (!parsed.HasValue)
-                {
-                    throw new InvalidOperationException(_localizationService["NexusDownloadPage.ParseFailed"]);
-                }
-                
-                downloadedPath = await _nexusModsService.DownloadModFileAsync(
-                    parsed.Value.GameDomain,
-                    SelectedMod.GameScopedId,
-                    SelectedFile.GameScopedId,
-                    tempPath);
-
-                StatusMessage = _localizationService["NexusDownloadPage.Importing"];
-                
-                var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(downloadedPath));
-                
-                if (problems.Length > 0)
-                {
-                    var hasError = problems.Any(p => p.IsError);
-                    var prefix = hasError
-                        ? _localizationService["NexusDownloadPage.ImportProblems"]
-                        : _localizationService["NexusDownloadPage.ImportWarnings"];
-                    
-                    ShowProblems(problems, prefix, hasError);
-                }
-                else
-                {
-                    StatusMessage = _localizationService["NexusDownloadPage.ImportSuccess"];
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = $"{_localizationService["NexusDownloadPage.ImportSuccessPrefix"]}{SelectedMod.Name}{_localizationService["NexusDownloadPage.ImportSuccessSuffix"]}" });
-                    _navStore.Value.Navigate<DashboardPageViewModel>();
-                }
-            }
-            catch (NexusPremiumRequiredException)
-            {
-                StatusMessage = _localizationService["NexusDownloadPage.PremiumRequired"];
-                ShowPremiumRequiredMessage();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to download or import mod");
-                StatusMessage = $"{_localizationService["NexusDownloadPage.DownloadFailedPrefix"]}{ex.Message}";
-                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = $"{_localizationService["NexusDownloadPage.OperationFailed"]}{ex.Message}" });
-            }
-            finally
-            {
-                if (!string.IsNullOrEmpty(downloadedPath) && File.Exists(downloadedPath))
-                {
-                    try
-                    {
-                        File.Delete(downloadedPath);
-                        _logger.LogInformation("Cleaned up temporary download file: {Path}", downloadedPath);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete temporary download file: {Path}", downloadedPath);
-                    }
-                }
-                IsDownloading = false;
-            }
+            StatusMessage = _localizationService["NexusDownloadPage.PremiumRequired"];
+            await ShowPremiumRequiredMessageAsync(cancellationToken);
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to download or import mod");
+            StatusMessage = _localizationService.Format("NexusDownloadPage.DownloadFailed", new { message = ex.Message });
+            await ShowMessageAsync(
+                _localizationService.Format("NexusDownloadPage.OperationFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                cancellationToken);
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(downloadedPath) && File.Exists(downloadedPath))
+            {
+                try
+                {
+                    File.Delete(downloadedPath);
+                    _logger.LogInformation("Cleaned up temporary download file: {Path}", downloadedPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete temporary download file: {Path}", downloadedPath);
+                }
+            }
+            IsDownloading = false;
+        }
+    }
 
     [RelayCommand]
-    private void OpenInBrowser()
+    private async Task OpenInBrowser(CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(NexusUrl))
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.EnterLinkFirst"] });
+            await ShowMessageAsync(_localizationService["NexusDownloadPage.EnterLinkFirst"], MessageDialogSeverity.Error, cancellationToken);
             return;
         }
 
@@ -252,35 +263,41 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open Nexus page in browser");
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = $"{_localizationService["NexusDownloadPage.OpenBrowserFailed"]}{ex.Message}" });
+            await ShowMessageAsync(
+                _localizationService.Format("NexusDownloadPage.OpenBrowserFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                cancellationToken);
         }
     }
 
     [RelayCommand]
     private void GoBack()
     {
-        _navStore.Value.Navigate<DashboardPageViewModel>();
+        _navigationService.Navigate(typeof(DashboardPageViewModel), root: true);
     }
 
-    private void ShowPremiumRequiredMessage()
+    private Task ShowPremiumRequiredMessageAsync(CancellationToken cancellationToken)
     {
-        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.PremiumRequiredMsg"] });
+        return ShowMessageAsync(
+            _localizationService["NexusDownloadPage.PremiumRequiredMsg"],
+            MessageDialogSeverity.Error,
+            cancellationToken);
     }
 
     private (string GameDomain, string ModId)? ParseNexusUrl(string url)
     {
         var pattern = @"nexusmods\.com/([^/]+)/mods/(\d+)";
         var match = Regex.Match(url, pattern);
-        
+
         if (match.Success && match.Groups.Count >= 3)
         {
             return (match.Groups[1].Value, match.Groups[2].Value);
         }
-        
+
         return null;
     }
 
-    private void ShowProblems(IEnumerable<ModProblem> problems, string prefix, bool error)
+    private Task ShowProblemsAsync(IEnumerable<ModProblem> problems, string prefix, bool error, CancellationToken cancellationToken)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine(prefix);
@@ -309,13 +326,22 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
             }
         }
 
-        if (error)
+        return ShowMessageAsync(
+            sb.ToString(),
+            error ? MessageDialogSeverity.Error : MessageDialogSeverity.Warning,
+            cancellationToken);
+    }
+
+    private Task ShowMessageAsync(string message, MessageDialogSeverity severity, CancellationToken cancellationToken)
+    {
+        var titleKey = severity switch
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = sb.ToString() });
-        }
-        else
-        {
-            WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage { Message = sb.ToString() });
-        }
+            MessageDialogSeverity.Warning => "MessageBox.Warning",
+            MessageDialogSeverity.Error => "MessageBox.Error",
+            _ => "MessageBox.Info"
+        };
+        return _dialogService.ShowMessageAsync(
+            new MessageDialogRequest(_localizationService[titleKey], message, severity),
+            cancellationToken);
     }
 }

@@ -6,6 +6,6 @@ namespace Helldivers2ModManager;
 internal sealed class RegisterServiceAttribute(ServiceLifetime lifetime) : Attribute
 {
     public ServiceLifetime Lifetime { get; } = lifetime;
-    
+
     public Type? Contract { get; init; }
 }

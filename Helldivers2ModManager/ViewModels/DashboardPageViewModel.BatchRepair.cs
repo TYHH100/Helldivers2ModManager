@@ -1,18 +1,18 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
-using Helldivers2ModManager.Components;
+using Helldivers2ModManager.Core.UI;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using System.Text;
-using System.Windows;
 
 namespace Helldivers2ModManager.ViewModels;
 
 internal sealed partial class DashboardPageViewModel
 {
     public bool IsBatchRepairEnabled =>
-        _settingsService.Initialized && _settingsService.EnableBatchRepair;
+        _settingsService.Initialized &&
+        _settingsService.EnableExperimentalRepair &&
+        _settingsService.EnableBatchRepair;
 
     [ObservableProperty]
     private bool _isBatchRepairing;
@@ -21,71 +21,60 @@ internal sealed partial class DashboardPageViewModel
         OnPropertyChanged(nameof(IsBatchRepairEnabled));
 
     [RelayCommand(AllowConcurrentExecutions = false)]
-    private async Task BatchRepair()
+    private async Task BatchRepair(CancellationToken cancellationToken)
     {
-        if (!IsBatchRepairEnabled || IsBatchRepairing || _mods.Count == 0 ||
-            Application.Current is not App app ||
-            app.Host?.Services?.GetService(typeof(VersionCheckService)) is not VersionCheckService service ||
-            app.Host.Services.GetService(typeof(RepairDisclaimerService)) is not RepairDisclaimerService disclaimerService)
+        if (!IsBatchRepairEnabled || IsBatchRepairing || _mods.Count == 0)
         {
             return;
         }
 
-        if (!disclaimerService.ContinueOrRequest(() => _ = BatchRepair()))
+        if (!await _repairDisclaimerService.EnsureAcceptedAsync(cancellationToken))
             return;
 
         IsBatchRepairing = true;
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-        {
-            Title = _localizationService["VersionCheckBatch.ScanTitle"],
-            Message = _localizationService["VersionCheckBatch.ScanMessage"]
-        });
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                _localizationService["VersionCheckBatch.ScanTitle"],
+                _localizationService["VersionCheckBatch.ScanMessage"]),
+            cancellationToken);
         try
         {
             var scanned = 0;
             var progress = new Progress<BatchModRepairItem>(item =>
             {
                 scanned++;
-                WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-                {
-                    Title = _localizationService["VersionCheckBatch.ScanTitle"],
-                    Message = _localizationService["VersionCheckBatch.ScanProgress"]
-                        .Replace("{current}", scanned.ToString())
-                        .Replace("{total}", _mods.Count.ToString())
-                        .Replace("{name}", item.ModName)
-                });
+                progressDialog.Report(new ProgressDialogRequest(
+                    _localizationService["VersionCheckBatch.ScanTitle"],
+                    _localizationService.Format("VersionCheckBatch.ScanProgress", new { current = scanned, total = _mods.Count, name = item.ModName })));
             });
-            var plan = await service.CreateBatchRepairPlanAsync(
+            var plan = await _batchRepairCoordinator.CreatePlanAsync(
                 _mods.Select(static viewModel => viewModel.Data),
-                progress);
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+                progress,
+                cancellationToken);
+            await progressDialog.CloseAsync(cancellationToken);
             if (plan.RepairableCount == 0)
             {
-                WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
-                {
-                    Message = BuildBatchPlanSummary(plan)
-                });
+                await ShowDashboardMessageAsync(
+                    BuildBatchPlanSummary(plan),
+                    MessageDialogSeverity.Information,
+                    cancellationToken);
                 return;
             }
 
-            WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-            {
-                Title = _localizationService["VersionCheckBatch.ConfirmTitle"],
-                Message = _localizationService["VersionCheckBatch.ConfirmMessage"]
-                    .Replace("{repairable}", plan.RepairableCount.ToString())
-                    .Replace("{blocked}", plan.BlockedCount.ToString())
-                    .Replace("{clean}", plan.NoActionCount.ToString()),
-                Confirm = () => _ = ExecuteBatchRepairAsync(service, plan)
-            });
+            if (await _dialogService.ShowAsync(
+                new Helldivers2ModManager.Core.UI.DialogRequest(
+                    _localizationService["VersionCheckBatch.ConfirmTitle"],
+                    _localizationService.Format("VersionCheckBatch.ConfirmMessage", new { repairable = plan.RepairableCount, blocked = plan.BlockedCount, clean = plan.NoActionCount })),
+                cancellationToken))
+                await ExecuteBatchRepairAsync(plan, cancellationToken);
         }
         catch (Exception ex)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = _localizationService["VersionCheckBatch.ScanFailed"]
-                    .Replace("{message}", ex.Message)
-            });
+            await progressDialog.CloseAsync(CancellationToken.None);
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("VersionCheckBatch.ScanFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                CancellationToken.None);
         }
         finally
         {
@@ -94,63 +83,57 @@ internal sealed partial class DashboardPageViewModel
     }
 
     private async Task ExecuteBatchRepairAsync(
-        VersionCheckService service,
-        BatchModRepairPlan plan)
+        BatchModRepairPlan plan,
+        CancellationToken cancellationToken)
     {
-        if (IsBatchRepairing)
-            return;
-
-        IsBatchRepairing = true;
         var processed = 0;
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-        {
-            Title = _localizationService["VersionCheckBatch.RepairTitle"],
-            Message = _localizationService["VersionCheckBatch.RepairMessage"]
-        });
+        await using var progressDialog = await _dialogService.OpenProgressAsync(
+            new ProgressDialogRequest(
+                _localizationService["VersionCheckBatch.RepairTitle"],
+                _localizationService["VersionCheckBatch.RepairMessage"]),
+            cancellationToken);
         try
         {
             var progress = new Progress<BatchModRepairItem>(item =>
             {
                 processed++;
-                WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-                {
-                    Title = _localizationService["VersionCheckBatch.RepairTitle"],
-                    Message = _localizationService["VersionCheckBatch.RepairProgress"]
-                        .Replace("{current}", processed.ToString())
-                        .Replace("{total}", plan.RepairableCount.ToString())
-                        .Replace("{name}", item.ModName)
-                });
+                progressDialog.Report(new ProgressDialogRequest(
+                    _localizationService["VersionCheckBatch.RepairTitle"],
+                    _localizationService.Format("VersionCheckBatch.RepairProgress", new { current = processed, total = plan.RepairableCount, name = item.ModName })));
             });
-            var result = await service.RepairModsBatchAsync(plan, progress);
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
-            {
-                Message = BuildBatchResultSummary(result)
-            });
+            var result = await _batchRepairCoordinator.ExecuteAsync(plan, progress, cancellationToken);
+            await progressDialog.CloseAsync(cancellationToken);
+            await ShowDashboardMessageAsync(
+                BuildBatchResultSummary(result),
+                MessageDialogSeverity.Information,
+                cancellationToken);
             await CheckVersionCompatibility();
         }
         catch (Exception ex)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
-            {
-                Message = _localizationService["VersionCheckBatch.RepairFailed"]
-                    .Replace("{message}", ex.Message)
-            });
+            await progressDialog.CloseAsync(CancellationToken.None);
+            await ShowDashboardMessageAsync(
+                _localizationService.Format("VersionCheckBatch.RepairFailed", new { message = ex.Message }),
+                MessageDialogSeverity.Error,
+                CancellationToken.None);
         }
-        finally
-        {
-            IsBatchRepairing = false;
-        }
+    }
+
+    private Task ShowDashboardMessageAsync(
+        string message,
+        MessageDialogSeverity severity,
+        CancellationToken cancellationToken)
+    {
+        var titleKey = severity == MessageDialogSeverity.Error ? "MessageBox.Error" : "MessageBox.Info";
+        return _dialogService.ShowMessageAsync(
+            new MessageDialogRequest(_localizationService[titleKey], message, severity),
+            cancellationToken);
     }
 
     private string BuildBatchPlanSummary(BatchModRepairPlan plan)
     {
         var builder = new StringBuilder();
-        builder.AppendLine(_localizationService["VersionCheckBatch.PlanSummary"]
-            .Replace("{repairable}", plan.RepairableCount.ToString())
-            .Replace("{blocked}", plan.BlockedCount.ToString())
-            .Replace("{clean}", plan.NoActionCount.ToString()));
+        builder.AppendLine(_localizationService.Format("VersionCheckBatch.PlanSummary", new { repairable = plan.RepairableCount, blocked = plan.BlockedCount, clean = plan.NoActionCount }));
         AppendBatchIssues(builder, plan.Items);
         return builder.ToString().TrimEnd();
     }
@@ -158,10 +141,7 @@ internal sealed partial class DashboardPageViewModel
     private string BuildBatchResultSummary(BatchModRepairResult result)
     {
         var builder = new StringBuilder();
-        builder.AppendLine(_localizationService["VersionCheckBatch.ResultSummary"]
-            .Replace("{repaired}", result.RepairedCount.ToString())
-            .Replace("{failed}", result.FailedCount.ToString())
-            .Replace("{skipped}", result.SkippedCount.ToString()));
+        builder.AppendLine(_localizationService.Format("VersionCheckBatch.ResultSummary", new { repaired = result.RepairedCount, failed = result.FailedCount, skipped = result.SkippedCount }));
         AppendBatchIssues(builder, result.Items);
         return builder.ToString().TrimEnd();
     }

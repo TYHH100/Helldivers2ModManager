@@ -1,154 +1,95 @@
-const browser = window.browser || window.chrome;
+import { API_BASE_URL, createAuthenticatedHeaders, unpairManager } from './protocol.js';
 
-let statusCheckInterval = null;
+const extensionApi = globalThis.browser ?? globalThis.chrome;
+const enabledToggle = document.getElementById('enabledToggle');
+const pairingCode = document.getElementById('pairingCode');
+const pairButton = document.getElementById('pairButton');
+const unpairButton = document.getElementById('unpairButton');
+const refreshButton = document.getElementById('refreshBtn');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
 
-function getServerUrl() {
-  const host = document.getElementById('serverHost').value || 'localhost';
-  const port = document.getElementById('serverPort').value || '7456';
-  return `http://${host}:${port}`;
+function setStatus(kind, text) {
+  statusDot.className = `status-dot ${kind}`;
+  statusText.textContent = text;
 }
 
-async function loadSettings() {
-  const result = await browser.storage.local.get(['enabled', 'serverHost', 'serverPort']);
-  
-  const enabledToggle = document.getElementById('enabledToggle');
-  const serverHostInput = document.getElementById('serverHost');
-  const serverPortInput = document.getElementById('serverPort');
-  
-  if (result.enabled !== false) {
-    enabledToggle.classList.add('active');
-  } else {
-    enabledToggle.classList.remove('active');
-  }
-  
-  if (result.serverHost) {
-    serverHostInput.value = result.serverHost;
-  }
-  
-  if (result.serverPort) {
-    serverPortInput.value = result.serverPort;
-  }
+async function loadState() {
+  const state = await extensionApi.storage.local.get(['enabled', 'pairingToken']);
+  enabledToggle.checked = state.enabled === true && Boolean(state.pairingToken);
+  enabledToggle.disabled = !state.pairingToken;
+  pairButton.hidden = Boolean(state.pairingToken);
+  pairingCode.hidden = Boolean(state.pairingToken);
+  unpairButton.hidden = !state.pairingToken;
+  await checkManagerStatus();
 }
 
-async function requestHostPermission(url) {
+async function pair() {
+  const code = pairingCode.value.trim();
+  if (!/^\d{8}$/.test(code)) {
+    setStatus('disconnected', 'Enter the 8-digit code shown by the app.');
+    return;
+  }
   try {
-    const host = new URL(url).host;
-    const permission = `http://${host}/*`;
-    
-    const hasPermission = await browser.permissions.contains({
-      origins: [permission]
+    const response = await fetch(`${API_BASE_URL}/pair`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
     });
-    
-    if (!hasPermission) {
-      if (!browser.permissions.request) {
-        console.log('permissions.request not available, skipping permission request');
-        return true;
-      }
-      
-      const granted = await browser.permissions.request({
-        origins: [permission]
-      });
-      
-      if (granted) {
-        console.log(`Permission granted for ${permission}`);
-        return true;
-      } else {
-        console.log(`Permission denied for ${permission}`);
-        return false;
-      }
+    const body = await response.json();
+    if (!response.ok || !body.token) {
+      setStatus('disconnected', body.error ?? `Pairing failed (${response.status})`);
+      return;
     }
-    return true;
-  } catch (error) {
-    console.error('Failed to request permission:', error);
-    return false;
+    await extensionApi.storage.local.set({ pairingToken: body.token, enabled: false });
+    pairingCode.value = '';
+    await loadState();
+  } catch {
+    setStatus('disconnected', 'Cannot connect to the mod manager.');
   }
 }
 
-async function saveSettings() {
-  const enabledToggle = document.getElementById('enabledToggle');
-  const serverHost = document.getElementById('serverHost').value;
-  const serverPort = document.getElementById('serverPort').value;
-  const isEnabled = enabledToggle.classList.contains('active');
-  
-  await browser.storage.local.set({
-    enabled: isEnabled,
-    serverHost: serverHost,
-    serverPort: serverPort
-  });
-  
-  browser.runtime.sendMessage({ type: 'settingsChanged' });
-  
-  if (!isEnabled) {
-    browser.runtime.sendMessage({ type: 'stopPolling' });
-  }
-}
+async function unpair() {
+	const { pairingToken } = await extensionApi.storage.local.get(['pairingToken']);
+	if (!pairingToken) {
+		await loadState();
+		return;
+	}
 
-async function requestPermissionIfNeeded() {
-  const isEnabled = document.getElementById('enabledToggle').classList.contains('active');
-  if (isEnabled) {
-    const serverHost = document.getElementById('serverHost').value;
-    const serverPort = document.getElementById('serverPort').value;
-    const serverUrl = `http://${serverHost}:${serverPort}`;
-    await requestHostPermission(serverUrl);
-  }
+	try {
+		const response = await unpairManager(pairingToken);
+		if (!response.ok) {
+			setStatus('disconnected', `Unpairing failed (${response.status})`);
+			return;
+		}
+		await extensionApi.storage.local.remove(['pairingToken']);
+		await extensionApi.storage.local.set({ enabled: false });
+		await loadState();
+	} catch {
+		setStatus('disconnected', 'Manager unavailable; pairing was not removed.');
+	}
 }
 
 async function checkManagerStatus() {
-  const statusDot = document.getElementById('statusDot');
-  const statusText = document.getElementById('statusText');
-  const serverUrl = getServerUrl();
-  
+  const { pairingToken } = await extensionApi.storage.local.get(['pairingToken']);
+  if (!pairingToken) {
+    setStatus('', 'Not paired');
+    return;
+  }
   try {
-    const response = await fetch(`${serverUrl}/api/download/health`);
-    
-    if (response.ok) {
-      statusDot.className = 'status-dot connected';
-      statusText.textContent = '管理器已连接';
-    } else {
-      statusDot.className = 'status-dot disconnected';
-      statusText.textContent = '管理器未运行';
-    }
-  } catch (error) {
-    statusDot.className = 'status-dot disconnected';
-    statusText.textContent = '管理器未运行';
+    const response = await fetch(`${API_BASE_URL}/health`, {
+      headers: createAuthenticatedHeaders(pairingToken)
+    });
+    setStatus(response.ok ? 'connected' : 'disconnected', response.ok ? 'Connected' : 'Authentication failed');
+  } catch {
+    setStatus('disconnected', 'Manager unavailable');
   }
 }
 
-function startStatusCheck() {
-  if (statusCheckInterval) {
-    clearInterval(statusCheckInterval);
-  }
-  statusCheckInterval = setInterval(checkManagerStatus, 5000);
-}
-
-function stopStatusCheck() {
-  if (statusCheckInterval) {
-    clearInterval(statusCheckInterval);
-    statusCheckInterval = null;
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  loadSettings();
-  checkManagerStatus();
-  startStatusCheck();
-  
-  const enabledToggle = document.getElementById('enabledToggle');
-  enabledToggle.addEventListener('click', async () => {
-    enabledToggle.classList.toggle('active');
-    await requestPermissionIfNeeded();
-    await saveSettings();
-  });
-  
-  const serverHostInput = document.getElementById('serverHost');
-  const serverPortInput = document.getElementById('serverPort');
-  serverHostInput.addEventListener('change', saveSettings);
-  serverPortInput.addEventListener('change', saveSettings);
-  
-  const refreshBtn = document.getElementById('refreshBtn');
-  refreshBtn.addEventListener('click', checkManagerStatus);
+enabledToggle.addEventListener('change', async () => {
+  await extensionApi.storage.local.set({ enabled: enabledToggle.checked });
 });
-
-window.addEventListener('unload', () => {
-  stopStatusCheck();
-});
+pairButton.addEventListener('click', pair);
+unpairButton.addEventListener('click', unpair);
+refreshButton.addEventListener('click', checkManagerStatus);
+loadState();

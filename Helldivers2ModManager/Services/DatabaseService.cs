@@ -2,8 +2,15 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.IO;
+using Helldivers2ModManager.Infrastructure.Database;
 
 namespace Helldivers2ModManager.Services;
+
+internal sealed class DatabaseReadOnlyException(string databasePath)
+    : InvalidOperationException($"The database is in read-only recovery mode: {databasePath}")
+{
+    public string DatabasePath { get; } = databasePath;
+}
 
 /// <summary>
 /// SQLite 数据库服务，负责管理数据库初始化及为每次操作提供独立连接。
@@ -13,14 +20,15 @@ namespace Helldivers2ModManager.Services;
 [RegisterService(ServiceLifetime.Singleton)]
 internal sealed class DatabaseService : IDisposable
 {
-	private const string DatabaseFileName = "mod_manager.db";
-	private const string WalPragma = "PRAGMA journal_mode=WAL;";
-	private const string BusyTimeoutPragma = "PRAGMA busy_timeout=5000;";
+    private const int CurrentDatabaseVersion = 2;
+    private const string DatabaseFileName = "mod_manager.db";
+    private const string WalPragma = "PRAGMA journal_mode=WAL;";
+    private const string BusyTimeoutPragma = "PRAGMA busy_timeout=5000;";
 
-	/// <summary>
-	/// 数据库表创建 SQL —— 存储 Mod 启用状态及选项配置
-	/// </summary>
-	private const string CreateEnabledModsTableSql = @"
+    /// <summary>
+    /// 数据库表创建 SQL —— 存储 Mod 启用状态及选项配置
+    /// </summary>
+    private const string CreateEnabledModsTableSql = @"
 		CREATE TABLE IF NOT EXISTS enabled_mods (
 			Guid TEXT PRIMARY KEY NOT NULL,
 			Enabled INTEGER NOT NULL DEFAULT 1,
@@ -32,20 +40,20 @@ internal sealed class DatabaseService : IDisposable
 		);
 	";
 
-	/// <summary>
-	/// 为旧版本数据库添加 SortOrder 列的迁移 SQL（在 PRAGMA 侧确保兼容旧库）
-	/// </summary>
-	private const string AddSortOrderColumnSql = "ALTER TABLE enabled_mods ADD COLUMN SortOrder INTEGER NOT NULL DEFAULT 0;";
+    /// <summary>
+    /// 为旧版本数据库添加 SortOrder 列的迁移 SQL（在 PRAGMA 侧确保兼容旧库）
+    /// </summary>
+    private const string AddSortOrderColumnSql = "ALTER TABLE enabled_mods ADD COLUMN SortOrder INTEGER NOT NULL DEFAULT 0;";
 
-	/// <summary>
-	/// 检查 SortOrder 列是否已存在的 SQL
-	/// </summary>
-	private const string CheckSortOrderColumnSql = "SELECT COUNT(*) FROM pragma_table_info('enabled_mods') WHERE name='SortOrder';";
+    /// <summary>
+    /// 检查 SortOrder 列是否已存在的 SQL
+    /// </summary>
+    private const string CheckSortOrderColumnSql = "SELECT COUNT(*) FROM pragma_table_info('enabled_mods') WHERE name='SortOrder';";
 
-	/// <summary>
-	/// 数据库表创建 SQL —— 存储 Dashboard 分组元数据与自定义分组成员
-	/// </summary>
-	private const string CreateModGroupsTableSql = @"
+    /// <summary>
+    /// 数据库表创建 SQL —— 存储 Dashboard 分组元数据与自定义分组成员
+    /// </summary>
+    private const string CreateModGroupsTableSql = @"
 		CREATE TABLE IF NOT EXISTS mod_groups (
 			Id TEXT PRIMARY KEY NOT NULL,
 			Name TEXT NOT NULL,
@@ -55,10 +63,10 @@ internal sealed class DatabaseService : IDisposable
 		);
 	";
 
-	/// <summary>
-	/// 数据库表创建 SQL —— 按分组隔离存储 Mod 启用状态及选项配置
-	/// </summary>
-	private const string CreateGroupEnabledModsTableSql = @"
+    /// <summary>
+    /// 数据库表创建 SQL —— 按分组隔离存储 Mod 启用状态及选项配置
+    /// </summary>
+    private const string CreateGroupEnabledModsTableSql = @"
 		CREATE TABLE IF NOT EXISTS group_enabled_mods (
 			GroupId TEXT NOT NULL,
 			Guid TEXT NOT NULL,
@@ -70,12 +78,12 @@ internal sealed class DatabaseService : IDisposable
 		);
 	";
 
-	private const string CreateGroupEnabledModsIndexSql = "CREATE INDEX IF NOT EXISTS idx_group_enabled_mods_group_sort ON group_enabled_mods (GroupId, SortOrder);";
+    private const string CreateGroupEnabledModsIndexSql = "CREATE INDEX IF NOT EXISTS idx_group_enabled_mods_group_sort ON group_enabled_mods (GroupId, SortOrder);";
 
-	/// <summary>
-	/// 数据库表创建 SQL —— 存储文件哈希缓存，用于模组增量更新时的快速比对
-	/// </summary>
-	private const string CreateFileHashesTableSql = @"
+    /// <summary>
+    /// 数据库表创建 SQL —— 存储文件哈希缓存，用于模组增量更新时的快速比对
+    /// </summary>
+    private const string CreateFileHashesTableSql = @"
 		CREATE TABLE IF NOT EXISTS file_hashes (
 			ModGuid TEXT NOT NULL,
 			FilePath TEXT NOT NULL,
@@ -86,15 +94,15 @@ internal sealed class DatabaseService : IDisposable
 		);
 	";
 
-	/// <summary>
-	/// file_hashes 表索引 —— 加速按 ModGuid 查询
-	/// </summary>
-	private const string CreateFileHashesIndexSql = "CREATE INDEX IF NOT EXISTS idx_file_hashes_modguid ON file_hashes (ModGuid);";
+    /// <summary>
+    /// file_hashes 表索引 —— 加速按 ModGuid 查询
+    /// </summary>
+    private const string CreateFileHashesIndexSql = "CREATE INDEX IF NOT EXISTS idx_file_hashes_modguid ON file_hashes (ModGuid);";
 
-	/// <summary>
-	/// 数据库表创建 SQL —— 存储版本兼容性检查结果
-	/// </summary>
-	private const string CreateVersionCheckResultsTableSql = @"
+    /// <summary>
+    /// 数据库表创建 SQL —— 存储版本兼容性检查结果
+    /// </summary>
+    private const string CreateVersionCheckResultsTableSql = @"
 		CREATE TABLE IF NOT EXISTS version_check_results (
 			ModGuid TEXT PRIMARY KEY NOT NULL,
 			Status INTEGER NOT NULL DEFAULT 0,
@@ -104,234 +112,292 @@ internal sealed class DatabaseService : IDisposable
 		);
 	";
 
-	private const string AddModLastWriteTimeColumnSql = "ALTER TABLE version_check_results ADD COLUMN ModLastWriteTimeUtc TEXT NOT NULL DEFAULT '';";
+    private const string AddModLastWriteTimeColumnSql = "ALTER TABLE version_check_results ADD COLUMN ModLastWriteTimeUtc TEXT NOT NULL DEFAULT '';";
 
-	private const string CheckModLastWriteTimeColumnSql = "SELECT COUNT(*) FROM pragma_table_info('version_check_results') WHERE name='ModLastWriteTimeUtc';";
+    private const string CheckModLastWriteTimeColumnSql = "SELECT COUNT(*) FROM pragma_table_info('version_check_results') WHERE name='ModLastWriteTimeUtc';";
 
-	/// <summary>
-	/// 数据库表创建 SQL —— 存储游戏 exe 最后写入时间，用于检测游戏版本变化
-	/// </summary>
-	private const string CreateGameCheckTrackerTableSql = @"
+    /// <summary>
+    /// 数据库表创建 SQL —— 存储游戏 exe 最后写入时间，用于检测游戏版本变化
+    /// </summary>
+    private const string CreateGameCheckTrackerTableSql = @"
 		CREATE TABLE IF NOT EXISTS game_check_tracker (
 			Id INTEGER PRIMARY KEY CHECK (Id = 1),
 			ExeLastWriteTimeUtc TEXT NOT NULL DEFAULT ''
 		);
 	";
 
-	/// <summary>
-	/// 插入默认行（仅当表为空时），确保始终有一条记录
-	/// </summary>
-	private const string InsertGameCheckTrackerDefaultSql = @"
+    /// <summary>
+    /// 插入默认行（仅当表为空时），确保始终有一条记录
+    /// </summary>
+    private const string InsertGameCheckTrackerDefaultSql = @"
 		INSERT OR IGNORE INTO game_check_tracker (Id, ExeLastWriteTimeUtc) VALUES (1, '');
 	";
 
-	private readonly ILogger<DatabaseService> _logger;
-	private string? _connectionString;
-	private bool _initialized;
-	private readonly object _initLock = new();
+    private readonly ILogger<DatabaseService> _logger;
+    private string? _connectionString;
+    private bool _initialized;
+    private readonly object _initLock = new();
 
-	public DatabaseService(ILogger<DatabaseService> logger)
-	{
-		_logger = logger;
-	}
+    public DatabaseService(ILogger<DatabaseService> logger)
+    {
+        _logger = logger;
+    }
 
-	/// <summary>
-	/// 是否已初始化
-	/// </summary>
-	public bool IsInitialized => _initialized;
+    /// <summary>
+    /// 是否已初始化
+    /// </summary>
+    public bool IsInitialized => _initialized;
 
-	/// <summary>
-	/// 获取数据库文件路径
-	/// </summary>
-	public static string GetDatabasePath(string storageDirectory)
-	{
-		return Path.Combine(storageDirectory, DatabaseFileName);
-	}
+    public bool IsReadOnly { get; private set; }
 
-	/// <summary>
-	/// 创建并返回一个已打开的新数据库连接。调用方负责 Dispose。
-	/// 每次操作使用独立连接，配合 WAL 模式实现真正的并发读写。
-	/// </summary>
-	/// <param name="storageDirectory">存储目录路径</param>
-	/// <returns>已打开的新 SqliteConnection</returns>
-	public SqliteConnection OpenConnection(string storageDirectory)
-	{
-		EnsureInitialized(storageDirectory);
+    public event EventHandler? ReadOnlyModeChanged;
 
-		var connection = new SqliteConnection(_connectionString);
-		connection.Open();
-		return connection;
-	}
+    private void SetReadOnly(bool value)
+    {
+        if (IsReadOnly == value)
+            return;
+        IsReadOnly = value;
+        ReadOnlyModeChanged?.Invoke(this, EventArgs.Empty);
+    }
 
-	/// <summary>
-	/// 确保数据库文件存在、WAL 模式已启用、表结构已创建。仅首次调用时执行。
-	/// </summary>
-	private void EnsureInitialized(string storageDirectory)
-	{
-		if (_initialized)
-			return;
+    /// <summary>
+    /// 获取数据库文件路径
+    /// </summary>
+    public static string GetDatabasePath(string storageDirectory)
+    {
+        return Path.Combine(storageDirectory, DatabaseFileName);
+    }
 
-		lock (_initLock)
-		{
-			if (_initialized)
-				return;
+    /// <summary>
+    /// 创建并返回一个已打开的新数据库连接。调用方负责 Dispose。
+    /// 每次操作使用独立连接，配合 WAL 模式实现真正的并发读写。
+    /// </summary>
+    /// <param name="storageDirectory">存储目录路径</param>
+    /// <returns>已打开的新 SqliteConnection</returns>
+    public SqliteConnection OpenConnection(string storageDirectory)
+    {
+        EnsureInitialized(storageDirectory);
 
-			try
-			{
-				var dbPath = GetDatabasePath(storageDirectory);
+        var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        return connection;
+    }
 
-				// 确保存储目录存在
-				if (!Directory.Exists(storageDirectory))
-					Directory.CreateDirectory(storageDirectory);
+    /// <summary>
+    /// Initializes the database if necessary and rejects mutations while the
+    /// application is running in migration-recovery mode.
+    /// </summary>
+    public void EnsureWritable(string storageDirectory)
+    {
+        EnsureInitialized(storageDirectory);
+        if (IsReadOnly)
+            throw new DatabaseReadOnlyException(GetDatabasePath(storageDirectory));
+    }
 
-				_logger.LogInformation("Initializing SQLite database: {DbPath}", dbPath);
+    /// <summary>
+    /// 确保数据库文件存在、WAL 模式已启用、表结构已创建。仅首次调用时执行。
+    /// </summary>
+    private void EnsureInitialized(string storageDirectory)
+    {
+        if (_initialized)
+            return;
 
-				var csb = new SqliteConnectionStringBuilder
-				{
-					DataSource = dbPath,
-					Mode = SqliteOpenMode.ReadWriteCreate,
-					// Shared Cache —— 多个连接共享同一个内存缓存，提高性能
-					Cache = SqliteCacheMode.Shared,
-				};
-				_connectionString = csb.ToString();
+        lock (_initLock)
+        {
+            if (_initialized)
+                return;
 
-				// 使用临时连接执行初始化
-				using var initConnection = new SqliteConnection(_connectionString);
-				initConnection.Open();
+            try
+            {
+                var dbPath = GetDatabasePath(storageDirectory);
 
-				// 启用 WAL 模式 —— 允许多读者与一写者并发
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = WalPragma;
-					cmd.ExecuteNonQuery();
-				}
+                // 确保存储目录存在
+                if (!Directory.Exists(storageDirectory))
+                    Directory.CreateDirectory(storageDirectory);
 
-				// 设置忙等待超时 —— 遇到锁时等待最多 5 秒而非立即失败
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = BusyTimeoutPragma;
-					cmd.ExecuteNonQuery();
-				}
+                _logger.LogInformation("Initializing SQLite database: {DbPath}", dbPath);
 
-				// 创建表结构
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = CreateEnabledModsTableSql;
-					cmd.ExecuteNonQuery();
-				}
+                try
+                {
+                    var migrator = new SqliteDatabaseMigrator(dbPath);
+                    migrator.MigrateAsync(CurrentDatabaseVersion, CancellationToken.None)
+                        .GetAwaiter()
+                        .GetResult();
+                }
+                catch (Exception migrationException) when (File.Exists(dbPath))
+                {
+                    _logger.LogError(
+                        migrationException,
+                        "SQLite migration failed; opening the existing database in read-only recovery mode");
+                    _connectionString = new SqliteConnectionStringBuilder
+                    {
+                        DataSource = dbPath,
+                        Mode = SqliteOpenMode.ReadOnly,
+                        Cache = SqliteCacheMode.Shared
+                    }.ToString();
+                    using var recoveryConnection = new SqliteConnection(_connectionString);
+                    recoveryConnection.Open();
+                    using var integrityCommand = recoveryConnection.CreateCommand();
+                    integrityCommand.CommandText = "PRAGMA integrity_check;";
+                    if (!string.Equals(integrityCommand.ExecuteScalar() as string, "ok", StringComparison.Ordinal))
+                        throw new InvalidDataException("The database is corrupt and cannot be opened safely.", migrationException);
+                    SetReadOnly(true);
+                    _initialized = true;
+                    return;
+                }
 
-				// 迁移旧库：检查并添加 SortOrder 列
-				using (var checkCmd = initConnection.CreateCommand())
-				{
-					checkCmd.CommandText = CheckSortOrderColumnSql;
-					var exists = (long)checkCmd.ExecuteScalar()!;
-					if (exists == 0)
-					{
-						using var alterCmd = initConnection.CreateCommand();
-						alterCmd.CommandText = AddSortOrderColumnSql;
-						alterCmd.ExecuteNonQuery();
-						_logger.LogInformation("Added SortOrder column to legacy database");
-					}
-				}
+                var csb = new SqliteConnectionStringBuilder
+                {
+                    DataSource = dbPath,
+                    Mode = SqliteOpenMode.ReadWriteCreate,
+                    // Shared Cache —— 多个连接共享同一个内存缓存，提高性能
+                    Cache = SqliteCacheMode.Shared,
+                };
+                _connectionString = csb.ToString();
 
-				// 创建分组表结构
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = CreateModGroupsTableSql;
-					cmd.ExecuteNonQuery();
-				}
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = CreateGroupEnabledModsTableSql;
-					cmd.ExecuteNonQuery();
-				}
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = CreateGroupEnabledModsIndexSql;
-					cmd.ExecuteNonQuery();
-				}
+                // 使用临时连接执行初始化
+                using var initConnection = new SqliteConnection(_connectionString);
+                initConnection.Open();
 
-				// 创建文件哈希缓存表
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = CreateFileHashesTableSql;
-					cmd.ExecuteNonQuery();
-				}
+                // 启用 WAL 模式 —— 允许多读者与一写者并发
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = WalPragma;
+                    cmd.ExecuteNonQuery();
+                }
 
-				// 创建文件哈希表索引
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = CreateFileHashesIndexSql;
-					cmd.ExecuteNonQuery();
-				}
+                // 设置忙等待超时 —— 遇到锁时等待最多 5 秒而非立即失败
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = BusyTimeoutPragma;
+                    cmd.ExecuteNonQuery();
+                }
 
-				// 创建版本检测结果表
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = CreateVersionCheckResultsTableSql;
-					cmd.ExecuteNonQuery();
-				}
-				using (var checkCmd = initConnection.CreateCommand())
-				{
-					checkCmd.CommandText = CheckModLastWriteTimeColumnSql;
-					var exists = (long)checkCmd.ExecuteScalar()!;
-					if (exists == 0)
-					{
-						using var alterCmd = initConnection.CreateCommand();
-						alterCmd.CommandText = AddModLastWriteTimeColumnSql;
-						alterCmd.ExecuteNonQuery();
-						_logger.LogInformation("Added ModLastWriteTimeUtc column to version check results");
-					}
-				}
+                // 创建表结构
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = CreateEnabledModsTableSql;
+                    cmd.ExecuteNonQuery();
+                }
 
-				// 创建游戏版本跟踪表 + 默认行
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = CreateGameCheckTrackerTableSql;
-					cmd.ExecuteNonQuery();
-				}
-				using (var cmd = initConnection.CreateCommand())
-				{
-					cmd.CommandText = InsertGameCheckTrackerDefaultSql;
-					cmd.ExecuteNonQuery();
-				}
+                // 迁移旧库：检查并添加 SortOrder 列
+                using (var checkCmd = initConnection.CreateCommand())
+                {
+                    checkCmd.CommandText = CheckSortOrderColumnSql;
+                    var exists = (long)checkCmd.ExecuteScalar()!;
+                    if (exists == 0)
+                    {
+                        using var alterCmd = initConnection.CreateCommand();
+                        alterCmd.CommandText = AddSortOrderColumnSql;
+                        alterCmd.ExecuteNonQuery();
+                        _logger.LogInformation("Added SortOrder column to legacy database");
+                    }
+                }
 
-				_initialized = true;
-				_logger.LogInformation("SQLite database initialization complete (WAL mode, one connection per operation)");
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "SQLite 数据库初始化失败");
-				_connectionString = null;
-				throw;
-			}
-		}
-	}
+                // 创建分组表结构
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = CreateModGroupsTableSql;
+                    cmd.ExecuteNonQuery();
+                }
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = CreateGroupEnabledModsTableSql;
+                    cmd.ExecuteNonQuery();
+                }
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = CreateGroupEnabledModsIndexSql;
+                    cmd.ExecuteNonQuery();
+                }
 
-	/// <summary>
-	/// 释放资源
-	/// </summary>
-	public void Dispose()
-	{
-		if (_connectionString is not null)
-		{
-			try
-			{
-				// 使用临时连接执行 WAL checkpoint，确保数据持久化
-				using var conn = new SqliteConnection(_connectionString);
-				conn.Open();
-				using var cmd = conn.CreateCommand();
-				cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-				cmd.ExecuteNonQuery();
-			}
-			catch (Exception ex)
-			{
-				_logger.LogWarning(ex, "WAL checkpoint 执行失败");
-			}
+                // 创建文件哈希缓存表
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = CreateFileHashesTableSql;
+                    cmd.ExecuteNonQuery();
+                }
 
-			_connectionString = null;
-			_initialized = false;
-			_logger.LogInformation("SQLite database connection released");
-		}
-	}
+                // 创建文件哈希表索引
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = CreateFileHashesIndexSql;
+                    cmd.ExecuteNonQuery();
+                }
+
+                // 创建版本检测结果表
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = CreateVersionCheckResultsTableSql;
+                    cmd.ExecuteNonQuery();
+                }
+                using (var checkCmd = initConnection.CreateCommand())
+                {
+                    checkCmd.CommandText = CheckModLastWriteTimeColumnSql;
+                    var exists = (long)checkCmd.ExecuteScalar()!;
+                    if (exists == 0)
+                    {
+                        using var alterCmd = initConnection.CreateCommand();
+                        alterCmd.CommandText = AddModLastWriteTimeColumnSql;
+                        alterCmd.ExecuteNonQuery();
+                        _logger.LogInformation("Added ModLastWriteTimeUtc column to version check results");
+                    }
+                }
+
+                // 创建游戏版本跟踪表 + 默认行
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = CreateGameCheckTrackerTableSql;
+                    cmd.ExecuteNonQuery();
+                }
+                using (var cmd = initConnection.CreateCommand())
+                {
+                    cmd.CommandText = InsertGameCheckTrackerDefaultSql;
+                    cmd.ExecuteNonQuery();
+                }
+
+                _initialized = true;
+                SetReadOnly(false);
+                _logger.LogInformation("SQLite database initialization complete (WAL mode, one connection per operation)");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SQLite 数据库初始化失败");
+                _connectionString = null;
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        if (_connectionString is not null)
+        {
+            try
+            {
+                if (!IsReadOnly)
+                {
+                    // 使用临时连接执行 WAL checkpoint，确保数据持久化
+                    using var conn = new SqliteConnection(_connectionString);
+                    conn.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "WAL checkpoint 执行失败");
+            }
+
+            _connectionString = null;
+            _initialized = false;
+            SetReadOnly(false);
+            SqliteConnection.ClearAllPools();
+            _logger.LogInformation("SQLite database connection released");
+        }
+    }
 }

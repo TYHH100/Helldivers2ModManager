@@ -6,45 +6,66 @@ using System.Security.Cryptography;
 
 namespace Helldivers2ModManager.Services;
 
-internal sealed partial class VersionCheckService
+internal sealed class GameCompanionRecoveryReader
 {
+    private const int MaxBundleResourceBytes = 64 * 1024 * 1024;
     private const int MaxGameCompanionSegmentBytes = 256 * 1024 * 1024;
+    private const int PatchHeaderMagic = unchecked((int)0xF0000011);
+    private const int HeaderSize = 72;
+    private const int TypeEntrySize = 32;
+    private const int FileEntrySize = 80;
+    private readonly Func<DirectoryInfo?> _getGameDataDirectory;
+    private readonly Func<FileInfo, List<string>, Task<List<AssistedRepairService.AssistedPatchEntry>?>> _readPatchEntries;
+    private readonly Func<FileInfo, FileStream> _openPatch;
+    private readonly Func<FileStream, long, byte[], Task<bool>> _readAt;
 
-    private sealed record RecoveryPackage(
+    public GameCompanionRecoveryReader(
+        Func<DirectoryInfo?> getGameDataDirectory,
+        Func<FileInfo, List<string>, Task<List<AssistedRepairService.AssistedPatchEntry>?>> readPatchEntries,
+        Func<FileInfo, FileStream> openPatch,
+        Func<FileStream, long, byte[], Task<bool>> readAt)
+    {
+        _getGameDataDirectory = getGameDataDirectory;
+        _readPatchEntries = readPatchEntries;
+        _openPatch = openPatch;
+        _readAt = readAt;
+    }
+
+    internal sealed record RecoveryPackage(
         string Name,
         PackageItem[] Items);
 
-    private sealed record GameCompanionLocator(
+    internal sealed record GameCompanionLocator(
         string PackageName,
         RecoveryPackage MainPackage,
         RecoveryPackage CompanionPackage,
         PatchTocEntry Entry);
 
-    private sealed record GameCompanionSegment(
+    internal sealed record GameCompanionSegment(
         ulong TargetOffset,
         uint Size,
         GameCompanionLocator Locator,
         byte[]? Payload);
 
-    private sealed class GameCompanionRecipe
+    internal sealed class GameCompanionRecipe
     {
         public required string Description { get; init; }
         public required long Length { get; init; }
         public required List<GameCompanionSegment> Segments { get; init; }
     }
 
-    private async Task<GameCompanionRecipe?> TryBuildGameCompanionRecipeAsync(
+    internal async Task<GameCompanionRecipe?> TryBuildGameCompanionRecipeAsync(
         FileInfo patchFile,
         string suffix,
         bool includePayloads,
         CancellationToken cancellationToken)
     {
-        var dataDirectory = GetConfiguredGameDataDirectory();
+        var dataDirectory = _getGameDataDirectory();
         if (dataDirectory is null)
             return null;
 
         var blockers = new List<string>();
-        var entries = await ReadAssistedPatchEntriesAsync(patchFile, blockers);
+        var entries = await _readPatchEntries(patchFile, blockers);
         if (entries is null || blockers.Count > 0)
             return null;
 
@@ -64,7 +85,7 @@ internal sealed partial class VersionCheckService
             return null;
 
         var segments = new List<GameCompanionSegment>();
-        await using var patchStream = OpenPatchReadStream(patchFile);
+        await using var patchStream = _openPatch(patchFile);
         foreach (var neededEntry in needed)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -76,7 +97,7 @@ internal sealed partial class VersionCheckService
             }
 
             var modMainData = new byte[toc.TocSize];
-            if (!await ReadAtAsync(patchStream, checked((long)toc.TocOffset), modMainData))
+            if (!await _readAt(patchStream, checked((long)toc.TocOffset), modMainData))
                 return null;
 
             var exactCandidates = new List<GameCompanionLocator>();
@@ -154,7 +175,7 @@ internal sealed partial class VersionCheckService
         };
     }
 
-    private static async Task WriteGameCompanionRecipeAsync(
+    internal static async Task WriteGameCompanionRecipeAsync(
         GameCompanionRecipe recipe,
         string destinationPath,
         CancellationToken cancellationToken)
@@ -185,7 +206,7 @@ internal sealed partial class VersionCheckService
         HashSet<(long FileId, long TypeId)> neededKeys,
         CancellationToken cancellationToken)
     {
-        var bundleIndexData = DecodeDsarFile(Path.Combine(dataDirectory.FullName, "bundles.nxa"));
+        var bundleIndexData = GameUnitReferenceService.DecodeDsarFile(Path.Combine(dataDirectory.FullName, "bundles.nxa"));
         if (bundleIndexData.Length < 0x18)
             return new GameCompanionLookup([], []);
 
@@ -196,7 +217,7 @@ internal sealed partial class VersionCheckService
 
         var bundles = new BundleInfo[bundleCount];
         for (var i = 0; i < bundles.Length; i++)
-            bundles[i] = LoadBundleInfo(Path.Combine(dataDirectory.FullName, $"bundles.{i:00}.nxa"));
+            bundles[i] = GameUnitReferenceService.LoadBundleInfo(Path.Combine(dataDirectory.FullName, $"bundles.{i:00}.nxa"));
 
         var packages = new Dictionary<string, RecoveryPackage>(StringComparer.OrdinalIgnoreCase);
         for (var packageIndex = 0; packageIndex < packageCount; packageIndex++)
@@ -215,7 +236,7 @@ internal sealed partial class VersionCheckService
                 continue;
             }
 
-            var name = ReadNullTerminatedString(bundleIndexData, nameOffset);
+            var name = GameUnitReferenceService.ReadNullTerminatedString(bundleIndexData, nameOffset);
             if (string.IsNullOrWhiteSpace(name))
                 continue;
             var items = ReadRecoveryPackageItems(bundleIndexData, itemsOffset, itemCount, bundles.Length);
@@ -353,7 +374,7 @@ internal sealed partial class VersionCheckService
         try
         {
             var bundleOffset = checked(item.BundleOffset + archiveOffset - item.ArchiveOffset);
-            var data = ReadBundleResource(bundles[item.BundleIndex], bundleOffset, maxBytes);
+            var data = GameUnitReferenceService.ReadBundleResource(bundles[item.BundleIndex], bundleOffset, maxBytes);
             if (readWholeResource)
                 return data;
             if (data.Length < size)

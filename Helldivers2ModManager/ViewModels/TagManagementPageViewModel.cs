@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
-using Helldivers2ModManager.Components;
+using Helldivers2ModManager.Core.UI;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
@@ -23,15 +22,23 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
 
     private readonly ILogger<TagManagementPageViewModel> _logger;
     private readonly SettingsService _settingsService;
-    private readonly NavigationStore _navigationStore;
+    private readonly INavigationService _navigationService;
+    private readonly IDialogService _dialogService;
     private readonly ModService _modService;
     private readonly LocalizationService _localizationService;
 
-    public TagManagementPageViewModel(ILogger<TagManagementPageViewModel> logger, SettingsService settingsService, NavigationStore navigationStore, ModService modService, LocalizationService localizationService)
+    public TagManagementPageViewModel(
+        ILogger<TagManagementPageViewModel> logger,
+        SettingsService settingsService,
+        INavigationService navigationService,
+        IDialogService dialogService,
+        ModService modService,
+        LocalizationService localizationService)
     {
         _logger = logger;
         _settingsService = settingsService;
-        _navigationStore = navigationStore;
+        _navigationService = navigationService;
+        _dialogService = dialogService;
         _modService = modService;
         _localizationService = localizationService;
 
@@ -42,128 +49,134 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
     }
 
     [RelayCommand]
-    void CreateTag()
+    async Task CreateTag(CancellationToken cancellationToken)
     {
-        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+        var tagName = await _dialogService.PromptAsync(
+            new InputDialogRequest(
+                _localizationService["TagManagementPage.CreateTitle"],
+                _localizationService["TagManagementPage.CreateMsg"],
+                MaxLength: 16),
+            cancellationToken);
+        if (tagName is null)
+            return;
+        if (string.IsNullOrWhiteSpace(tagName))
         {
-            Title = _localizationService["TagManagementPage.CreateTitle"],
-            Message = _localizationService["TagManagementPage.CreateMsg"],
-            MaxLength = 16,
-            Confirm = (tagName) =>
-            {
-                if (string.IsNullOrWhiteSpace(tagName))
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.CreateEmptyError"] });
-                    return;
-                }
+            await ShowErrorAsync("TagManagementPage.CreateEmptyError", cancellationToken);
+            return;
+        }
+        if (_settingsService.IsReadonly)
+        {
+            await ShowErrorAsync("TagManagementPage.CreateReadonly", cancellationToken);
+            return;
+        }
 
-                if (!_settingsService.IsReadonly)
-                {
-                    _settingsService.Tags.Add(new ModTag(tagName));
-                    _ = _settingsService.SaveAsync();
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["TagManagementPage.CreateSuccess"] });
-                }
-                else
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.CreateReadonly"] });
-                }
-            }
-        });
+        _settingsService.Tags.Add(new ModTag(tagName));
+        await _settingsService.SaveAsync(cancellationToken);
+        await ShowInfoAsync("TagManagementPage.CreateSuccess", cancellationToken);
     }
 
     [RelayCommand]
-    void RenameTag(ModTag? tag)
+    async Task RenameTag(ModTag? tag, CancellationToken cancellationToken)
     {
         if (tag == null)
             return;
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+        var newName = await _dialogService.PromptAsync(
+            new InputDialogRequest(
+                _localizationService["TagManagementPage.RenameTitle"],
+                _localizationService["TagManagementPage.RenameMsg"],
+                tag.Name,
+                16),
+            cancellationToken);
+        if (newName is null)
+            return;
+        if (string.IsNullOrWhiteSpace(newName))
         {
-            Title = _localizationService["TagManagementPage.RenameTitle"],
-            Message = _localizationService["TagManagementPage.RenameMsg"],
-            MaxLength = 16,
-            InitialText = tag.Name,
-            Confirm = (newName) =>
-            {
-                if (string.IsNullOrWhiteSpace(newName))
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.RenameEmptyError"] });
-                    return;
-                }
+            await ShowErrorAsync("TagManagementPage.RenameEmptyError", cancellationToken);
+            return;
+        }
+        if (_settingsService.IsReadonly)
+        {
+            await ShowErrorAsync("TagManagementPage.RenameReadonly", cancellationToken);
+            return;
+        }
 
-                if (!_settingsService.IsReadonly)
-                {
-                    tag.Name = newName;
-                    _ = _settingsService.SaveAsync();
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["TagManagementPage.RenameSuccess"] });
-                }
-                else
-                {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.RenameReadonly"] });
-                }
-            }
-        });
+        tag.Name = newName;
+        await _settingsService.SaveAsync(cancellationToken);
+        await ShowInfoAsync("TagManagementPage.RenameSuccess", cancellationToken);
     }
 
     [RelayCommand]
-    void ChangeColor(ModTag? tag)
+    async Task ChangeColor(ModTag? tag, CancellationToken cancellationToken)
     {
         if (tag == null)
             return;
 
-        if (!_settingsService.IsReadonly)
+        if (_settingsService.IsReadonly)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxColorPickerMessage
-            {
-                Title = _localizationService["TagManagementPage.ColorTitle"],
-                Message = $"{_localizationService["TagManagementPage.ColorPrefix"]}{tag.Name}{_localizationService["TagManagementPage.ColorSuffix"]}",
-                CurrentColor = tag.Color,
-                Confirm = (colorCode) =>
-                {
-                    tag.Color = colorCode;
-                    _ = _settingsService.SaveAsync();
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["TagManagementPage.ColorUpdated"] });
-                }
-            });
+            await ShowErrorAsync("TagManagementPage.ColorReadonly", cancellationToken);
+            return;
         }
-        else
-        {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.ColorReadonly"] });
-        }
+
+        var colorCode = await _dialogService.PickColorAsync(
+            new ColorDialogRequest(
+                _localizationService["TagManagementPage.ColorTitle"],
+                _localizationService.Format("TagManagementPage.ColorMessage", new { tagName = tag.Name }),
+                tag.Color),
+            cancellationToken);
+        if (colorCode is null)
+            return;
+
+        tag.Color = colorCode;
+        await _settingsService.SaveAsync(cancellationToken);
+        await ShowInfoAsync("TagManagementPage.ColorUpdated", cancellationToken);
     }
 
     [RelayCommand]
-    void DeleteTag(ModTag? tag)
+    async Task DeleteTag(ModTag? tag, CancellationToken cancellationToken)
     {
         if (tag == null)
             return;
 
         if (!_settingsService.IsReadonly)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-            {
-                Title = _localizationService["DashboardPage.DeleteConfirmTitle"],
-                Message = _localizationService["TagManagementPage.DeletePrefix"] + tag.Name + _localizationService["TagManagementPage.DeleteSuffix"],
-                Confirm = () =>
-                {
-                    _settingsService.Tags.Remove(tag);
-                    _ = _settingsService.SaveAsync();
+            var confirmed = await _dialogService.ShowAsync(
+                new DialogRequest(
+                    _localizationService["DashboardPage.DeleteConfirmTitle"],
+                    _localizationService.Format("TagManagementPage.DeleteMessage", new { tagName = tag.Name })),
+                cancellationToken);
+            if (!confirmed)
+                return;
 
-                    SelectedTag = null;
-                    WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["TagManagementPage.DeleteSuccess"] });
-                }
-            });
+            _settingsService.Tags.Remove(tag);
+            await _settingsService.SaveAsync(cancellationToken);
+            SelectedTag = null;
+            await ShowInfoAsync("TagManagementPage.DeleteSuccess", cancellationToken);
         }
         else
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.DeleteReadonly"] });
+            await ShowErrorAsync("TagManagementPage.DeleteReadonly", cancellationToken);
         }
     }
 
     [RelayCommand]
     void Back()
     {
-        _navigationStore.Navigate<DashboardPageViewModel>();
+        _navigationService.Navigate(typeof(DashboardPageViewModel), root: true);
     }
-}
 
+    private Task ShowInfoAsync(string messageKey, CancellationToken cancellationToken) =>
+        _dialogService.ShowMessageAsync(
+            new MessageDialogRequest(
+                _localizationService["MessageBox.Info"],
+                _localizationService[messageKey]),
+            cancellationToken);
+
+    private Task ShowErrorAsync(string messageKey, CancellationToken cancellationToken) =>
+        _dialogService.ShowMessageAsync(
+            new MessageDialogRequest(
+                _localizationService["MessageBox.Error"],
+                _localizationService[messageKey],
+                MessageDialogSeverity.Error),
+            cancellationToken);
+}

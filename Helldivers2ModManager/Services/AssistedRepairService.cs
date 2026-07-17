@@ -5,8 +5,62 @@ using System.Buffers.Binary;
 
 namespace Helldivers2ModManager.Services;
 
-internal sealed partial class VersionCheckService
+internal sealed class AssistedRepairService
 {
+    private const long UnitTypeId = unchecked((long)16187218042980615487UL);
+    private const int HeaderSize = 72;
+    private const int TypeEntrySize = 32;
+    private const int FileEntrySize = 80;
+    private const uint VersionThresholdForLayoutCheck = 0xA4CD36u;
+    private readonly ILogger _logger;
+    private readonly LocalizationService _localizationService;
+    private readonly ModBackupService _backupService;
+    private readonly Func<DirectoryInfo, CancellationToken, Task<ModRepairPlan>> _createSafeRepairPlan;
+    private readonly Func<FileInfo, FileInfo?, Task<PatchFileAnalysis>> _analyzePatch;
+    private readonly Func<IReadOnlyCollection<long>, Task<GameUnitReferenceLookup>> _getReferences;
+    private readonly Func<FileInfo, FileStream> _openPatch;
+    private readonly Func<FileStream, long, byte[], Task<bool>> _readAt;
+    private readonly Func<FileInfo, string, string> _createBackupPath;
+    private readonly Func<PatchFileAnalysis, bool> _isRepairValidationSuccessful;
+    private readonly SemaphoreSlim _repairSemaphore = new(1, 1);
+
+    private sealed class PreparedRepair
+    {
+        public required string OriginalPath { get; init; }
+        public required string TemporaryPath { get; init; }
+        public required string BackupPath { get; init; }
+    }
+
+    public AssistedRepairService(
+        ILogger logger,
+        LocalizationService localizationService,
+        ModBackupService backupService,
+        Func<DirectoryInfo, CancellationToken, Task<ModRepairPlan>> createSafeRepairPlan,
+        Func<FileInfo, FileInfo?, Task<PatchFileAnalysis>> analyzePatch,
+        Func<IReadOnlyCollection<long>, Task<GameUnitReferenceLookup>> getReferences,
+        Func<FileInfo, FileStream> openPatch,
+        Func<FileStream, long, byte[], Task<bool>> readAt,
+        Func<FileInfo, string, string> createBackupPath,
+        Func<PatchFileAnalysis, bool> isRepairValidationSuccessful)
+    {
+        _logger = logger;
+        _localizationService = localizationService;
+        _backupService = backupService;
+        _createSafeRepairPlan = createSafeRepairPlan;
+        _analyzePatch = analyzePatch;
+        _getReferences = getReferences;
+        _openPatch = openPatch;
+        _readAt = readAt;
+        _createBackupPath = createBackupPath;
+        _isRepairValidationSuccessful = isRepairValidationSuccessful;
+    }
+
+    private static bool IsMainPatchFile(string name) =>
+        name.Contains(".patch_", StringComparison.OrdinalIgnoreCase) &&
+        !name.Contains(".hd2mm-repair-", StringComparison.OrdinalIgnoreCase) &&
+        !name.Contains(".hd2mm-backup", StringComparison.OrdinalIgnoreCase) &&
+        !name.EndsWith(".gpu_resources", StringComparison.OrdinalIgnoreCase) &&
+        !name.EndsWith(".stream", StringComparison.OrdinalIgnoreCase);
     private const long MaxAssistedRepairFileBytes = 256L * 1024 * 1024;
     private const double AutomaticMeshGpuExpansionRatio = 6.0;
     private const uint AutomaticLargeCustomGpuBytes = 6U * 1024U * 1024U;
@@ -15,7 +69,7 @@ internal sealed partial class VersionCheckService
     private static readonly Lazy<IReadOnlyDictionary<long, string>> s_unitFriendlyNames =
         new(LoadUnitFriendlyNames);
 
-    private sealed record AssistedPatchEntry(
+    internal sealed record AssistedPatchEntry(
         PatchTocEntry Toc,
         long TableOffset);
 
@@ -127,7 +181,7 @@ internal sealed partial class VersionCheckService
             .Where(f => IsMainPatchFile(f.Name))
             .ToArray();
 
-        var safePlan = await CreateRepairPlanAsync(modDirectory);
+        var safePlan = await _createSafeRepairPlan(modDirectory, CancellationToken.None);
         if (safePlan.ActionCount > 0)
         {
             blockers.Add(_localizationService["VersionCheckRepair.RunSafeRepairFirst"]);
@@ -141,7 +195,7 @@ internal sealed partial class VersionCheckService
         var unitIds = new HashSet<long>();
         foreach (var patchFile in patchFiles)
         {
-            var analysis = await AnalyzeSinglePatchFileStructureAsync(patchFile);
+            var analysis = await _analyzePatch(patchFile, null);
             var entries = await ReadAssistedPatchEntriesAsync(patchFile, blockers);
             if (entries is null)
                 continue;
@@ -162,19 +216,18 @@ internal sealed partial class VersionCheckService
             };
         }
 
-        var referenceLookup = await GetGameUnitReferencesAsync(unitIds);
+        var referenceLookup = await _getReferences(unitIds);
         if (!string.IsNullOrWhiteSpace(referenceLookup.ErrorMessage))
             blockers.Add(referenceLookup.ErrorMessage);
         foreach (var ambiguousId in referenceLookup.AmbiguousUnitIds)
         {
-            blockers.Add(_localizationService["VersionCheckRepair.AmbiguousReference"]
-                .Replace("{id}", $"0x{(ulong)ambiguousId:X16}"));
+            blockers.Add(_localizationService.Format("VersionCheckRepair.AmbiguousReference", new { id = $"0x{(ulong)ambiguousId:X16}" }));
         }
 
         foreach (var (patchFile, analysis, entries) in patchData)
         {
             var entryByIndex = entries.ToDictionary(e => (int)e.Toc.EntryIndex);
-            await using var stream = OpenPatchReadStream(patchFile);
+            await using var stream = _openPatch(patchFile);
             foreach (var unit in analysis.UnitDetails)
             {
                 if (!referenceLookup.References.TryGetValue(unit.FileId, out var reference))
@@ -187,7 +240,7 @@ internal sealed partial class VersionCheckService
                 }
 
                 var unitData = new byte[entry.Toc.TocSize];
-                if (!await ReadAtAsync(stream, checked((long)entry.Toc.TocOffset), unitData))
+                if (!await _readAt(stream, checked((long)entry.Toc.TocOffset), unitData))
                 {
                     blockers.Add($"{patchFile.Name}: Unit #{unit.EntryIndex} cannot be read");
                     continue;
@@ -196,7 +249,7 @@ internal sealed partial class VersionCheckService
                 var lodDataDiffers = unit.LODGroupSize != reference.LodGroupData.Length ||
                     !unitData.AsSpan(unit.LODGroupOffset, unit.LODGroupSize)
                         .SequenceEqual(reference.LodGroupData);
-                var currentMeshIds = ReadUnitMeshIds(unitData, unitData.Length);
+                var currentMeshIds = GameUnitReferenceService.ReadUnitMeshIds(unitData, unitData.Length);
                 var currentMeshSignature = currentMeshIds.Length == 0
                     ? string.Empty
                     : string.Join(',', currentMeshIds.Select(id => id.ToString("X8")));
@@ -303,7 +356,7 @@ internal sealed partial class VersionCheckService
                 };
             }
 
-            var referenceLookup = await GetGameUnitReferencesAsync(
+            var referenceLookup = await _getReferences(
                 plan.Actions.Select(a => a.FileId).Distinct().ToArray());
             if (!string.IsNullOrWhiteSpace(referenceLookup.ErrorMessage) ||
                 referenceLookup.AmbiguousUnitIds.Count > 0 ||
@@ -325,7 +378,7 @@ internal sealed partial class VersionCheckService
                 var temporaryPath = Path.Combine(
                     originalFile.DirectoryName!,
                     "." + originalFile.Name + ".hd2mm-repair-" + Guid.NewGuid().ToString("N") + ".tmp");
-                var backupPath = CreateBackupPath(originalFile, stamp);
+                var backupPath = _createBackupPath(originalFile, stamp);
 
                 prepared.Add(new PreparedRepair
                 {
@@ -340,14 +393,13 @@ internal sealed partial class VersionCheckService
                     fileGroup.ToList(),
                     referenceLookup.References);
 
-                var validation = await AnalyzeSinglePatchFileStructureAsync(
+                var validation = await _analyzePatch(
                     new FileInfo(temporaryPath),
                     originalFile);
-                if (!IsRepairValidationSuccessful(validation))
+                if (!_isRepairValidationSuccessful(validation))
                 {
                     throw new InvalidDataException(
-                        _localizationService["VersionCheckRepair.ValidationFailed"]
-                            .Replace("{file}", originalFile.Name));
+                        _localizationService.Format("VersionCheckRepair.ValidationFailed", new { file = originalFile.Name }));
                 }
 
             }
@@ -378,7 +430,7 @@ internal sealed partial class VersionCheckService
                         : strategies.SingleOrDefault() == AssistedLodStrategy.UseGameReference
                             ? ModBackupRepairKind.UseGameLod
                             : ModBackupRepairKind.PreserveModLod;
-                await TryWriteBackupMetadataAsync(
+                await _backupService.TryWriteBackupMetadataAsync(
                     item.BackupPath,
                     item.OriginalPath,
                     repairKind,
@@ -433,7 +485,7 @@ internal sealed partial class VersionCheckService
         }
     }
 
-    private async Task<List<AssistedPatchEntry>?> ReadAssistedPatchEntriesAsync(
+    internal async Task<List<AssistedPatchEntry>?> ReadAssistedPatchEntriesAsync(
         FileInfo patchFile,
         List<string> blockers)
     {
@@ -443,9 +495,9 @@ internal sealed partial class VersionCheckService
             return null;
         }
 
-        await using var stream = OpenPatchReadStream(patchFile);
+        await using var stream = _openPatch(patchFile);
         var header = new byte[HeaderSize];
-        if (!await ReadAtAsync(stream, 0, header))
+        if (!await _readAt(stream, 0, header))
             return null;
 
         var numTypes = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(4, 4));
@@ -462,7 +514,7 @@ internal sealed partial class VersionCheckService
         for (var i = 0; i < numFiles; i++)
         {
             var tableOffset = entryStart + (long)i * FileEntrySize;
-            if (!await ReadAtAsync(stream, tableOffset, buffer))
+            if (!await _readAt(stream, tableOffset, buffer))
                 return null;
 
             entries.Add(new AssistedPatchEntry(
@@ -514,12 +566,18 @@ internal sealed partial class VersionCheckService
         IReadOnlyList<AssistedUnitRepairAction> actions,
         IReadOnlyDictionary<long, GameUnitReferenceData> references)
     {
-        var originalData = await File.ReadAllBytesAsync(originalFile.FullName);
         var planBlockers = new List<string>();
         var entries = await ReadAssistedPatchEntriesAsync(originalFile, planBlockers)
             ?? throw new InvalidDataException(string.Join(Environment.NewLine, planBlockers));
         var actionByEntry = actions.ToDictionary(a => a.EntryIndex);
         var replacements = new List<UnitReplacement>();
+        await using var originalStream = new FileStream(
+            originalFile.FullName,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            1024 * 1024,
+            FileOptions.Asynchronous | FileOptions.RandomAccess);
 
         foreach (var entry in entries)
         {
@@ -531,9 +589,11 @@ internal sealed partial class VersionCheckService
                 throw new InvalidDataException("The assisted repair plan no longer matches the patch.");
             }
 
-            var unitData = originalData.AsSpan(
-                checked((int)entry.Toc.TocOffset),
-                checked((int)entry.Toc.TocSize)).ToArray();
+            if (entry.Toc.TocSize > 256 * 1024 * 1024)
+                throw new InvalidDataException("A Unit resource is too large for assisted repair.");
+            var unitData = new byte[checked((int)entry.Toc.TocSize)];
+            if (!await _readAt(originalStream, checked((long)entry.Toc.TocOffset), unitData))
+                throw new EndOfStreamException("Could not read the target Unit resource.");
             var currentVersion = BinaryPrimitives.ReadUInt32LittleEndian(unitData.AsSpan(0x2C, 4));
             var currentLodStart = BinaryPrimitives.ReadUInt32LittleEndian(unitData.AsSpan(0x30, 4));
             var currentLodEnd = BinaryPrimitives.ReadUInt32LittleEndian(unitData.AsSpan(0x34, 4));
@@ -555,22 +615,26 @@ internal sealed partial class VersionCheckService
         }
 
         replacements.Sort((left, right) => left.OriginalOffset.CompareTo(right.OriginalOffset));
-        var newLength = checked(originalData.LongLength +
+        var newLength = checked(originalStream.Length +
             replacements.Sum(r => (long)r.UpdatedData.Length - r.OriginalSize));
-        if (newLength > int.MaxValue)
-            throw new InvalidDataException("The rebuilt patch is too large.");
-
-        using var output = new MemoryStream(checked((int)newLength));
-        var cursor = 0;
+        await using var output = new FileStream(
+            temporaryPath,
+            FileMode.Create,
+            FileAccess.ReadWrite,
+            FileShare.None,
+            1024 * 1024,
+            FileOptions.Asynchronous | FileOptions.RandomAccess | FileOptions.WriteThrough);
+        long cursor = 0;
         foreach (var replacement in replacements)
         {
-            var start = checked((int)replacement.OriginalOffset);
-            output.Write(originalData, cursor, start - cursor);
-            output.Write(replacement.UpdatedData);
-            cursor = checked(start + (int)replacement.OriginalSize);
+            var start = checked((long)replacement.OriginalOffset);
+            await CopyRangeAsync(originalStream, output, cursor, start - cursor);
+            await output.WriteAsync(replacement.UpdatedData);
+            cursor = checked(start + replacement.OriginalSize);
         }
-        output.Write(originalData, cursor, originalData.Length - cursor);
-        var updatedPatch = output.ToArray();
+        await CopyRangeAsync(originalStream, output, cursor, originalStream.Length - cursor);
+        if (output.Length != newLength)
+            throw new InvalidDataException("The rebuilt patch length does not match the repair plan.");
 
         foreach (var entry in entries)
         {
@@ -578,28 +642,45 @@ internal sealed partial class VersionCheckService
                 .Where(r => r.OriginalOffset < entry.Toc.TocOffset)
                 .Sum(r => (long)r.UpdatedData.Length - r.OriginalSize);
             var updatedOffset = checked((ulong)((long)entry.Toc.TocOffset + offsetAdjustment));
-            BinaryPrimitives.WriteUInt64LittleEndian(
-                updatedPatch.AsSpan(checked((int)entry.TableOffset + 16), 8),
-                updatedOffset);
+            var offsetBuffer = new byte[8];
+            BinaryPrimitives.WriteUInt64LittleEndian(offsetBuffer, updatedOffset);
+            output.Seek(checked(entry.TableOffset + 16), SeekOrigin.Begin);
+            await output.WriteAsync(offsetBuffer);
 
             var replacement = replacements.FirstOrDefault(r =>
                 r.EntryIndex == entry.Toc.EntryIndex);
             if (replacement is not null)
             {
-                BinaryPrimitives.WriteUInt32LittleEndian(
-                    updatedPatch.AsSpan(checked((int)entry.TableOffset + 56), 4),
-                    checked((uint)replacement.UpdatedData.Length));
+                var sizeBuffer = new byte[4];
+                BinaryPrimitives.WriteUInt32LittleEndian(sizeBuffer, checked((uint)replacement.UpdatedData.Length));
+                output.Seek(checked(entry.TableOffset + 56), SeekOrigin.Begin);
+                await output.WriteAsync(sizeBuffer);
             }
         }
 
-        await File.WriteAllBytesAsync(temporaryPath, updatedPatch);
-        await using var stream = new FileStream(
-            temporaryPath,
-            FileMode.Open,
-            FileAccess.ReadWrite,
-            FileShare.None);
-        await stream.FlushAsync();
-        stream.Flush(true);
+        await output.FlushAsync();
+        output.Flush(true);
+    }
+
+    private static async Task CopyRangeAsync(
+        FileStream source,
+        FileStream destination,
+        long sourceOffset,
+        long count)
+    {
+        if (sourceOffset < 0 || count < 0 || sourceOffset + count > source.Length)
+            throw new InvalidDataException("A repair copy range is outside the source file.");
+        source.Seek(sourceOffset, SeekOrigin.Begin);
+        var buffer = new byte[1024 * 1024];
+        while (count > 0)
+        {
+            var requested = (int)Math.Min(buffer.Length, count);
+            var read = await source.ReadAsync(buffer.AsMemory(0, requested));
+            if (read == 0)
+                throw new EndOfStreamException();
+            await destination.WriteAsync(buffer.AsMemory(0, read));
+            count -= read;
+        }
     }
 
     private static bool TryBuildUpdatedUnitData(

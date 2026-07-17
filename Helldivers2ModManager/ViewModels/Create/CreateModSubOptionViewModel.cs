@@ -1,8 +1,8 @@
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
-using Helldivers2ModManager.Components;
+using Helldivers2ModManager.Core.UI;
+using Helldivers2ModManager.Services;
 
 namespace Helldivers2ModManager.ViewModels.Create;
 
@@ -13,63 +13,71 @@ namespace Helldivers2ModManager.ViewModels.Create;
 /// </summary>
 internal sealed partial class CreateModSubOptionViewModel : ModImageViewModelBase
 {
-	/// <summary>子选项名称</summary>
-	[ObservableProperty]
-	private string _name = string.Empty;
+    private readonly IDialogService _dialogService;
 
-	/// <summary>子选项描述</summary>
-	[ObservableProperty]
-	private string _description = string.Empty;
+    public CreateModSubOptionViewModel(LocalizationService localizationService, IDialogService dialogService) : base(localizationService)
+    {
+        _dialogService = dialogService;
+    }
+    /// <summary>子选项名称</summary>
+    [ObservableProperty]
+    private string _name = string.Empty;
 
-	/// <summary>Include 路径，以分号分隔（相对于源目录的路径）</summary>
-	[ObservableProperty]
-	private string _includePaths = string.Empty;
+    /// <summary>子选项描述</summary>
+    [ObservableProperty]
+    private string _description = string.Empty;
 
-	/// <summary>浏览对话框标题</summary>
-	protected override string BrowseImageDialogTitle => LocalizationService?["CreateSubOption.SelectIconTitle"] ?? "选择子选项图标";
+    /// <summary>Include 路径，以分号分隔（相对于源目录的路径）</summary>
+    [ObservableProperty]
+    private string _includePaths = string.Empty;
 
-	/// <summary>
-	/// 浏览选择 Include 目录（子选项模式）。
-	/// 弹出目录树选择对话框，展示源目录的子目录结构，
-	/// 用户勾选后自动转为相对路径。
-	/// 如果未设置源目录，弹窗警告提示。
-	/// </summary>
-	[RelayCommand]
-	void BrowseInclude()
-	{
-		if (string.IsNullOrWhiteSpace(SourceDirectory) || !Directory.Exists(SourceDirectory))
-		{
-			WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
-			{
-				Message = LocalizationService?["CreateSubOption.SetSourceDirHint"] ?? "请先设置源目录后再选择 Include 路径。"
-			});
-			return;
-		}
+    /// <summary>浏览对话框标题</summary>
+    protected override string BrowseImageDialogTitle => LocalizationService["CreateSubOption.SelectIconTitle"];
 
-		var picker = new Views.Create.IncludeDirectoryPicker(SourceDirectory, IncludePaths);
-		picker.Owner = System.Windows.Application.Current.MainWindow;
+    /// <summary>
+    /// 浏览选择 Include 目录（子选项模式）。
+    /// 弹出目录树选择对话框，展示源目录的子目录结构，
+    /// 用户勾选后自动转为相对路径。
+    /// 如果未设置源目录，弹窗警告提示。
+    /// </summary>
+    [RelayCommand]
+    async Task BrowseInclude(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(SourceDirectory) || !Directory.Exists(SourceDirectory))
+        {
+            await _dialogService.ShowMessageAsync(
+                new MessageDialogRequest(
+                    LocalizationService["MessageBox.Warning"],
+                    LocalizationService["CreateSubOption.SetSourceDirHint"],
+                    MessageDialogSeverity.Warning),
+                cancellationToken);
+            return;
+        }
 
-		if (picker.ShowDialog() == true && picker.SelectedRelativePaths.Count > 0)
-		{
-			// 用对话框中勾选的结果替换当前值（而非追加，避免重复）
-			IncludePaths = string.Join(";", picker.SelectedRelativePaths);
-		}
-	}
+        var picker = new Views.Create.IncludeDirectoryPicker(_dialogService, LocalizationService, SourceDirectory, IncludePaths);
+        picker.Owner = System.Windows.Application.Current.MainWindow;
 
-	/// <summary>将 ViewModel 数据转换为 ModSubOption 模型</summary>
-	public Models.ModSubOption ToModSubOption()
-	{
-		var includes = IncludePaths.Split(';', StringSplitOptions.RemoveEmptyEntries)
-			.Select(p => p.Trim())
-			.Where(p => !string.IsNullOrWhiteSpace(p))
-			.ToList();
+        if (picker.ShowDialog() == true && picker.SelectedRelativePaths.Count > 0)
+        {
+            // 用对话框中勾选的结果替换当前值（而非追加，避免重复）
+            IncludePaths = string.Join(";", picker.SelectedRelativePaths);
+        }
+    }
 
-		return new Models.ModSubOption
-		{
-			Name = !string.IsNullOrWhiteSpace(Name) ? Name : (LocalizationService?["CreateSubOption.DefaultName"] ?? "未命名子选项"),
-			Description = !string.IsNullOrWhiteSpace(Description) ? Description : string.Empty,
-			Include = includes,
-			Image = !string.IsNullOrWhiteSpace(ImagePath) ? ImagePath : null,
-		};
-	}
+    /// <summary>将 ViewModel 数据转换为 ModSubOption 模型</summary>
+    public Models.ModSubOption ToModSubOption()
+    {
+        var includes = IncludePaths.Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim())
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .ToList();
+
+        return new Models.ModSubOption
+        {
+            Name = !string.IsNullOrWhiteSpace(Name) ? Name : LocalizationService["CreateSubOption.DefaultName"],
+            Description = !string.IsNullOrWhiteSpace(Description) ? Description : string.Empty,
+            Include = includes,
+            Image = !string.IsNullOrWhiteSpace(ImagePath) ? ImagePath : null,
+        };
+    }
 }

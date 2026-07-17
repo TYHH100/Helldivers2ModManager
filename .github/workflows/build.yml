@@ -4,23 +4,80 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      release_channel:
+        description: Release channel
+        required: true
+        default: stable
+        type: choice
+        options: [beta, rc, stable]
+      release_version:
+        description: Release tag without the leading v
+        required: true
+        default: 2.0.0
+        type: string
 
 jobs:
   HD2MM-build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hd2mmt_nexus-download-interceptor/package-lock.json
+
+      - name: Restore solution
+        run: dotnet restore Helldivers2ModManager.sln
+
+      - name: Build Release validation binary
+        run: dotnet build Helldivers2ModManager.sln --configuration Release --no-restore
+
+      - name: Run unit and integration tests
+        run: dotnet test Helldivers2ModManager.Tests/Helldivers2ModManager.Tests.csproj --configuration Release --no-build --no-restore
+
+      - name: Run Windows UI localization tests
+        env:
+          HD2MM_RUN_UI_TESTS: "1"
+          HD2MM_APP_PATH: ${{ github.workspace }}\Helldivers2ModManager\bin\Release\net8.0-windows\win-x64\Helldivers2ModManager.exe
+          HD2MM_ENABLE_PSEUDO_LOCALIZATION: "1"
+        run: dotnet test Helldivers2ModManager.UiTests/Helldivers2ModManager.UiTests.csproj --configuration Release --no-build --no-restore
+
+      - name: Run browser extension tests
+        working-directory: hd2mmt_nexus-download-interceptor
+        run: |
+          npm ci --ignore-scripts
+          npm test
+
+      - name: Verify formatting
+        run: dotnet format Helldivers2ModManager.sln style --verify-no-changes --no-restore --severity error
+
+      - name: Validate release metadata and safety defaults
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'release') {
+            $releaseVersion = '${{ github.event.release.tag_name }}'.TrimStart('v')
+            if ($releaseVersion -match '-beta\.') { $channel = 'beta' }
+            elseif ($releaseVersion -match '-rc\.') { $channel = 'rc' }
+            else { $channel = 'stable' }
+          } else {
+            $channel = '${{ inputs.release_channel }}'
+            $releaseVersion = '${{ inputs.release_version }}'
+          }
+          ./scripts/validate-release.ps1 -Channel $channel -Version $releaseVersion
+
       - name: Build HD2MM
         run: |
-          cd Helldivers2ModManager
-          dotnet publish Helldivers2ModManager.csproj --configuration Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o HD2MM-Complete
+          dotnet publish Helldivers2ModManager/Helldivers2ModManager.csproj --configuration Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o Helldivers2ModManager/HD2MM-Complete
 
       - name: Zip HD2MM
         uses: vimtor/action-zip@v1.2

@@ -6,10 +6,17 @@
 	<Application.Resources>
 		<ResourceDictionary>
 			<ResourceDictionary.MergedDictionaries>
-				<ResourceDictionary Source="Resources/Styles/FluentDesignTokens.xaml"/>
+				<ResourceDictionary Source="Resources/Styles/DesignTokens.xaml"/>
+				<ResourceDictionary Source="Resources/Styles/Theme.Dark.xaml"/>
 				<ResourceDictionary Source="Resources/Styles/FluentAnimations.xaml"/>
 				<ResourceDictionary Source="Resources/Styles/FluentControls.xaml"/>
 				<ResourceDictionary Source="Resources/Styles/FluentWindows.xaml"/>
+				<ResourceDictionary Source="Resources/Styles/Typography.xaml"/>
+				<ResourceDictionary Source="Resources/Styles/ButtonStyles.xaml"/>
+				<ResourceDictionary Source="Resources/Styles/InputStyles.xaml"/>
+				<ResourceDictionary Source="Resources/Styles/NavigationStyles.xaml"/>
+				<ResourceDictionary Source="Resources/Styles/DialogStyles.xaml"/>
+				<ResourceDictionary Source="Resources/Styles/ListStyles.xaml"/>
 			</ResourceDictionary.MergedDictionaries>
 
 			<local:StringToColorBrushConverter x:Key="StringToColorBrushConverter"/>
@@ -27,6 +34,7 @@
 			<local:VersionStatusToColorConverter x:Key="VersionStatusToColorConverter"/>
 			<local:VersionStatusToTextConverter x:Key="VersionStatusToTextConverter"/>
 			<local:ModLevelToVisibilityConverter x:Key="ModLevelToVisibilityConverter"/>
+			<local:ProportionalDoubleConverter x:Key="ProportionalDoubleConverter"/>
 
 			<!-- ============================================ -->
 			<!-- Legacy Style Mappings (Backward Compatibility) -->
@@ -35,12 +43,12 @@
 			<Style TargetType="TextBlock">
 				<Setter Property="SnapsToDevicePixels" Value="True"/>
 				<Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Arial"/>
-				<Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+				<Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
 			</Style>
 
 			<Style TargetType="Label">
 				<Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Arial"/>
-				<Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+				<Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
 			</Style>
 
 			<!-- System Button (Window Chrome) -->
@@ -80,14 +88,14 @@
 			<!-- TreeView -->
 			<Style TargetType="TreeView">
 				<Setter Property="SnapsToDevicePixels" Value="True"/>
-				<Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-				<Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
-				<Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+				<Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+				<Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
+				<Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
 				<Setter Property="BorderThickness" Value="1"/>
 			</Style>
 
 			<Style TargetType="TreeViewItem">
-				<Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+				<Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
 				<Setter Property="FontSize" Value="14"/>
 			</Style>
 
@@ -95,8 +103,8 @@
 			<Style TargetType="ContextMenu">
 				<Setter Property="OverridesDefaultStyle" Value="True"/>
 				<Setter Property="SnapsToDevicePixels" Value="True"/>
-				<Setter Property="Background" Value="{StaticResource NeutralBackgroundAltBrush}"/>
-				<Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+				<Setter Property="Background" Value="{DynamicResource NeutralBackgroundAltBrush}"/>
+				<Setter Property="BorderBrush" Value="{DynamicResource NeutralBorderBrush}"/>
 				<Setter Property="BorderThickness" Value="1"/>
 				<Setter Property="Padding" Value="4"/>
 				<Setter Property="Template">
@@ -120,7 +128,7 @@
 				<Setter Property="OverridesDefaultStyle" Value="True"/>
 				<Setter Property="SnapsToDevicePixels" Value="True"/>
 				<Setter Property="Background" Value="Transparent"/>
-				<Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+				<Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
 				<Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Arial"/>
 				<Setter Property="FontSize" Value="14"/>
 				<Setter Property="Padding" Value="12 8"/>
@@ -147,13 +155,13 @@
 									<TextBlock x:Name="InputGestureText"
 											   Grid.Column="2"
 											   Text="{TemplateBinding InputGestureText}"
-											   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+											   Foreground="{DynamicResource NeutralForegroundTertiaryBrush}"
 											   Margin="16 0 0 0"
 											   VerticalAlignment="Center"/>
 									<Path x:Name="SubMenuArrow"
 										  Grid.Column="3"
 										  Data="M0,0 L4,4 L0,8"
-										  Stroke="{StaticResource NeutralForegroundBrush}"
+										  Stroke="{DynamicResource NeutralForegroundBrush}"
 										  StrokeThickness="1"
 										  VerticalAlignment="Center"
 										  Margin="8 0 0 0"
@@ -164,8 +172,8 @@
 										   AllowsTransparency="True"
 										   Focusable="False"
 										   PopupAnimation="Fade">
-										<Border Background="{StaticResource NeutralBackgroundAltBrush}"
-												BorderBrush="{StaticResource NeutralBorderBrush}"
+										<Border Background="{DynamicResource NeutralBackgroundAltBrush}"
+												BorderBrush="{DynamicResource NeutralBorderBrush}"
 												BorderThickness="1"
 												CornerRadius="4"
 												Effect="{StaticResource ShadowElevationLevel3}"
@@ -186,10 +194,10 @@
 									<Setter TargetName="SubMenuArrow" Property="Visibility" Value="Visible"/>
 								</Trigger>
 								<Trigger Property="IsMouseOver" Value="True">
-									<Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+									<Setter TargetName="BackgroundBorder" Property="Background" Value="{DynamicResource NeutralBackgroundFillBrush}"/>
 								</Trigger>
 								<Trigger Property="IsEnabled" Value="False">
-									<Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
+									<Setter Property="Foreground" Value="{DynamicResource NeutralForegroundDisabledBrush}"/>
 								</Trigger>
 							</ControlTemplate.Triggers>
 						</ControlTemplate>

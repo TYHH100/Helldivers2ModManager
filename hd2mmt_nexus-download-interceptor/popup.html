@@ -1,213 +1,45 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HD2 Mod Manager</title>
   <style>
-    body {
-      width: 320px;
-      padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #1a1a2e;
-      color: #ffffff;
-      margin: 0;
-    }
-    
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid #333;
-    }
-    
-    .header img {
-      width: 32px;
-      height: 32px;
-    }
-    
-    .header h1 {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 600;
-    }
-    
-    .section {
-      margin-bottom: 20px;
-    }
-    
-    .section-title {
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 12px;
-      color: #b0b0b0;
-    }
-    
-    .toggle-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    
-    .toggle-label {
-      font-size: 14px;
-    }
-    
-    .toggle {
-      position: relative;
-      width: 48px;
-      height: 26px;
-      background: #333;
-      border-radius: 13px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    
-    .toggle.active {
-      background: #4CAF50;
-    }
-    
-    .toggle::after {
-      content: '';
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      width: 20px;
-      height: 20px;
-      background: white;
-      border-radius: 50%;
-      transition: transform 0.3s;
-    }
-    
-    .toggle.active::after {
-      transform: translateX(22px);
-    }
-    
-    .status-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: #2a2a4a;
-      border-radius: 6px;
-      margin-bottom: 12px;
-    }
-    
-    .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #666;
-    }
-    
-    .status-dot.connected {
-      background: #4CAF50;
-      animation: pulse 2s infinite;
-    }
-    
-    .status-dot.disconnected {
-      background: #f44336;
-    }
-    
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-    
-    .status-text {
-      font-size: 13px;
-    }
-    
-    .input-group {
-      margin-bottom: 12px;
-    }
-    
-    .input-label {
-      display: block;
-      font-size: 13px;
-      margin-bottom: 6px;
-      color: #b0b0b0;
-    }
-    
-    .input-control {
-      width: 100%;
-      padding: 8px 12px;
-      background: #2a2a4a;
-      border: 1px solid #3a3a5a;
-      border-radius: 6px;
-      color: white;
-      font-size: 14px;
-      box-sizing: border-box;
-      transition: border-color 0.3s;
-    }
-    
-    .input-control:focus {
-      outline: none;
-      border-color: #4CAF50;
-    }
-    
-    .footer {
-      padding-top: 12px;
-      border-top: 1px solid #333;
-      font-size: 12px;
-      color: #666;
-      text-align: center;
-    }
-    
-    .refresh-btn {
-      padding: 6px 12px;
-      background: #3a3a5a;
-      border: none;
-      border-radius: 4px;
-      color: white;
-      font-size: 12px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    
-    .refresh-btn:hover {
-      background: #4a4a6a;
-    }
+    body { width: 340px; margin: 0; padding: 18px; box-sizing: border-box; font: 14px "Segoe UI", sans-serif; background: #191919; color: #fff; }
+    header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    header img { width: 32px; height: 32px; }
+    h1 { margin: 0; font-size: 17px; }
+    section { display: grid; gap: 10px; margin: 16px 0; }
+    label { color: #d0d0d0; }
+    input, button { min-height: 34px; border-radius: 6px; border: 1px solid #555; padding: 6px 10px; box-sizing: border-box; }
+    input { width: 100%; background: #282828; color: #fff; }
+    button { background: #3b3b3b; color: #fff; cursor: pointer; }
+    button.primary { background: #0f6cbd; border-color: #0f6cbd; }
+    .toggle-row, .status-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .status { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .status-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: #888; }
+    .status-dot.connected { background: #6ccb5f; }
+    .status-dot.disconnected { background: #f1707b; }
+    .hint { color: #aaa; font-size: 12px; line-height: 1.4; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <img src="icons/icon32.png" alt="Icon">
-    <h1>Nexus Download Interceptor</h1>
-  </div>
-  
-  <div class="section">
-    <div class="toggle-container">
-      <span class="toggle-label">启用拦截</span>
-      <div id="enabledToggle" class="toggle"></div>
-    </div>
-  </div>
-  
-  <div class="section">
-    <div class="section-title">管理器状态</div>
-    <div class="status-container">
-      <div id="statusDot" class="status-dot"></div>
-      <span id="statusText" class="status-text">检测中...</span>
-      <button id="refreshBtn" class="refresh-btn">刷新</button>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">连接设置</div>
-    <div class="input-group">
-      <label class="input-label">服务器地址</label>
-      <input type="text" id="serverHost" class="input-control" placeholder="localhost" value="localhost">
-    </div>
-    <div class="input-group">
-      <label class="input-label">端口</label>
-      <input type="number" id="serverPort" class="input-control" placeholder="74566" value="74566">
-    </div>
-  </div>
-  
-  <div class="footer">
-    支持拦截 Nexus Mods 下载并发送到管理器
-  </div>
-  
-  <script src="popup.js"></script>
+  <header><img src="icons/icon32.png" alt=""><h1>HD2 Mod Manager connection</h1></header>
+  <section>
+    <label for="pairingCode">Pairing code</label>
+    <input id="pairingCode" inputmode="numeric" maxlength="8" placeholder="8-digit code" autocomplete="one-time-code">
+    <button id="pairButton" class="primary">Pair extension</button>
+    <button id="unpairButton" hidden>Forget pairing</button>
+    <div class="hint">Enable browser integration in the app, then generate a one-time code. Codes expire after five minutes.</div>
+  </section>
+  <section class="status-row">
+    <div class="status"><span id="statusDot" class="status-dot"></span><span id="statusText">Checking…</span></div>
+    <button id="refreshBtn">Refresh</button>
+  </section>
+  <section class="toggle-row">
+    <label for="enabledToggle">Intercept Nexus downloads</label>
+    <input id="enabledToggle" type="checkbox">
+  </section>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

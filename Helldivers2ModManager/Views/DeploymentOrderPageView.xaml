@@ -10,7 +10,7 @@
       xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
       mc:Ignorable="d"
       d:DataContext="{d:DesignInstance vms:DeploymentOrderPageViewModel}"
-      d:Background="{StaticResource MicaBackgroundBrush}"
+      d:Background="{DynamicResource MicaBackgroundBrush}"
       d:DesignWidth="800"
       d:DesignHeight="600"
       Title="{Binding Title}">
@@ -31,6 +31,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0"
+                    AutomationProperties.Name="{loc:Loc Common.Back}"
                     Style="{StaticResource FluentIconButton}"
                     Command="{Binding BackCommand}"
                     ToolTip="{loc:Loc Common.Back}"
@@ -49,19 +50,19 @@
 
         <!-- 部署方向说明 -->
         <Border Grid.Row="1"
-                Background="{StaticResource NeutralBackgroundFillSecondaryBrush}"
+                Background="{DynamicResource NeutralBackgroundFillSecondaryBrush}"
                 CornerRadius="6"
                 Padding="12 8"
                 Margin="0 0 0 12">
             <TextBlock Text="{Binding OrderDescription}"
                        FontSize="13"
-                       Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                       Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"/>
         </Border>
 
         <!-- 工具栏 -->
         <Border Grid.Row="2"
-                Background="{StaticResource LayerBackgroundBrush}"
-                BorderBrush="{StaticResource NeutralStrokeBrush}"
+                Background="{DynamicResource LayerBackgroundBrush}"
+                BorderBrush="{DynamicResource NeutralStrokeBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="8"
@@ -78,7 +79,7 @@
                         Style="{StaticResource FluentSecondaryButton}"
                         Margin="0 0 6 4"/>
                 <Rectangle Width="1"
-                           Fill="{StaticResource NeutralStrokeBrush}"
+                           Fill="{DynamicResource NeutralStrokeBrush}"
                            Margin="12 4"
                            Height="20"/>
                 <Button Content="{loc:Loc DeploymentOrderPage.SyncFromHome}"
@@ -90,7 +91,7 @@
                         Style="{StaticResource FluentSecondaryButton}"
                         Margin="0 0 6 4"/>
                 <Rectangle Width="1"
-                           Fill="{StaticResource NeutralStrokeBrush}"
+                           Fill="{DynamicResource NeutralStrokeBrush}"
                            Margin="12 4"
                            Height="20"/>
                 <Button Content="{loc:Loc DashboardPage.SelectAll}"
@@ -110,8 +111,8 @@
 
         <!-- 部署顺序列表（支持拖拽和多选） -->
         <Border Grid.Row="3"
-                Background="{StaticResource LayerBackgroundBrush}"
-                BorderBrush="{StaticResource NeutralStrokeBrush}"
+                Background="{DynamicResource LayerBackgroundBrush}"
+                BorderBrush="{DynamicResource NeutralStrokeBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="0">
@@ -144,14 +145,14 @@
                                        Text="&#xE763;"
                                        FontFamily="Segoe Fluent Icons"
                                        FontSize="14"
-                                       Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+                                       Foreground="{DynamicResource NeutralForegroundTertiaryBrush}"
                                        VerticalAlignment="Center"
                                        Margin="0 0 6 0"/>
                             <!-- 名称 -->
                             <TextBlock Grid.Column="2"
                                        Text="{Binding Name}"
                                        FontSize="14"
-                                       Foreground="{StaticResource NeutralForegroundBrush}"
+                                       Foreground="{DynamicResource NeutralForegroundBrush}"
                                        VerticalAlignment="Center"/>
                         </Grid>
                     </DataTemplate>
@@ -163,7 +164,7 @@
         <TextBlock Grid.Row="4"
                    Text="{loc:Loc DeploymentOrderPage.HintText}"
                    FontSize="12"
-                   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+                   Foreground="{DynamicResource NeutralForegroundTertiaryBrush}"
                    Margin="0 8 0 0"/>
     </Grid>
 </Page>

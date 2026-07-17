@@ -15,12 +15,11 @@
 		Height="700"
 		MinWidth="800"
 		MinHeight="600"
-		Content="{Binding CurrentViewModel}"
 		WindowStyle="None"
-		AllowsTransparency="True"
+		AllowsTransparency="False"
 		WindowStartupLocation="CenterScreen"
-		Background="{StaticResource MicaBackgroundBrush}"
-		d:Background="{StaticResource MicaBackgroundBrush}">
+		Background="{DynamicResource MicaBackgroundBrush}"
+		d:Background="{DynamicResource MicaBackgroundBrush}">
 	<Window.Resources>
 		<DataTemplate DataType="{x:Type vms:DashboardPageViewModel}">
 			<views:DashboardPageView/>
@@ -52,6 +51,15 @@
 		<DataTemplate DataType="{x:Type vms:BackgroundTasksPageViewModel}">
 			<views:BackgroundTasksPageView/>
 		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:HelpPageViewModel}">
+			<views:HelpPageView/>
+		</DataTemplate>
+		<ContextMenu x:Key="UiTestContextMenu">
+			<MenuItem Header="{loc:Loc UiTest.ContextMenuPrimary}"/>
+			<MenuItem Header="{loc:Loc UiTest.ContextMenuSecondary}"/>
+			<Separator/>
+			<MenuItem Header="{loc:Loc UiTest.ContextMenuDanger}"/>
+		</ContextMenu>
 
 	</Window.Resources>
 
@@ -59,7 +67,7 @@
 		<Style TargetType="Window">
 			<Setter Property="OverridesDefaultStyle" Value="True"/>
 			<Setter Property="SnapsToDevicePixels" Value="True"/>
-			<Setter Property="BorderBrush" Value="{StaticResource MicaBorderBrush}"/>
+			<Setter Property="BorderBrush" Value="{DynamicResource MicaBorderBrush}"/>
 			<Setter Property="BorderThickness" Value="1"/>
 			<Setter Property="Template">
 				<Setter.Value>
@@ -76,7 +84,7 @@
 
 								<!-- Title Bar with Mica Effect -->
 								<Border Grid.Row="0"
-										Background="{StaticResource MicaBackgroundBrush}">
+										Background="{DynamicResource MicaBackgroundBrush}">
 									<Border.BorderBrush>
 										<LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
 											<GradientStop Color="#20FFFFFF" Offset="0"/>
@@ -103,11 +111,11 @@
 											<TextBlock Text="{loc:Loc MainWindow.Title}"
 													   FontSize="14"
 													   FontWeight="SemiBold"
-													   Foreground="{StaticResource NeutralForegroundBrush}"
+													   Foreground="{DynamicResource NeutralForegroundBrush}"
 													   VerticalAlignment="Center"/>
 											<TextBlock Text="{Binding Version}"
 													   FontSize="12"
-													   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+													   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 													   Margin="12 0 0 0"
 													   VerticalAlignment="Center"/>
 										</StackPanel>
@@ -117,6 +125,8 @@
 													Orientation="Horizontal"
 													VerticalAlignment="Top">
 											<Button Style="{StaticResource FluentTitleBarButton}"
+													AutomationProperties.AutomationId="Window.ReportBug"
+													AutomationProperties.Name="{loc:Loc MainWindow.ReportBug}"
 													Command="{Binding ReportBugCommand}"
 													ToolTip="{loc:Loc MainWindow.ReportBug}">
 												<TextBlock Text="&#xebe8;"
@@ -124,6 +134,8 @@
 														   FontSize="14"/>
 											</Button>
 											<Button Style="{StaticResource FluentTitleBarButton}"
+													AutomationProperties.AutomationId="Window.Help"
+													AutomationProperties.Name="{loc:Loc MainWindow.Help}"
 													Click="HelpButton_Click"
 													ToolTip="{loc:Loc MainWindow.Help}">
 												<TextBlock Text="&#xE897;"
@@ -131,6 +143,8 @@
 														   FontSize="14"/>
 											</Button>
 											<Button Style="{StaticResource FluentTitleBarButton}"
+													AutomationProperties.AutomationId="Window.Minimize"
+													AutomationProperties.Name="{loc:Loc MainWindow.Minimize}"
 													Click="MinButton_Click"
 													ToolTip="{loc:Loc MainWindow.Minimize}">
 												<TextBlock Text="&#xE921;"
@@ -138,6 +152,8 @@
 														   FontSize="14"/>
 											</Button>
 											<Button Style="{StaticResource FluentTitleBarButton}"
+													AutomationProperties.AutomationId="Window.Maximize"
+													AutomationProperties.Name="{loc:Loc MainWindow.Maximize}"
 													Click="MaxButton_Click"
 													ToolTip="{loc:Loc MainWindow.Maximize}">
 												<TextBlock Text="&#xE922;"
@@ -145,6 +161,8 @@
 														   FontSize="14"/>
 											</Button>
 											<Button Style="{StaticResource FluentCloseButton}"
+													AutomationProperties.AutomationId="Window.Close"
+													AutomationProperties.Name="{loc:Loc MainWindow.Close}"
 													Click="CloseButton_Click"
 													ToolTip="{loc:Loc MainWindow.Close}">
 												<TextBlock Text="&#xE8BB;"
@@ -156,11 +174,27 @@
 								</Border>
 
 								<!-- Content Area -->
-								<ContentPresenter Name="presenter"
-												  Grid.Row="1"/>
-								<cmp:ImagePreviewOverlay Grid.Row="1"/>
-								<cmp:VersionCheckDetailOverlay Grid.Row="1"/>
-								<cmp:MessageBox Grid.Row="1"/>
+								<Grid Grid.Row="1">
+									<Grid.RowDefinitions>
+										<RowDefinition Height="Auto"/>
+										<RowDefinition Height="*"/>
+									</Grid.RowDefinitions>
+									<Border Grid.Row="0"
+											Background="{DynamicResource NeutralBackgroundFillSecondaryBrush}"
+											BorderBrush="{DynamicResource WarningBrush}"
+											BorderThickness="0 0 0 1"
+											Padding="16 10"
+											Visibility="{Binding IsDatabaseReadOnly, Converter={StaticResource BoolToVisibilityConverter}}">
+										<TextBlock Text="{Binding DatabaseReadOnlyMessage}"
+												   TextWrapping="Wrap"
+												   Foreground="{DynamicResource NeutralForegroundBrush}"
+												   AutomationProperties.LiveSetting="Assertive"/>
+									</Border>
+									<ContentPresenter Name="presenter" Grid.Row="1"/>
+									<cmp:ImagePreviewOverlay Grid.Row="0" Grid.RowSpan="2"/>
+									<cmp:VersionCheckDetailOverlay x:Name="VersionDetailHost" Grid.Row="0" Grid.RowSpan="2"/>
+									<cmp:MessageBox x:Name="DialogHost" Grid.Row="0" Grid.RowSpan="2"/>
+								</Grid>
 							</Grid>
 						</Border>
 						<ControlTemplate.Triggers>
@@ -179,4 +213,83 @@
 					  CornerRadius="0"
 					  ResizeBorderThickness="6"/>
 	</WindowChrome.WindowChrome>
+
+	<Grid x:Name="ShellRoot">
+		<Grid.ColumnDefinitions>
+			<ColumnDefinition x:Name="NavigationColumn" Width="220"/>
+			<ColumnDefinition Width="*"/>
+		</Grid.ColumnDefinitions>
+
+		<Border x:Name="NavigationPane"
+		        Grid.Column="0"
+		        Width="220"
+		        HorizontalAlignment="Left"
+		        Background="{DynamicResource ThemeSurfaceBrush}"
+		        BorderBrush="{DynamicResource ThemeBorderBrush}"
+		        BorderThickness="0,0,1,0"
+		        Panel.ZIndex="10">
+			<Grid Margin="8">
+				<Grid.RowDefinitions>
+					<RowDefinition Height="Auto"/>
+					<RowDefinition Height="*"/>
+					<RowDefinition Height="Auto"/>
+				</Grid.RowDefinitions>
+				<Button Grid.Row="0"
+				        AutomationProperties.AutomationId="Navigation.Back"
+				        AutomationProperties.Name="{loc:Loc Common.Back}"
+				        Style="{StaticResource AutoTextButtonStyle}"
+				        Command="{Binding GoBackCommand}"
+				        HorizontalContentAlignment="Left"
+				        ToolTip="{loc:Loc Common.Back}">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" Width="24"/>
+						<TextBlock x:Name="BackLabel" Text="{loc:Loc Common.Back}" TextWrapping="Wrap"/>
+					</StackPanel>
+				</Button>
+				<StackPanel Grid.Row="1" Margin="0,8,0,0">
+					<Button AutomationProperties.AutomationId="Navigation.Home" AutomationProperties.Name="{loc:Loc DashboardPage.Title}" Style="{StaticResource AutoTextButtonStyle}" Command="{Binding NavigateHomeCommand}" HorizontalContentAlignment="Left" ToolTip="{loc:Loc DashboardPage.Title}">
+						<StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" FontFamily="Segoe Fluent Icons" Width="24"/><TextBlock x:Name="HomeLabel" Text="{loc:Loc DashboardPage.Title}" TextWrapping="Wrap"/></StackPanel>
+					</Button>
+					<Button AutomationProperties.AutomationId="Navigation.Create" AutomationProperties.Name="{loc:Loc DashboardPage.CreateMod}" Style="{StaticResource AutoTextButtonStyle}" Command="{Binding NavigateCreateCommand}" HorizontalContentAlignment="Left" ToolTip="{loc:Loc DashboardPage.CreateMod}">
+						<StackPanel Orientation="Horizontal"><TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" Width="24"/><TextBlock x:Name="CreateLabel" Text="{loc:Loc DashboardPage.CreateMod}" TextWrapping="Wrap"/></StackPanel>
+					</Button>
+					<Button AutomationProperties.AutomationId="Navigation.Downloads" AutomationProperties.Name="{loc:Loc DashboardPage.DownloadProgress}" Style="{StaticResource AutoTextButtonStyle}" Command="{Binding NavigateDownloadsCommand}" HorizontalContentAlignment="Left" ToolTip="{loc:Loc DashboardPage.DownloadProgress}">
+						<StackPanel Orientation="Horizontal"><TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons" Width="24"/><TextBlock x:Name="DownloadsLabel" Text="{loc:Loc DashboardPage.DownloadProgress}" TextWrapping="Wrap"/></StackPanel>
+					</Button>
+					<Button AutomationProperties.AutomationId="Navigation.Tasks" AutomationProperties.Name="{loc:Loc DashboardPage.BackgroundTasks}" Style="{StaticResource AutoTextButtonStyle}" Command="{Binding NavigateBackgroundTasksCommand}" HorizontalContentAlignment="Left" ToolTip="{loc:Loc DashboardPage.BackgroundTasks}">
+						<StackPanel Orientation="Horizontal"><TextBlock Text="&#xE9D9;" FontFamily="Segoe Fluent Icons" Width="24"/><TextBlock x:Name="TasksLabel" Text="{loc:Loc DashboardPage.BackgroundTasks}" TextWrapping="Wrap"/></StackPanel>
+					</Button>
+					<Button AutomationProperties.AutomationId="Navigation.Settings" AutomationProperties.Name="{loc:Loc DashboardPage.Settings}" Style="{StaticResource AutoTextButtonStyle}" Command="{Binding NavigateSettingsCommand}" HorizontalContentAlignment="Left" ToolTip="{loc:Loc DashboardPage.Settings}">
+						<StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" Width="24"/><TextBlock x:Name="SettingsLabel" Text="{loc:Loc DashboardPage.Settings}" TextWrapping="Wrap"/></StackPanel>
+					</Button>
+				</StackPanel>
+				<Button Grid.Row="2" AutomationProperties.AutomationId="Navigation.Help" AutomationProperties.Name="{loc:Loc MainWindow.Help}" Style="{StaticResource AutoTextButtonStyle}" Command="{Binding NavigateHelpCommand}" HorizontalContentAlignment="Left" ToolTip="{loc:Loc MainWindow.Help}">
+					<StackPanel Orientation="Horizontal"><TextBlock Text="&#xE897;" FontFamily="Segoe Fluent Icons" Width="24"/><TextBlock x:Name="HelpLabel" Text="{loc:Loc MainWindow.Help}" TextWrapping="Wrap"/></StackPanel>
+				</Button>
+			</Grid>
+		</Border>
+
+		<Grid Grid.Column="1" x:Name="ContentRegion" Background="{DynamicResource ThemeWindowBrush}">
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto"/>
+				<RowDefinition Height="*"/>
+			</Grid.RowDefinitions>
+			<Button x:Name="NavigationToggleButton"
+			        AutomationProperties.AutomationId="Navigation.Toggle"
+			        AutomationProperties.Name="{loc:Loc MainWindow.Navigation}"
+			        Grid.Row="0"
+			        Width="40"
+			        Height="40"
+			        Margin="8,4"
+			        HorizontalAlignment="Left"
+			        Click="NavigationToggleButton_Click"
+			        ToolTip="{loc:Loc MainWindow.Navigation}">
+				<TextBlock Text="&#xE700;" FontFamily="Segoe Fluent Icons"/>
+			</Button>
+			<Frame Grid.Row="1"
+			       NavigationUIVisibility="Hidden"
+			       JournalOwnership="OwnsJournal"
+			       Content="{Binding CurrentViewModel}"/>
+		</Grid>
+	</Grid>
 </Window>

@@ -8,25 +8,25 @@ namespace Helldivers2ModManager.Models;
 internal sealed class V1ModManifest : IModManifest
 {
     public ManifestVersion Version => ManifestVersion.V1;
-    
+
     public required Guid Guid { get; init; }
-    
+
     public required string Name { get; init; }
 
     public required string Description { get; init; }
-    
+
     public string? IconPath { get; init; }
-    
+
     public IReadOnlyList<ModOption>? Options { get; init; }
-    
+
     public NexusDataModel? NexusData { get; init; }
-    
+
     public sealed class NexusDataModel
     {
         public int ModId { get; init; }
         public string Version { get; init; } = string.Empty;
     }
-    
+
     public static IModManifest Deserialize(JsonElement root, ILogger? logger = null)
     {
         var guid = Guid.Parse(root.GetProperty<string>(nameof(Guid)));

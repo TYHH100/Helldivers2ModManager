@@ -1,4 +1,5 @@
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Core.Compatibility;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -12,11 +13,11 @@ namespace Helldivers2ModManager.Services;
 /// 版本检测服务
 /// 参考 hd2-repatcher 的实现方式：扫描所有模组的补丁文件提取 Unit 版本号，
 /// https://github.com/RaidingForPants/hd2-repatcher/
-/// 以多数版本作为参考基准，标记偏离的模组。
+/// 以当前游戏文件中的 Unit 数据作为唯一参考基准。
 /// v1.5.0 新增深度分析：文件结构完整性校验、Unit 内部结构分析、伴生文件检查。
 /// </summary>
 [RegisterService(ServiceLifetime.Singleton)]
-internal sealed partial class VersionCheckService
+internal sealed class VersionCheckService
 {
     /// <summary>
     /// Unit 资源类型 ID（来自 hd2-repatcher 魔数）
@@ -33,7 +34,6 @@ internal sealed partial class VersionCheckService
     /// 来自 hd2-repatcher update_patch_file() 的 (v &lt; 0xA4CD36) 判断
     /// </summary>
     private const uint VersionThresholdForLayoutCheck = 0xA4CD36u;
-    private const long MaxMemoryReadBytes = 512L * 1024 * 1024;
     private const int HeaderSize = 72;
     private const int TypeEntrySize = 32;
     private const int FileEntrySize = 80;
@@ -53,25 +53,210 @@ internal sealed partial class VersionCheckService
     private readonly ILogger<VersionCheckService> _logger;
     private readonly SettingsService _settingsService;
     private readonly LocalizationService _localizationService;
+    private readonly ModBackupService _backupService;
+    private readonly CompanionRecoveryCoordinator _companionRecoveryCoordinator;
+    private readonly GameUnitReferenceService _gameUnitReferenceService;
+    private readonly PatchRepairService _patchRepairService;
+    private readonly AssistedRepairService _assistedRepairService;
+    private readonly GameCompanionRecoveryReader _gameCompanionRecoveryReader;
 
     public VersionCheckService(ILogger<VersionCheckService> logger, SettingsService settingsService, LocalizationService localizationService)
     {
         _logger = logger;
         _settingsService = settingsService;
         _localizationService = localizationService;
+        _gameUnitReferenceService = new GameUnitReferenceService(
+            logger,
+            settingsService,
+            localizationService);
+        _patchRepairService = new PatchRepairService(
+            logger,
+            localizationService,
+            AnalyzeUnitResourceDeepAsync,
+            OpenPatchReadStream,
+            ReadAtAsync,
+            ValidateMainDataRanges,
+            ValidateCompanionFiles,
+            IsRangeInBounds,
+            IsMainPatchFile);
+        _backupService = new ModBackupService(
+            logger,
+            localizationService,
+            AnalyzeSinglePatchFileStructureAsync,
+            _patchRepairService.InspectPatchForRepairsAsync);
+        _assistedRepairService = new AssistedRepairService(
+            logger,
+            localizationService,
+            _backupService,
+            _patchRepairService.CreateRepairPlanAsync,
+            (file, companion) => AnalyzeSinglePatchFileStructureAsync(file, companion),
+            GetGameUnitReferencesAsync,
+            OpenPatchReadStream,
+            ReadAtAsync,
+            CreateBackupPath,
+            IsRepairValidationSuccessful);
+        _gameCompanionRecoveryReader = new GameCompanionRecoveryReader(
+            GetConfiguredGameDataDirectory,
+            _assistedRepairService.ReadAssistedPatchEntriesAsync,
+            OpenPatchReadStream,
+            ReadAtAsync);
+        _companionRecoveryCoordinator = new CompanionRecoveryCoordinator(
+            logger,
+            settingsService,
+            GetConfiguredGameDataDirectory,
+            file => AnalyzeSinglePatchFileStructureAsync(file),
+            CanBuildGameCompanionAsync,
+            WriteGameCompanionAsync);
+    }
+
+    public Task<ModBackupHistory> GetBackupHistoryAsync(
+        DirectoryInfo modDirectory,
+        CancellationToken cancellationToken = default) =>
+        _backupService.GetBackupHistoryAsync(modDirectory, cancellationToken);
+
+    public Task<ModBackupOperationResult> RestoreBackupAsync(
+        DirectoryInfo modDirectory,
+        string backupPath,
+        CancellationToken cancellationToken = default) =>
+        _backupService.RestoreBackupAsync(modDirectory, backupPath, cancellationToken);
+
+    public Task<ModBackupOperationResult> DeleteBackupAsync(
+        DirectoryInfo modDirectory,
+        string backupPath,
+        CancellationToken cancellationToken = default) =>
+        _backupService.DeleteBackupAsync(modDirectory, backupPath, cancellationToken);
+
+    public Task<ModBackupOperationResult> CleanOldBackupsAsync(
+        DirectoryInfo modDirectory,
+        int keepPerPatch,
+        CancellationToken cancellationToken = default) =>
+        _backupService.CleanOldBackupsAsync(modDirectory, keepPerPatch, cancellationToken);
+
+    public Task<CompanionRecoveryPlan> CreateCompanionRecoveryPlanAsync(
+        DirectoryInfo modDirectory,
+        CancellationToken cancellationToken = default) =>
+        _companionRecoveryCoordinator.CreatePlanAsync(modDirectory, cancellationToken);
+
+    public Task<CompanionRecoveryResult> RecoverCompanionFilesAsync(
+        DirectoryInfo modDirectory,
+        CancellationToken cancellationToken = default) =>
+        _companionRecoveryCoordinator.RecoverAsync(modDirectory, cancellationToken);
+
+    private async Task<bool> CanBuildGameCompanionAsync(
+        FileInfo patchFile,
+        string suffix,
+        CancellationToken cancellationToken)
+    {
+        var recipe = await _gameCompanionRecoveryReader.TryBuildGameCompanionRecipeAsync(
+            patchFile,
+            suffix,
+            includePayloads: false,
+            cancellationToken);
+        return recipe is not null;
+    }
+
+    private async Task<bool> WriteGameCompanionAsync(
+        FileInfo patchFile,
+        string suffix,
+        string destinationPath,
+        CancellationToken cancellationToken)
+    {
+        var recipe = await _gameCompanionRecoveryReader.TryBuildGameCompanionRecipeAsync(
+            patchFile,
+            suffix,
+            includePayloads: true,
+            cancellationToken);
+        if (recipe is null)
+            return false;
+
+        await GameCompanionRecoveryReader.WriteGameCompanionRecipeAsync(
+            recipe,
+            destinationPath,
+            cancellationToken);
+        return true;
+    }
+
+    private Task<GameUnitReferenceLookup> GetGameUnitReferencesAsync(
+        IReadOnlyCollection<long> unitIds) =>
+        _gameUnitReferenceService.GetGameUnitReferencesAsync(unitIds);
+
+    public Task<ModRepairPlan> CreateRepairPlanAsync(
+        DirectoryInfo modDirectory,
+        CancellationToken cancellationToken = default) =>
+        _patchRepairService.CreateRepairPlanAsync(modDirectory, cancellationToken);
+
+    public Task<AssistedModRepairPlan> CreateAssistedRepairPlanAsync(
+        DirectoryInfo modDirectory) =>
+        _assistedRepairService.CreateAssistedRepairPlanAsync(modDirectory);
+
+    public Task<AssistedModRepairPlan> CreateAssistedRepairPlanAsync(
+        DirectoryInfo modDirectory,
+        AssistedLodStrategy lodStrategy) =>
+        _assistedRepairService.CreateAssistedRepairPlanAsync(modDirectory, lodStrategy);
+
+    public Task<AssistedModRepairPlan> CreateMixedAssistedRepairPlanAsync(
+        DirectoryInfo modDirectory,
+        IReadOnlySet<long> preserveModLodUnitIds) =>
+        _assistedRepairService.CreateMixedAssistedRepairPlanAsync(modDirectory, preserveModLodUnitIds);
+
+    public Task<AssistedModRepairPlan> CreateAutomaticAssistedRepairPlanAsync(
+        DirectoryInfo modDirectory) =>
+        _assistedRepairService.CreateAutomaticAssistedRepairPlanAsync(modDirectory);
+
+    public Task<ModRepairResult> RepairModWithGameReferencesAsync(
+        DirectoryInfo modDirectory) =>
+        _assistedRepairService.RepairModWithGameReferencesAsync(modDirectory);
+
+    public Task<ModRepairResult> RepairModWithGameReferencesAsync(
+        DirectoryInfo modDirectory,
+        AssistedLodStrategy lodStrategy) =>
+        _assistedRepairService.RepairModWithGameReferencesAsync(modDirectory, lodStrategy);
+
+    public Task<ModRepairResult> RepairModWithMixedGameReferencesAsync(
+        DirectoryInfo modDirectory,
+        IReadOnlySet<long> preserveModLodUnitIds) =>
+        _assistedRepairService.RepairModWithMixedGameReferencesAsync(modDirectory, preserveModLodUnitIds);
+
+    public Task<ModRepairResult> RepairModAutomaticallyAsync(
+        DirectoryInfo modDirectory) =>
+        _assistedRepairService.RepairModAutomaticallyAsync(modDirectory);
+
+    private static bool IsRepairValidationSuccessful(PatchFileAnalysis analysis) =>
+        PatchRepairService.IsRepairValidationSuccessful(analysis);
+
+    private static string CreateBackupPath(FileInfo patchFile, string stamp) =>
+        PatchRepairService.CreateBackupPath(patchFile, stamp);
+
+    internal Task<GameReferenceSnapshot> GetCoreGameReferencesAsync(
+        string gameDataDirectory,
+        IReadOnlyCollection<long> unitIds,
+        CancellationToken cancellationToken) =>
+        _gameUnitReferenceService.GetCoreGameReferencesAsync(
+            gameDataDirectory,
+            unitIds,
+            cancellationToken);
+
+    private DirectoryInfo? GetConfiguredGameDataDirectory()
+    {
+        if (!_settingsService.Initialized || string.IsNullOrWhiteSpace(_settingsService.GameDirectory))
+            return null;
+
+        var directory = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data"));
+        return directory.Exists && File.Exists(Path.Combine(directory.FullName, "bundles.nxa"))
+            ? directory
+            : null;
     }
 
     /// <summary>
-    /// 批量检查所有模组的版本兼容性。
-    /// 采用"模组间横向对比"策略：
-    /// 1. 扫描所有模组的补丁文件，收集所有 Unit 版本号
-    /// 2. 以出现频率最高的版本作为参考版本
-    /// 3. 与参考版本不一致的模组标记为不兼容
+    /// 批量检查所有模组的版本兼容性，以当前游戏文件为唯一权威来源。
     /// </summary>
     /// <param name="mods">模组数据列表</param>
     /// <returns>模组 GUID 到检测结果的映射字典</returns>
-    public async Task<Dictionary<Guid, ModVersionCheckResult>> CheckAllModsAsync(IEnumerable<ModData> mods)
+    public async Task<Dictionary<Guid, ModVersionCheckResult>> CheckAllModsAsync(
+        IEnumerable<ModData> mods,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var results = new ConcurrentDictionary<Guid, ModVersionCheckResult>();
         var modList = mods.ToList();
         if (modList.Count == 0)
@@ -83,7 +268,7 @@ internal sealed partial class VersionCheckService
 
         var scanTasks = modList.Select(async mod =>
         {
-            await semaphore.WaitAsync();
+            await semaphore.WaitAsync(cancellationToken);
             try
             {
                 var analysis = await AnalyzeModPatchFilesAsync(mod.Directory);
@@ -98,40 +283,39 @@ internal sealed partial class VersionCheckService
                 semaphore.Release();
             }
         });
-        await Task.WhenAll(scanTasks);
+        await Task.WhenAll(scanTasks).WaitAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        // 结构已损坏的补丁不能参与参考版本投票，否则大量旧坏包会反向污染基准。
-        var allVersions = allModScans.Values
-            .Where(v => !HasBlockingStructuralIssues(v.Analysis))
-            .SelectMany(v => v.Versions)
-            .ToList();
-        uint? referenceVersion = allVersions.Count > 0 ? GetMostCommonVersion(allVersions) : null;
-        s_cachedReferenceVersion = referenceVersion;
-        s_cachedModCount = allModScans.Values.Count(v => v.Versions.Count > 0);
-        s_cachedUnitCount = allVersions.Count;
-
-        if (referenceVersion.HasValue)
-        {
-            _logger.LogInformation("Reference Unit version: 0x{Version:X8} (from {UnitCount} Unit entries across {ModCount} mods)",
-                referenceVersion.Value, s_cachedUnitCount, s_cachedModCount);
-        }
+        var allUnitIds = allModScans.Values.SelectMany(static scan => scan.Infos).Select(static info => info.FileId).Distinct().ToArray();
+        var referenceLookup = await GetGameUnitReferencesAsync(allUnitIds);
+        var referenceVersions = referenceLookup.References.Values.Select(static reference => reference.Version).Distinct().ToArray();
+        s_cachedReferenceVersion = referenceVersions.Length == 1 ? referenceVersions[0] : null;
+        s_cachedModCount = allModScans.Values.Count(static scan => scan.Versions.Count > 0);
+        s_cachedUnitCount = referenceLookup.References.Count;
 
         foreach (var mod in modList)
         {
             var scan = allModScans[mod.Manifest.Guid];
             var hasBlockingIssues = HasBlockingStructuralIssues(scan.Analysis);
+            var missingReference = scan.Infos.Any(info =>
+                !referenceLookup.References.ContainsKey(info.FileId) || referenceLookup.AmbiguousUnitIds.Contains(info.FileId));
             var status = hasBlockingIssues
                 ? ModVersionStatus.Incompatible
-                : scan.Versions.Count == 0 || !referenceVersion.HasValue
+                : scan.Infos.Count == 0 || !string.IsNullOrWhiteSpace(referenceLookup.ErrorMessage) || missingReference
                     ? ModVersionStatus.Unknown
-                    : scan.Versions.All(v => v == referenceVersion.Value)
+                    : scan.Infos.All(info => referenceLookup.References[info.FileId].Version == info.Version)
                         ? ModVersionStatus.Compatible
                         : ModVersionStatus.Incompatible;
+            var modReferenceVersions = scan.Infos
+                .Where(info => referenceLookup.References.ContainsKey(info.FileId))
+                .Select(info => referenceLookup.References[info.FileId].Version)
+                .Distinct()
+                .ToArray();
 
             results[mod.Manifest.Guid] = new ModVersionCheckResult
             {
                 Status = status,
-                GameVersion = referenceVersion ?? 0,
+                GameVersion = modReferenceVersions.Length == 1 ? modReferenceVersions[0] : 0,
                 LastChecked = DateTime.Now,
                 PatchUnits = new System.Collections.ObjectModel.ObservableCollection<PatchUnitInfo>(scan.Infos)
             };
@@ -144,9 +328,13 @@ internal sealed partial class VersionCheckService
     /// <summary>
     /// 对单个新增或变动模组执行版本与结构检测。
     /// </summary>
-    public async Task<ModVersionCheckResult?> CheckSingleModAsync(ModData mod, uint? fallbackVersion = null, bool includeDetailedAnalysis = false)
+    public async Task<ModVersionCheckResult?> CheckSingleModAsync(
+        ModData mod,
+        uint? fallbackVersion = null,
+        bool includeDetailedAnalysis = false,
+        CancellationToken cancellationToken = default)
     {
-        var referenceVersion = s_cachedReferenceVersion ?? fallbackVersion;
+        cancellationToken.ThrowIfCancellationRequested();
         var analysis = await AnalyzeModPatchFilesAsync(mod.Directory);
         var infos = analysis.PatchFiles
             .SelectMany(p => p.UnitDetails)
@@ -154,36 +342,45 @@ internal sealed partial class VersionCheckService
             .ToList();
         var versions = infos.Select(i => i.Version).ToList();
         var hasBlockingIssues = HasBlockingStructuralIssues(analysis);
+        var referenceLookup = await GetGameUnitReferencesAsync(infos.Select(static info => info.FileId).Distinct().ToArray());
+        var missingReference = infos.Any(info =>
+            !referenceLookup.References.ContainsKey(info.FileId) || referenceLookup.AmbiguousUnitIds.Contains(info.FileId));
+        var referenceVersions = infos
+            .Where(info => referenceLookup.References.ContainsKey(info.FileId))
+            .Select(info => referenceLookup.References[info.FileId].Version)
+            .Distinct()
+            .ToArray();
 
         ModVersionStatus status;
         uint reportedVersion;
         if (hasBlockingIssues)
         {
             status = ModVersionStatus.Incompatible;
-            reportedVersion = referenceVersion ?? (versions.Count > 0 ? GetMostCommonVersion(versions) : 0);
+            reportedVersion = referenceVersions.Length == 1 ? referenceVersions[0] : 0;
         }
         else if (versions.Count == 0)
         {
             status = ModVersionStatus.Unknown;
-            reportedVersion = referenceVersion ?? 0;
+            reportedVersion = 0;
         }
-        else if (referenceVersion.HasValue)
+        else if (!string.IsNullOrWhiteSpace(referenceLookup.ErrorMessage) || missingReference)
         {
-            status = versions.All(v => v == referenceVersion.Value)
-                ? ModVersionStatus.Compatible
-                : ModVersionStatus.Incompatible;
-            reportedVersion = referenceVersion.Value;
+            status = ModVersionStatus.Unknown;
+            reportedVersion = 0;
         }
         else
         {
-            status = ModVersionStatus.Compatible;
-            reportedVersion = GetMostCommonVersion(versions);
+            status = infos.All(info => referenceLookup.References[info.FileId].Version == info.Version)
+                ? ModVersionStatus.Compatible
+                : ModVersionStatus.Incompatible;
+            reportedVersion = referenceVersions.Length == 1 ? referenceVersions[0] : 0;
         }
 
         _logger.LogInformation(
             "Mod {Name} compatibility check: {Status}, patches={PatchCount}, corrupted={CorruptedCount}",
             mod.Manifest.Name, status, analysis.TotalPatchFiles, analysis.CorruptedFileCount);
 
+        cancellationToken.ThrowIfCancellationRequested();
         return new ModVersionCheckResult
         {
             Status = status,
@@ -227,54 +424,7 @@ internal sealed partial class VersionCheckService
             if (!patchFile.Exists || patchFile.Length < 72)
                 return result;
 
-            if (!ShouldUseMemoryRead(patchFile))
-                return await ExtractUnitVersionsFromPatchFileStreamAsync(patchFile);
-
-            var data = await File.ReadAllBytesAsync(patchFile.FullName);
-
-            // 解析补丁文件头: magic(4) + numTypes(4) + numFiles(4) + unknown(4) + unknownData(56) = 72 bytes
-            if (data.Length < 72)
-                return result;
-
-            var numTypes = MemoryMarshal.Read<int>(data.AsSpan(4, 4));
-            var numFiles = MemoryMarshal.Read<int>(data.AsSpan(8, 4));
-
-            // 类型条目偏移: 72
-            var typeEntriesOffset = 72;
-            // 文件条目偏移: 72 + numTypes * 32
-            var fileEntriesOffset = typeEntriesOffset + numTypes * 32;
-
-            if (fileEntriesOffset + numFiles * 80 > data.Length)
-            {
-                _logger.LogTrace("Patch file {File} format mismatch, skipping", patchFile.Name);
-                return result;
-            }
-
-            for (int i = 0; i < numFiles; i++)
-            {
-                var entryOffset = fileEntriesOffset + i * 80;
-                var typeId = MemoryMarshal.Read<long>(data.AsSpan(entryOffset + 8, 8));
-
-                if (typeId == UnitTypeId)
-                {
-                    var fileId = MemoryMarshal.Read<long>(data.AsSpan(entryOffset, 8));
-                    var dataOffset = MemoryMarshal.Read<long>(data.AsSpan(entryOffset + 16, 8));
-                    var dataSize = MemoryMarshal.Read<int>(data.AsSpan(entryOffset + 56, 4));
-
-                    if (dataOffset >= 0 && dataSize >= 0x30 && dataOffset + 0x30 <= data.Length)
-                    {
-                        var version = MemoryMarshal.Read<uint>(data.AsSpan((int)dataOffset + 0x2C, 4));
-
-                        result.Add(new PatchUnitInfo
-                        {
-                            FileName = patchFile.Name,
-                            FileId = fileId,
-                            Version = version,
-                            DataSize = dataSize
-                        });
-                    }
-                }
-            }
+            return await ExtractUnitVersionsFromPatchFileStreamAsync(patchFile);
         }
         catch (Exception ex)
         {
@@ -347,34 +497,10 @@ internal sealed partial class VersionCheckService
         return result;
     }
 
-    /// <summary>
-    /// 获取列表中出现频率最高的版本号
-    /// </summary>
-    private static uint GetMostCommonVersion(List<uint> versions)
-    {
-        return versions
-            .GroupBy(v => v)
-            .OrderByDescending(g => g.Count())
-            .ThenByDescending(g => g.Key)
-            .First()
-            .Key;
-    }
-
     // ===================================================================
     // 深度分析（v1.5.0+）
     // 解析完整 Stingray legacy package TOC，并验证三路资源边界。
     // ===================================================================
-
-    private readonly record struct PatchTocEntry(
-        long FileId,
-        long TypeId,
-        ulong TocOffset,
-        ulong StreamOffset,
-        ulong GpuOffset,
-        uint TocSize,
-        uint StreamSize,
-        uint GpuSize,
-        uint EntryIndex);
 
     /// <summary>
     /// 对单个模组的所有补丁文件执行深度分析。
@@ -471,9 +597,7 @@ internal sealed partial class VersionCheckService
             if (magic != PatchHeaderMagic)
             {
                 analysis.HeaderValid = false;
-                MarkCorrupted(analysis, _localizationService["VersionCheck.InvalidMagicNumber"]
-                    .Replace("{actual}", $"0x{magic:X8}")
-                    .Replace("{expected}", $"0x{PatchHeaderMagic:X8}"));
+                MarkCorrupted(analysis, _localizationService.Format("VersionCheck.InvalidMagicNumber", new { actual = $"0x{magic:X8}", expected = $"0x{PatchHeaderMagic:X8}" }));
                 return analysis;
             }
 
@@ -485,9 +609,7 @@ internal sealed partial class VersionCheckService
 
             if (numTypes < 0 || numFiles < 0 || numTypes > 1000 || numFiles > 100000)
             {
-                MarkCorrupted(analysis, _localizationService["VersionCheck.SuspiciousHeaderValues"]
-                    .Replace("{numTypes}", numTypes.ToString())
-                    .Replace("{numFiles}", numFiles.ToString()));
+                MarkCorrupted(analysis, _localizationService.Format("VersionCheck.SuspiciousHeaderValues", new { numTypes, numFiles }));
                 return analysis;
             }
 
@@ -539,9 +661,7 @@ internal sealed partial class VersionCheckService
             {
                 analysis.TypeDistributionValid = false;
                 analysis.TypeDistributionIssueCount++;
-                MarkCorrupted(analysis, _localizationService["VersionCheck.ResourceCountMismatch"]
-                    .Replace("{totalResources}", totalResources.ToString())
-                    .Replace("{numFiles}", numFiles.ToString()));
+                MarkCorrupted(analysis, _localizationService.Format("VersionCheck.ResourceCountMismatch", new { totalResources, numFiles }));
             }
 
             var entries = new List<PatchTocEntry>(numFiles);
@@ -577,8 +697,7 @@ internal sealed partial class VersionCheckService
             analysis.FileEntriesInBounds = true;
             analysis.EntryIndicesValid = analysis.EntryIndexIssueCount == 0;
             if (!analysis.EntryIndicesValid)
-                MarkWarning(analysis, _localizationService["VersionCheck.EntryIndexMismatch"]
-                    .Replace("{count}", analysis.EntryIndexIssueCount.ToString()));
+                MarkWarning(analysis, _localizationService.Format("VersionCheck.EntryIndexMismatch", new { count = analysis.EntryIndexIssueCount }));
 
             if (declaredTypeCounts.Count != actualTypeCounts.Count ||
                 declaredTypeCounts.Any(kv => !actualTypeCounts.TryGetValue(kv.Key, out var count) || count != kv.Value))
@@ -619,8 +738,7 @@ internal sealed partial class VersionCheckService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "分析补丁文件 {File} 结构时出错", patchFile.Name);
-            MarkCorrupted(analysis, _localizationService["VersionCheck.AnalysisException"]
-                .Replace("{message}", ex.Message));
+            MarkCorrupted(analysis, _localizationService.Format("VersionCheck.AnalysisException", new { message = ex.Message }));
         }
 
         return analysis;
@@ -746,12 +864,16 @@ internal sealed partial class VersionCheckService
             detail.IsTruncated = detail.ExpectedDataSize > detail.DataSize;
             if (!detail.DeclaredSizeMatchesInternal)
             {
-                detail.Warning = loc[detail.IsTruncated
+                detail.Warning = loc.Format(
+                    detail.IsTruncated
                         ? "VersionCheck.UnitDataSizeTruncated"
-                        : "VersionCheck.UnitDataSizeMismatch"]
-                    .Replace("{declared}", detail.DataSize.ToString())
-                    .Replace("{expected}", detail.ExpectedDataSize.ToString())
-                    .Replace("{difference}", Math.Abs(detail.ExpectedDataSize - detail.DataSize).ToString());
+                        : "VersionCheck.UnitDataSizeMismatch",
+                    new
+                    {
+                        declared = detail.DataSize,
+                        expected = detail.ExpectedDataSize,
+                        difference = Math.Abs(detail.ExpectedDataSize - detail.DataSize)
+                    });
             }
         }
 
@@ -838,8 +960,9 @@ internal sealed partial class VersionCheckService
 
         detail.LayoutFormatValid = detail.LayoutFormatIssueCount == 0;
         if (!detail.LayoutFormatValid)
-            AppendUnitWarning(detail, loc["VersionCheck.LayoutFormatIssues"]
-                .Replace("{count}", detail.LayoutFormatIssueCount.ToString()));
+            AppendUnitWarning(
+                detail,
+                loc.Format("VersionCheck.LayoutFormatIssues", new { count = detail.LayoutFormatIssueCount }));
     }
 
     private static bool IsRangeInBounds(ulong offset, uint size, long fileLength)
@@ -877,20 +1000,6 @@ internal sealed partial class VersionCheckService
             ? message
             : analysis.Message + Environment.NewLine + message;
     }
-    private static bool ShouldUseMemoryRead(FileInfo file)
-    {
-        if (file.Name.EndsWith(".gpu_resources", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var memoryInfo = GC.GetGCMemoryInfo();
-        var availableMemory = memoryInfo.TotalAvailableMemoryBytes - GC.GetTotalMemory(false);
-        if (availableMemory <= 0)
-            return false;
-
-        var safeReadLimit = Math.Min(availableMemory / 10, MaxMemoryReadBytes);
-        return file.Length > 0 && file.Length <= safeReadLimit && file.Length <= int.MaxValue;
-    }
-
     private static FileStream OpenPatchReadStream(FileInfo file)
     {
         return new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess);

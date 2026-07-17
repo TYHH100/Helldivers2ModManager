@@ -25,7 +25,7 @@ namespace Helldivers2ModManager.Services.Nexus
             {
                 _logger.LogDebug("Cache miss for key: {Key}", key);
                 cachedValue = await factory();
-                
+
                 _cache.Set(key, cachedValue, new MemoryCacheEntryOptions
                 {
                     AbsoluteExpirationRelativeToNow = expiration,

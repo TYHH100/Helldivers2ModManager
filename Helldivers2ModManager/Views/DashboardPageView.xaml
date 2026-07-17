@@ -13,7 +13,7 @@
 	  xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
 	  mc:Ignorable="d"
 	  d:DataContext="{d:DesignInstance vms:DashboardPageViewModel}"
-	  d:Background="{StaticResource MicaBackgroundBrush}"
+	  d:Background="{DynamicResource MicaBackgroundBrush}"
 	  d:DesignWidth="1000"
 	  d:DesignHeight="700"
 	  Title="{Binding Title}">
@@ -29,7 +29,7 @@
 								<Setter Property="BorderThickness" Value="2"/>
 								<Style.Triggers>
 									<DataTrigger Binding="{Binding IsSelected}" Value="True">
-										<Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+										<Setter Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
 									</DataTrigger>
 								</Style.Triggers>
 							</Style>
@@ -101,7 +101,7 @@
 								<TextBlock Text="{Binding Name}"
 										   FontSize="18"
 										   FontWeight="SemiBold"
-										   Foreground="{StaticResource NeutralForegroundBrush}"
+										   Foreground="{DynamicResource NeutralForegroundBrush}"
 										   TextWrapping="NoWrap"
 										   TextTrimming="CharacterEllipsis">
 									<TextBlock.ToolTip>
@@ -109,7 +109,7 @@
 											<TextBlock Text="{Binding Name}"
 													   FontSize="18"
 													   FontWeight="SemiBold"
-													   Foreground="{StaticResource NeutralForegroundBrush}"/>
+													   Foreground="{DynamicResource NeutralForegroundBrush}"/>
 										</ToolTip>
 									</TextBlock.ToolTip>
 								</TextBlock>
@@ -176,9 +176,8 @@
 									   Grid.Row="1"
 									   Text="{Binding Description}"
 									   FontSize="13"
-									   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-									   TextWrapping="NoWrap"
-									   TextTrimming="WordEllipsis"
+									   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
+									   TextWrapping="Wrap"
 									   VerticalAlignment="Center"/>
 
 							<!-- Options Panel -->
@@ -187,7 +186,8 @@
 										Grid.RowSpan="2"
 										Orientation="Horizontal"
 										VerticalAlignment="Center">
-								<ComboBox Width="140"
+								<ComboBox MinWidth="140"
+								          MaxWidth="320"
 										  Margin="8 0"
 										  Visibility="{Binding OptionsVisible}"
 										  ItemsSource="{Binding LegacyOptions}"
@@ -213,6 +213,7 @@
 
 							<!-- Remove Button -->
 							<Button Grid.Column="4"
+									AutomationProperties.Name="{loc:Loc DashboardPage.DeleteModHint}"
 									Grid.Row="0"
 									Grid.RowSpan="2"
 									Style="{StaticResource FluentIconButton}"
@@ -222,7 +223,7 @@
 								<TextBlock Text="&#xE74D;"
 										   FontFamily="Segoe Fluent Icons"
 										   FontSize="16"
-										   Foreground="{StaticResource DangerBrush}"/>
+										   Foreground="{DynamicResource DangerBrush}"/>
 							</Button>
 
 							<!-- 版本状态指示器 -->
@@ -253,16 +254,16 @@
 								<Border.ToolTip>
 									<ToolTip>
 										<StackPanel>
-											<TextBlock FontWeight="SemiBold" Margin="0 0 0 4">
-												<Run Text="{loc:Loc DashboardPage.VersionStatusPrefix}"/>
-												<Run Text="{Binding VersionStatus, Converter={StaticResource VersionStatusToTextConverter}}"/>
-											</TextBlock>
+											<TextBlock Text="{Binding VersionStatusDisplayText}"
+													   TextWrapping="Wrap"
+													   FontWeight="SemiBold"
+													   Margin="0 0 0 4"/>
 											<TextBlock Text="{Binding LastCheckDisplayText}"
 													   FontSize="11"
-													   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+													   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"/>
 											<TextBlock Text="{loc:Loc DashboardPage.ClickForDetails}"
 													   FontSize="11"
-													   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+													   Foreground="{DynamicResource NeutralForegroundTertiaryBrush}"
 													   Margin="0 4 0 0"/>
 										</StackPanel>
 									</ToolTip>
@@ -277,7 +278,7 @@
 									HorizontalAlignment="Left"
 									VerticalAlignment="Top"
 									Margin="-7,-7,0,0"
-									Background="{StaticResource SystemAccentBrush}"
+									Background="{DynamicResource SystemAccentBrush}"
 									Visibility="{Binding DataContext.IsCheckingVersion, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"
 									ToolTip="{loc:Loc DashboardPage.CheckingVersion}"/>
 						</Grid>
@@ -331,6 +332,7 @@
 
 							<!-- 删除按钮 -->
 							<Button Grid.Column="1"
+									AutomationProperties.Name="{loc:Loc DashboardPage.DeleteSeparatorHint}"
 									Style="{StaticResource FluentIconButton}"
 									Command="{Binding DataContext.DeleteSeparatorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Page}}}"
 									CommandParameter="{Binding}"
@@ -370,7 +372,7 @@
 				CornerRadius="8">
 			<DockPanel LastChildFill="False">
 				<!-- App Logo/Header -->
-				<!-- <Border Background="{StaticResource SystemAccentBrush}"
+				<!-- <Border Background="{DynamicResource SystemAccentBrush}"
 						CornerRadius="4"
 						Padding="12"
 						Margin="0 0 0 16"
@@ -381,7 +383,7 @@
 								   FontSize="32"
 								   Foreground="White"
 								   HorizontalAlignment="Center"/>
-						<TextBlock Text="MOD MANAGER"
+						<TextBlock Text="{loc:Loc App.BrandShort}"
 								   FontSize="10"
 								   FontWeight="Bold"
 								   Foreground="White"
@@ -397,7 +399,7 @@
 							IsEnabled="{Binding Initialized}">
 						<StackPanel Orientation="Horizontal">
 							<TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-							<TextBlock Text="{loc:Loc DashboardPage.AddMod}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+							<TextBlock Text="{loc:Loc DashboardPage.AddMod}" Margin="12 0 0 0" VerticalAlignment="Center" TextWrapping="Wrap"/>
 						</StackPanel>
 					</Button>
 					<Button Style="{StaticResource FluentNavigationButton}"
@@ -405,23 +407,15 @@
 							IsEnabled="{Binding Initialized}">
 						<StackPanel Orientation="Horizontal">
 							<TextBlock Text="&#xE7AC;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-							<TextBlock Text="{loc:Loc DashboardPage.CreateMod}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+							<TextBlock Text="{loc:Loc DashboardPage.CreateMod}" Margin="12 0 0 0" VerticalAlignment="Center" TextWrapping="Wrap"/>
 						</StackPanel>
 					</Button>
-					<!-- <Button Style="{StaticResource FluentNavigationButton}"
-						Command="{Binding DownloadFromNexusCommand}"
-						IsEnabled="{Binding Initialized}">
-					<StackPanel Orientation="Horizontal">
-						<TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-                        <TextBlock Text="从 Nexus 下载" ToolTip="试验性, 未经测试(我没有n网会员所以这个就鸽了)" Margin="12 0 0 0" VerticalAlignment="Center"/>
-					</StackPanel>
-				</Button> -->
 					<Button Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding ShowDownloadProgressCommand}"
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE118;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="{loc:Loc DashboardPage.DownloadProgress}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+						<TextBlock Text="{loc:Loc DashboardPage.DownloadProgress}" Margin="12 0 0 0" VerticalAlignment="Center" TextWrapping="Wrap"/>
 					</StackPanel>
 				</Button>
 					<Button Style="{StaticResource FluentNavigationButton}"
@@ -429,7 +423,7 @@
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE9F5;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="{loc:Loc DashboardPage.BackgroundTasks}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+						<TextBlock Text="{loc:Loc DashboardPage.BackgroundTasks}" Margin="12 0 0 0" VerticalAlignment="Center" TextWrapping="Wrap"/>
 					</StackPanel>
 				</Button>
 					<Button Style="{StaticResource FluentNavigationButton}"
@@ -437,7 +431,7 @@
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE8EC;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="{loc:Loc DashboardPage.TagManagement}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+						<TextBlock Text="{loc:Loc DashboardPage.TagManagement}" Margin="12 0 0 0" VerticalAlignment="Center" TextWrapping="Wrap"/>
 					</StackPanel>
 				</Button>
 
@@ -445,7 +439,7 @@
 						Command="{Binding SettingsCommand}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="{loc:Loc DashboardPage.Settings}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+						<TextBlock Text="{loc:Loc DashboardPage.Settings}" Margin="12 0 0 0" VerticalAlignment="Center" TextWrapping="Wrap"/>
 					</StackPanel>
 				</Button>
 
@@ -455,7 +449,7 @@
 						Visibility="{Binding IsDeploymentOrderEnabled, Converter={StaticResource BoolToVisibilityConverter}}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE718;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="{loc:Loc DashboardPage.DeploymentOrder}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+						<TextBlock Text="{loc:Loc DashboardPage.DeploymentOrder}" Margin="12 0 0 0" VerticalAlignment="Center" TextWrapping="Wrap"/>
 					</StackPanel>
 				</Button>
 
@@ -468,7 +462,7 @@
 					<!-- Social Links -->
 					<TextBlock Text="{loc:Loc DashboardPage.RelatedLinks}"
 							   FontSize="12"
-							   Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+							   Foreground="{DynamicResource NeutralForegroundTertiaryBrush}"
 							   Margin="12 8"/>
 					<Grid>
 						<Grid.ColumnDefinitions>
@@ -505,7 +499,7 @@
 							IsEnabled="{Binding Initialized}">
 						<StackPanel Orientation="Horizontal">
 							<TextBlock Text="&#xE897;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-							<TextBlock Text="{loc:Loc DashboardPage.CheckVersion}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{loc:Loc DashboardPage.VersionCheckHint}" />
+							<TextBlock Text="{loc:Loc DashboardPage.CheckVersion}" Margin="12 0 0 0" VerticalAlignment="Center" TextWrapping="Wrap" ToolTip="{loc:Loc DashboardPage.VersionCheckHint}" />
 						</StackPanel>
 					</Button>
 				</StackPanel>
@@ -542,6 +536,7 @@
 						 Tag="{loc:Loc DashboardPage.SearchWatermark}"
 						 Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 					<Button Grid.Column="1"
+							AutomationProperties.Name="{loc:Loc DashboardPage.ClearSearch}"
 							Style="{StaticResource FluentIconButton}"
 							Command="{Binding ClearSearchCommand}"
 							ToolTip="{loc:Loc DashboardPage.ClearSearch}"
@@ -559,15 +554,16 @@
 					<TextBlock Text="&#xE8CB;"
 							   FontFamily="Segoe Fluent Icons"
 							   FontSize="16"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 							   VerticalAlignment="Center"
 							   Margin="0 0 8 0"/>
-					<ComboBox Width="120"
+					<ComboBox MinWidth="120"
+					          MaxWidth="280"
 							  ItemsSource="{Binding SortModes}"
 							  SelectedItem="{Binding CurrentSortMode, Mode=TwoWay}">
 						<ComboBox.ItemTemplate>
 							<DataTemplate>
-								<TextBlock Foreground="{StaticResource NeutralForegroundBrush}">
+								<TextBlock Foreground="{DynamicResource NeutralForegroundBrush}">
 									<TextBlock.Text>
 										<Binding FallbackValue="默认顺序">
 											<Binding.Converter>
@@ -590,7 +586,7 @@
 							Margin="0 8 0 0">
 					<TextBlock Text="{Binding SelectionCountText}"
 							   FontSize="13"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 							   VerticalAlignment="Center"
 							   Margin="0 0 8 0"/>
 					<Button Style="{StaticResource FluentSecondaryButton}"
@@ -630,37 +626,59 @@
 		</Border>
 
 		<!-- Mod List -->
-		<ScrollViewer x:Name="ModListScrollViewer"
-					  Grid.Row="1"
-					  Grid.Column="1"
-					  Margin="0 0 0 16"
-					  Background="Transparent"
-					  BorderThickness="0"
-					  HorizontalScrollBarVisibility="Disabled"
-					  VerticalScrollBarVisibility="Auto">
-			<ScrollViewer.ContextMenu>
+		<ListBox x:Name="ModList"
+				 Grid.Row="1"
+				 Grid.Column="1"
+				 Margin="0 0 0 16"
+				 ItemsSource="{Binding Mods}"
+				 Background="Transparent"
+				 BorderThickness="0"
+				 HorizontalContentAlignment="Stretch"
+				 ScrollViewer.CanContentScroll="True"
+				 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+				 ScrollViewer.VerticalScrollBarVisibility="Auto"
+				 VirtualizingPanel.IsVirtualizing="True"
+				 VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+				 VirtualizingPanel.VirtualizationMode="Recycling"
+				 dd:DragDrop.IsDragSource="{Binding IsSearchEmpty}"
+				 dd:DragDrop.IsDropTarget="True"
+				 dd:DragDrop.DropHandler="{Binding}"
+				 local:DragDropAutoScrollBehavior.IsEnabled="True">
+			<ListBox.ContextMenu>
 				<ContextMenu Visibility="{Binding ShowSeparator, Converter={StaticResource BoolToVisibilityConverter}}">
 					<MenuItem Header="{loc:Loc DashboardPage.CreateSeparator}"
 							  Command="{Binding CreateSeparatorCommand}"/>
 				</ContextMenu>
-			</ScrollViewer.ContextMenu>
-			<ItemsControl ItemsSource="{Binding Mods}"
-					  dd:DragDrop.IsDragSource="{Binding IsSearchEmpty}"
-					  dd:DragDrop.IsDropTarget="True"
-					  dd:DragDrop.DropHandler="{Binding}"
-					  local:DragDropAutoScrollBehavior.IsEnabled="True">
-				<ItemsControl.ItemTemplateSelector>
-					<StaticResource ResourceKey="DashboardItemTemplateSelector"/>
-				</ItemsControl.ItemTemplateSelector>
-				<ItemsControl.ItemsPanel>
-					<ItemsPanelTemplate>
-						<StackPanel/>
-					</ItemsPanelTemplate>
-				</ItemsControl.ItemsPanel>
-			</ItemsControl>
-		</ScrollViewer>
+			</ListBox.ContextMenu>
+			<ListBox.ItemTemplateSelector>
+				<StaticResource ResourceKey="DashboardItemTemplateSelector"/>
+			</ListBox.ItemTemplateSelector>
+			<ListBox.ItemContainerStyle>
+				<Style TargetType="ListBoxItem">
+					<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+					<Setter Property="Padding" Value="0"/>
+					<Setter Property="Margin" Value="0"/>
+					<Setter Property="Background" Value="Transparent"/>
+					<Setter Property="BorderThickness" Value="0"/>
+					<Setter Property="Focusable" Value="False"/>
+					<Setter Property="Template">
+						<Setter.Value>
+							<ControlTemplate TargetType="ListBoxItem">
+								<ContentPresenter/>
+							</ControlTemplate>
+						</Setter.Value>
+					</Setter>
+				</Style>
+			</ListBox.ItemContainerStyle>
+			<ListBox.ItemsPanel>
+				<ItemsPanelTemplate>
+					<VirtualizingStackPanel/>
+				</ItemsPanelTemplate>
+			</ListBox.ItemsPanel>
+		</ListBox>
 
 		<Button Grid.Row="1"
+				AutomationProperties.Name="{loc:Loc ModGroup.ToggleSidebar}"
 				Grid.Column="2"
 				Style="{StaticResource FluentIconButton}"
 				Command="{Binding GroupSidebar.ToggleOpenCommand}"
@@ -727,30 +745,32 @@
 							Width="12"
 							Height="12"
 							CornerRadius="6"
-							Background="{StaticResource SystemAccentBrush}"
+							Background="{DynamicResource SystemAccentBrush}"
 							Visibility="{Binding IsCheckingVersion, Converter={StaticResource BoolToVisibilityConverter}}"/>
 					<TextBlock Grid.Column="1"
 							   Text="{Binding VersionCheckSummary}"
 							   FontSize="12"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
 							   VerticalAlignment="Center"
 							   Margin="8 0 0 0"
-							   TextTrimming="CharacterEllipsis"
+							   TextWrapping="Wrap"
 							   Visibility="{Binding HasVersionCheckResult, Converter={StaticResource BoolToVisibilityConverter}}"/>
 					<!-- 哈希迁移状态（版本升级后后台计算文件指纹的进度提示） -->
 					<TextBlock Grid.Column="1"
 							   Text="{Binding HashMigrationStatusText}"
 							   FontSize="12"
-							   Foreground="{StaticResource SystemAccentBrush}"
+							   Foreground="{DynamicResource SystemAccentBrush}"
 							   VerticalAlignment="Center"
 							   Margin="8 0 0 0"
-							   TextTrimming="CharacterEllipsis"
+							   TextWrapping="Wrap"
 							   Visibility="{Binding HashMigrationStatusText, Converter={StaticResource StringToVisibilityConverter}}"/>
 				</Grid>
 
 				<!-- Action Buttons (右侧) -->
-				<StackPanel Grid.Column="1"
-							Orientation="Horizontal">
+				<WrapPanel Grid.Column="1"
+						   Orientation="Horizontal"
+						   HorizontalAlignment="Right"
+						   MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource ProportionalDoubleConverter}, ConverterParameter=0.72}">
                     <Button Style="{StaticResource FluentSecondaryButton}"
                             Command="{Binding BatchRepairCommand}"
                             IsEnabled="{Binding Initialized}"
@@ -798,7 +818,7 @@
 							<ToolTip Content="{loc:Loc DashboardPage.LaunchGameHint}"/>
 						</Button.ToolTip>
 					</Button>
-				</StackPanel>
+				</WrapPanel>
 			</Grid>
 		</Border>
 

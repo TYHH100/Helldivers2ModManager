@@ -1,3 +1,4 @@
+using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,193 +11,194 @@ namespace Helldivers2ModManager.Services;
 [RegisterService(ServiceLifetime.Singleton)]
 internal sealed class ProfileSaveCoordinator
 {
-	private static readonly TimeSpan s_debounceDelay = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan s_debounceDelay = TimeSpan.FromMilliseconds(300);
 
-	private readonly ILogger<ProfileSaveCoordinator> _logger;
-	private readonly ProfileService _profileService;
-	private readonly ModGroupService _modGroupService;
-	private readonly SettingsService _settingsService;
-	private readonly object _sync = new();
+    private readonly ILogger<ProfileSaveCoordinator> _logger;
+    private readonly ProfileService _profileService;
+    private readonly ModGroupService _modGroupService;
+    private readonly SettingsService _settingsService;
+    private readonly object _sync = new();
 
-	private long _nextSequence;
-	private long _lastQueuedSequence;
-	private ProfileSnapshot? _currentSnapshot;
-	private ProfileSnapshot? _pendingSnapshot;
-	private CancellationTokenSource? _debounceCancellation;
-	private Task _saveQueueTail = Task.CompletedTask;
+    private long _nextSequence;
+    private long _lastQueuedSequence;
+    private ProfileSnapshot? _currentSnapshot;
+    private ProfileSnapshot? _pendingSnapshot;
+    private CancellationTokenSource? _debounceCancellation;
+    private Task _saveQueueTail = Task.CompletedTask;
 
-	public ProfileSaveCoordinator(
-		ILogger<ProfileSaveCoordinator> logger,
-		ProfileService profileService,
-		ModGroupService modGroupService,
-		SettingsService settingsService)
-	{
-		_logger = logger;
-		_profileService = profileService;
-		_modGroupService = modGroupService;
-		_settingsService = settingsService;
-	}
+    public ProfileSaveCoordinator(
+        ILogger<ProfileSaveCoordinator> logger,
+        ProfileService profileService,
+        ModGroupService modGroupService,
+        SettingsService settingsService)
+    {
+        _logger = logger;
+        _profileService = profileService;
+        _modGroupService = modGroupService;
+        _settingsService = settingsService;
+    }
 
-	public ProfileSnapshot Capture(
-		IEnumerable<ModData> mods,
-		IEnumerable<Guid> order,
-		Guid groupId,
-		bool isDefaultGroup)
-	{
-		var snapshot = ProfileSnapshot.Capture(
-			Interlocked.Increment(ref _nextSequence),
-			groupId,
-			isDefaultGroup,
-			mods,
-			order);
+    public ProfileSnapshot Capture(
+        IEnumerable<ModData> mods,
+        IEnumerable<Guid> order,
+        Guid groupId,
+        bool isDefaultGroup)
+    {
+        var snapshot = ProfileSnapshot.Capture(
+            Interlocked.Increment(ref _nextSequence),
+            groupId,
+            isDefaultGroup,
+            mods,
+            order);
 
-		lock (_sync)
-		{
-			if (_currentSnapshot is null || snapshot.Sequence >= _currentSnapshot.Sequence)
-				_currentSnapshot = snapshot;
-		}
+        lock (_sync)
+        {
+            if (_currentSnapshot is null || snapshot.Sequence >= _currentSnapshot.Sequence)
+                _currentSnapshot = snapshot;
+        }
 
-		return snapshot;
-	}
+        return snapshot;
+    }
 
-	public IReadOnlyList<Guid>? GetCurrentOrder()
-	{
-		lock (_sync)
-			return _currentSnapshot?.Order.ToArray();
-	}
+    public IReadOnlyList<Guid>? GetCurrentOrder()
+    {
+        lock (_sync)
+            return _currentSnapshot?.Order.ToArray();
+    }
 
-	public void RequestSave(ProfileSnapshot snapshot)
-	{
-		if (_settingsService.IsReadonly)
-			return;
+    public void RequestSave(ProfileSnapshot snapshot)
+    {
+        if (_settingsService.IsReadonly)
+            return;
 
-		CancellationTokenSource cancellation;
-		lock (_sync)
-		{
-			UpdateCurrentAndPendingLocked(snapshot);
-			_debounceCancellation?.Cancel();
-			cancellation = new CancellationTokenSource();
-			_debounceCancellation = cancellation;
-		}
+        CancellationTokenSource cancellation;
+        lock (_sync)
+        {
+            UpdateCurrentAndPendingLocked(snapshot);
+            _debounceCancellation?.Cancel();
+            cancellation = new CancellationTokenSource();
+            _debounceCancellation = cancellation;
+        }
 
-		_ = RunDebouncedSaveAsync(cancellation);
-	}
+        RunDebouncedSaveAsync(cancellation).Observe(
+            ex => _logger.LogError(ex, "Debounced profile save supervision failed"));
+    }
 
-	public Task SaveNowAsync(ProfileSnapshot snapshot)
-	{
-		if (_settingsService.IsReadonly)
-			return Task.CompletedTask;
+    public Task SaveNowAsync(ProfileSnapshot snapshot)
+    {
+        if (_settingsService.IsReadonly)
+            return Task.CompletedTask;
 
-		lock (_sync)
-		{
-			UpdateCurrentAndPendingLocked(snapshot);
-			_debounceCancellation?.Cancel();
-			_debounceCancellation = null;
-			var snapshotToSave = _pendingSnapshot;
-			_pendingSnapshot = null;
-			return snapshotToSave is null ? _saveQueueTail : QueueSaveLocked(snapshotToSave);
-		}
-	}
+        lock (_sync)
+        {
+            UpdateCurrentAndPendingLocked(snapshot);
+            _debounceCancellation?.Cancel();
+            _debounceCancellation = null;
+            var snapshotToSave = _pendingSnapshot;
+            _pendingSnapshot = null;
+            return snapshotToSave is null ? _saveQueueTail : QueueSaveLocked(snapshotToSave);
+        }
+    }
 
-	public Task SaveCurrentAsync(IEnumerable<ModData> mods)
-	{
-		ProfileSnapshot? context;
-		lock (_sync)
-			context = _currentSnapshot;
+    public Task SaveCurrentAsync(IEnumerable<ModData> mods)
+    {
+        ProfileSnapshot? context;
+        lock (_sync)
+            context = _currentSnapshot;
 
-		if (context is null)
-			return Task.CompletedTask;
+        if (context is null)
+            return Task.CompletedTask;
 
-		var sourceMods = mods.ToDictionary(static mod => mod.Manifest.Guid);
-		var contextMods = context.Order
-			.Where(sourceMods.ContainsKey)
-			.Select(guid => sourceMods[guid])
-			.ToArray();
-		var snapshot = Capture(contextMods, context.Order, context.GroupId, context.IsDefaultGroup);
-		return SaveNowAsync(snapshot);
-	}
+        var sourceMods = mods.ToDictionary(static mod => mod.Manifest.Guid);
+        var contextMods = context.Order
+            .Where(sourceMods.ContainsKey)
+            .Select(guid => sourceMods[guid])
+            .ToArray();
+        var snapshot = Capture(contextMods, context.Order, context.GroupId, context.IsDefaultGroup);
+        return SaveNowAsync(snapshot);
+    }
 
-	public Task FlushAsync()
-	{
-		if (_settingsService.IsReadonly)
-			return Task.CompletedTask;
+    public Task FlushAsync()
+    {
+        if (_settingsService.IsReadonly)
+            return Task.CompletedTask;
 
-		lock (_sync)
-		{
-			_debounceCancellation?.Cancel();
-			_debounceCancellation = null;
-			if (_pendingSnapshot is not null)
-			{
-				QueueSaveLocked(_pendingSnapshot);
-				_pendingSnapshot = null;
-			}
-			return _saveQueueTail;
-		}
-	}
+        lock (_sync)
+        {
+            _debounceCancellation?.Cancel();
+            _debounceCancellation = null;
+            if (_pendingSnapshot is not null)
+            {
+                QueueSaveLocked(_pendingSnapshot);
+                _pendingSnapshot = null;
+            }
+            return _saveQueueTail;
+        }
+    }
 
-	private void UpdateCurrentAndPendingLocked(ProfileSnapshot snapshot)
-	{
-		if (_currentSnapshot is null || snapshot.Sequence >= _currentSnapshot.Sequence)
-			_currentSnapshot = snapshot;
+    private void UpdateCurrentAndPendingLocked(ProfileSnapshot snapshot)
+    {
+        if (_currentSnapshot is null || snapshot.Sequence >= _currentSnapshot.Sequence)
+            _currentSnapshot = snapshot;
 
-		var latestSnapshot = _currentSnapshot!;
-		if (_pendingSnapshot is null || latestSnapshot.Sequence >= _pendingSnapshot.Sequence)
-			_pendingSnapshot = latestSnapshot;
-	}
+        var latestSnapshot = _currentSnapshot!;
+        if (_pendingSnapshot is null || latestSnapshot.Sequence >= _pendingSnapshot.Sequence)
+            _pendingSnapshot = latestSnapshot;
+    }
 
-	private async Task RunDebouncedSaveAsync(CancellationTokenSource cancellation)
-	{
-		try
-		{
-			await Task.Delay(s_debounceDelay, cancellation.Token).ConfigureAwait(false);
-			Task saveTask;
-			lock (_sync)
-			{
-				if (!ReferenceEquals(_debounceCancellation, cancellation))
-					return;
-				_debounceCancellation = null;
-				var snapshot = _pendingSnapshot;
-				_pendingSnapshot = null;
-				saveTask = snapshot is null ? _saveQueueTail : QueueSaveLocked(snapshot);
-			}
-			await saveTask.ConfigureAwait(false);
-		}
-		catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-		{
-		}
-		catch (Exception ex)
-		{
-			_logger.LogError(ex, "Automatic profile save failed");
-		}
-		finally
-		{
-			cancellation.Dispose();
-		}
-	}
+    private async Task RunDebouncedSaveAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(s_debounceDelay, cancellation.Token).ConfigureAwait(false);
+            Task saveTask;
+            lock (_sync)
+            {
+                if (!ReferenceEquals(_debounceCancellation, cancellation))
+                    return;
+                _debounceCancellation = null;
+                var snapshot = _pendingSnapshot;
+                _pendingSnapshot = null;
+                saveTask = snapshot is null ? _saveQueueTail : QueueSaveLocked(snapshot);
+            }
+            await saveTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Automatic profile save failed");
+        }
+        finally
+        {
+            cancellation.Dispose();
+        }
+    }
 
-	private Task QueueSaveLocked(ProfileSnapshot snapshot)
-	{
-		if (snapshot.Sequence <= _lastQueuedSequence)
-			return _saveQueueTail;
+    private Task QueueSaveLocked(ProfileSnapshot snapshot)
+    {
+        if (snapshot.Sequence <= _lastQueuedSequence)
+            return _saveQueueTail;
 
-		_lastQueuedSequence = snapshot.Sequence;
-		_saveQueueTail = PersistAfterPreviousAsync(_saveQueueTail, snapshot);
-		return _saveQueueTail;
-	}
+        _lastQueuedSequence = snapshot.Sequence;
+        _saveQueueTail = PersistAfterPreviousAsync(_saveQueueTail, snapshot);
+        return _saveQueueTail;
+    }
 
-	private async Task PersistAfterPreviousAsync(Task previousSave, ProfileSnapshot snapshot)
-	{
-		try
-		{
-			await previousSave.ConfigureAwait(false);
-		}
-		catch
-		{
-		}
+    private async Task PersistAfterPreviousAsync(Task previousSave, ProfileSnapshot snapshot)
+    {
+        try
+        {
+            await previousSave.ConfigureAwait(false);
+        }
+        catch
+        {
+        }
 
-		// 默认组以 enabled_mods 为权威来源；成功后再同步默认组状态缓存。
-		if (snapshot.IsDefaultGroup)
-			await _profileService.SaveSnapshotAsync(_settingsService, snapshot).ConfigureAwait(false);
-		await _modGroupService.SaveGroupSnapshotAsync(snapshot).ConfigureAwait(false);
-	}
+        // 默认组以 enabled_mods 为权威来源；成功后再同步默认组状态缓存。
+        if (snapshot.IsDefaultGroup)
+            await _profileService.SaveSnapshotAsync(_settingsService, snapshot).ConfigureAwait(false);
+        await _modGroupService.SaveGroupSnapshotAsync(snapshot).ConfigureAwait(false);
+    }
 }

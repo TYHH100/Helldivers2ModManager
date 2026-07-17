@@ -10,11 +10,16 @@
       xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
       mc:Ignorable="d"
       d:DataContext="{d:DesignInstance vms:SettingsPageViewModel}"
-      d:Background="{StaticResource MicaBackgroundBrush}"
+      d:Background="{DynamicResource MicaBackgroundBrush}"
       d:DesignWidth="1000"
       d:DesignHeight="700"
       Title="{Binding Title}">
     <Page.Resources>
+		<!-- Settings text is allowed to grow for every LTR locale. Explicit icon and
+		     heading styles continue to override this default where appropriate. -->
+		<Style TargetType="TextBlock">
+			<Setter Property="TextWrapping" Value="Wrap"/>
+		</Style>
         <ObjectDataProvider x:Key="LogLevelEnumData"
                             MethodName="GetValues"
                             ObjectType="{x:Type sys:Enum}">
@@ -43,13 +48,13 @@
         <!-- Tab Bar                                      -->
         <!-- ============================================ -->
         <Border Grid.Row="1"
-                Background="{StaticResource LayerBackgroundBrush}"
-                BorderBrush="{StaticResource NeutralStrokeBrush}"
+                Background="{DynamicResource LayerBackgroundBrush}"
+                BorderBrush="{DynamicResource NeutralStrokeBrush}"
                 BorderThickness="1"
                 CornerRadius="6 6 0 0"
                 Padding="4 2 0 0"
                 Margin="0 0 0 0">
-            <StackPanel Orientation="Horizontal">
+            <WrapPanel Orientation="Horizontal">
                 <!-- 路径 选项卡 -->
                 <Button Content="{loc:Loc SettingsPage.TabPaths}"
                         Command="{Binding SetTabCommand}"
@@ -58,9 +63,9 @@
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="0">
-                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+                                    <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -74,9 +79,9 @@
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="1">
-                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+                                    <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -90,9 +95,9 @@
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="2">
-                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+                                    <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -106,9 +111,9 @@
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="3">
-                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+                                    <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -122,9 +127,9 @@
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="4">
-                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+                                    <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -138,9 +143,9 @@
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="5">
-                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+                                    <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -154,23 +159,23 @@
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="6">
-                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource NeutralForegroundBrush}"/>
+                                    <Setter Property="Background" Value="{DynamicResource NeutralBackgroundFillSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Button.Style>
                 </Button>
-            </StackPanel>
+            </WrapPanel>
         </Border>
 
         <!-- ============================================ -->
         <!-- Tab Content Area                             -->
         <!-- ============================================ -->
         <Border Grid.Row="2"
-                Background="{StaticResource LayerBackgroundBrush}"
-                BorderBrush="{StaticResource NeutralStrokeBrush}"
+                Background="{DynamicResource LayerBackgroundBrush}"
+                BorderBrush="{DynamicResource NeutralStrokeBrush}"
                 BorderThickness="1 0 1 1"
                 CornerRadius="0 0 6 6"
                 Padding="4"
@@ -238,7 +243,7 @@
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 4 0 4"/>
                                 <TextBlock Text="{loc:Loc SettingsPage.StorageDirWarning}"
-                                           Foreground="{StaticResource DangerBrush}"
+                                           Foreground="{DynamicResource DangerBrush}"
                                            FontSize="12"
                                            Margin="0 0 0 12"/>
                                 <Grid>
@@ -303,18 +308,17 @@
                                 <TextBlock Text="{loc:Loc SettingsPage.OrgFoldersDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 0 0 12"/>
-                                <ListBox Width="400"
-                                         MinHeight="80"
+								<ListBox MinHeight="80"
                                          MaxHeight="150"
                                          ItemsSource="{Binding OrganizationalFolderNames}"
-                                         HorizontalAlignment="Left"
+										 HorizontalAlignment="Stretch"
                                          SelectedIndex="{Binding SelectedOrgFolder}">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type sys:String}">
                                             <TextBlock Text="{Binding}"
                                                        FontFamily="Consolas"
                                                        FontSize="13"
-                                                       Foreground="{StaticResource NeutralForegroundBrush}"/>
+                                                       Foreground="{DynamicResource NeutralForegroundBrush}"/>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
@@ -378,9 +382,20 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{loc:Loc SettingsPage.UseSymLinks}"
                                                FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               Foreground="{DynamicResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
+                                <Border Margin="36 8 0 4"
+                                        Padding="12 10"
+                                        CornerRadius="6"
+                                        Background="{DynamicResource NeutralBackgroundFillSecondaryBrush}"
+                                        BorderBrush="{DynamicResource WarningBrush}"
+                                        BorderThickness="1"
+                                        Visibility="{Binding IsSymbolicLinkAdminWarningVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="{Binding SymbolicLinkAdminWarning}"
+                                               TextWrapping="Wrap"
+                                               AutomationProperties.LiveSetting="Assertive"/>
+                                </Border>
                                 <TextBlock Text="{loc:Loc SettingsPage.DeployOrder}"
                                            Style="{StaticResource FluentSubSectionHeader}"
                                            Margin="0 12 0 4"/>
@@ -390,14 +405,14 @@
                                 <RadioButton Content="{loc:Loc SettingsPage.DeployTopToBottom}"
                                              IsChecked="{Binding DeployBottomToTop, Converter={StaticResource InverseBoolConverter}}"
                                              FontSize="14"
-                                             Foreground="{StaticResource NeutralForegroundBrush}"
+                                             Foreground="{DynamicResource NeutralForegroundBrush}"
                                              Margin="0 2 0 2"
                                              GroupName="DeployOrder"
                                              Style="{StaticResource FluentRadioButton}"/>
                                 <RadioButton Content="{loc:Loc SettingsPage.DeployBottomToTop}"
                                              IsChecked="{Binding DeployBottomToTop}"
                                              FontSize="14"
-                                             Foreground="{StaticResource NeutralForegroundBrush}"
+                                             Foreground="{DynamicResource NeutralForegroundBrush}"
                                              Margin="0 2 0 2"
                                              GroupName="DeployOrder"
                                              Style="{StaticResource FluentRadioButton}"/>
@@ -430,7 +445,7 @@
                                 <TextBlock Text="{loc:Loc SettingsPage.CustomDeployOrderHint}"
                                            Visibility="{Binding UseDeploymentOrder, Converter={StaticResource BoolToVisibilityConverter}}"
                                            Style="{StaticResource FluentBodyText}"
-                                           Foreground="{StaticResource NeutralForegroundTertiaryBrush}"
+                                           Foreground="{DynamicResource NeutralForegroundTertiaryBrush}"
                                            Margin="0 4 0 0"/>
                             </StackPanel>
                                 </Border>
@@ -444,18 +459,17 @@
                                 <TextBlock Text="{loc:Loc SettingsPage.SkipListDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 0 0 12"/>
-                                <ListBox Width="400"
-                                         MinHeight="100"
+								<ListBox MinHeight="100"
                                          MaxHeight="200"
                                          ItemsSource="{Binding SkipList}"
-                                         HorizontalAlignment="Left"
+										 HorizontalAlignment="Stretch"
                                          SelectedIndex="{Binding SelectedSkip}">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type sys:String}">
                                             <TextBlock Text="{Binding}"
                                                        FontFamily="Consolas"
                                                        FontSize="13"
-                                                       Foreground="{StaticResource NeutralForegroundBrush}"/>
+                                                       Foreground="{DynamicResource NeutralForegroundBrush}"/>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
@@ -514,7 +528,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{loc:Loc SettingsPage.MoveToRecycleBin}"
                                                FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               Foreground="{DynamicResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
@@ -542,7 +556,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{loc:Loc SettingsPage.AutoRemoveMissing}"
                                                FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               Foreground="{DynamicResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
@@ -570,7 +584,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{loc:Loc SettingsPage.AutoCheckOnStartup}"
                                                FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               Foreground="{DynamicResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
                                 <Grid Margin="0 12 0 0">
@@ -586,7 +600,7 @@
                                     <StackPanel Grid.Column="1">
                                         <TextBlock Text="{loc:Loc SettingsPage.EnableBatchRepair}"
                                                    FontSize="14"
-                                                   Foreground="{StaticResource NeutralForegroundBrush}"/>
+                                                   Foreground="{DynamicResource NeutralForegroundBrush}"/>
                                         <TextBlock Text="{loc:Loc SettingsPage.EnableBatchRepairDesc}"
                                                    Style="{StaticResource FluentBodyText}"
                                                    Margin="0 2 0 0"
@@ -625,11 +639,33 @@
                                     <Run Text="{loc:Loc SettingsPage.LogLevelDesc3}"/>
                                 </TextBlock>
                                 <ComboBox HorizontalAlignment="Left"
-                                          Width="200"
+										  MinWidth="180"
+										  MaxWidth="420"
                                           ItemsSource="{Binding Source={StaticResource LogLevelEnumData}}"
                                           SelectedItem="{Binding LogLevel}"/>
                             </StackPanel>
                         </Border>
+
+						<Border Style="{StaticResource FluentSettingsCard}">
+							<StackPanel>
+								<TextBlock Text="{loc:Loc SettingsPage.Appearance}"
+								           Style="{StaticResource FluentSubSectionHeader}"/>
+								<TextBlock Text="{loc:Loc SettingsPage.AppearanceDesc}"
+								           Style="{StaticResource FluentBodyText}"
+								           TextWrapping="Wrap"
+								           Margin="0 4 0 8"/>
+								<ComboBox ItemsSource="{Binding ThemeOptions}"
+								          SelectedValue="{Binding SelectedTheme}"
+								          SelectedValuePath="LocaleCode"
+								          DisplayMemberPath="DisplayName"
+								          HorizontalAlignment="Left"
+								          MinWidth="180"
+								          MaxWidth="420"/>
+								<CheckBox Content="{loc:Loc SettingsPage.EnableAnimations}"
+								          IsChecked="{Binding EnableAnimations}"
+								          Margin="0 10 0 0"/>
+							</StackPanel>
+						</Border>
 
                         <!-- 日志自动清理 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
@@ -653,13 +689,14 @@
                                               Margin="0 0 12 0"/>
                                     <TextBox Grid.Column="1"
                                              Text="{Binding LogRetentionDays, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="60"
+											 MinWidth="60"
+											 MaxWidth="120"
                                              VerticalAlignment="Center"
                                              Margin="0 0 8 0"/>
                                     <TextBlock Grid.Column="2"
                                            Text="{loc:Loc SettingsPage.LogAutoCleanDays}"
                                            FontSize="14"
-                                           Foreground="{StaticResource NeutralForegroundBrush}"
+                                           Foreground="{DynamicResource NeutralForegroundBrush}"
                                            VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
@@ -689,77 +726,53 @@
                                 <TextBlock Text="{loc:Loc SettingsPage.BrowserExtDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 4 0 12"/>
+                                <CheckBox Content="{loc:Loc SettingsPage.EnableBrowserIntegration}"
+                                          IsChecked="{Binding EnableBrowserIntegration, Mode=TwoWay}"
+                                          Margin="0 0 0 12"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="200"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-                                    <TextBlock Grid.Row="0" Grid.Column="0"
-                                               Text="{loc:Loc SettingsPage.AddressLabel}"
-                                               VerticalAlignment="Center"
-                                               Margin="0 0 8 8"
-                                               FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1"
-                                             Text="{Binding ExtensionHost, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource FluentTextBox}"
-                                             Margin="0 0 16 8"/>
-                                    <TextBlock Grid.Row="0" Grid.Column="2"
+                                    <TextBlock Grid.Column="0"
                                                Text="{loc:Loc SettingsPage.PortLabel}"
                                                VerticalAlignment="Center"
-                                               Margin="0 0 8 8"
-                                               FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"/>
-                                    <TextBox Grid.Row="0" Grid.Column="3"
+                                               Margin="0 0 12 0"
+                                               TextWrapping="Wrap"/>
+                                    <TextBox Grid.Column="1"
+                                             MinWidth="96"
+                                             MaxWidth="180"
+                                             HorizontalAlignment="Left"
                                              Text="{Binding ExtensionPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource FluentTextBox}"
-                                             Margin="0 0 0 8"/>
+                                             Style="{StaticResource FluentTextBox}"/>
                                 </Grid>
-                                <TextBlock FontSize="12"
-                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-                                           Margin="0 4 0 0">
-                                    <Run Text="{loc:Loc SettingsPage.ConnectionAddressLabel}"/>
-                                    <Run Text="{Binding ExtensionHost, Mode=OneWay}"/>
-                                    <Run Text=":"/>
-                                    <Run Text="{Binding ExtensionPort, Mode=OneWay}"/>
-                                    <Run Text="/"/>
-                                </TextBlock>
+                                <WrapPanel Margin="0 12 0 0">
+                                    <Button Content="{loc:Loc SettingsPage.GeneratePairingCode}"
+                                            Command="{Binding GenerateBrowserPairingCodeCommand}"
+                                            Style="{StaticResource FluentPrimaryButton}"
+                                            MinWidth="120"
+                                            Padding="12 8"
+                                            Margin="0 0 8 8"/>
+                                    <Button Content="{loc:Loc SettingsPage.UnpairBrowserExtension}"
+                                            Command="{Binding UnpairBrowserExtensionCommand}"
+                                            Style="{StaticResource FluentSecondaryButton}"
+                                            MinWidth="100"
+                                            Padding="12 8"
+                                            Margin="0 0 0 8"/>
+                                </WrapPanel>
+                                <TextBlock Text="{Binding PairingCode}"
+                                           FontFamily="Consolas"
+                                           FontSize="24"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"
+                                           Margin="0 4 0 0"/>
+                                <TextBlock Text="{loc:Loc SettingsPage.PairingCodeHint}"
+                                           Style="{StaticResource FluentBodyText}"
+                                           TextWrapping="Wrap"
+                                           Margin="0 6 0 0"/>
                             </StackPanel>
                         </Border>
 
-                        <!-- Nexus Mods API Key（预留位置，后续功能启用） -->
-                        <!-- <Border Style="{StaticResource FluentSettingsCard}">
-                            <StackPanel>
-                                <TextBlock Text="Nexus Mods API"
-                                           Style="{StaticResource FluentSubSectionHeader}"
-                                           Margin="0"/>
-                                <TextBlock Text="用于从 Nexus Mods 获取模组信息和更新检测"
-                                           Style="{StaticResource FluentBodyText}"
-                                           Margin="0 4 0 12"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <PasswordBox x:Name="NexusApiKeyPasswordBox"
-                                                Grid.Column="0"
-                                                Style="{StaticResource FluentPasswordBox}"
-                                                VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1"
-                                            Content="验证"
-                                            Style="{StaticResource FluentPrimaryButton}"
-                                            Command="{Binding ValidateNexusApiKeyCommand}"
-                                            Margin="8 0 0 0"
-                                            Padding="12 8"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border> -->
                     </StackPanel>
                 </Grid>
 
@@ -793,7 +806,7 @@
                                         Padding="16 10"
                                         Margin="0 0 0 4"/>
                                 <TextBlock Text="{loc:Loc SettingsPage.RecomputeHashesDesc}"
-                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                           Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
                                            FontSize="12"
                                            Margin="0 0 0 16"/>
 
@@ -805,7 +818,7 @@
                                         Padding="16 10"
                                         Margin="0 0 0 4"/>
                                 <TextBlock Text="{loc:Loc SettingsPage.ForceCleanPatchesDesc}"
-                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                           Foreground="{DynamicResource NeutralForegroundSecondaryBrush}"
                                            FontSize="12"
                                            Margin="0 0 0 16"/>
 
@@ -819,7 +832,7 @@
                                         Padding="16 10"
                                         Margin="0 8 0 4"/>
                                 <TextBlock Text="{loc:Loc SettingsPage.ResetSettingsWarning}"
-                                           Foreground="{StaticResource WarningBrush}"
+                                           Foreground="{DynamicResource WarningBrush}"
                                            FontSize="12"
                                            Margin="0 4 0 0"/>
                             </StackPanel>
@@ -861,7 +874,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{loc:Loc SettingsPage.EnableSeparators}"
                                                FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               Foreground="{DynamicResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
@@ -889,7 +902,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{loc:Loc SettingsPage.EnableSorting}"
                                                FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               Foreground="{DynamicResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
@@ -914,7 +927,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{loc:Loc SettingsPage.CaseSensitive}"
                                                FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               Foreground="{DynamicResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
@@ -930,7 +943,8 @@
                                     <Run Text="{loc:Loc SettingsPage.LanguageDesc}"/>
                                 </TextBlock>
                                 <ComboBox HorizontalAlignment="Left"
-                                          Width="200"
+										  MinWidth="180"
+										  MaxWidth="420"
                                           ItemsSource="{Binding AvailableLanguages}"
                                           SelectedValue="{Binding SelectedLanguageCode}"
                                           SelectedValuePath="LocaleCode"

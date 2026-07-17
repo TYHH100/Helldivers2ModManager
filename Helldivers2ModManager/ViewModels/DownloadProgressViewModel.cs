@@ -3,12 +3,12 @@ using CommunityToolkit.Mvvm.Input;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
+using Helldivers2ModManager.Core.UI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Windows;
 
 namespace Helldivers2ModManager.ViewModels;
 
@@ -18,8 +18,10 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
     private readonly ILogger<DownloadProgressViewModel> _logger;
     private readonly BrowserExtensionService _browserExtensionService;
     private readonly SettingsService _settingsService;
-    private readonly Lazy<NavigationStore> _navStore;
+    private readonly INavigationService _navigationService;
     private readonly LocalizationService _localizationService;
+    private readonly IDialogService _dialogService;
+    private readonly IClipboardService _clipboardService;
 
     public override string Title => _localizationService["DashboardPage.DownloadProgress"];
 
@@ -39,16 +41,20 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
 
     public DownloadProgressViewModel(
         ILogger<DownloadProgressViewModel> logger,
-        IServiceProvider provider,
+        INavigationService navigationService,
         BrowserExtensionService browserExtensionService,
         SettingsService settingsService,
-        LocalizationService localizationService)
+        LocalizationService localizationService,
+        IDialogService dialogService,
+        IClipboardService clipboardService)
     {
         _logger = logger;
         _browserExtensionService = browserExtensionService;
         _settingsService = settingsService;
         _localizationService = localizationService;
-        _navStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
+        _navigationService = navigationService;
+        _dialogService = dialogService;
+        _clipboardService = clipboardService;
 
         _localizationService.PropertyChanged += (_, _) =>
         {
@@ -70,7 +76,7 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
     [RelayCommand]
     private void GoBack()
     {
-        _navStore.Value.Navigate<DashboardPageViewModel>();
+        _navigationService.Navigate(typeof(DashboardPageViewModel), root: true);
     }
 
     /// <summary>
@@ -150,11 +156,11 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
     /// 复制下载链接到剪贴板
     /// </summary>
     [RelayCommand]
-    private void CopyDownloadUrl(DownloadTask task)
+    private async Task CopyDownloadUrl(DownloadTask task, CancellationToken cancellationToken)
     {
         try
         {
-            Clipboard.SetText(task.Url);
+            await _clipboardService.SetTextAsync(task.Url, cancellationToken);
             _logger.LogDebug("Copied download URL to clipboard: {Url}", task.Url);
         }
         catch (Exception ex)
@@ -170,7 +176,7 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
     private async Task AddManualDownloadAsync()
     {
         var url = ManualUrl.Trim();
-        
+
         if (string.IsNullOrWhiteSpace(url))
         {
             _logger.LogWarning("User attempted to add empty download URL");
@@ -178,7 +184,7 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
         }
 
         var success = _browserExtensionService.AddManualDownload(url);
-        
+
         if (success)
         {
             _logger.LogInformation("Manual download added successfully: {Url}", url);
@@ -187,15 +193,12 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
         else
         {
             _logger.LogWarning("Failed to add manual download: {Url}", url);
-            // 可以在这里显示错误提示
-            await Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                MessageBox.Show(
-                    _localizationService["DownloadProgress.AddFailed"],
+            await _dialogService.ShowMessageAsync(
+                new MessageDialogRequest(
                     _localizationService["DownloadProgress.AddFailedTitle"],
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            });
+                    _localizationService["DownloadProgress.AddFailed"],
+                    MessageDialogSeverity.Warning),
+                CancellationToken.None);
         }
     }
 
@@ -235,7 +238,7 @@ internal sealed partial class DownloadProgressViewModel : PageViewModelBase
         _browserExtensionService.DownloadProgressChanged -= OnDownloadProgressChanged;
         _browserExtensionService.DownloadCompleted -= OnDownloadCompleted;
         _browserExtensionService.DownloadFailed -= OnDownloadFailed;
-        
+
         base.OnDispose();
     }
 }
