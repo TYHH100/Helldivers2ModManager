@@ -226,9 +226,9 @@
 							</Button>
 
 							<!-- 版本状态指示器 -->
-							<Border Grid.Column="0"
-									Grid.Row="0"
-									Width="14"
+			<Border Grid.Column="0"
+							Grid.Row="0"
+							Width="14"
 									Height="14"
 									CornerRadius="7"
 									HorizontalAlignment="Left"
@@ -278,8 +278,30 @@
 									VerticalAlignment="Top"
 									Margin="-7,-7,0,0"
 									Background="{StaticResource SystemAccentBrush}"
-									Visibility="{Binding DataContext.IsCheckingVersion, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"
-									ToolTip="{loc:Loc DashboardPage.CheckingVersion}"/>
+							Visibility="{Binding DataContext.IsCheckingVersion, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"
+							ToolTip="{loc:Loc DashboardPage.CheckingVersion}"/>
+							<!-- 覆盖关系指示器：扫描后显示，感叹号表示存在覆盖，对勾表示未发现覆盖 -->
+							<Border Grid.Column="0"
+									Grid.Row="0"
+									Width="18"
+									Height="18"
+									CornerRadius="9"
+									HorizontalAlignment="Left"
+									VerticalAlignment="Top"
+									Margin="12,-9,0,0"
+															Panel.ZIndex="2"
+															Background="{Binding ConflictStatusBrush}"
+															Cursor="Hand"
+															MouseLeftButtonDown="ConflictStatusIndicator_MouseLeftButtonDown"
+															ToolTip="{loc:Loc DashboardPage.ConflictStatusHint}"
+															Visibility="{Binding ConflictScanCompleted, Converter={StaticResource BoolToVisibilityConverter}}">
+								<TextBlock Text="{Binding ConflictStatusIcon}"
+										  Foreground="White"
+										  FontSize="13"
+										  FontWeight="Bold"
+										  HorizontalAlignment="Center"
+										  VerticalAlignment="Center"/>
+							</Border>
 						</Grid>
 					</Border>
 				</DataTemplate>
@@ -432,6 +454,15 @@
 						<TextBlock Text="{loc:Loc DashboardPage.BackgroundTasks}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
+					<!-- Armor pollution detection is temporarily disabled.
+					<Button Style="{StaticResource FluentNavigationButton}"
+						Command="{Binding ArmorPollutionCommand}"
+						IsEnabled="{Binding Initialized}">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+						<TextBlock Text="{loc:Loc DashboardPage.ArmorPollution}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+					</StackPanel>
+				</Button> -->
 					<Button Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding TagManagementCommand}"
 						IsEnabled="{Binding Initialized}">
@@ -506,6 +537,15 @@
 						<StackPanel Orientation="Horizontal">
 							<TextBlock Text="&#xE897;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
 							<TextBlock Text="{loc:Loc DashboardPage.CheckVersion}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{loc:Loc DashboardPage.VersionCheckHint}" />
+						</StackPanel>
+					</Button>
+					<Button Style="{StaticResource FluentNavigationButton}"
+							Command="{Binding ScanModConflictsCommand}"
+							IsEnabled="{Binding Initialized}"
+							Margin="0 6 0 0">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xE7C4;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+							<TextBlock Text="{loc:Loc DashboardPage.ScanConflicts}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 						</StackPanel>
 					</Button>
 				</StackPanel>

@@ -73,6 +73,7 @@ internal sealed partial class VersionCheckService
                 .Select(group => new
                 {
                     FileId = group.Key,
+                    MeshDiffers = group.Any(action => action.MeshIdsDiffer),
                     StrongCustom = group.Any(action => action.StrongCustomModelSignal),
                     StrongCustomMesh = group.Any(action =>
                         action.StrongCustomModelSignal && action.MeshIdsDiffer),
@@ -90,14 +91,20 @@ internal sealed partial class VersionCheckService
             }
 
             var strongCount = units.Count(unit => unit.StrongCustom);
+            var meshDiffCount = units.Count(unit => unit.MeshDiffers);
             var wholePatchIsCustom = strongCount > 0 &&
                 strongCount / (double)units.Count >= AutomaticWholePatchCustomDensity;
+            var wholePatchHasCustomMeshes = meshDiffCount > 0 &&
+                meshDiffCount / (double)units.Count >= AutomaticWholePatchCustomDensity;
             var strongCustomMeshSignatures = units
-                .Where(unit => unit.StrongCustomMesh && !string.IsNullOrEmpty(unit.MeshSignature))
+                .Where(unit => (unit.StrongCustomMesh || unit.MeshDiffers) &&
+                               !string.IsNullOrEmpty(unit.MeshSignature))
                 .Select(unit => unit.MeshSignature)
                 .ToHashSet(StringComparer.Ordinal);
             foreach (var unit in units.Where(unit =>
+                         unit.MeshDiffers ||
                          wholePatchIsCustom ||
+                         wholePatchHasCustomMeshes ||
                          (unit.StrongCustom && strongCustomMeshSignatures.Count > 0) ||
                          strongCustomMeshSignatures.Contains(unit.MeshSignature)))
                 preserveIds.Add(unit.FileId);
@@ -846,50 +853,6 @@ internal sealed partial class VersionCheckService
 
     private static IReadOnlyDictionary<long, string> LoadUnitFriendlyNames()
     {
-        var result = new Dictionary<long, string>();
-        var path = Path.Combine(
-            AppContext.BaseDirectory,
-            "Resources",
-            "Hashlists",
-            "friendlynames.txt");
-        if (!File.Exists(path))
-            return result;
-
-        try
-        {
-            foreach (var line in File.ReadLines(path))
-            {
-                var separator = line.IndexOf(' ');
-                if (separator <= 0 ||
-                    !ulong.TryParse(line.AsSpan(0, separator), out var unsignedId))
-                {
-                    continue;
-                }
-
-                var name = line[(separator + 1)..].Trim();
-                if (name.Length == 0)
-                    continue;
-
-                var fileId = unchecked((long)unsignedId);
-                if (!result.TryGetValue(fileId, out var existing) ||
-                    IsBetterFriendlyName(name, existing))
-                {
-                    result[fileId] = name;
-                }
-            }
-        }
-        catch
-        {
-            return new Dictionary<long, string>();
-        }
-
-        return result;
-    }
-
-    private static bool IsBetterFriendlyName(string candidate, string existing)
-    {
-        var candidateLooksLikePath = candidate.Contains('/');
-        var existingLooksLikePath = existing.Contains('/');
-        return existingLooksLikePath && !candidateLooksLikePath;
+        return new Dictionary<long, string>();
     }
 }

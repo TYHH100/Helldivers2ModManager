@@ -317,7 +317,7 @@ internal sealed partial class ModService
 
 		_logger.LogInformation("Attempting to add mod from \"{}\"", file.Name);
 
-		// 使用文件名 + 短GUID 作为临时目录名，避免嵌套压缩包与外层同名时发生路径冲突
+		// 使用文件名 + 短GUID 作为临时目录名，避免嵌套压缩包与外层同名时发生路径覆盖
 		// 例如：外层压缩包和嵌套压缩包都叫 "mod.zip" 时，两级的临时目录名会不同
 		var tmpDirName = $"{file.Name[..^file.Extension.Length]}_{Guid.NewGuid():N}"[..^24];
 		var tmpDir = new DirectoryInfo(Path.Combine(_settingsService.TempDirectory, tmpDirName));
@@ -1280,6 +1280,73 @@ internal sealed partial class ModService
 		await Task.WhenAll(copyTasks);
 
 		_logger.LogInformation("Deployment success");
+	}
+
+	/// <summary>
+	/// 返回某个模组在当前选项状态下实际会参与部署的主补丁文件。
+	/// 覆盖扫描和部署共用同一组选项展开规则，避免把未选中的护甲变体误报为覆盖。
+	/// </summary>
+	public IReadOnlyList<FileInfo> GetSelectedPatchFiles(ModData mod)
+	{
+		GuardInitialized();
+
+		var directories = new List<DirectoryInfo>();
+		void AddDirectory(string relativePath)
+		{
+			var directory = new DirectoryInfo(Path.Combine(mod.Directory.FullName, relativePath));
+			if (directory.Exists)
+				directories.Add(directory);
+		}
+
+		switch (mod.Manifest)
+		{
+			case LegacyModManifest legacy:
+				if (legacy.Options is { } legacyOptions)
+			{
+					var selected = mod.SelectedOptions is { Length: > 0 } ? mod.SelectedOptions[0] : 0;
+					if (selected >= 0 && selected < legacyOptions.Count)
+						AddDirectory(legacyOptions[selected]);
+				}
+				else
+					directories.Add(mod.Directory);
+				break;
+
+			case V1ModManifest v1:
+				if (v1.Options is not { } options)
+				{
+					directories.Add(mod.Directory);
+					break;
+				}
+
+				for (var i = 0; i < options.Count; i++)
+				{
+					if (i >= mod.EnabledOptions.Length || !mod.EnabledOptions[i])
+						continue;
+
+					var option = options[i];
+					if (option.Include is { } includes)
+						foreach (var include in includes)
+							AddDirectory(include);
+
+					if (option.SubOptions is not { } subOptions || subOptions.Count == 0)
+						continue;
+
+					var selectedSub = i < mod.SelectedOptions.Length ? mod.SelectedOptions[i] : 0;
+					if (selectedSub >= 0 && selectedSub < subOptions.Count)
+						foreach (var include in subOptions[selectedSub].Include)
+							AddDirectory(include);
+				}
+				break;
+
+			default:
+				throw new NotSupportedException("Unknown manifest version!");
+		}
+
+		return directories
+			.SelectMany(static directory => directory.GetFiles().Where(file => GetPatchFileRegex().IsMatch(file.Name)))
+			.GroupBy(static file => file.FullName, StringComparer.OrdinalIgnoreCase)
+			.Select(static group => group.First())
+			.ToArray();
 	}
 
 	private async Task CopyFileAsync(string sourcePath, string destinationPath)

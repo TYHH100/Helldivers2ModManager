@@ -44,19 +44,16 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Content Include="Resources\Native\7z.dll">
-			<Link>7z.dll</Link>
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</Content>
+	  <Content Include="Resources\Native\7z.dll">
+	    <Link>7z.dll</Link>
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	</ItemGroup>
 
 	<ItemGroup>
-		<Content Include="Resources\Language\*.json">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</Content>
-		<Content Include="Resources\Hashlists\friendlynames.txt">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</Content>
+	  <Content Include="Resources\Language\*.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	</ItemGroup>
 
 	<ItemGroup>

@@ -284,6 +284,30 @@ internal sealed partial class VersionCheckService
         return result;
     }
 
+    /// <summary>
+    /// 从当前游戏 bundle 参考中解析 Unit 对应的显示名。
+    /// 这里不依赖仓库内的静态文本映射。
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, string>> ResolveGameUnitDisplayNamesAsync(
+        IReadOnlyCollection<long> unitIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (unitIds.Count == 0)
+            return new Dictionary<long, string>();
+
+        var lookup = await GetGameUnitReferencesAsync(unitIds);
+        var result = new Dictionary<long, string>();
+        foreach (var (unitId, reference) in lookup.References)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var displayName = NormalizeGamePackageName(reference.PackageName);
+            if (!string.IsNullOrWhiteSpace(displayName))
+                result[unitId] = displayName;
+        }
+
+        return result;
+    }
+
     private async Task<List<PatchUnitInfo>> ExtractUnitVersionsFromPatchFileStreamAsync(FileInfo patchFile)
     {
         var result = new List<PatchUnitInfo>();
@@ -894,6 +918,18 @@ internal sealed partial class VersionCheckService
     private static FileStream OpenPatchReadStream(FileInfo file)
     {
         return new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess);
+    }
+
+    private static string NormalizeGamePackageName(string packageName)
+    {
+        if (string.IsNullOrWhiteSpace(packageName))
+            return string.Empty;
+
+        var fileName = Path.GetFileNameWithoutExtension(packageName);
+        if (!string.IsNullOrWhiteSpace(fileName))
+            return fileName;
+
+        return packageName.Trim();
     }
 
     private static async Task<bool> ReadAtAsync(FileStream stream, long offset, byte[] buffer)

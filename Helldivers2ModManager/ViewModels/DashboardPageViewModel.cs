@@ -56,6 +56,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly LocalizationService _localizationService;
     private readonly BackgroundTaskService _backgroundTaskService;
     private readonly ModGroupService _modGroupService;
+    private readonly ModConflictService _modConflictService;
+    private readonly ModConflictRepository _modConflictRepository;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -116,6 +118,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [ObservableProperty]
     private string _hashMigrationStatusText = string.Empty;
 
+    [ObservableProperty]
+    private bool _isScanningConflicts;
+
+    [ObservableProperty]
+    private string _conflictSummary = string.Empty;
+
+    private bool _conflictScanPending;
+    private string? _appliedConflictCacheKey;
+    private readonly Dictionary<string, ModConflictAnalysisResult> _conflictCache = new(StringComparer.Ordinal);
+
     public IEnumerable<SortMode> SortModes { get; } = [SortMode.Default, SortMode.NameAsc, SortMode.NameDesc, SortMode.EnabledFirst, SortMode.DisabledFirst];
 
     public DashboardPageViewModel(
@@ -135,6 +147,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         LocalizationService localizationService,
         BackgroundTaskService backgroundTaskService,
         ModGroupService modGroupService,
+        ModConflictService modConflictService,
+        ModConflictRepository modConflictRepository,
         ModGroupSidebarViewModel groupSidebar)
     {
         _logger = logger;
@@ -154,6 +168,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _localizationService = localizationService;
         _backgroundTaskService = backgroundTaskService;
         _modGroupService = modGroupService;
+        _modConflictService = modConflictService;
+        _modConflictRepository = modConflictRepository;
         GroupSidebar = groupSidebar;
         GroupSidebar.Configure(GetSelectedModData, () => _mods?.Select(static vm => vm.Data) ?? [], SelectGroupAsync, UpdateGroupedView);
 
@@ -474,8 +490,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         // 从数据库加载已缓存的版本检测结果，避免每次启动都需要全量扫描
         _versionCheckVm.LoadCachedResults(_mods);
 
+        var hasCachedConflictResult = RestoreCachedConflictStatuses();
+
         Initialized = true;
         _logger.LogInformation("Initialization successful");
+
+        if (!hasCachedConflictResult)
+            RequestAutomaticConflictScan();
 
         // 检测新增或变动的模组，自动触发版本兼容性检查
         var autoCheckReason = _versionCheckVm.GetAutoCheckReason(_mods);
@@ -579,6 +600,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _modGroupService.CaptureGroupState(ModGroup.DefaultGroupId, _mods.Select(static vm => vm.Data));
         GroupSidebar.RefreshSelectionProperties();
         UpdateView();
+        RequestAutomaticConflictScan();
     }
 
     private async void OnModAdded(ModData mod)
@@ -602,6 +624,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             _modGroupService.CaptureGroupState(_modGroupService.SelectedGroup.Id, _modGroupService.FilterMods(_mods.Select(static vm => vm.Data)));
             GroupSidebar.RefreshSelectionProperties();
             UpdateView();
+            RequestAutomaticConflictScan();
         }
     }
 
@@ -613,6 +636,118 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private void ModViewModel_OptionsChanged()
     {
         RequestProfileSave();
+        RequestAutomaticConflictScan();
+    }
+
+    private void ClearConflictStatuses()
+    {
+        foreach (var vm in _mods)
+            vm.ClearConflictStatus();
+    }
+
+    private bool RestoreCachedConflictStatuses()
+    {
+        var deploymentMods = GetDeploymentMods(CaptureProfileSnapshot());
+        var cacheKey = _modConflictService.BuildCacheKey(deploymentMods);
+        if (TryGetCachedConflictResult(cacheKey, out var cachedResult))
+        {
+            ApplyConflictAnalysisResult(cacheKey, cachedResult, showReport: false);
+            return true;
+        }
+
+        _appliedConflictCacheKey = null;
+        ConflictSummary = string.Empty;
+        return false;
+    }
+
+    private bool TryGetCachedConflictResult(string cacheKey, [NotNullWhen(true)] out ModConflictAnalysisResult? result)
+    {
+        if (_conflictCache.TryGetValue(cacheKey, out result))
+            return true;
+
+        if (string.IsNullOrEmpty(_settingsService.StorageDirectory))
+        {
+            result = null;
+            return false;
+        }
+
+        result = _modConflictRepository.Load(_settingsService.StorageDirectory, cacheKey);
+        if (result is null)
+            return false;
+
+        _conflictCache[cacheKey] = result;
+        return true;
+    }
+
+    private void ApplyConflictAnalysisResult(string cacheKey, ModConflictAnalysisResult result, bool showReport)
+    {
+        var visibleConflicts = result.Conflicts
+            .Where(static conflict => !string.IsNullOrWhiteSpace(conflict.FriendlyName))
+            .ToArray();
+
+        var conflictsByMod = result.Conflicts
+            .SelectMany(conflict => conflict.Participants
+                .Select(participant => (participant.ModGuid, Conflict: conflict)))
+            .GroupBy(static item => item.ModGuid)
+            .ToDictionary(
+                static group => group.Key,
+                static group => (IReadOnlyList<ModConflictRecord>)group
+                    .Select(static item => item.Conflict)
+                    .Distinct()
+                    .ToArray());
+
+        foreach (var vm in _mods)
+        {
+            vm.ApplyConflictStatus(conflictsByMod.TryGetValue(vm.Guid, out var conflicts)
+                ? conflicts
+                : []);
+        }
+
+        ConflictSummary = visibleConflicts.Length > 0
+            ? _localizationService["DashboardPage.ConflictFound"]
+                .Replace("{count}", visibleConflicts.Length.ToString())
+            : _localizationService["DashboardPage.ConflictNone"];
+
+        _conflictCache[cacheKey] = result;
+        _appliedConflictCacheKey = cacheKey;
+
+        if (showReport)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+            {
+                Message = FormatConflictReport(result, visibleConflicts)
+            });
+        }
+    }
+
+    private string GetCurrentConflictCacheKey()
+    {
+        return _modConflictService.BuildCacheKey(GetDeploymentMods(CaptureProfileSnapshot()));
+    }
+
+    private void RequestAutomaticConflictScan()
+    {
+        if (Initialized)
+        {
+            if (IsScanningConflicts)
+            {
+                _conflictScanPending = true;
+                return;
+            }
+
+            var cacheKey = GetCurrentConflictCacheKey();
+            if (string.Equals(_appliedConflictCacheKey, cacheKey, StringComparison.Ordinal)
+                && _conflictCache.ContainsKey(cacheKey))
+                return;
+
+            if (TryGetCachedConflictResult(cacheKey, out var cachedResult))
+            {
+                ApplyConflictAnalysisResult(cacheKey, cachedResult, showReport: false);
+                return;
+            }
+
+            _ = RunConflictScanAsync(showReport: false, allowCachedResult: false);
+        }
     }
 
     /// <summary>
@@ -693,6 +828,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
 
         RequestProfileSave();
+        RequestAutomaticConflictScan();
     }
 
     /// <summary>
@@ -750,6 +886,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         else if (e.PropertyName == nameof(ModViewModel.Enabled))
         {
             RequestProfileSave();
+            RequestAutomaticConflictScan();
         }
     }
 
@@ -1261,6 +1398,17 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _navStore.Value.Navigate<DeploymentOrderPageViewModel>();
     }
 
+    /*
+    // Armor pollution detection is temporarily disabled.
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    async Task ArmorPollution()
+    {
+        await SaveProfileNowAsync();
+
+        _navStore.Value.Navigate<ArmorPollutionPageViewModel>();
+    }
+    */
+
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task Purge()
     {
@@ -1553,6 +1701,116 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         await _versionCheckVm.CheckVersionCompatibilityAsync(_mods, forceFullScan);
     }
 
+    /// <summary>
+    /// 扫描当前启用模组在实际部署顺序下的 Unit 覆盖关系。
+    /// 该操作只读，不会修改模组文件或部署目录。
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    async Task ScanModConflicts()
+    {
+        await RunConflictScanAsync(showReport: true, allowCachedResult: false);
+    }
+
+    private async Task RunConflictScanAsync(bool showReport, bool allowCachedResult)
+    {
+        if (!Initialized || IsScanningConflicts)
+            return;
+
+        var deploymentMods = GetDeploymentMods(CaptureProfileSnapshot());
+        var cacheKey = _modConflictService.BuildCacheKey(deploymentMods);
+
+        if (allowCachedResult && TryGetCachedConflictResult(cacheKey, out var cachedResult))
+        {
+            ApplyConflictAnalysisResult(cacheKey, cachedResult, showReport);
+            return;
+        }
+
+        ClearConflictStatuses();
+        IsScanningConflicts = true;
+        ConflictSummary = _localizationService["DashboardPage.ConflictScanning"];
+        var backgroundTask = _backgroundTaskService.Add(
+            _localizationService["BackgroundTasksPage.TaskTypeConflictScan"],
+            ConflictSummary);
+
+        try
+        {
+            var result = await _modConflictService.AnalyzeAsync(deploymentMods);
+            _conflictCache[cacheKey] = result;
+            if (!_settingsService.IsReadonly)
+                await _modConflictRepository.SaveAsync(_settingsService.StorageDirectory, cacheKey, result);
+
+            if (showReport || string.Equals(GetCurrentConflictCacheKey(), cacheKey, StringComparison.Ordinal))
+                ApplyConflictAnalysisResult(cacheKey, result, showReport);
+
+            _backgroundTaskService.Complete(backgroundTask, ConflictSummary);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to scan mod conflicts");
+            ConflictSummary = _localizationService["DashboardPage.ConflictScanFailed"];
+            _backgroundTaskService.Fail(backgroundTask, ex.Message);
+            if (showReport)
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+                {
+                    Message = $"{ConflictSummary}\n{ex.Message}"
+                });
+            }
+        }
+        finally
+        {
+            IsScanningConflicts = false;
+            if (_conflictScanPending)
+            {
+                _conflictScanPending = false;
+                RequestAutomaticConflictScan();
+            }
+        }
+    }
+
+    private string FormatConflictReport(ModConflictAnalysisResult result, IReadOnlyList<ModConflictRecord> visibleConflicts)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(_localizationService["DashboardPage.ConflictReportTitle"]);
+        sb.AppendLine(_localizationService["DashboardPage.ConflictReportScanned"]
+            .Replace("{mods}", result.ScannedModCount.ToString())
+            .Replace("{patches}", result.ScannedPatchCount.ToString())
+            .Replace("{units}", result.ScannedUnitCount.ToString()));
+
+        if (visibleConflicts.Count == 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(_localizationService["DashboardPage.ConflictNone"]);
+            return sb.ToString();
+        }
+
+        sb.AppendLine(_localizationService["DashboardPage.ConflictReportCount"]
+            .Replace("{count}", visibleConflicts.Count.ToString())
+            .Replace("{definite}", visibleConflicts.Count(static conflict => conflict.IsDefiniteConflict).ToString()));
+
+        foreach (var conflict in visibleConflicts.Take(50))
+        {
+            var winner = conflict.Winner;
+            var names = string.Join(", ", conflict.Participants
+                .Select(static p => p.ModName)
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+            sb.AppendLine();
+            sb.AppendLine(_localizationService["DashboardPage.ConflictReportItem"]
+                .Replace("{resource}", conflict.FriendlyName)
+                .Replace("{kind}", conflict.IsDefiniteConflict
+                    ? _localizationService["DashboardPage.ConflictDefinite"]
+                    : _localizationService["DashboardPage.ConflictPotential"])
+                .Replace("{mods}", names)
+                .Replace("{winner}", winner.ModName));
+        }
+
+        if (visibleConflicts.Count > 50)
+            sb.AppendLine(_localizationService["DashboardPage.ConflictReportTruncated"]
+                .Replace("{count}", (visibleConflicts.Count - 50).ToString()));
+
+        return sb.ToString();
+    }
+
     private void VersionCheckVm_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         OnPropertyChanged(nameof(IsCheckingVersion));
@@ -1769,10 +2027,21 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"
                 };
 
+                bool IsExcludedFile(FileInfo f)
+                {
+                    if (excludedExtensions.Contains(f.Extension))
+                        return true;
+                    if (f.Name.EndsWith(".hd2mm-backup", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                    if (f.Name.EndsWith(".hd2mm-backup.json", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                    return false;
+                }
+
                 long totalSize = 0;
                 foreach (var f in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
                 {
-                    if (!excludedExtensions.Contains(f.Extension))
+                    if (!IsExcludedFile(f))
                         totalSize += f.Length;
                 }
 
@@ -1794,13 +2063,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     {
                         Title = _localizationService["DashboardPage.ExportMemoryWarning"],
                         Message = $"{_localizationService["DashboardPage.ExportMemoryMsgPrefix"]}{sizeText}{_localizationService["DashboardPage.ExportMemoryMsgMid"]}{levelName}{_localizationService["DashboardPage.ExportMemoryMsgCompression"]}{dictDesc}{_localizationService["DashboardPage.ExportMemoryMsgSuffix"]}",
-                        Confirm = () => DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, excludedExtensions),
+                        Confirm = () => DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, IsExcludedFile),
                         Abort = () => { }
                     });
                 }
                 else
                 {
-                    DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, excludedExtensions);
+                    DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, IsExcludedFile);
                 }
             }
         });
@@ -1811,7 +2080,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// Shows a real-time progress dialog with compression speed and ratio.
     /// </summary>
     private void DoExport(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
-        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions)
+        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, Func<FileInfo, bool> isExcludedFile)
     {
         // Show progress dialog on UI thread
         WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressMessage
@@ -1825,14 +2094,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
 
         // Run export on background thread to keep UI responsive
-        Task.Run(() => DoExportAsync(vm, modDir, outputPath, is7z, level, dictSize, levelName, excludedExtensions, backgroundTask));
+        Task.Run(() => DoExportAsync(vm, modDir, outputPath, is7z, level, dictSize, levelName, isExcludedFile, backgroundTask));
     }
 
     /// <summary>
     /// Background export with real-time progress reporting.
     /// </summary>
     private void DoExportAsync(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
-        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, HashSet<string> excludedExtensions, BackgroundTaskItem backgroundTask)
+        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, Func<FileInfo, bool> isExcludedFile, BackgroundTaskItem backgroundTask)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         long lastUpdateBytes = 0;
@@ -1842,7 +2111,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         // Calculate total input size for progress tracking
         long totalInputSize = 0;
         foreach (var f in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
-            if (!excludedExtensions.Contains(f.Extension))
+            if (!isExcludedFile(f))
                 totalInputSize += f.Length;
 
         // Helper to send progress updates to UI thread (throttled)
@@ -1921,7 +2190,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 compressor.CustomParameters.Add("d", dictSize);
 
                 var files = modDir.EnumerateFiles("*", SearchOption.AllDirectories)
-                    .Where(f => !excludedExtensions.Contains(f.Extension))
+                    .Where(f => !isExcludedFile(f))
                     .Select(f => f.FullName)
                     .ToArray();
 
@@ -1961,7 +2230,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
                 foreach (var file in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
                 {
-                    if (excludedExtensions.Contains(file.Extension))
+                    if (isExcludedFile(file))
                         continue;
 
                     currentFile = file.Name;

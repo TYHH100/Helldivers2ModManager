@@ -52,6 +52,11 @@
 		<DataTemplate DataType="{x:Type vms:BackgroundTasksPageViewModel}">
 			<views:BackgroundTasksPageView/>
 		</DataTemplate>
+		<!-- Armor pollution detection is temporarily disabled.
+		<DataTemplate DataType="{x:Type vms:ArmorPollutionPageViewModel}">
+			<views:ArmorPollutionPageView/>
+		</DataTemplate>
+		-->
 
 	</Window.Resources>
 
@@ -160,6 +165,7 @@
 												  Grid.Row="1"/>
 								<cmp:ImagePreviewOverlay Grid.Row="1"/>
 								<cmp:VersionCheckDetailOverlay Grid.Row="1"/>
+								<cmp:ModConflictDetailOverlay Grid.Row="1"/>
 								<cmp:MessageBox Grid.Row="1"/>
 							</Grid>
 						</Border>

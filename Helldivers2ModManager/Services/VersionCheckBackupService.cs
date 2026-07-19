@@ -14,6 +14,9 @@ internal sealed partial class VersionCheckService
     private static readonly Regex s_backupNamePattern = new(
         @"^(?<base>.+)\.patch-backup_(?<index>[^.]+)\.(?<stamp>\d{8}-\d{6})(?:-(?<sequence>\d+))?\.hd2mm-backup$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex s_legacyBackupNamePattern = new(
+        @"^(?<base>.+)\.patch_(?<index>[^.]+)\.(?<stamp>\d{8}-\d{6})(?:-(?<sequence>\d+))?\.hd2mm-backup$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     private static readonly JsonSerializerOptions s_backupJsonOptions = new()
     {
@@ -236,16 +239,17 @@ internal sealed partial class VersionCheckService
         var originalPath = string.Empty;
         try
         {
+            var metadata = await ReadBackupMetadataAsync(backupFile.FullName, cancellationToken);
             var match = s_backupNamePattern.Match(backupFile.Name);
             if (!match.Success)
-                return InvalidBackupEntry(backupFile, "The backup file name is not recognized.");
+                match = s_legacyBackupNamePattern.Match(backupFile.Name);
 
-            var originalName = match.Groups["base"].Value + ".patch_" + match.Groups["index"].Value;
+            if (!TryGetOriginalBackupFileName(backupFile, match, metadata, out var originalName))
+                return InvalidBackupEntry(backupFile, "The backup file name is not recognized.");
             originalPath = Path.GetFullPath(Path.Combine(backupFile.DirectoryName!, originalName));
             if (!IsPathInside(modDirectory.FullName, originalPath))
                 return InvalidBackupEntry(backupFile, "The backup maps outside the mod directory.", originalPath);
 
-            var metadata = await ReadBackupMetadataAsync(backupFile.FullName, cancellationToken);
             var backupHash = await ComputeSha256Async(backupFile.FullName, cancellationToken);
             var metadataMatches = metadata is null ||
                 (string.Equals(metadata.OriginalFileName, originalName, StringComparison.OrdinalIgnoreCase) &&
@@ -267,7 +271,9 @@ internal sealed partial class VersionCheckService
 
             var createdLocal = metadata is not null && metadata.CreatedUtc != default
                 ? metadata.CreatedUtc.ToLocalTime()
-                : ParseBackupTimestamp(match, backupFile.LastWriteTime);
+                : match.Success
+                    ? ParseBackupTimestamp(match, backupFile.LastWriteTime)
+                    : backupFile.LastWriteTime;
             return new ModBackupEntry
             {
                 BackupPath = backupFile.FullName,
@@ -292,6 +298,36 @@ internal sealed partial class VersionCheckService
             _logger.LogWarning(ex, "Failed to inspect backup {Backup}", backupFile.FullName);
             return InvalidBackupEntry(backupFile, ex.Message, originalPath);
         }
+    }
+
+    private static bool TryGetOriginalBackupFileName(
+        FileInfo backupFile,
+        Match match,
+        ModBackupMetadata? metadata,
+        out string originalName)
+    {
+        if (match.Success)
+        {
+            originalName = match.Groups["base"].Value + ".patch_" + match.Groups["index"].Value;
+            return IsSafePatchFileName(originalName);
+        }
+
+        if (metadata is not null && IsSafePatchFileName(metadata.OriginalFileName))
+        {
+            originalName = metadata.OriginalFileName;
+            return true;
+        }
+
+        originalName = string.Empty;
+        return false;
+    }
+
+    private static bool IsSafePatchFileName(string fileName)
+    {
+        return !string.IsNullOrWhiteSpace(fileName) &&
+               Path.GetFileName(fileName) == fileName &&
+               fileName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 &&
+               IsMainPatchFile(fileName);
     }
 
     private async Task TryWriteBackupMetadataAsync(

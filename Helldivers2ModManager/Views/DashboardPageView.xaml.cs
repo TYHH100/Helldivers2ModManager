@@ -90,4 +90,16 @@ internal partial class DashboardPageView : Page
 		}
 	}
 
+	/// <summary>
+	/// 点击覆盖状态指示器，打开与版本检查相同风格的覆盖详情面板。
+	/// </summary>
+	private void ConflictStatusIndicator_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		if (sender is Border border && border.DataContext is ModViewModel vm)
+		{
+			vm.ShowConflictDetailCommand.Execute(null);
+			e.Handled = true;
+		}
+	}
+
 }

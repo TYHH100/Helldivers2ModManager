@@ -1,0 +1,183 @@
+<UserControl x:Class="Helldivers2ModManager.Components.ModConflictDetailOverlay"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
+             Background="#99000000"
+             Visibility="Hidden"
+             Focusable="True"
+             IsVisibleChanged="Overlay_IsVisibleChanged"
+             KeyDown="Overlay_KeyDown"
+             MouseLeftButtonDown="Overlay_MouseLeftButtonDown">
+    <Border Width="820"
+            MaxWidth="920"
+            MaxHeight="650"
+            Margin="24"
+            Padding="24"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Style="{StaticResource FluentMessageDialog}"
+            MouseLeftButtonDown="Dialog_MouseLeftButtonDown">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="0 0 0 18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{loc:Loc ConflictDetail.Title}"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource NeutralForegroundBrush}"/>
+                    <TextBlock Text="{Binding ModName}"
+                               Margin="0 4 0 0"
+                               FontSize="13"
+                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Width="36"
+                        Height="36"
+                        Margin="12 -6 -6 0"
+                        Style="{StaticResource FluentIconButton}"
+                        ToolTip="{loc:Loc MainWindow.Close}"
+                        Click="CloseButton_Click">
+                    <TextBlock Text="&#xE8BB;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                </Button>
+            </Grid>
+
+            <ScrollViewer Grid.Row="1"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0 0 8 0">
+                    <Border Padding="16"
+                            CornerRadius="4"
+                            Background="{Binding StatusBackground}"
+                            BorderBrush="{Binding StatusBrush}"
+                            BorderThickness="1"
+                            Margin="0 0 0 12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="40"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding StatusIcon}"
+                                       FontSize="24"
+                                       Foreground="{Binding StatusBrush}"
+                                       VerticalAlignment="Top"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="{Binding StatusText}"
+                                           FontSize="17"
+                                           FontWeight="SemiBold"
+                                           Foreground="{Binding StatusBrush}"/>
+                                <TextBlock Text="{Binding Summary}"
+                                           Margin="0 4 0 0"
+                                           FontSize="13"
+                                           Foreground="{StaticResource NeutralForegroundBrush}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource FluentSettingsCard}" Margin="0 0 0 16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="1"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="1"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding ConflictCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{loc:Loc ConflictDetail.Conflicts}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="{StaticResource NeutralStrokeBrush}" Margin="0 2"/>
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding DefiniteCount}" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource DangerBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{loc:Loc ConflictDetail.Definite}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                            </StackPanel>
+                            <Border Grid.Column="3" Background="{StaticResource NeutralStrokeBrush}" Margin="0 2"/>
+                            <StackPanel Grid.Column="4" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding ModParticipantCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{loc:Loc ConflictDetail.Participants}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Grid Margin="0 0 0 8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{loc:Loc ConflictDetail.ResourceList}"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <Border Visibility="{Binding NoConflictsVisibility}"
+                            Padding="16"
+                            CornerRadius="4"
+                            BorderBrush="{StaticResource SuccessBrush}"
+                            BorderThickness="1"
+                            Background="#15107C10"
+                            Margin="0 0 0 12">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons" Foreground="{StaticResource SuccessBrush}" FontSize="18" Margin="0 0 12 0"/>
+                            <StackPanel>
+                                <TextBlock Text="{loc:Loc ConflictDetail.NoConflicts}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{loc:Loc ConflictDetail.NoConflictsDescription}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 3 0 0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <ItemsControl ItemsSource="{Binding Items}" Visibility="{Binding ConflictsVisibility}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource FluentSettingsCard}" Margin="0 0 0 8" Padding="0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4"/>
+                                            <ColumnDefinition Width="40"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{Binding Brush}" CornerRadius="4 0 0 4"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Icon}"
+                                                   FontSize="17"
+                                                   Foreground="{Binding Brush}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Top"
+                                                   Margin="0 15 0 0"/>
+                                        <StackPanel Grid.Column="2" Margin="8 12 14 12">
+                                            <TextBlock Text="{Binding ResourceName}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding UnitText}"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                                       Margin="0 2 0 0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding ParticipantsText}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 5 0 0" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding WinnerText}" FontSize="12" Foreground="{StaticResource NeutralForegroundBrush}" Margin="0 4 0 0" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!--<StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0 18 0 0">
+                <Button Style="{StaticResource FluentSecondaryButton}" Click="CloseButton_Click">
+                    <TextBlock Text="{loc:Loc MainWindow.Close}"/>
+                </Button>
+            </StackPanel>-->
+        </Grid>
+    </Border>
+</UserControl>

@@ -107,6 +107,24 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ModDetailedAnalysis? _detailedAnalysis;
 
+    /// <summary>
+    /// 是否已经完成过一次覆盖扫描。未扫描时不显示状态图标，避免把“未知”误认为“无覆盖”。
+    /// </summary>
+    [ObservableProperty]
+    private bool _conflictScanCompleted;
+
+    [ObservableProperty]
+    private bool _hasConflict;
+
+    [ObservableProperty]
+    private string _conflictStatusTooltip = string.Empty;
+
+    public string ConflictStatusIcon => HasConflict ? "!" : "✓";
+
+    public Brush ConflictStatusBrush => HasConflict
+        ? new SolidColorBrush(Color.FromRgb(220, 80, 55))
+        : new SolidColorBrush(Color.FromRgb(40, 160, 95));
+
     public ModData Data => _mod;
 
     public event Action? OptionsChanged;
@@ -116,6 +134,73 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     public void OnOptionsChanged()
     {
         OptionsChanged?.Invoke();
+    }
+
+    public void ApplyConflictStatus(IReadOnlyList<ModConflictRecord> conflicts)
+    {
+        var visibleConflicts = conflicts
+            .Where(static conflict => !string.IsNullOrWhiteSpace(conflict.FriendlyName))
+            .ToArray();
+        ConflictRecords = visibleConflicts;
+
+        HasConflict = visibleConflicts.Length > 0;
+        ConflictScanCompleted = true;
+
+        if (visibleConflicts.Length == 0)
+        {
+            ConflictStatusTooltip = _localizationService["DashboardPage.ConflictStatusNoConflict"];
+            return;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine(_localizationService["DashboardPage.ConflictStatusConflict"]);
+        foreach (var conflict in visibleConflicts.Take(12))
+        {
+            var others = string.Join(", ", conflict.Participants
+                .Where(p => p.ModGuid != Guid)
+                .Select(static p => p.ModName)
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+            sb.AppendLine(_localizationService["DashboardPage.ConflictStatusItem"]
+                .Replace("{resource}", conflict.FriendlyName)
+                .Replace("{mods}", others)
+                .Replace("{winner}", conflict.Winner.ModName));
+        }
+
+        if (visibleConflicts.Length > 12)
+            sb.AppendLine(_localizationService["DashboardPage.ConflictStatusMore"]
+                .Replace("{count}", (visibleConflicts.Length - 12).ToString()));
+
+        ConflictStatusTooltip = sb.ToString().TrimEnd();
+    }
+
+    public void ClearConflictStatus()
+    {
+        ConflictRecords = [];
+        ConflictScanCompleted = false;
+        HasConflict = false;
+        ConflictStatusTooltip = string.Empty;
+    }
+
+    [RelayCommand]
+    private void ShowConflictDetail()
+    {
+        if (!ConflictScanCompleted)
+            return;
+
+        var conflicts = ConflictRecords;
+        WeakReferenceMessenger.Default.Send(new ModConflictDetailMessage
+        {
+            ModName = Name,
+            Conflicts = conflicts,
+        });
+    }
+
+    private IReadOnlyList<ModConflictRecord> ConflictRecords { get; set; } = [];
+
+    partial void OnHasConflictChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ConflictStatusIcon));
+        OnPropertyChanged(nameof(ConflictStatusBrush));
     }
 
     public string[]? LegacyOptions { get; private set; }

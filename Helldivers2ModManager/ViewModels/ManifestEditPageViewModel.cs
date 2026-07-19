@@ -112,6 +112,9 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	/// <summary>模组选项集合（可编辑）</summary>
 	public ObservableCollection<CreateModOptionViewModel> EditOptions { get; } = [];
 
+	/// <summary>原始 Legacy 选项的快照（用于判断选项是否被修改）</summary>
+	private string[]? _originalLegacyOptions;
+
 	private readonly ILogger<ManifestEditPageViewModel> _logger;
 	private readonly NavigationStore _navStore;
 	private readonly EditModStore _editModStore;
@@ -182,6 +185,7 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		{
 			// Legacy 格式的选项只是简单的字符串数组，作为选项名称导入
 			var legacyOptions = EditMod.LegacyOptions;
+			_originalLegacyOptions = legacyOptions?.ToArray();
 			if (legacyOptions is not null)
 			{
 				foreach (var optName in legacyOptions)
@@ -247,8 +251,8 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 				}
 
 				// 保存选项
-				// V1 直接更新；Legacy 升级为 V1（写入 Version 字段）
-				if (IsV1Manifest || IsLegacyManifest)
+				// V1 直接更新；Legacy 只有在选项被修改时才升级为 V1（写入 Version 字段）
+				if (IsV1Manifest || (IsLegacyManifest && OptionsWereModified()))
 				{
 					var newOptions = EditOptions.Select(o => o.ToModOption()).ToList();
 					var modDir = EditMod.Data.Directory.FullName;
@@ -342,6 +346,31 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		}
 	}
 
+	/// <summary>判断选项是否被修改（仅针对 Legacy 格式）</summary>
+	/// <returns>如果选项被添加、删除或修改返回 true；否则返回 false</returns>
+	private bool OptionsWereModified()
+	{
+		if (_originalLegacyOptions is null)
+		{
+			return EditOptions.Count > 0;
+		}
+
+		if (_originalLegacyOptions.Length != EditOptions.Count)
+		{
+			return true;
+		}
+
+		for (int i = 0; i < _originalLegacyOptions.Length; i++)
+		{
+			if (_originalLegacyOptions[i] != EditOptions[i].Name)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	/// <summary>添加新选项</summary>
 	[RelayCommand]
 	void AddOption()
@@ -399,14 +428,30 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		var sourceDir = EditMod?.Data.Directory.FullName ?? string.Empty;
 		var newOptions = EditOptions.Select(o => o.ToModOption()).ToList();
 		var guid = EditMod?.Data.Manifest.Guid ?? Guid.NewGuid();
-		var manifest = new V1ModManifest
+		IModManifest manifest;
+
+		if (IsLegacyManifest && !OptionsWereModified())
 		{
-			Guid = guid,
-			Name = ModName,
-			Description = ModDescription,
-			IconPath = !string.IsNullOrWhiteSpace(IconPath) ? IconPath : null,
-			Options = newOptions.Count > 0 ? newOptions : null,
-		};
+			manifest = new LegacyModManifest
+			{
+				Guid = guid,
+				Name = ModName,
+				Description = ModDescription,
+				IconPath = !string.IsNullOrWhiteSpace(IconPath) ? IconPath : null,
+				Options = EditOptions.Count > 0 ? EditOptions.Select(o => o.Name).ToArray() : null,
+			};
+		}
+		else
+		{
+			manifest = new V1ModManifest
+			{
+				Guid = guid,
+				Name = ModName,
+				Description = ModDescription,
+				IconPath = !string.IsNullOrWhiteSpace(IconPath) ? IconPath : null,
+				Options = newOptions.Count > 0 ? newOptions : null,
+			};
+		}
 
 		using var stream = new MemoryStream();
 		using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))

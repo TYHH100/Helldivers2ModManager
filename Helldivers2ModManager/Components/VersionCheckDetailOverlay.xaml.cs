@@ -90,6 +90,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
     public VersionCheckDetailOverlay()
     {
         InitializeComponent();
+        DataContext = null;
         WeakReferenceMessenger.Default.Register<VersionCheckDetailMessage>(this);
 
         if (Application.Current is App app &&

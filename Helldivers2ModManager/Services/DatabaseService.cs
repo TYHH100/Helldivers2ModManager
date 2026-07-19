@@ -104,6 +104,17 @@ internal sealed class DatabaseService : IDisposable
 		);
 	";
 
+	/// <summary>
+	/// 数据库表创建 SQL —— 存储护甲覆盖扫描缓存
+	/// </summary>
+	private const string CreateConflictScanCacheTableSql = @"
+		CREATE TABLE IF NOT EXISTS conflict_scan_cache (
+			CacheKey TEXT PRIMARY KEY NOT NULL,
+			ResultJson TEXT NOT NULL,
+			UpdatedUtc TEXT NOT NULL DEFAULT ''
+		);
+	";
+
 	private const string AddModLastWriteTimeColumnSql = "ALTER TABLE version_check_results ADD COLUMN ModLastWriteTimeUtc TEXT NOT NULL DEFAULT '';";
 
 	private const string CheckModLastWriteTimeColumnSql = "SELECT COUNT(*) FROM pragma_table_info('version_check_results') WHERE name='ModLastWriteTimeUtc';";
@@ -282,6 +293,13 @@ internal sealed class DatabaseService : IDisposable
 						alterCmd.ExecuteNonQuery();
 						_logger.LogInformation("Added ModLastWriteTimeUtc column to version check results");
 					}
+				}
+
+				// 创建护甲覆盖扫描缓存表
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateConflictScanCacheTableSql;
+					cmd.ExecuteNonQuery();
 				}
 
 				// 创建游戏版本跟踪表 + 默认行
