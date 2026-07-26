@@ -68,23 +68,6 @@ internal partial class App : Application
 		MainWindow = Host.Services.GetRequiredService<MainWindow>();
 		MainWindow.Show();
 
-		Task.Run(async () =>
-		{
-			await Task.Delay(1000);
-			await Dispatcher.InvokeAsync(() =>
-			{
-				try
-				{
-					var browserExtensionService = Host.Services.GetRequiredService<BrowserExtensionService>();
-					browserExtensionService.Start();
-					_logger?.LogInformation("Browser extension service started successfully");
-				}
-				catch (Exception ex)
-				{
-					_logger?.LogWarning(ex, "Failed to start browser extension service");
-				}
-			});
-		});
 	}
 
 	/// <summary>

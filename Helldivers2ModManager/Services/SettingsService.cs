@@ -439,38 +439,6 @@ internal sealed class SettingsService
 		}
 	}
 
-	public string ExtensionHost
-	{
-		get
-		{
-			GuardInitialized();
-			return _extensionHost;
-		}
-
-		set
-		{
-			GuardInitialized();
-			GuardReadonly();
-			_extensionHost = value;
-		}
-	}
-
-	public int ExtensionPort
-	{
-		get
-		{
-			GuardInitialized();
-			return _extensionPort;
-		}
-
-		set
-		{
-			GuardInitialized();
-			GuardReadonly();
-			_extensionPort = value;
-		}
-	}
-
 	public string? NexusApiKey
 	{
 		get
@@ -544,10 +512,6 @@ internal sealed class SettingsService
 	private ObservableCollection<ModTag> _tags = null!;
 	[JsonInclude]
 	private string? _encryptedNexusApiKey;
-	[JsonInclude]
-	private string _extensionHost = "localhost";
-	[JsonInclude]
-	private int _extensionPort = 7456;
 	[JsonInclude]
 	private string _language = string.Empty;
 	[JsonInclude]
@@ -738,20 +702,6 @@ internal sealed class SettingsService
 				_skipList.Remove(elm);
 		}
 
-		if (string.IsNullOrWhiteSpace(_extensionHost))
-		{
-			if (IsReadonly)
-				return false;
-			_extensionHost = "localhost";
-		}
-
-		if (_extensionPort is < 1 or > 65535)
-		{
-			if (IsReadonly)
-				return false;
-			_extensionPort = 7456;
-		}
-		
 		return true;
 	}
 
@@ -814,8 +764,6 @@ internal sealed class SettingsService
 				color = tag.Color
 			}),
 			NexusApiKey = _encryptedNexusApiKey,
-			ExtensionHost = _extensionHost,
-			ExtensionPort = _extensionPort,
 			Language = _language,
 			UseDeploymentOrder = _useDeploymentOrder,
 			DeploymentOrderGuids = _deploymentOrderGuids,
@@ -993,11 +941,6 @@ internal sealed class SettingsService
 		}
 		if (root.TryGetProperty(nameof(LogRetentionDays), JsonValueKind.Number, out prop))
 			_logRetentionDays = Math.Max(1, prop.GetInt32());
-		if (root.TryGetProperty(nameof(ExtensionHost), JsonValueKind.String, out prop))
-			_extensionHost = prop.GetString()!;
-		if (root.TryGetProperty(nameof(ExtensionPort), JsonValueKind.Number, out prop))
-			if (prop.TryGetInt32(out var portValue))
-				_extensionPort = portValue;
 		if (root.TryGetProperty(nameof(Language), JsonValueKind.String, out prop))
 			_language = prop.GetString() ?? string.Empty;
 		if (root.TryGetProperty(nameof(Tags), JsonValueKind.Array, out var tagsArr))
@@ -1091,8 +1034,6 @@ internal sealed class SettingsService
 		_repairDisclaimerAccepted = false;
 		_showSeparator = true;
 		_separators = [];
-		_extensionHost = "localhost";
-		_extensionPort = 7456;
 		_tags = [];
 		_organizationalFolderNames = ["Models", "Model"];
 		_encryptedNexusApiKey = null;

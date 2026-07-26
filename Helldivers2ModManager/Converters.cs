@@ -245,37 +245,6 @@ internal sealed class BytesToSizeConverter : IValueConverter
     }
 }
 
-internal sealed class DownloadStatusToStringConverter : IValueConverter
-{
-    private static LocalizationService? _localizationService;
-    static DownloadStatusToStringConverter()
-    {
-        try { if (Application.Current is App app) _localizationService = app.Host.Services.GetService(typeof(LocalizationService)) as LocalizationService; } catch { }
-    }
-
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is Models.DownloadStatus status)
-        {
-            return status switch
-            {
-                Models.DownloadStatus.Pending => _localizationService?["Converters.DownloadStatusWaiting"] ?? "等待中",
-                Models.DownloadStatus.Downloading => _localizationService?["Converters.DownloadStatusDownloading"] ?? "下载中",
-                Models.DownloadStatus.Completed => _localizationService?["Converters.DownloadStatusCompleted"] ?? "已完成",
-                Models.DownloadStatus.Failed => _localizationService?["Converters.DownloadStatusFailed"] ?? "失败",
-                Models.DownloadStatus.Cancelled => _localizationService?["Converters.DownloadStatusCancelled"] ?? "已取消",
-                _ => _localizationService?["Converters.Unknown"] ?? "未知"
-            };
-        }
-        return _localizationService?["Converters.Unknown"] ?? "未知";
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        throw new NotImplementedException();
-    }
-}
-
 internal sealed class BackgroundTaskStatusToStringConverter : IValueConverter
 {
     private static LocalizationService? _localizationService;
@@ -300,23 +269,6 @@ internal sealed class BackgroundTaskStatusToStringConverter : IValueConverter
             };
         }
         return _localizationService?["Converters.Unknown"] ?? "未知";
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        throw new NotImplementedException();
-    }
-}
-
-internal sealed class DownloadStatusToVisibilityConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is Models.DownloadStatus status)
-        {
-            return status == Models.DownloadStatus.Downloading ? Visibility.Visible : Visibility.Collapsed;
-        }
-        return Visibility.Collapsed;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

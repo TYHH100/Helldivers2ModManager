@@ -30,10 +30,10 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	public ModViewModel? EditMod => _editModStore.CurrentMod;
 
 	/// <summary>是否为 V1 格式清单</summary>
-	public bool IsV1Manifest => EditMod?.Data.Manifest.Version == ManifestVersion.V1;
+	public bool IsV1Manifest => (_draftManifest ?? EditMod?.Data.Manifest)?.Version == ManifestVersion.V1;
 
 	/// <summary>是否为 Legacy 格式清单（旧版，无 Version 字段）</summary>
-	public bool IsLegacyManifest => EditMod?.Data.Manifest.Version == ManifestVersion.Legacy;
+	public bool IsLegacyManifest => (_draftManifest ?? EditMod?.Data.Manifest)?.Version == ManifestVersion.Legacy;
 
 	/// <summary>
 	/// 是否显示选项编辑区域。
@@ -115,6 +115,9 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	/// <summary>原始 Legacy 选项的快照（用于判断选项是否被修改）</summary>
 	private string[]? _originalLegacyOptions;
 
+	/// <summary>当前表单正在编辑的清单版本及其不在表单中的元数据。</summary>
+	private IModManifest? _draftManifest;
+
 	private readonly ILogger<ManifestEditPageViewModel> _logger;
 	private readonly NavigationStore _navStore;
 	private readonly EditModStore _editModStore;
@@ -141,20 +144,31 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		if (EditMod is null)
 			return;
 
-		ModName = EditMod.Name;
-		ModDescription = EditMod.Description;
+		_draftManifest = EditMod.Data.Manifest;
+		LoadVisualFields(_draftManifest);
+
+		OnPropertyChanged(nameof(IconPreview));
+		OnPropertyChanged(nameof(IsV1Manifest));
+		OnPropertyChanged(nameof(IsLegacyManifest));
+		OnPropertyChanged(nameof(ShowOptionEditing));
+	}
+
+	private void LoadVisualFields(IModManifest manifest)
+	{
+		ModName = manifest.Name;
+		ModDescription = manifest.Description;
 
 		// 图标路径：直接使用清单中的相对路径（如 icon.png）
-		IconPath = EditMod.Data.Manifest.IconPath ?? string.Empty;
+		IconPath = manifest.IconPath ?? string.Empty;
 
 		// 加载已有选项
 		EditOptions.Clear();
-		if (IsV1Manifest && EditMod.Options is not null)
+		_originalLegacyOptions = null;
+		if (manifest is V1ModManifest v1Manifest)
 		{
-			var manifest = (V1ModManifest)EditMod.Data.Manifest;
-			var sourceDir = EditMod.Data.Directory.FullName;
+			var sourceDir = EditMod?.Data.Directory.FullName ?? string.Empty;
 
-			foreach (var opt in manifest.Options ?? [])
+			foreach (var opt in v1Manifest.Options ?? [])
 			{
 				var optVm = new CreateModOptionViewModel
 				{
@@ -181,10 +195,10 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 				EditOptions.Add(optVm);
 			}
 		}
-		else if (IsLegacyManifest)
+		else if (manifest is LegacyModManifest legacyManifest)
 		{
 			// Legacy 格式的选项只是简单的字符串数组，作为选项名称导入
-			var legacyOptions = EditMod.LegacyOptions;
+			var legacyOptions = legacyManifest.Options;
 			_originalLegacyOptions = legacyOptions?.ToArray();
 			if (legacyOptions is not null)
 			{
@@ -193,16 +207,11 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 					EditOptions.Add(new CreateModOptionViewModel
 					{
 						Name = optName,
-						SourceDirectory = EditMod.Data.Directory.FullName,
+						SourceDirectory = EditMod?.Data.Directory.FullName ?? string.Empty,
 					});
 				}
 			}
 		}
-
-		OnPropertyChanged(nameof(IconPreview));
-		OnPropertyChanged(nameof(IsV1Manifest));
-		OnPropertyChanged(nameof(IsLegacyManifest));
-		OnPropertyChanged(nameof(ShowOptionEditing));
 	}
 
 	/// <summary>保存并返回仪表板</summary>
@@ -218,76 +227,19 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 			{
 				// JSON 模式：直接解析 JSON 并保存
 				using var doc = JsonDocument.Parse(JsonContent);
-				var manifest = (V1ModManifest)V1ModManifest.Deserialize(doc.RootElement);
+				var manifest = ModManifest.DeserializeFromDocument(doc, _logger);
 				EditMod.Data.Manifest = manifest;
 				ModManifest.SaveToFile(EditMod.Data.Manifest, EditMod.Data.Directory);
 			}
 			else
 			{
-				// 可视化模式：保存基本信息
-				if (ModName != EditMod.Name)
-					EditMod.Data.UpdateManifestName(ModName);
-				if (ModDescription != EditMod.Description)
-					EditMod.Data.UpdateManifestDescription(ModDescription);
-
-				// 保存图标（显示/存储均为相对路径）
-				var currentIconPath = EditMod.Data.Manifest.IconPath ?? string.Empty;
-
-				if (IconPath != currentIconPath)
-				{
-					if (string.IsNullOrWhiteSpace(IconPath))
-					{
-						EditMod.Data.UpdateManifestIconPath(null);
-					}
-					else
-					{
-						var modDir = EditMod.Data.Directory.FullName;
-						// 优先使用浏览选择时的原始路径，否则按相对路径组合
-						var sourcePath = _browsedIconSourcePath ?? (Path.IsPathRooted(IconPath) ? IconPath : Path.Combine(modDir, IconPath));
-						CopyImageIfNeeded(sourcePath, modDir);
-						_browsedIconSourcePath = null;
-						EditMod.Data.UpdateManifestIconPath(IconPath);
-					}
-				}
-
-				// 保存选项
-				// V1 直接更新；Legacy 只有在选项被修改时才升级为 V1（写入 Version 字段）
-				if (IsV1Manifest || (IsLegacyManifest && OptionsWereModified()))
-				{
-					var newOptions = EditOptions.Select(o => o.ToModOption()).ToList();
-					var modDir = EditMod.Data.Directory.FullName;
-
-					// 复制新图片文件到模组目录（仅复制不在模组目录中的文件）
-					foreach (var opt in EditOptions)
-					{
-						CopyImageIfNeeded(opt.ResolveImageSourcePath(), modDir);
-						opt.ResetBrowsedImageSource();
-						foreach (var sub in opt.SubOptions)
-						{
-							CopyImageIfNeeded(sub.ResolveImageSourcePath(), modDir);
-							sub.ResetBrowsedImageSource();
-						}
-					}
-
-					// 构建新清单（Legacy 升级为 V1）
-					var newManifest = new V1ModManifest
-					{
-						Guid = EditMod.Data.Manifest.Guid,
-						Name = ModName,
-						Description = ModDescription,
-						IconPath = EditMod.Data.Manifest.IconPath,
-						Options = newOptions.Count > 0 ? newOptions : null,
-					};
-					EditMod.Data.Manifest = newManifest;
-					ModManifest.SaveToFile(EditMod.Data.Manifest, EditMod.Data.Directory);
-					OnPropertyChanged(nameof(IsV1Manifest));
-					OnPropertyChanged(nameof(IsLegacyManifest));
-				}
+				SaveVisualManifest();
 			}
 		}
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "保存模组清单失败");
+			return;
 		}
 
 		// 保存配置
@@ -362,13 +314,77 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 
 		for (int i = 0; i < _originalLegacyOptions.Length; i++)
 		{
-			if (_originalLegacyOptions[i] != EditOptions[i].Name)
+			var option = EditOptions[i];
+			if (_originalLegacyOptions[i] != option.Name
+				|| !string.IsNullOrWhiteSpace(option.Description)
+				|| !string.IsNullOrWhiteSpace(option.IncludePaths)
+				|| !string.IsNullOrWhiteSpace(option.ImagePath)
+				|| option.SubOptions.Count > 0)
 			{
 				return true;
 			}
 		}
 
 		return false;
+	}
+
+	private void SaveVisualManifest()
+	{
+		if (EditMod is null)
+			return;
+
+		var currentManifest = _draftManifest ?? EditMod.Data.Manifest;
+		var modDir = EditMod.Data.Directory.FullName;
+		var iconPath = ResolveAndCopyIconPath(modDir);
+
+		if (currentManifest is LegacyModManifest && !OptionsWereModified())
+		{
+			EditMod.Data.Manifest = new LegacyModManifest
+			{
+				Guid = currentManifest.Guid,
+				Name = ModName,
+				Description = ModDescription,
+				IconPath = iconPath,
+				Options = EditOptions.Count > 0 ? EditOptions.Select(o => o.Name).ToArray() : null,
+			};
+		}
+		else
+		{
+			foreach (var opt in EditOptions)
+			{
+				CopyImageIfNeeded(opt.ResolveImageSourcePath(), modDir);
+				opt.ResetBrowsedImageSource();
+				foreach (var sub in opt.SubOptions)
+				{
+					CopyImageIfNeeded(sub.ResolveImageSourcePath(), modDir);
+					sub.ResetBrowsedImageSource();
+				}
+			}
+
+			EditMod.Data.Manifest = new V1ModManifest
+			{
+				Guid = currentManifest.Guid,
+				Name = ModName,
+				Description = ModDescription,
+				IconPath = iconPath,
+				Options = EditOptions.Count > 0 ? EditOptions.Select(o => o.ToModOption()).ToList() : null,
+				NexusData = (currentManifest as V1ModManifest)?.NexusData,
+			};
+		}
+
+		ModManifest.SaveToFile(EditMod.Data.Manifest, EditMod.Data.Directory);
+		_draftManifest = EditMod.Data.Manifest;
+	}
+
+	private string? ResolveAndCopyIconPath(string modDir)
+	{
+		if (string.IsNullOrWhiteSpace(IconPath))
+			return null;
+
+		var sourcePath = _browsedIconSourcePath ?? (Path.IsPathRooted(IconPath) ? IconPath : Path.Combine(modDir, IconPath));
+		CopyImageIfNeeded(sourcePath, modDir);
+		_browsedIconSourcePath = null;
+		return Path.IsPathRooted(IconPath) ? Path.GetFileName(IconPath) : IconPath;
 	}
 
 	/// <summary>添加新选项</summary>
@@ -425,9 +441,9 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	/// <summary>切换为 JSON 模式：将当前可视状态序列化为 JSON</summary>
 	private void SwitchToJsonMode()
 	{
-		var sourceDir = EditMod?.Data.Directory.FullName ?? string.Empty;
 		var newOptions = EditOptions.Select(o => o.ToModOption()).ToList();
-		var guid = EditMod?.Data.Manifest.Guid ?? Guid.NewGuid();
+		var currentManifest = _draftManifest ?? EditMod?.Data.Manifest;
+		var guid = currentManifest?.Guid ?? Guid.NewGuid();
 		IModManifest manifest;
 
 		if (IsLegacyManifest && !OptionsWereModified())
@@ -450,6 +466,7 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 				Description = ModDescription,
 				IconPath = !string.IsNullOrWhiteSpace(IconPath) ? IconPath : null,
 				Options = newOptions.Count > 0 ? newOptions : null,
+				NexusData = (currentManifest as V1ModManifest)?.NexusData,
 			};
 		}
 
@@ -470,37 +487,11 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		try
 		{
 			using var doc = JsonDocument.Parse(JsonContent);
-			var manifest = (V1ModManifest)V1ModManifest.Deserialize(doc.RootElement);
-
-			ModName = manifest.Name;
-			ModDescription = manifest.Description;
-			IconPath = manifest.IconPath ?? string.Empty;
-
-			var sourceDir = EditMod?.Data.Directory.FullName ?? string.Empty;
-			EditOptions.Clear();
-			foreach (var opt in manifest.Options ?? [])
-			{
-				var optVm = new CreateModOptionViewModel
-				{
-					Name = opt.Name,
-					Description = opt.Description,
-					IncludePaths = opt.Include is not null ? string.Join(";", opt.Include) : string.Empty,
-					ImagePath = opt.Image ?? string.Empty,
-					SourceDirectory = sourceDir,
-				};
-				foreach (var sub in opt.SubOptions ?? [])
-				{
-					optVm.SubOptions.Add(new CreateModSubOptionViewModel
-					{
-						Name = sub.Name,
-						Description = sub.Description,
-						IncludePaths = string.Join(";", sub.Include),
-						ImagePath = sub.Image ?? string.Empty,
-						SourceDirectory = sourceDir,
-					});
-				}
-				EditOptions.Add(optVm);
-			}
+			_draftManifest = ModManifest.DeserializeFromDocument(doc, _logger);
+			LoadVisualFields(_draftManifest);
+			OnPropertyChanged(nameof(IsV1Manifest));
+			OnPropertyChanged(nameof(IsLegacyManifest));
+			OnPropertyChanged(nameof(ShowOptionEditing));
 		}
 		catch (Exception ex)
 		{

@@ -439,14 +439,6 @@
 					</StackPanel>
 				</Button> -->
 					<Button Style="{StaticResource FluentNavigationButton}"
-						Command="{Binding ShowDownloadProgressCommand}"
-						IsEnabled="{Binding Initialized}">
-					<StackPanel Orientation="Horizontal">
-						<TextBlock Text="&#xE118;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
-						<TextBlock Text="{loc:Loc DashboardPage.DownloadProgress}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-					</StackPanel>
-				</Button>
-					<Button Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding ShowBackgroundTasksCommand}"
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">

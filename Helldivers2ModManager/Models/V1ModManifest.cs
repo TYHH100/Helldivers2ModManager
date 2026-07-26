@@ -46,6 +46,16 @@ internal sealed class V1ModManifest : IModManifest
                     logger?.LogWarning("Unexpected none `object` value found in v1 manifest options");
         }
 
+        NexusDataModel? nexusData = null;
+        if (root.TryGetProperty(nameof(NexusData), JsonValueKind.Object, out prop))
+        {
+            nexusData = new NexusDataModel
+            {
+                ModId = prop.GetProperty<int>(nameof(NexusDataModel.ModId)),
+                Version = prop.GetProperty<string>(nameof(NexusDataModel.Version)),
+            };
+        }
+
         return new V1ModManifest
         {
             Guid = guid,
@@ -53,6 +63,7 @@ internal sealed class V1ModManifest : IModManifest
             Description = description,
             IconPath = iconPath,
             Options = options,
+            NexusData = nexusData,
         };
     }
 
@@ -71,6 +82,13 @@ internal sealed class V1ModManifest : IModManifest
             foreach (var opt in Options)
                 opt.Serialize(writer);
             writer.WriteEndArray();
+        }
+        if (NexusData is not null)
+        {
+            writer.WriteStartObject(nameof(NexusData));
+            writer.WriteNumber(nameof(NexusDataModel.ModId), NexusData.ModId);
+            writer.WriteString(nameof(NexusDataModel.Version), NexusData.Version);
+            writer.WriteEndObject();
         }
         writer.WriteEndObject();
     }

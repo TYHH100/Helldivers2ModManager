@@ -34,20 +34,6 @@ Helldivers2ModManager 是一个用于 Helldivers 2 游戏的模组管理器，�
 Helldivers2ModManager/
 ├── .github/                        # GitHub Actions
 │   └── workflows/main.yml
-├── hd2mmt_nexus-download-interceptor/  # 浏览器扩展
-│   ├── _locales/zh/messages.json
-│   ├── icons/
-│   │   ├── icon16.png
-│   │   ├── icon32.png
-│   │   ├── icon48.png
-│   │   └── icon128.png
-│   ├── background.js
-│   ├── generate-icons.js
-│   ├── manifest.json
-│   ├── popup.html
-│   ├── popup.js
-│   ├── LICENSE
-│   └── README.md
 ├── Helldivers2ModManager/          # 主应用程序
 │   ├── Components/                 # UI组件
 │   │   ├── MessageBox.xaml
@@ -64,7 +50,6 @@ Helldivers2ModManager/
 │   │   └── TypeExtension.cs
 │   ├── Models/                     # 数据模型
 │   │   ├── BackgroundTaskItem.cs   # 后台任务状态模型
-│   │   ├── DownloadTask.cs         # 下载任务模型
 │   │   ├── EnabledData.cs
 │   │   ├── IJsonInplaceSerializable.cs
 │   │   ├── IJsonSerializable.cs
@@ -115,7 +100,6 @@ Helldivers2ModManager/
 │   │       └── FluentWindows.xaml
 │   ├── Services/                   # 业务服务
 │   │   ├── BackgroundTaskService.cs    # 后台任务状态管理服务
-│   │   ├── BrowserExtensionService.cs  # 浏览器扩展通信服务
 │   │   ├── DatabaseService.cs      # SQLite数据库服务
 │   │   ├── EnabledDataRepository.cs    # EnabledData仓储
 │   │   ├── ModHashService.cs       # Mod 文件哈希/指纹计算服务
@@ -142,7 +126,6 @@ Helldivers2ModManager/
 │   │   ├── BackgroundTasksPageViewModel.cs # 后台任务页ViewModel
 │   │   ├── CreatePageViewModel.cs
 │   │   ├── DashboardPageViewModel.cs
-│   │   ├── DownloadProgressViewModel.cs  # 下载进度页ViewModel
 │   │   ├── EditPageViewModel.cs
 │   │   ├── HelpPageViewModel.cs
 │   │   ├── MainViewModel.cs
@@ -169,8 +152,6 @@ Helldivers2ModManager/
 │   │   ├── CreatePageView.xaml.cs
 │   │   ├── DashboardPageView.xaml
 │   │   ├── DashboardPageView.xaml.cs
-│   │   ├── DownloadProgressView.xaml      # 下载进度页
-│   │   ├── DownloadProgressView.xaml.cs
 │   │   ├── EditPageView.xaml
 │   │   ├── EditPageView.xaml.cs
 │   │   ├── HelpPageView.xaml
@@ -267,7 +248,7 @@ internal sealed class NexusModsService : INexusModsService
 </Window.Resources>
 ```
 
-当前已注册的页面 DataTemplate 包括：DashboardPageView、SettingsPageView、EditPageView、ManifestEditPageView、CreatePageView、TagManagementPageView、NexusDownloadPageView、DownloadProgressView、BackgroundTasksPageView。
+当前已注册的页面 DataTemplate 包括：DashboardPageView、SettingsPageView、EditPageView、ManifestEditPageView、CreatePageView、TagManagementPageView、NexusDownloadPageView、BackgroundTasksPageView。
 
 **常见错误**: 如果只添加了 `[RegisterService]` 但没有在 XAML 中添加 DataTemplate，导航到该页面时会显示空白或错误。
 
@@ -314,7 +295,6 @@ internal sealed class NexusModsService : INexusModsService
 - 应接入：下载/导入、批量导入、Mod 更新、导出、部署、清理、删除、版本兼容性检查、文件哈希/指纹计算
 - 可选接入：启动加载 Mod、自动检测游戏目录等低频辅助长操作
 - 不建议接入：设置保存、标签保存、语言初始化、HTTP 监听循环等短操作或常驻服务
-- 下载任务保留 `DownloadTask` 作为业务和持久化模型，同时镜像到 `BackgroundTaskItem` 作为后台任务总览
 
 **本地化规则**:
 - 任务名称和描述应优先使用 `LocalizationService`
@@ -370,8 +350,6 @@ catch (Exception ex)
 | `InverseBoolConverter` | 布尔值取反 | — |
 | `StringToVisibilityConverter` | 非空字符串 → Visible | 空字符串 → Collapsed |
 | `BytesToSizeConverter` | 字节数转可读大小 | B/KB/MB/GB/TB 自动换算 |
-| `DownloadStatusToStringConverter` | 下载状态枚举转中文文本 | 等待中/下载中/已完成/失败/已取消 |
-| `DownloadStatusToVisibilityConverter` | 下载中 → Visible | 其他状态 → Collapsed |
 | `ProgressWidthConverter` | 进度百分比 × 可用宽度 | `IMultiValueConverter`，需进度值和最大宽度 |
 | `SpeedToReadableConverter` | 下载速度转可读文本 | 如 `1.5 MB/s` |
 | `VersionStatusToColorConverter` | 版本状态转颜色画刷 | 兼容(绿)/不兼容(红)/未知(黄)/检查中(蓝)/错误(橙) |
@@ -561,7 +539,6 @@ internal sealed class MyViewModel
 | `ManifestEditPage.*` | ManifestEditPageView.xaml |
 | `EditPage.*` | EditPageView.xaml |
 | `NexusDownloadPage.*` | NexusDownloadPageView.xaml |
-| `DownloadProgress.*` | DownloadProgressView.xaml |
 | `TagManagementPage.*` | TagManagementPageView.xaml |
 | `HelpPage.*` | HelpPageView.xaml |
 | `DeploymentOrderPage.*` | DeploymentOrderPageView.xaml |
@@ -681,8 +658,6 @@ internal sealed class MyViewModel
 | `AutoCheckVersionOnStartup` | `bool` | `false` | 启动时自动检查模组版本兼容性 |
 | `AutoCleanLogs` | `bool` | `true` | 是否启用自动清理过期日志 |
 | `LogRetentionDays` | `int` | `7` | 日志保留天数 |
-| `ExtensionHost` | `string` | `"localhost"` | 浏览器扩展监听主机 |
-| `ExtensionPort` | `int` | `7456` | 浏览器扩展监听端口 |
 | `NexusApiKey` | `string?` | `null` | Nexus Mods API Key（使用 `ProtectedData` 加密存储） |
 | `Groups` | `ObservableCollection<ModGroup>` | `[]` | Mod分组列表 |
 | `Tags` | `ObservableCollection<ModTag>` | `[]` | 标签列表 |
@@ -694,8 +669,6 @@ internal sealed class MyViewModel
 - `TempDirectory`: 不存在时自动创建
 - `Opacity`: 自动限制在 0.4-1.0 范围内
 - `SkipList`: 元素必须为16字符长度
-- `ExtensionHost`: 不能为空或空白字符串
-- `ExtensionPort`: 必须在 1-65535 范围内
 - `NexusApiKey`: 使用 `System.Security.Cryptography.ProtectedData` 加密存储
 
 ---

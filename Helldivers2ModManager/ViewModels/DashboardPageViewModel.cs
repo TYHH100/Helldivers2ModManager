@@ -567,6 +567,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     ModProblemKind.EmptyOptions => _localizationService["DashboardPage.EmptyOptions"],
                     ModProblemKind.EmptySubOptions => _localizationService["DashboardPage.EmptySubOptions"],
                     ModProblemKind.EmptyIncludes => _localizationService["DashboardPage.EmptyIncludes"],
+                    ModProblemKind.MissingIncludePath => w.ExtraData is not null
+                        ? $"{_localizationService["DashboardPage.MissingIncludePathPrefix"]}{w.ExtraData}{_localizationService["DashboardPage.MissingIncludePathSuffix"]}"
+                        : _localizationService["DashboardPage.MissingIncludePath"],
                     ModProblemKind.InvalidImagePath => w.ExtraData is not null
                         ? $"{_localizationService["DashboardPage.InvalidImagePathPrefix"]}{w.ExtraData}{_localizationService["DashboardPage.InvalidImagePathSuffix"]}"
                         : _localizationService["DashboardPage.InvalidImagePathError"],
@@ -2305,12 +2308,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage { Message = _localizationService["DashboardPage.NexusDownloadInfo"] });
         
         _navStore.Value.Navigate<NexusDownloadPageViewModel>();
-    }
-
-    [RelayCommand]
-    void ShowDownloadProgress()
-    {
-        _navStore.Value.Navigate<DownloadProgressViewModel>();
     }
 
     [RelayCommand]

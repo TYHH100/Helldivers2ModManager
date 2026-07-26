@@ -1461,7 +1461,7 @@ internal sealed partial class ModService
 						});
 						// 图标路径为空不阻止导入，模组功能不受影响
 					}
-					else if (!File.Exists(Path.Combine(dir.FullName, man.IconPath)))
+					else if (!TryResolveManifestRelativePath(dir, man.IconPath, out var imagePath) || !File.Exists(imagePath))
 					{
 						_logger.LogWarning("Manifest \"{}\" contains invalid icon path \"{}\"", manifestFile.FullName, man.IconPath);
 						problems.Add(new ModProblem
@@ -1475,17 +1475,19 @@ internal sealed partial class ModService
 				}
 
 				foreach (var opt in opts)
-					if (!Directory.Exists(Path.Combine(dir.FullName, opt)))
+				{
+					if (!TryResolveManifestRelativePath(dir, opt, out var optionPath))
 					{
-						_logger.LogWarning("Manifest \"{}\" contains invalid option directory \"{}\", skipping", manifestFile.FullName, opt);
-						problems.Add(new ModProblem
-						{
-							Directory = dir,
-							Kind = ModProblemKind.InvalidPath,
-							ExtraData = opt,
-						});
+						_logger.LogWarning("Manifest \"{}\" contains unsafe option directory \"{}\"", manifestFile.FullName, opt);
+						problems.Add(new ModProblem { Directory = dir, Kind = ModProblemKind.InvalidPath, ExtraData = opt });
 						error = true;
 					}
+					else if (!Directory.Exists(optionPath))
+					{
+						_logger.LogWarning("Manifest \"{}\" references missing option directory \"{}\"; it will act as an empty switch", manifestFile.FullName, opt);
+						problems.Add(new ModProblem { Directory = dir, Kind = ModProblemKind.MissingIncludePath, ExtraData = opt });
+					}
+				}
 				break;
 			}
 
@@ -1537,7 +1539,7 @@ internal sealed partial class ModService
 						});
 						// 图标路径为空不阻止导入
 					}
-					else if (!File.Exists(Path.Combine(dir.FullName, man.IconPath)))
+					else if (!TryResolveManifestRelativePath(dir, man.IconPath, out var iconPath) || !File.Exists(iconPath))
 					{
 						_logger.LogWarning("Manifest \"{}\" contains invalid icon path \"{}\"", manifestFile.FullName, man.IconPath);
 						problems.Add(new ModProblem
@@ -1564,7 +1566,7 @@ internal sealed partial class ModService
 							});
 							// 选项图片路径为空不阻止导入
 						}
-						else if (!File.Exists(Path.Combine(dir.FullName, opt.Image)))
+						else if (!TryResolveManifestRelativePath(dir, opt.Image, out var optionImagePath) || !File.Exists(optionImagePath))
 						{
 							_logger.LogWarning("Manifest \"{}\" contains invalid option image path \"{}\"", manifestFile.FullName, opt.Image);
 							problems.Add(new ModProblem
@@ -1579,17 +1581,7 @@ internal sealed partial class ModService
 
 					if (opt.Include is not null)
 						foreach (var inc in opt.Include)
-							if (!Directory.Exists(Path.Combine(dir.FullName, inc)))
-							{
-								_logger.LogWarning("Manifest \"{}\" contains invalid include path \"{}\", skipping", manifestFile.FullName, inc);
-								problems.Add(new ModProblem
-								{
-									Directory = dir,
-									Kind = ModProblemKind.InvalidPath,
-									ExtraData = inc,
-								});
-								error = true;
-							}
+							ValidateIncludePath(inc);
 
 					if (opt.SubOptions is not null)
 						foreach (var sub in opt.SubOptions)
@@ -1606,7 +1598,7 @@ internal sealed partial class ModService
 									});
 									// 子选项图片路径为空不阻止导入
 								}
-								else if (!File.Exists(Path.Combine(dir.FullName, sub.Image)))
+								else if (!TryResolveManifestRelativePath(dir, sub.Image, out var subOptionImagePath) || !File.Exists(subOptionImagePath))
 								{
 									_logger.LogWarning("Manifest \"{}\" contains invalid sub-option image path \"{}\"", manifestFile.FullName, sub.Image);
 									problems.Add(new ModProblem
@@ -1620,17 +1612,7 @@ internal sealed partial class ModService
 							}
 
 							foreach (var inc in sub.Include)
-								if (!Directory.Exists(Path.Combine(dir.FullName, inc)))
-								{
-									_logger.LogWarning("Manifest \"{}\" contains invalid sub-option include path \"{}\", skipping", manifestFile.FullName, inc);
-									problems.Add(new ModProblem
-									{
-										Directory = dir,
-										Kind = ModProblemKind.InvalidPath,
-										ExtraData = inc,
-									});
-									error = true;
-								}
+								ValidateIncludePath(inc);
 						}
 				}
 				break;
@@ -1640,6 +1622,40 @@ internal sealed partial class ModService
 		_logger.LogDebug("Path check complete");
 
 		return !error;
+
+		void ValidateIncludePath(string include)
+		{
+			if (!TryResolveManifestRelativePath(dir, include, out var includePath))
+			{
+				_logger.LogWarning("Manifest \"{}\" contains unsafe include path \"{}\"", manifestFile.FullName, include);
+				problems.Add(new ModProblem { Directory = dir, Kind = ModProblemKind.InvalidPath, ExtraData = include });
+				error = true;
+			}
+			else if (!Directory.Exists(includePath))
+			{
+				_logger.LogWarning("Manifest \"{}\" references missing include path \"{}\"; it will act as an empty switch", manifestFile.FullName, include);
+				problems.Add(new ModProblem { Directory = dir, Kind = ModProblemKind.MissingIncludePath, ExtraData = include });
+			}
+		}
+	}
+
+	private static bool TryResolveManifestRelativePath(DirectoryInfo root, string? relativePath, out string fullPath)
+	{
+		fullPath = string.Empty;
+		if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
+			return false;
+
+		try
+		{
+			var rootPath = Path.GetFullPath(root.FullName);
+			fullPath = Path.GetFullPath(Path.Combine(rootPath, relativePath));
+			return fullPath.Equals(rootPath, StringComparison.OrdinalIgnoreCase)
+				|| fullPath.StartsWith(Path.EndsInDirectorySeparator(rootPath) ? rootPath : rootPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+		}
+		catch (Exception)
+		{
+			return false;
+		}
 	}
 
 	[GeneratedRegex(@"^[a-z0-9]{16}\.patch_[0-9]+(\.(stream|gpu_resources))?$")]

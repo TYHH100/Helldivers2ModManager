@@ -680,59 +680,6 @@
                         </Style>
                     </Grid.Style>
                     <StackPanel>
-                        <!-- 浏览器扩展连接 -->
-                        <Border Style="{StaticResource FluentSettingsCard}">
-                            <StackPanel>
-                                <TextBlock Text="{loc:Loc SettingsPage.BrowserExt}"
-                                           Style="{StaticResource FluentSubSectionHeader}"
-                                           Margin="0"/>
-                                <TextBlock Text="{loc:Loc SettingsPage.BrowserExtDesc}"
-                                           Style="{StaticResource FluentBodyText}"
-                                           Margin="0 4 0 12"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="200"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="100"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-                                    <TextBlock Grid.Row="0" Grid.Column="0"
-                                               Text="{loc:Loc SettingsPage.AddressLabel}"
-                                               VerticalAlignment="Center"
-                                               Margin="0 0 8 8"
-                                               FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1"
-                                             Text="{Binding ExtensionHost, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource FluentTextBox}"
-                                             Margin="0 0 16 8"/>
-                                    <TextBlock Grid.Row="0" Grid.Column="2"
-                                               Text="{loc:Loc SettingsPage.PortLabel}"
-                                               VerticalAlignment="Center"
-                                               Margin="0 0 8 8"
-                                               FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"/>
-                                    <TextBox Grid.Row="0" Grid.Column="3"
-                                             Text="{Binding ExtensionPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource FluentTextBox}"
-                                             Margin="0 0 0 8"/>
-                                </Grid>
-                                <TextBlock FontSize="12"
-                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-                                           Margin="0 4 0 0">
-                                    <Run Text="{loc:Loc SettingsPage.ConnectionAddressLabel}"/>
-                                    <Run Text="{Binding ExtensionHost, Mode=OneWay}"/>
-                                    <Run Text=":"/>
-                                    <Run Text="{Binding ExtensionPort, Mode=OneWay}"/>
-                                    <Run Text="/"/>
-                                </TextBlock>
-                            </StackPanel>
-                        </Border>
-
                         <!-- Nexus Mods API Key（预留位置，后续功能启用） -->
                         <!-- <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>

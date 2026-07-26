@@ -243,36 +243,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
-	private bool _restartRequired;
-
-	public string ExtensionHost
-	{
-		get => _settingsService.Initialized ? _settingsService.ExtensionHost : "localhost";
-		set
-		{
-			OnPropertyChanging();
-			_settingsService.ExtensionHost = value;
-			OnPropertyChanged();
-
-			// 标记需要重启才能生效
-			_restartRequired = true;
-		}
-	}
-
-	public int ExtensionPort
-	{
-		get => _settingsService.Initialized ? _settingsService.ExtensionPort : 7456;
-		set
-		{
-			OnPropertyChanging();
-			_settingsService.ExtensionPort = value;
-			OnPropertyChanged();
-
-			// 标记需要重启才能生效
-			_restartRequired = true;
-		}
-	}
-
 	public string? NexusApiKey
 	{
 		get => _settingsService.Initialized ? _settingsService.NexusApiKey : null;
@@ -515,8 +485,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(AutoCleanLogs));
 		OnPropertyChanged(nameof(ShowSeparator));
 		OnPropertyChanged(nameof(LogRetentionDays));
-		OnPropertyChanged(nameof(ExtensionHost));
-		OnPropertyChanged(nameof(ExtensionPort));
 		OnPropertyChanged(nameof(NexusApiKey));
 		OnPropertyChanged(nameof(SelectedLanguageCode));
 		OnPropertyChanged(nameof(AvailableLanguages));
@@ -573,21 +541,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 		WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
 
-		if (_restartRequired)
-		{
-			// IP/端口修改后提示重启才能生效
-			WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
-			{
-				Title = _localizationService["MessageBox.Info"],
-				Message = _localizationService["SettingsPage.RestartForExtChange"],
-				Confirm = static () => System.Windows.Application.Current.Shutdown(),
-				Abort = () => _navStore.Navigate<DashboardPageViewModel>()
-			});
-		}
-		else
-		{
-			_navStore.Navigate<DashboardPageViewModel>();
-		}
+		_navStore.Navigate<DashboardPageViewModel>();
 	}
 
 	[RelayCommand]

@@ -15,8 +15,61 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
         {
             if (_manifest == value)
                 return;
+
+            var previousManifest = _manifest;
+            var previousEnabledOptions = _enabledOptions;
+            var previousSelectedOptions = _selectedOptions;
             _manifest = value;
+            SynchronizeOptionState(previousManifest, previousEnabledOptions, previousSelectedOptions);
             OnPropertyChanged(nameof(Manifest));
+        }
+    }
+
+    /// <summary>
+    /// Keeps runtime option state compatible when a manifest is edited or updated.
+    /// In particular, a Legacy-to-V1 conversion must resize the arrays before the
+    /// dashboard rebuilds option view models or saves the active profile.
+    /// </summary>
+    private void SynchronizeOptionState(IModManifest previousManifest, bool[] previousEnabledOptions, int[] previousSelectedOptions)
+    {
+        switch (Manifest)
+        {
+            case LegacyModManifest:
+                EnabledOptions = [];
+                SelectedOptions = [previousSelectedOptions.FirstOrDefault()];
+                break;
+
+            case V1ModManifest { Options: { } options }:
+            {
+                var enabled = Enumerable.Repeat(true, options.Count).ToArray();
+                var selected = new int[options.Count];
+
+                if (previousManifest.Version == ManifestVersion.V1)
+                {
+                    Array.Copy(previousEnabledOptions, enabled, Math.Min(previousEnabledOptions.Length, enabled.Length));
+                    Array.Copy(previousSelectedOptions, selected, Math.Min(previousSelectedOptions.Length, selected.Length));
+                }
+                else if (previousSelectedOptions.Length > 0 && previousSelectedOptions[0] is var legacySelected
+                    && legacySelected >= 0 && legacySelected < enabled.Length)
+                {
+                    // Legacy options form a mutually exclusive drop-down. Preserve the
+                    // previously chosen entry when turning them into V1 option toggles.
+                    Array.Fill(enabled, false);
+                    enabled[legacySelected] = true;
+                }
+
+                EnabledOptions = enabled;
+                SelectedOptions = selected;
+                break;
+            }
+
+            case V1ModManifest:
+                EnabledOptions = [];
+                SelectedOptions = [];
+                break;
+
+            default:
+                throw new NotSupportedException($"Unsupported manifest version: {Manifest.Version}");
         }
     }
 
@@ -168,6 +221,7 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
                 Description = Manifest.Description,
                 IconPath = Manifest.IconPath,
                 Options = ((V1ModManifest)Manifest).Options,
+                NexusData = ((V1ModManifest)Manifest).NexusData,
             },
             _ => throw new NotImplementedException()
         };
@@ -193,6 +247,7 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
                 Description = newDescription,
                 IconPath = Manifest.IconPath,
                 Options = ((V1ModManifest)Manifest).Options,
+                NexusData = ((V1ModManifest)Manifest).NexusData,
             },
             _ => throw new NotImplementedException()
         };
@@ -218,6 +273,7 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
                 Description = Manifest.Description,
                 IconPath = newIconPath,
                 Options = ((V1ModManifest)Manifest).Options,
+                NexusData = ((V1ModManifest)Manifest).NexusData,
             },
             _ => throw new NotImplementedException()
         };

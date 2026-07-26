@@ -357,6 +357,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
                 case ManifestVersion.V1:
                 {
+                    LegacyOptions = null;
                     var manifest = (V1ModManifest)_mod.Manifest;
                     if (manifest.Options is null)
                     {

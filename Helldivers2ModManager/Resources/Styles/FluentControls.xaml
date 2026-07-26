@@ -19,8 +19,6 @@
     <local:InverseBoolConverter x:Key="InverseBoolConverter"/>
     <local:BytesToSizeConverter x:Key="BytesToSizeConverter"/>
     <local:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
-    <local:DownloadStatusToStringConverter x:Key="DownloadStatusToStringConverter"/>
-    <local:DownloadStatusToVisibilityConverter x:Key="DownloadStatusToVisibilityConverter"/>
     <local:ProgressWidthConverter x:Key="ProgressWidthConverter"/>
 
     <!-- ============================================ -->
