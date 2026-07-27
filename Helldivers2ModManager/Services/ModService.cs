@@ -1484,8 +1484,9 @@ internal sealed partial class ModService
 					}
 					else if (!Directory.Exists(optionPath))
 					{
-						_logger.LogWarning("Manifest \"{}\" references missing option directory \"{}\"; it will act as an empty switch", manifestFile.FullName, opt);
-						problems.Add(new ModProblem { Directory = dir, Kind = ModProblemKind.MissingIncludePath, ExtraData = opt });
+						// 旧格式的目录选项允许作为占位开关存在。目录缺失时部署阶段
+						// 会自然跳过，不应在每次启动时向用户报告为问题。
+						_logger.LogDebug("Manifest \"{}\" references optional missing option directory \"{}\"; skipping", manifestFile.FullName, opt);
 					}
 				}
 				break;
@@ -1633,8 +1634,9 @@ internal sealed partial class ModService
 			}
 			else if (!Directory.Exists(includePath))
 			{
-				_logger.LogWarning("Manifest \"{}\" references missing include path \"{}\"; it will act as an empty switch", manifestFile.FullName, include);
-				problems.Add(new ModProblem { Directory = dir, Kind = ModProblemKind.MissingIncludePath, ExtraData = include });
+				// Include 列表常包含作者预留的空选项目录；保持安全路径校验，
+				// 但将不存在的目录视为无内容，避免启动时产生无意义警告。
+				_logger.LogDebug("Manifest \"{}\" references optional missing include path \"{}\"; skipping", manifestFile.FullName, include);
 			}
 		}
 	}

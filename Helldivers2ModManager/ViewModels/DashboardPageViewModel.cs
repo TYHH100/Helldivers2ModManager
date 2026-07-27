@@ -1401,16 +1401,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _navStore.Value.Navigate<DeploymentOrderPageViewModel>();
     }
 
-    /*
-    // Armor pollution detection is temporarily disabled.
     [RelayCommand(AllowConcurrentExecutions = false)]
-    async Task ArmorPollution()
+    async Task ArmorReuse()
     {
         await SaveProfileNowAsync();
 
-        _navStore.Value.Navigate<ArmorPollutionPageViewModel>();
+        _navStore.Value.Navigate<ArmorReusePageViewModel>();
     }
-    */
 
     [RelayCommand(AllowConcurrentExecutions = false)]
     async Task Purge()

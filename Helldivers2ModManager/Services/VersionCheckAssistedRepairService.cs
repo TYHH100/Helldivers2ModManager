@@ -5,6 +5,12 @@ using System.Buffers.Binary;
 
 namespace Helldivers2ModManager.Services;
 
+/// <summary>
+/// 使用游戏参考资源协助修复 Unit LOD 的实现。
+/// Unit 结构、旧版 Layout 判断及重建思路参考 hd2-repatcher，格式与归档资料参考
+/// HD2SDK-CommunityEdition。来源：https://github.com/RaidingForPants/hd2-repatcher、
+/// https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition。
+/// </summary>
 internal sealed partial class VersionCheckService
 {
     private const long MaxAssistedRepairFileBytes = 256L * 1024 * 1024;

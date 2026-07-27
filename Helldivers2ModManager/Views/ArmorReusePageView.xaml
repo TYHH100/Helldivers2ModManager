@@ -1,0 +1,67 @@
+<Page x:Class="Helldivers2ModManager.Views.ArmorReusePageView"
+      x:ClassModifier="internal"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
+      mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="1000">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Margin="0 0 0 16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Command="{Binding GoBackCommand}" Style="{StaticResource FluentIconButton}" ToolTip="{loc:Loc Common.Back}" Margin="0 0 12 0">
+                <TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
+            </Button>
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="{loc:Loc ArmorReusePage.Title}" FontSize="22" FontWeight="SemiBold"/>
+                <TextBlock Text="{loc:Loc ArmorReusePage.Description}" Margin="0 4 0 0" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextWrapping="Wrap"/>
+                <TextBlock Text="{loc:Loc ArmorReusePage.Attribution}" Margin="0 5 0 0" FontSize="11" Foreground="{StaticResource NeutralForegroundTertiaryBrush}" TextWrapping="Wrap"/>
+            </StackPanel>
+            <Button Grid.Column="2" Command="{Binding RefreshCommand}" IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource FluentSecondaryButton}" Padding="14 8">
+                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons" Margin="0 0 7 0"/><TextBlock Text="{loc:Loc ArmorReusePage.Refresh}"/></StackPanel>
+            </Button>
+        </Grid>
+
+        <Border Grid.Row="1" Style="{StaticResource FluentSettingsCard}" Margin="0 0 0 16">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <TextBlock Grid.ColumnSpan="4" Text="{Binding SummaryText}" Margin="0 0 0 12" TextWrapping="Wrap" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                <StackPanel Grid.Row="1" Grid.Column="0" HorizontalAlignment="Center"><TextBlock Text="{Binding ScannedModCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorReusePage.ScannedMods}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center"><TextBlock Text="{Binding ScannedPatchCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorReusePage.ScannedPatches}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="2" HorizontalAlignment="Center"><TextBlock Text="{Binding AffectedModCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorReusePage.AffectedMods}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="3" HorizontalAlignment="Center"><TextBlock Text="{Binding ReusedArmorCount}" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource SystemAccentBrush}" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorReusePage.ReusedArmors}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Border Visibility="{Binding EmptyVisibility}" Padding="18" CornerRadius="6" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1" Background="#15107C10" VerticalAlignment="Top">
+                <StackPanel><TextBlock Text="{loc:Loc ArmorReusePage.EmptyTitle}" FontWeight="SemiBold"/><TextBlock Text="{loc:Loc ArmorReusePage.EmptyDescription}" Margin="0 4 0 0" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
+            </Border>
+            <ScrollViewer Visibility="{Binding ResultVisibility}" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemTemplate><DataTemplate>
+                        <Border Style="{StaticResource FluentSettingsCard}" Margin="0 0 0 8">
+                            <StackPanel>
+                                <TextBlock Text="{Binding ModName}" FontSize="14" FontWeight="SemiBold"/>
+                                <TextBlock Margin="0 6 0 0" FontSize="12"><Run Text="{loc:Loc ArmorReusePage.SourceArmor}"/><Run Text="{Binding SourceArmor}"/><Run Text=" ("/><Run Text="{Binding SourceArmorId}"/><Run Text=")"/></TextBlock>
+                                <TextBlock Text="{Binding ReusedBy}" Margin="0 4 0 0" TextWrapping="Wrap" Foreground="{StaticResource SystemAccentBrush}"/>
+                                <TextBlock Text="{Binding SharedUnitText}" Margin="0 4 0 0" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Page>

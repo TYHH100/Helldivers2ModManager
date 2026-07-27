@@ -119,6 +119,25 @@
                         </Grid>
                     </Border>
 
+                    <!-- Patch/Unit structure and repair references are intentionally visible in this feature. -->
+                    <Border Padding="12"
+                            CornerRadius="4"
+                            BorderBrush="{StaticResource NeutralStrokeBrush}"
+                            BorderThickness="1"
+                            Background="{StaticResource NeutralBackgroundFillSecondaryBrush}"
+                            Margin="0 0 0 16">
+                        <StackPanel>
+                            <TextBlock Text="{loc:Loc VersionCheckDetail.AttributionTitle}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="{loc:Loc VersionCheckDetail.Attribution}"
+                                       Margin="0 4 0 0"
+                                       FontSize="11"
+                                       Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
                     <Grid Margin="0 0 0 8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>

@@ -813,7 +813,8 @@
                                 Opacity="0.3"/>
                         <Track x:Name="PART_Track" IsDirectionReversed="True">
                             <Track.DecreaseRepeatButton>
-                                <RepeatButton Command="ScrollBar.LineUpCommand">
+                                <RepeatButton x:Name="DecreaseRepeatButton"
+                                              Command="ScrollBar.LineUpCommand">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
                                             <Border Background="Transparent"/>
@@ -849,7 +850,8 @@
                                 </Thumb>
                             </Track.Thumb>
                             <Track.IncreaseRepeatButton>
-                                <RepeatButton Command="ScrollBar.LineDownCommand">
+                                <RepeatButton x:Name="IncreaseRepeatButton"
+                                              Command="ScrollBar.LineDownCommand">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
                                             <Border Background="Transparent"/>
@@ -859,6 +861,14 @@
                             </Track.IncreaseRepeatButton>
                         </Track>
                     </Grid>
+                    <ControlTemplate.Triggers>
+                        <!-- Vertical tracks grow downwards, while horizontal tracks grow to the right. -->
+                        <Trigger Property="Orientation" Value="Horizontal">
+                            <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
+                            <Setter TargetName="DecreaseRepeatButton" Property="Command" Value="{x:Static ScrollBar.LineLeftCommand}"/>
+                            <Setter TargetName="IncreaseRepeatButton" Property="Command" Value="{x:Static ScrollBar.LineRightCommand}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

@@ -7,6 +7,12 @@ using System.Text;
 
 namespace Helldivers2ModManager.Services;
 
+/// <summary>
+/// 从游戏归档读取 Unit 参考数据。
+/// DSAR/归档与补丁结构的解析依据 HD2SDK-CommunityEdition 和 hd2-repatcher 的公开研究；
+/// 来源：https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition、
+/// https://github.com/RaidingForPants/hd2-repatcher。
+/// </summary>
 internal sealed partial class VersionCheckService
 {
     private const byte DsarCompressionNone = 0;

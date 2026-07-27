@@ -9,9 +9,11 @@ using System.Threading;
 namespace Helldivers2ModManager.Services;
 
 /// <summary>
-/// 版本检测服务
-/// 参考 hd2-repatcher 的实现方式：扫描所有模组的补丁文件提取 Unit 版本号，
-/// https://github.com/RaidingForPants/hd2-repatcher/
+/// 版本检测服务。
+/// Patch/Unit 结构研究、旧 Layout 版本处理和校验策略参考
+/// hd2-repatcher（https://github.com/RaidingForPants/hd2-repatcher）；
+/// 补丁/归档格式常量参考 HD2SDK-CommunityEdition
+/// （https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition）。
 /// 以多数版本作为参考基准，标记偏离的模组。
 /// v1.5.0 新增深度分析：文件结构完整性校验、Unit 内部结构分析、伴生文件检查。
 /// </summary>
@@ -19,12 +21,12 @@ namespace Helldivers2ModManager.Services;
 internal sealed partial class VersionCheckService
 {
     /// <summary>
-    /// Unit 资源类型 ID（来自 hd2-repatcher 魔数）
+    /// Unit 资源类型 ID（参考 hd2-repatcher 的补丁结构研究）。
     /// </summary>
     private const long UnitTypeId = unchecked((long)16187218042980615487UL);
 
     /// <summary>
-    /// 补丁文件头魔数（0xF0000011），来自 HD2SDK-CommunityEdition
+    /// 补丁文件头魔数（0xF0000011），参考 HD2SDK-CommunityEdition 的格式资料。
     /// </summary>
     private const int PatchHeaderMagic = unchecked((int)0xF0000011);
 

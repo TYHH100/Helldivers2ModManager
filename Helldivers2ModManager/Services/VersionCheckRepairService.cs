@@ -6,6 +6,12 @@ using System.Runtime.InteropServices;
 
 namespace Helldivers2ModManager.Services;
 
+/// <summary>
+/// 补丁安全修复实现。
+/// Unit/TOC 校验与重建流程参考 hd2-repatcher 的结构研究，格式常量参考 HD2SDK-CommunityEdition。
+/// 来源：https://github.com/RaidingForPants/hd2-repatcher、
+/// https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition。
+/// </summary>
 internal sealed partial class VersionCheckService
 {
     private readonly SemaphoreSlim _repairSemaphore = new(1, 1);

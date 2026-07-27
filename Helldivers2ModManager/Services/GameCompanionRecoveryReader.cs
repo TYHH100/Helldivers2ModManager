@@ -6,6 +6,12 @@ using System.Security.Cryptography;
 
 namespace Helldivers2ModManager.Services;
 
+/// <summary>
+/// 从游戏归档恢复补丁伴生资源。
+/// 归档、TOC 与资源定位字段参考 HD2SDK-CommunityEdition 和 hd2-repatcher 的研究成果；
+/// 来源：https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition、
+/// https://github.com/RaidingForPants/hd2-repatcher。
+/// </summary>
 internal sealed partial class VersionCheckService
 {
     private const int MaxGameCompanionSegmentBytes = 256 * 1024 * 1024;
