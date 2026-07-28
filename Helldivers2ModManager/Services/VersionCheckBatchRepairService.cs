@@ -56,6 +56,14 @@ internal sealed partial class VersionCheckService
             var changed = false;
             try
             {
+                if (!await SupportsAutomaticUnitRepairAsync(directory))
+                {
+                    item.State = BatchModRepairState.SkippedUnsupported;
+                    item.Message = _localizationService["VersionCheckBatch.UnsupportedResourceType"];
+                    progress?.Report(item);
+                    continue;
+                }
+
                 var companionPlan = await CreateCompanionRecoveryPlanAsync(directory, cancellationToken);
                 if (companionPlan.MissingCount > 0)
                 {
@@ -127,6 +135,13 @@ internal sealed partial class VersionCheckService
             return;
         }
 
+        if (!await SupportsAutomaticUnitRepairAsync(directory))
+        {
+            item.State = BatchModRepairState.SkippedUnsupported;
+            item.Message = _localizationService["VersionCheckBatch.UnsupportedResourceType"];
+            return;
+        }
+
         var companionPlan = await CreateCompanionRecoveryPlanAsync(directory, cancellationToken);
         if (companionPlan.MissingCount > 0)
         {
@@ -170,6 +185,17 @@ internal sealed partial class VersionCheckService
             item.State = BatchModRepairState.NoAction;
             item.Message = "No repair is required.";
         }
+    }
+
+    /// <summary>
+    /// 自动修复当前只验证了 Unit（模型）资源的结构和 LOD 路径。
+    /// 音频、材质及其他非 Unit 资源即使拥有合法的 .stream companion，也不能进入
+    /// 通用元数据或 companion 恢复流程，以免在支持其语义修复前改写原始模组。
+    /// </summary>
+    private async Task<bool> SupportsAutomaticUnitRepairAsync(DirectoryInfo directory)
+    {
+        var analysis = await AnalyzeModPatchFilesAsync(directory);
+        return analysis.PatchFiles.Any(patch => patch.UnitDetails.Count > 0);
     }
 
     private static string BuildCompanionBlockMessage(CompanionRecoveryPlan plan)

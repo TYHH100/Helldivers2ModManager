@@ -73,6 +73,7 @@ internal sealed partial class DashboardPageViewModel
                 Title = _localizationService["VersionCheckBatch.ConfirmTitle"],
                 Message = _localizationService["VersionCheckBatch.ConfirmMessage"]
                     .Replace("{repairable}", plan.RepairableCount.ToString())
+                    .Replace("{unsupported}", plan.UnsupportedCount.ToString())
                     .Replace("{blocked}", plan.BlockedCount.ToString())
                     .Replace("{clean}", plan.NoActionCount.ToString()),
                 Confirm = () => _ = ExecuteBatchRepairAsync(service, plan)
@@ -149,6 +150,7 @@ internal sealed partial class DashboardPageViewModel
         var builder = new StringBuilder();
         builder.AppendLine(_localizationService["VersionCheckBatch.PlanSummary"]
             .Replace("{repairable}", plan.RepairableCount.ToString())
+            .Replace("{unsupported}", plan.UnsupportedCount.ToString())
             .Replace("{blocked}", plan.BlockedCount.ToString())
             .Replace("{clean}", plan.NoActionCount.ToString()));
         AppendBatchIssues(builder, plan.Items);
@@ -171,7 +173,7 @@ internal sealed partial class DashboardPageViewModel
         IEnumerable<BatchModRepairItem> items)
     {
         var issues = items
-            .Where(item => item.State is BatchModRepairState.Blocked or BatchModRepairState.Failed)
+            .Where(item => item.State is BatchModRepairState.SkippedUnsupported or BatchModRepairState.Blocked or BatchModRepairState.Failed)
             .Take(20)
             .ToList();
         if (issues.Count == 0)

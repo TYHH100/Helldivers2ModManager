@@ -104,6 +104,7 @@ internal enum BatchModRepairState
 {
     NoAction,
     Repairable,
+    SkippedUnsupported,
     Blocked,
     Repaired,
     Failed
@@ -124,6 +125,7 @@ internal sealed class BatchModRepairPlan
 {
     public List<BatchModRepairItem> Items { get; init; } = [];
     public int RepairableCount => Items.Count(item => item.State == BatchModRepairState.Repairable);
+    public int UnsupportedCount => Items.Count(item => item.State == BatchModRepairState.SkippedUnsupported);
     public int BlockedCount => Items.Count(item => item.State == BatchModRepairState.Blocked);
     public int NoActionCount => Items.Count(item => item.State == BatchModRepairState.NoAction);
 }
@@ -133,5 +135,5 @@ internal sealed class BatchModRepairResult
     public List<BatchModRepairItem> Items { get; init; } = [];
     public int RepairedCount => Items.Count(item => item.State == BatchModRepairState.Repaired);
     public int FailedCount => Items.Count(item => item.State == BatchModRepairState.Failed);
-    public int SkippedCount => Items.Count(item => item.State is BatchModRepairState.NoAction or BatchModRepairState.Blocked);
+    public int SkippedCount => Items.Count(item => item.State is BatchModRepairState.NoAction or BatchModRepairState.SkippedUnsupported or BatchModRepairState.Blocked);
 }
