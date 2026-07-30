@@ -39,8 +39,8 @@
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="gong-wpf-dragdrop" Version="4.0.0" />
 		<PackageReference Include="MdXaml" Version="1.27.0" />
-		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
-		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.18" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.18" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -652,12 +652,12 @@
                                               IsChecked="{Binding AutoCleanLogs}"
                                               Margin="0 0 12 0"/>
                                     <TextBox Grid.Column="1"
-                                             Text="{Binding LogRetentionDays, UpdateSourceTrigger=PropertyChanged}"
+                                             Text="{Binding MaxLogFiles, UpdateSourceTrigger=PropertyChanged}"
                                              Width="60"
                                              VerticalAlignment="Center"
                                              Margin="0 0 8 0"/>
                                     <TextBlock Grid.Column="2"
-                                           Text="{loc:Loc SettingsPage.LogAutoCleanDays}"
+                                           Text="{loc:Loc SettingsPage.LogAutoCleanFiles}"
                                            FontSize="14"
                                            Foreground="{StaticResource NeutralForegroundBrush}"
                                            VerticalAlignment="Center"/>

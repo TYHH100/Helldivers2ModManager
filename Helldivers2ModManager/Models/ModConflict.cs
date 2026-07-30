@@ -11,6 +11,7 @@ internal sealed class ModConflictParticipant
     public required long UnitId { get; init; }
     public required uint Version { get; init; }
     public required int DataSize { get; init; }
+    public required uint GpuSize { get; init; }
     public required int DeploymentOrder { get; init; }
 }
 
@@ -25,10 +26,10 @@ internal sealed class ModConflictRecord
     public required IReadOnlyList<ModConflictParticipant> Participants { get; init; }
 
     /// <summary>
-    /// 版本或数据大小不一致时，可以确认不是同一份资源；否则仍标记为潜在覆盖。
+    /// 版本、主数据大小或 GPU 数据大小不一致时，可以确认不是同一份资源；否则仍标记为潜在覆盖。
     /// </summary>
     public bool IsDefiniteConflict => Participants
-        .Select(static p => (p.Version, p.DataSize))
+        .Select(static p => (p.Version, p.DataSize, p.GpuSize))
         .Distinct()
         .Count() > 1;
 

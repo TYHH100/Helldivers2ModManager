@@ -74,13 +74,13 @@ internal sealed partial class ArmorReuseService
             }
         }
 
-        var gameUnitNames = await _versionCheckService.ResolveGameUnitDisplayNamesAsync(
+        var gameUnitPackages = await _versionCheckService.ResolveGameUnitPackageNamesAsync(
             sources.Select(static source => source.UnitId).Distinct().ToArray(),
             cancellationToken);
 
         var records = sources
             .GroupBy(static source => new { source.ModGuid, source.ModName, source.PatchPath })
-            .Select(group => BuildRecord(group.Key.ModGuid, group.Key.ModName, group, gameUnitNames))
+            .Select(group => BuildRecord(group.Key.ModGuid, group.Key.ModName, group, gameUnitPackages))
             .Where(static record => record is not null)
             .Cast<ArmorReuseRecord>()
             .OrderBy(static record => record.ModName, StringComparer.OrdinalIgnoreCase)
@@ -100,15 +100,15 @@ internal sealed partial class ArmorReuseService
         Guid modGuid,
         string modName,
         IEnumerable<SourceUnit> sources,
-        IReadOnlyDictionary<long, string> gameUnitNames)
+        IReadOnlyDictionary<long, IReadOnlyList<string>> gameUnitPackages)
     {
         var armors = sources
-            .Select(source => gameUnitNames.TryGetValue(source.UnitId, out var packageName) &&
-                              ResolveKnownArmor(packageName) is { } armor
-                ? new ResolvedArmor(armor.Id, armor.Name, source.UnitId)
-                : null)
-            .Where(static armor => armor is not null)
-            .Cast<ResolvedArmor>()
+            .SelectMany(source => gameUnitPackages.TryGetValue(source.UnitId, out var packageNames)
+                ? packageNames
+                    .Select(ResolveKnownArmor)
+                    .Where(static armor => armor is not null)
+                    .Select(armor => new ResolvedArmor(armor!.Id, armor.Name, source.UnitId))
+                : [])
             .GroupBy(static armor => armor.Id, StringComparer.OrdinalIgnoreCase)
             .Select(group => new
             {

@@ -656,8 +656,8 @@ internal sealed class MyViewModel
 | `AutoRemoveMissingMods` | `bool` | `false` | 自动删除不存在的模组条目 |
 | `EnableSorting` | `bool` | `false` | 是否启用排序功能 |
 | `AutoCheckVersionOnStartup` | `bool` | `false` | 启动时自动检查模组版本兼容性 |
-| `AutoCleanLogs` | `bool` | `true` | 是否启用自动清理过期日志 |
-| `LogRetentionDays` | `int` | `7` | 日志保留天数 |
+| `AutoCleanLogs` | `bool` | `true` | 是否启用按数量自动清理日志 |
+| `MaxLogFiles` | `int` | `20` | `logs` 目录保留的最大日志文件数 |
 | `NexusApiKey` | `string?` | `null` | Nexus Mods API Key（使用 `ProtectedData` 加密存储） |
 | `Groups` | `ObservableCollection<ModGroup>` | `[]` | Mod分组列表 |
 | `Tags` | `ObservableCollection<ModTag>` | `[]` | 标签列表 |
@@ -749,7 +749,7 @@ GitHub Actions 工作流 (`.github/workflows/main.yml`)：
 - **设置文件**: `settings.json` (程序目录)
 - **Mod存储**: `%LocalAppData%\Helldivers2ModManager\Mods`
 - **临时文件**: `%LocalAppData%\Temp\Helldivers2ModManager`
-- **日志文件**: `ModManager*.log` (程序目录)
+- **日志文件**: `logs/ModManager*.log` (程序目录下的 `logs` 目录)
 
 ### 8.3 常见问题处理
 

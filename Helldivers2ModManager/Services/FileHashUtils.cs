@@ -157,6 +157,9 @@ internal static class FileHashUtils
             .OrderBy(f => f.FullName)
             .ToArray();
 
+        // 一次性加载本 Mod 的所有缓存记录。此前每个文件都会分别打开 SQLite
+        // 连接查询一次，文件较多时即使全部命中缓存也会产生大量数据库往返。
+        var cachedHashes = repo.GetAllForMod(storageDirectory, modGuid);
         var result = new Dictionary<string, string>(files.Length, StringComparer.OrdinalIgnoreCase);
         var newHashes = new Dictionary<string, (string fileHash, long fileSize, DateTime lastModified)>(StringComparer.OrdinalIgnoreCase);
         int cacheHits = 0;
@@ -176,11 +179,12 @@ internal static class FileHashUtils
             var fileSize = file.Length;
             var lastModified = file.LastWriteTimeUtc;
 
-            // 优先检查数据库缓存：文件大小和修改时间均匹配则直接使用缓存哈希
-            var cachedHash = repo.GetValidCacheHash(storageDirectory, modGuid, relativePath, fileSize, lastModified);
-            if (cachedHash is not null)
+            // 优先检查内存中的缓存快照：文件大小和修改时间均匹配则直接使用缓存哈希。
+            if (cachedHashes.TryGetValue(relativePath, out var cachedHash) &&
+                cachedHash.FileSize == fileSize &&
+                cachedHash.LastModified == lastModified)
             {
-                result[relativePath] = cachedHash;
+                result[relativePath] = cachedHash.FileHash;
                 cacheHits++;
                 continue;
             }

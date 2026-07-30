@@ -20,6 +20,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MessageBox = Helldivers2ModManager.Components.MessageBox;
 
 namespace Helldivers2ModManager.ViewModels;
@@ -58,6 +59,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly ModGroupService _modGroupService;
     private readonly ModConflictService _modConflictService;
     private readonly ModConflictRepository _modConflictRepository;
+    private readonly DispatcherTimer _searchDebounceTimer;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -190,6 +192,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _mods = [];
         _orderedItems = [];
 
+        _searchDebounceTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(180)
+        };
+        _searchDebounceTimer.Tick += (_, _) =>
+        {
+            _searchDebounceTimer.Stop();
+            UpdateView();
+        };
+
         Mods = _orderedItems;
 
         if (MessageBox.IsRegistered)
@@ -204,7 +216,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             OnPropertyChanged(nameof(IsSearchEmpty));
             ClearSearchCommand.NotifyCanExecuteChanged();
-            UpdateView();
+            _searchDebounceTimer.Stop();
+            _searchDebounceTimer.Start();
         }
 
         base.OnPropertyChanged(e);

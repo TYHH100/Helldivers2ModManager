@@ -1,7 +1,5 @@
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Text;
-using System.Text.Json;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -100,14 +98,6 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 			return EditMod?.Icon;
 		}
 	}
-
-	/// <summary>是否为直接编辑 JSON 模式</summary>
-	[ObservableProperty]
-	private bool _isJsonMode;
-
-	/// <summary>JSON 编辑器内容（直接编辑模式时使用）</summary>
-	[ObservableProperty]
-	private string _jsonContent = string.Empty;
 
 	/// <summary>模组选项集合（可编辑）</summary>
 	public ObservableCollection<CreateModOptionViewModel> EditOptions { get; } = [];
@@ -223,18 +213,7 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 
 		try
 		{
-			if (IsJsonMode)
-			{
-				// JSON 模式：直接解析 JSON 并保存
-				using var doc = JsonDocument.Parse(JsonContent);
-				var manifest = ModManifest.DeserializeFromDocument(doc, _logger);
-				EditMod.Data.Manifest = manifest;
-				ModManifest.SaveToFile(EditMod.Data.Manifest, EditMod.Data.Directory);
-			}
-			else
-			{
-				SaveVisualManifest();
-			}
+			SaveVisualManifest();
 		}
 		catch (Exception ex)
 		{
@@ -429,74 +408,4 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(IconPreview));
 	}
 
-	/// <summary>切换编辑模式时，序列化或反序列化 JSON</summary>
-	partial void OnIsJsonModeChanged(bool value)
-	{
-		if (value)
-			SwitchToJsonMode();
-		else
-			SwitchToVisualMode();
-	}
-
-	/// <summary>切换为 JSON 模式：将当前可视状态序列化为 JSON</summary>
-	private void SwitchToJsonMode()
-	{
-		var newOptions = EditOptions.Select(o => o.ToModOption()).ToList();
-		var currentManifest = _draftManifest ?? EditMod?.Data.Manifest;
-		var guid = currentManifest?.Guid ?? Guid.NewGuid();
-		IModManifest manifest;
-
-		if (IsLegacyManifest && !OptionsWereModified())
-		{
-			manifest = new LegacyModManifest
-			{
-				Guid = guid,
-				Name = ModName,
-				Description = ModDescription,
-				IconPath = !string.IsNullOrWhiteSpace(IconPath) ? IconPath : null,
-				Options = EditOptions.Count > 0 ? EditOptions.Select(o => o.Name).ToArray() : null,
-			};
-		}
-		else
-		{
-			manifest = new V1ModManifest
-			{
-				Guid = guid,
-				Name = ModName,
-				Description = ModDescription,
-				IconPath = !string.IsNullOrWhiteSpace(IconPath) ? IconPath : null,
-				Options = newOptions.Count > 0 ? newOptions : null,
-				NexusData = (currentManifest as V1ModManifest)?.NexusData,
-			};
-		}
-
-		using var stream = new MemoryStream();
-		using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
-		{
-			manifest.Serialize(writer);
-		}
-		JsonContent = Encoding.UTF8.GetString(stream.ToArray());
-	}
-
-	/// <summary>切换为可视化模式：解析 JSON 并填充到表单</summary>
-	private void SwitchToVisualMode()
-	{
-		if (string.IsNullOrWhiteSpace(JsonContent))
-			return;
-
-		try
-		{
-			using var doc = JsonDocument.Parse(JsonContent);
-			_draftManifest = ModManifest.DeserializeFromDocument(doc, _logger);
-			LoadVisualFields(_draftManifest);
-			OnPropertyChanged(nameof(IsV1Manifest));
-			OnPropertyChanged(nameof(IsLegacyManifest));
-			OnPropertyChanged(nameof(ShowOptionEditing));
-		}
-		catch (Exception ex)
-		{
-			_logger.LogError(ex, "JSON 解析失败，切换到可视化编辑模式");
-			// 不阻断切换，保留原有数据
-		}
-	}
 }

@@ -1,7 +1,5 @@
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Text;
-using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Helldivers2ModManager.Models;
@@ -50,17 +48,9 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	[NotifyCanExecuteChangedFor(nameof(CreateCommand))]
 	private bool _isCreating;
 
-	/// <summary>是否为直接编辑 JSON 模式</summary>
-	[ObservableProperty]
-	private bool _isJsonMode;
-
 	/// <summary>是否显示创建流程提示横幅（可由用户关闭）</summary>
 	[ObservableProperty]
 	private bool _showBanner = true;
-
-	/// <summary>JSON 编辑器内容（直接编辑模式时使用）</summary>
-	[ObservableProperty]
-	private string _jsonContent = string.Empty;
 
 	/// <summary>模组选项集合</summary>
 	public ObservableCollection<CreateModOptionViewModel> Options { get; } = [];
@@ -152,8 +142,6 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 			return false;
 		if (string.IsNullOrWhiteSpace(SourceDirectory))
 			return false;
-		if (IsJsonMode)
-			return !string.IsNullOrWhiteSpace(JsonContent);
 		return !string.IsNullOrWhiteSpace(ModName);
 	}
 
@@ -169,50 +157,23 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 
 		try
 		{
-			if (IsJsonMode)
+			var sourceDir = new DirectoryInfo(SourceDirectory);
+			var modOptions = Options.Select(o => o.ToModOption()).ToList();
+
+			// 复制图片文件到源目录（在复制到存储目录之前）
+			CopyImageFiles(sourceDir);
+
+			var problems = await _modService.TryAddModFromDirectoryAsync(
+				sourceDir, ModName, ModDescription, modOptions, IconPath);
+
+			if (problems.Length > 0)
 			{
-				// JSON 模式：直接解析 JSON 并创建模组
-				using var doc = JsonDocument.Parse(JsonContent);
-				var manifest = (V1ModManifest)V1ModManifest.Deserialize(doc.RootElement);
-				var sourceDir = new DirectoryInfo(SourceDirectory);
-				var modOptions = manifest.Options?.ToList() ?? [];
-				var iconPath = !string.IsNullOrWhiteSpace(manifest.IconPath)
-					? Path.Combine(SourceDirectory, manifest.IconPath)
-					: null;
-
-				var problems = await _modService.TryAddModFromDirectoryAsync(
-					sourceDir, manifest.Name, manifest.Description, modOptions, iconPath);
-
-				if (problems.Length > 0)
-				{
-					foreach (var problem in problems)
-						_logger.LogWarning("创建模组时遇到问题: {Kind}", problem.Kind);
-					return;
-				}
-
-				_logger.LogInformation("Mod created successfully: {}", manifest.Name);
+				foreach (var problem in problems)
+					_logger.LogWarning("创建模组时遇到问题: {Kind}", problem.Kind);
+				return;
 			}
-			else
-			{
-				// 可视化模式：使用表单数据创建模组
-				var sourceDir = new DirectoryInfo(SourceDirectory);
-				var modOptions = Options.Select(o => o.ToModOption()).ToList();
 
-				// 复制图片文件到源目录（在复制到存储目录之前）
-				CopyImageFiles(sourceDir);
-
-				var problems = await _modService.TryAddModFromDirectoryAsync(
-					sourceDir, ModName, ModDescription, modOptions, IconPath);
-
-				if (problems.Length > 0)
-				{
-					foreach (var problem in problems)
-						_logger.LogWarning("创建模组时遇到问题: {Kind}", problem.Kind);
-					return;
-				}
-
-				_logger.LogInformation("Mod created successfully: {}", ModName);
-			}
+			_logger.LogInformation("Mod created successfully: {}", ModName);
 
 			_navigationStore.Navigate<DashboardPageViewModel>();
 		}
@@ -318,83 +279,6 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	partial void OnIconPathChanged(string value)
 	{
 		OnPropertyChanged(nameof(IconPreview));
-	}
-
-	/// <summary>切换编辑模式时，序列化或反序列化 JSON</summary>
-	partial void OnIsJsonModeChanged(bool value)
-	{
-		if (value)
-			SwitchToJsonMode();
-		else
-			SwitchToVisualMode();
-		CreateCommand.NotifyCanExecuteChanged();
-	}
-
-	/// <summary>切换为 JSON 模式：将当前表单状态序列化为 JSON</summary>
-	private void SwitchToJsonMode()
-	{
-		var options = Options.Select(o => o.ToModOption()).ToList();
-		var manifest = new V1ModManifest
-		{
-			Guid = Guid.NewGuid(),
-			Name = ModName,
-			Description = ModDescription,
-			IconPath = !string.IsNullOrWhiteSpace(IconPath) ? Path.GetFileName(IconPath) : null,
-			Options = options.Count > 0 ? options : null,
-		};
-
-		using var stream = new MemoryStream();
-		using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
-		{
-			manifest.Serialize(writer);
-		}
-		JsonContent = Encoding.UTF8.GetString(stream.ToArray());
-	}
-
-	/// <summary>切换为可视化模式：解析 JSON 并填充到表单</summary>
-	private void SwitchToVisualMode()
-	{
-		if (string.IsNullOrWhiteSpace(JsonContent))
-			return;
-
-		try
-		{
-			using var doc = JsonDocument.Parse(JsonContent);
-			var manifest = (V1ModManifest)V1ModManifest.Deserialize(doc.RootElement);
-
-			ModName = manifest.Name;
-			ModDescription = manifest.Description;
-			IconPath = manifest.IconPath ?? string.Empty;
-
-			Options.Clear();
-			foreach (var opt in manifest.Options ?? [])
-			{
-				var optVm = new CreateModOptionViewModel
-				{
-					Name = opt.Name,
-					Description = opt.Description,
-					IncludePaths = opt.Include is not null ? string.Join(";", opt.Include) : string.Empty,
-					ImagePath = opt.Image ?? string.Empty,
-					SourceDirectory = SourceDirectory,
-				};
-				foreach (var sub in opt.SubOptions ?? [])
-				{
-					optVm.SubOptions.Add(new CreateModSubOptionViewModel
-					{
-						Name = sub.Name,
-						Description = sub.Description,
-						IncludePaths = string.Join(";", sub.Include),
-						ImagePath = sub.Image ?? string.Empty,
-						SourceDirectory = SourceDirectory,
-					});
-				}
-				Options.Add(optVm);
-			}
-		}
-		catch (Exception ex)
-		{
-			_logger.LogError(ex, "JSON 解析失败，切换到可视化编辑模式");
-		}
 	}
 
 	partial void OnSourceDirectoryChanged(string value)

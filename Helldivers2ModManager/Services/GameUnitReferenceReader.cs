@@ -53,12 +53,14 @@ internal sealed partial class VersionCheckService
         public required BundleInfo[] Bundles { get; init; }
         public required Dictionary<long, List<GameUnitLocator>> UnitLocators { get; init; }
         public Dictionary<long, GameUnitReferenceData> ResolvedReferences { get; } = [];
+        public Dictionary<long, IReadOnlyList<string>> PackageNames { get; } = [];
         public HashSet<long> AmbiguousUnitIds { get; } = [];
     }
 
     private sealed class GameUnitReferenceLookup
     {
         public Dictionary<long, GameUnitReferenceData> References { get; } = [];
+        public Dictionary<long, IReadOnlyList<string>> PackageNames { get; } = [];
         public HashSet<long> MissingUnitIds { get; } = [];
         public HashSet<long> AmbiguousUnitIds { get; } = [];
         public string? ErrorMessage { get; init; }
@@ -107,6 +109,9 @@ internal sealed partial class VersionCheckService
             var lookup = new GameUnitReferenceLookup();
             foreach (var unitId in unitIds)
             {
+                if (_gameReferenceIndex.PackageNames.TryGetValue(unitId, out var cachedPackageNames))
+                    lookup.PackageNames[unitId] = cachedPackageNames;
+
                 if (_gameReferenceIndex.AmbiguousUnitIds.Contains(unitId))
                 {
                     lookup.AmbiguousUnitIds.Add(unitId);
@@ -144,13 +149,22 @@ internal sealed partial class VersionCheckService
                 {
                     lookup.MissingUnitIds.Add(unitId);
                 }
-                else if (distinctCandidates.Count > 1)
-                {
-                    _gameReferenceIndex.AmbiguousUnitIds.Add(unitId);
-                    lookup.AmbiguousUnitIds.Add(unitId);
-                }
                 else
                 {
+                    var packageNames = candidates
+                        .Select(candidate => candidate.PackageName)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    _gameReferenceIndex.PackageNames[unitId] = packageNames;
+                    lookup.PackageNames[unitId] = packageNames;
+
+                    if (distinctCandidates.Count > 1)
+                    {
+                        _gameReferenceIndex.AmbiguousUnitIds.Add(unitId);
+                        lookup.AmbiguousUnitIds.Add(unitId);
+                        continue;
+                    }
+
                     var resolved = distinctCandidates[0];
                     _gameReferenceIndex.ResolvedReferences[unitId] = resolved;
                     lookup.References[unitId] = resolved;

@@ -55,6 +55,15 @@ internal sealed partial class VersionCheckService
     private readonly ILogger<VersionCheckService> _logger;
     private readonly SettingsService _settingsService;
     private readonly LocalizationService _localizationService;
+    private readonly ConcurrentDictionary<string, PatchUnitCacheEntry> _patchUnitCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private sealed class PatchUnitCacheEntry
+    {
+        public required long Length { get; init; }
+        public required DateTime LastWriteTimeUtc { get; init; }
+        public required Lazy<Task<List<PatchUnitInfo>>> Units { get; init; }
+    }
 
     public VersionCheckService(ILogger<VersionCheckService> logger, SettingsService settingsService, LocalizationService localizationService)
     {
@@ -203,7 +212,8 @@ internal sealed partial class VersionCheckService
             FileName = detail.FileName,
             FileId = detail.FileId,
             Version = detail.Version,
-            DataSize = detail.DataSize
+            DataSize = detail.DataSize,
+            GpuSize = detail.GpuSize
         };
     }
 
@@ -221,6 +231,42 @@ internal sealed partial class VersionCheckService
     /// 参考 hd2-repatcher update_patch_file() 实现
     /// </summary>
     public async Task<List<PatchUnitInfo>> ExtractUnitVersionsFromPatchFileAsync(FileInfo patchFile)
+    {
+        patchFile.Refresh();
+        if (!patchFile.Exists || patchFile.Length < HeaderSize)
+            return [];
+
+        var length = patchFile.Length;
+        var lastWriteTimeUtc = patchFile.LastWriteTimeUtc;
+        var fullPath = patchFile.FullName;
+        var entry = _patchUnitCache.AddOrUpdate(
+            fullPath,
+            _ => CreatePatchUnitCacheEntry(patchFile, length, lastWriteTimeUtc),
+            (_, existing) => existing.Length == length && existing.LastWriteTimeUtc == lastWriteTimeUtc
+                ? existing
+                : CreatePatchUnitCacheEntry(patchFile, length, lastWriteTimeUtc));
+
+        // 调用方只读取结果；返回新的 List 容器，避免误修改缓存集合。
+        return new List<PatchUnitInfo>(await entry.Units.Value);
+    }
+
+    private PatchUnitCacheEntry CreatePatchUnitCacheEntry(
+        FileInfo patchFile,
+        long length,
+        DateTime lastWriteTimeUtc)
+    {
+        var cachedFile = new FileInfo(patchFile.FullName);
+        return new PatchUnitCacheEntry
+        {
+            Length = length,
+            LastWriteTimeUtc = lastWriteTimeUtc,
+            Units = new Lazy<Task<List<PatchUnitInfo>>>(
+                () => ExtractUnitVersionsFromPatchFileUncachedAsync(cachedFile),
+                LazyThreadSafetyMode.ExecutionAndPublication)
+        };
+    }
+
+    private async Task<List<PatchUnitInfo>> ExtractUnitVersionsFromPatchFileUncachedAsync(FileInfo patchFile)
     {
         var result = new List<PatchUnitInfo>();
 
@@ -262,6 +308,7 @@ internal sealed partial class VersionCheckService
                     var fileId = MemoryMarshal.Read<long>(data.AsSpan(entryOffset, 8));
                     var dataOffset = MemoryMarshal.Read<long>(data.AsSpan(entryOffset + 16, 8));
                     var dataSize = MemoryMarshal.Read<int>(data.AsSpan(entryOffset + 56, 4));
+                    var gpuSize = MemoryMarshal.Read<uint>(data.AsSpan(entryOffset + 64, 4));
 
                     if (dataOffset >= 0 && dataSize >= 0x30 && dataOffset + 0x30 <= data.Length)
                     {
@@ -272,7 +319,8 @@ internal sealed partial class VersionCheckService
                             FileName = patchFile.Name,
                             FileId = fileId,
                             Version = version,
-                            DataSize = dataSize
+                            DataSize = dataSize,
+                            GpuSize = gpuSize
                         });
                     }
                 }
@@ -305,6 +353,28 @@ internal sealed partial class VersionCheckService
             var displayName = NormalizeGamePackageName(reference.PackageName);
             if (!string.IsNullOrWhiteSpace(displayName))
                 result[unitId] = displayName;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 返回每个 Unit 在当前游戏归档中出现过的所有 package 名称。
+    /// 相同 Unit 数据可能被多个护甲 package 复用；这些别名不能在连带影响分析中丢弃。
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, IReadOnlyList<string>>> ResolveGameUnitPackageNamesAsync(
+        IReadOnlyCollection<long> unitIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (unitIds.Count == 0)
+            return new Dictionary<long, IReadOnlyList<string>>();
+
+        var lookup = await GetGameUnitReferencesAsync(unitIds);
+        var result = new Dictionary<long, IReadOnlyList<string>>();
+        foreach (var (unitId, packageNames) in lookup.PackageNames)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            result[unitId] = packageNames;
         }
 
         return result;
@@ -350,6 +420,7 @@ internal sealed partial class VersionCheckService
                 var fileId = MemoryMarshal.Read<long>(entry.AsSpan(0, 8));
                 var dataOffset = MemoryMarshal.Read<long>(entry.AsSpan(16, 8));
                 var dataSize = MemoryMarshal.Read<int>(entry.AsSpan(56, 4));
+                var gpuSize = MemoryMarshal.Read<uint>(entry.AsSpan(64, 4));
                 if (dataOffset < 0 || dataSize < 0x30 || dataOffset + 0x30 > stream.Length)
                     continue;
 
@@ -361,7 +432,8 @@ internal sealed partial class VersionCheckService
                     FileName = patchFile.Name,
                     FileId = fileId,
                     Version = MemoryMarshal.Read<uint>(versionBuffer),
-                    DataSize = dataSize
+                    DataSize = dataSize,
+                    GpuSize = gpuSize
                 });
             }
         }
@@ -421,6 +493,7 @@ internal sealed partial class VersionCheckService
         foreach (var patchFile in patchFiles)
         {
             var patchAnalysis = await AnalyzeSinglePatchFileStructureAsync(patchFile);
+            patchAnalysis.FileName = Path.GetRelativePath(modDir.FullName, patchFile.FullName);
             patchAnalyses.Add(patchAnalysis);
 
             foreach (var resourceType in patchAnalysis.ResourceTypes)
@@ -454,6 +527,16 @@ internal sealed partial class VersionCheckService
             .ToList();
 
         return analysis;
+    }
+
+    /// <summary>
+    /// Analyses every patch below a user-selected directory without requiring a manifest,
+    /// mod database entry, or the main application's configured mod storage.
+    /// </summary>
+    internal Task<ModDetailedAnalysis> AnalyzePatchDirectoryAsync(DirectoryInfo directory)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        return AnalyzeModPatchFilesAsync(directory);
     }
 
     private static bool IsMainPatchFile(string name)
@@ -606,8 +689,11 @@ internal sealed partial class VersionCheckService
                 MarkWarning(analysis, _localizationService["VersionCheck.EntryIndexMismatch"]
                     .Replace("{count}", analysis.EntryIndexIssueCount.ToString()));
 
-            if (declaredTypeCounts.Count != actualTypeCounts.Count ||
-                declaredTypeCounts.Any(kv => !actualTypeCounts.TryGetValue(kv.Key, out var count) || count != kv.Value))
+            // Legacy patches can retain empty resource-type slots. Such entries are valid:
+            // a declared count of zero is equivalent to that type being absent from the TOC entries.
+            // Check both directions so non-zero mismatches and undeclared actual types are still rejected.
+            if (declaredTypeCounts.Any(kv => actualTypeCounts.GetValueOrDefault(kv.Key) != kv.Value) ||
+                actualTypeCounts.Any(kv => !declaredTypeCounts.TryGetValue(kv.Key, out var count) || count != kv.Value))
             {
                 analysis.TypeDistributionValid = false;
                 analysis.TypeDistributionIssueCount++;
@@ -743,6 +829,7 @@ internal sealed partial class VersionCheckService
             EntryIndex = entryIndex,
             FileId = entry.FileId,
             DataSize = entry.TocSize <= int.MaxValue ? (int)entry.TocSize : int.MaxValue,
+            GpuSize = entry.GpuSize,
             UnitDataInBounds = IsRangeInBounds(entry.TocOffset, entry.TocSize, stream.Length) && entry.TocSize >= 0x68
         };
 

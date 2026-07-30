@@ -20,7 +20,6 @@
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="Auto"/>
-			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="*"/>
 			<RowDefinition Height="Auto"/>
 		</Grid.RowDefinitions>
@@ -32,30 +31,8 @@
 				   HorizontalAlignment="Center"
 				   Margin="0 0 0 16"/>
 
-		<!-- 编辑模式切换 -->
-		<Border Grid.Row="1"
-				Background="{StaticResource NeutralBackgroundFillBrush}"
-				CornerRadius="6"
-				Padding="8 6"
-				Margin="0 0 0 12"
-				HorizontalAlignment="Center">
-			<StackPanel Orientation="Horizontal">
-				<RadioButton GroupName="EditMode"
-							 IsChecked="{Binding IsJsonMode, Converter={StaticResource InverseBoolConverter}}"
-							 Content="{loc:Loc CreatePage.VisualEdit}"
-							 Margin="0,0,12,0"
-							 Padding="12 4"
-							 Style="{StaticResource FluentRadioButton}"/>
-				<RadioButton GroupName="EditMode"
-							 IsChecked="{Binding IsJsonMode}"
-							 Content="{loc:Loc CreatePage.JsonEdit}"
-							 Padding="12 4"
-							 Style="{StaticResource FluentRadioButton}"/>
-			</StackPanel>
-		</Border>
-
 		<!-- 流程提示横幅 -->
-		<Border Grid.Row="2"
+		<Border Grid.Row="1"
 				Background="#1a3a5c"
 				CornerRadius="8"
 				Padding="14 12"
@@ -105,23 +82,13 @@
 		</Border>
 
 		<!-- Form Content -->
-		<ScrollViewer Grid.Row="3"
+		<ScrollViewer Grid.Row="2"
 					  HorizontalScrollBarVisibility="Disabled"
 					  VerticalScrollBarVisibility="Auto">
 
 			<StackPanel>
-			<!-- 可视化编辑模式 -->
+			<!-- 图形化编辑 -->
 			<StackPanel>
-				<StackPanel.Style>
-					<Style TargetType="StackPanel">
-						<Setter Property="Visibility" Value="Visible"/>
-						<Style.Triggers>
-							<DataTrigger Binding="{Binding IsJsonMode}" Value="True">
-								<Setter Property="Visibility" Value="Collapsed"/>
-							</DataTrigger>
-						</Style.Triggers>
-					</Style>
-				</StackPanel.Style>
 
 			<Border Style="{StaticResource FluentCard}"
 					CornerRadius="8"
@@ -511,33 +478,11 @@
 			</Border>
 			</StackPanel>
 
-			<!-- 直接编辑 JSON 模式 -->
-			<TextBox Text="{Binding JsonContent, UpdateSourceTrigger=PropertyChanged}"
-					 FontFamily="Consolas"
-					 FontSize="12"
-					 AcceptsReturn="True"
-					 AcceptsTab="True"
-					 TextWrapping="NoWrap"
-					 VerticalScrollBarVisibility="Auto"
-					 HorizontalScrollBarVisibility="Auto"
-					 Padding="8"
-					 MinHeight="400">
-				<TextBox.Style>
-					<Style TargetType="TextBox">
-						<Setter Property="Visibility" Value="Collapsed"/>
-						<Style.Triggers>
-							<DataTrigger Binding="{Binding IsJsonMode}" Value="True">
-								<Setter Property="Visibility" Value="Visible"/>
-							</DataTrigger>
-						</Style.Triggers>
-					</Style>
-				</TextBox.Style>
-			</TextBox>
 			</StackPanel>
 		</ScrollViewer>
 
 		<!-- Navigation Buttons -->
-		<Border Grid.Row="4"
+		<Border Grid.Row="3"
 				Style="{StaticResource FluentCard}"
 				CornerRadius="8"
 				Margin="0 16 0 0">

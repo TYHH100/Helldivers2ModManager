@@ -54,6 +54,11 @@ internal sealed class PatchUnitInfo
     /// Unit 资源数据大小（字节）
     /// </summary>
     public int DataSize { get; init; }
+
+    /// <summary>
+    /// Unit 关联的 GPU 资源数据大小（字节）
+    /// </summary>
+    public uint GpuSize { get; init; }
 }
 
 /// <summary>
@@ -111,6 +116,11 @@ internal sealed class UnitResourceDetail
     /// Unit 数据大小（字节）
     /// </summary>
     public int DataSize { get; set; }
+
+    /// <summary>
+    /// Unit 关联的 GPU 资源数据大小（字节）
+    /// </summary>
+    public uint GpuSize { get; set; }
 
     /// <summary>
     /// Unit 内部记录的结束偏移（头部 +0x60）。

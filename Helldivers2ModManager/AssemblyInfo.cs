@@ -4,3 +4,4 @@ using System.Windows;
 
 [assembly: ThemeInfo(ResourceDictionaryLocation.None, ResourceDictionaryLocation.SourceAssembly)]
 [assembly: InternalsVisibleTo("Helldivers2ModManager.Tests")]
+[assembly: InternalsVisibleTo("Helldivers2PatchTool")]

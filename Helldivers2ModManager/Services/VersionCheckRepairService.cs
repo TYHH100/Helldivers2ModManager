@@ -351,6 +351,22 @@ internal sealed partial class VersionCheckService
                 return;
 
             var virtualEntries = entries.Select(e => e.Toc).ToArray();
+
+            // An oversized Unit TOC range can overlap the following payload even when both
+            // offsets are correct. Repair those self-describing sizes before asking the
+            // generic offset recovery code to reject overlapping "valid-looking" ranges.
+            // Invalid Unit offsets are deferred until after offset inference below.
+            await AddUnitSizeRepairsAsync(
+                patchFile,
+                entries,
+                virtualEntries,
+                stream,
+                actions,
+                blockers,
+                deferInvalidUnitHeaders: true);
+            if (blockers.Count > 0)
+                return;
+
             if (!TryInferInvalidMainOffsets(
                     patchFile,
                     entries,
@@ -363,13 +379,18 @@ internal sealed partial class VersionCheckService
                 return;
             }
 
-            var rangeAnalysis = new PatchFileAnalysis();
-            ValidateMainDataRanges(virtualEntries, stream.Length, tableEnd, rangeAnalysis);
-            if (!rangeAnalysis.MainDataBoundsValid)
-            {
-                AddRepairBlocker(blockers, patchFile, "resource payload ranges overlap or exceed the patch after reconstruction");
+            // Re-run after offset reconstruction so a Unit whose original offset was invalid
+            // can now be checked and, when physically proven, have its TOC size repaired.
+            await AddUnitSizeRepairsAsync(
+                patchFile,
+                entries,
+                virtualEntries,
+                stream,
+                actions,
+                blockers,
+                deferInvalidUnitHeaders: false);
+            if (blockers.Count > 0)
                 return;
-            }
 
             var companionAnalysis = new PatchFileAnalysis();
             ValidateCompanionFiles(companionSource ?? patchFile, virtualEntries, companionAnalysis);
@@ -382,73 +403,6 @@ internal sealed partial class VersionCheckService
                 return;
             }
 
-            for (var i = 0; i < entries.Count; i++)
-            {
-                var toc = virtualEntries[i];
-                var entry = entries[i];
-                if (toc.TypeId != UnitTypeId)
-                    continue;
-
-                var detail = await AnalyzeUnitResourceDeepAsync(
-                    patchFile.Name, i + 1, toc, stream, _localizationService);
-                if (!detail.UnitDataInBounds)
-                {
-                    AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} header is outside its declared payload");
-                    continue;
-                }
-
-                if (detail.DeclaredSizeMatchesInternal)
-                {
-                    if (!detail.LODGroupInBounds)
-                        AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} has an unsupported LOD boundary problem");
-                    continue;
-                }
-
-                if (!detail.IsTruncated || detail.ExpectedDataSize <= 0)
-                {
-                    AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} cannot be repaired without shrinking or moving data");
-                    continue;
-                }
-
-                var expectedSize = (uint)detail.ExpectedDataSize;
-                var expectedEnd = toc.TocOffset + expectedSize;
-                var nextPayloadOffset = virtualEntries
-                    .Where(e => e.TocSize > 0 && e.TocOffset > toc.TocOffset)
-                    .Select(e => e.TocOffset)
-                    .DefaultIfEmpty((ulong)stream.Length)
-                    .Min();
-
-                if (expectedEnd != nextPayloadOffset || expectedEnd > (ulong)stream.Length)
-                {
-                    AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} physical boundary does not prove the expected size");
-                    continue;
-                }
-
-                var repairedEntry = toc with { TocSize = expectedSize };
-                var repairedDetail = await AnalyzeUnitResourceDeepAsync(
-                    patchFile.Name, i + 1, repairedEntry, stream, _localizationService);
-                if (!repairedDetail.UnitDataInBounds ||
-                    !repairedDetail.DeclaredSizeMatchesInternal ||
-                    !repairedDetail.LODGroupInBounds)
-                {
-                    AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} still fails validation with the proposed size");
-                    continue;
-                }
-
-                virtualEntries[i] = repairedEntry;
-                actions.Add(new PatchRepairAction
-                {
-                    Kind = PatchRepairKind.UnitTocSize,
-                    PatchFilePath = patchFile.FullName,
-                    Offset = entry.TableOffset + 56,
-                    Width = 4,
-                    OldValue = toc.TocSize,
-                    NewValue = expectedSize,
-                    EntryIndex = i + 1,
-                    FileId = toc.FileId
-                });
-            }
-
             var repairedRangeAnalysis = new PatchFileAnalysis();
             ValidateMainDataRanges(virtualEntries, stream.Length, tableEnd, repairedRangeAnalysis);
             if (!repairedRangeAnalysis.MainDataBoundsValid)
@@ -458,6 +412,89 @@ internal sealed partial class VersionCheckService
         {
             _logger.LogWarning(ex, "Failed to build repair plan for {Patch}", patchFile.FullName);
             AddRepairBlocker(blockers, patchFile, ex.Message);
+        }
+    }
+
+    private async Task AddUnitSizeRepairsAsync(
+        FileInfo patchFile,
+        IReadOnlyList<RepairTocEntry> entries,
+        PatchTocEntry[] virtualEntries,
+        FileStream stream,
+        List<PatchRepairAction> actions,
+        List<string> blockers,
+        bool deferInvalidUnitHeaders)
+    {
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var toc = virtualEntries[i];
+            var entry = entries[i];
+            if (toc.TypeId != UnitTypeId)
+                continue;
+
+            var detail = await AnalyzeUnitResourceDeepAsync(
+                patchFile.Name, i + 1, toc, stream, _localizationService);
+            if (!detail.UnitDataInBounds)
+            {
+                if (deferInvalidUnitHeaders)
+                    continue;
+
+                AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} header is outside its declared payload");
+                continue;
+            }
+
+            if (detail.DeclaredSizeMatchesInternal)
+            {
+                if (!detail.LODGroupInBounds)
+                    AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} has an unsupported LOD boundary problem");
+                continue;
+            }
+
+            if (detail.ExpectedDataSize <= 0)
+            {
+                AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} does not contain a usable internal size");
+                continue;
+            }
+
+            var expectedSize = (uint)detail.ExpectedDataSize;
+            var expectedEnd = toc.TocOffset + expectedSize;
+            var nextPayloadOffset = virtualEntries
+                .Where(e => e.TocSize > 0 && e.TocOffset > toc.TocOffset)
+                .Select(e => e.TocOffset)
+                .DefaultIfEmpty((ulong)stream.Length)
+                .Min();
+
+            // The internal end marker is accepted only when it lands exactly on the next
+            // payload (or EOF). This proves both safe expansion of a truncated declaration
+            // and safe shrinking of an oversized declaration without moving any bytes.
+            if (expectedEnd != nextPayloadOffset || expectedEnd > (ulong)stream.Length)
+            {
+                AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} physical boundary does not prove the expected size");
+                continue;
+            }
+
+            var repairedEntry = toc with { TocSize = expectedSize };
+            var repairedDetail = await AnalyzeUnitResourceDeepAsync(
+                patchFile.Name, i + 1, repairedEntry, stream, _localizationService);
+            if (!repairedDetail.UnitDataInBounds ||
+                !repairedDetail.DeclaredSizeMatchesInternal ||
+                !repairedDetail.LODGroupInBounds)
+            {
+                AddRepairBlocker(blockers, patchFile, $"Unit #{i + 1} still fails validation with the proposed size");
+                continue;
+            }
+
+            virtualEntries[i] = repairedEntry;
+            actions.Add(new PatchRepairAction
+            {
+                Kind = PatchRepairKind.UnitTocSize,
+                PatchFilePath = patchFile.FullName,
+                Offset = entry.TableOffset + 56,
+                Width = 4,
+                OldValue = toc.TocSize,
+                NewValue = expectedSize,
+                EntryIndex = i + 1,
+                FileId = toc.FileId
+            });
         }
     }
 

@@ -263,7 +263,7 @@ internal sealed class SettingsService
 	}
 
 	/// <summary>
-	/// 是否启用自动清理过期日志
+	/// 是否启用日志数量自动清理
 	/// </summary>
 	public bool AutoCleanLogs
 	{
@@ -313,21 +313,21 @@ internal sealed class SettingsService
 	}
 
 	/// <summary>
-	/// 日志保留天数（超过此天数的日志将被清理）
+	/// logs 目录中保留的最大日志文件数量
 	/// </summary>
-	public int LogRetentionDays
+	public int MaxLogFiles
 	{
 		get
 		{
 			GuardInitialized();
-			return _logRetentionDays;
+			return _maxLogFiles;
 		}
 
 		set
 		{
 			GuardInitialized();
 			GuardReadonly();
-			_logRetentionDays = Math.Max(1, value);
+			_maxLogFiles = Math.Max(1, value);
 		}
 	}
 
@@ -507,7 +507,7 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private ObservableCollection<ModSeparator> _separators = null!;
 	[JsonInclude]
-	private int _logRetentionDays = 7;
+	private int _maxLogFiles = 20;
 	[JsonInclude]
 	private ObservableCollection<ModTag> _tags = null!;
 	[JsonInclude]
@@ -589,8 +589,8 @@ internal sealed class SettingsService
 		Initialized = true;
 		_logger.LogInformation("Settings service initialization complete");
 
-		// 启动时自动清理过期日志
-		CleanOldLogs();
+		// 启动时自动清理超出数量上限的日志
+		CleanExcessLogs();
 
 		return true;
 	}
@@ -756,7 +756,7 @@ internal sealed class SettingsService
 				displayIndex = separator.DisplayIndex,
 				modGuids = separator.ModGuids
 			}),
-			LogRetentionDays = _logRetentionDays,
+			MaxLogFiles = _maxLogFiles,
 			Tags = _tags.Select(static tag => new
 			{
 				id = tag.Id,
@@ -939,8 +939,8 @@ internal sealed class SettingsService
 			}
 			_separators = new ObservableCollection<ModSeparator>(sepList);
 		}
-		if (root.TryGetProperty(nameof(LogRetentionDays), JsonValueKind.Number, out prop))
-			_logRetentionDays = Math.Max(1, prop.GetInt32());
+		if (root.TryGetProperty(nameof(MaxLogFiles), JsonValueKind.Number, out prop))
+			_maxLogFiles = Math.Max(1, prop.GetInt32());
 		if (root.TryGetProperty(nameof(Language), JsonValueKind.String, out prop))
 			_language = prop.GetString() ?? string.Empty;
 		if (root.TryGetProperty(nameof(Tags), JsonValueKind.Array, out var tagsArr))
@@ -973,10 +973,10 @@ internal sealed class SettingsService
 	}
 
 	/// <summary>
-	/// 清理过期日志文件。
-	/// 根据 LogRetentionDays 删除 logs 目录中超过指定天数的日志文件。
+	/// 清理超出数量上限的日志文件。
+	/// logs 目录中只保留最新的 MaxLogFiles 个日志。
 	/// </summary>
-	public void CleanOldLogs()
+	public void CleanExcessLogs()
 	{
 		if (!_autoCleanLogs)
 			return;
@@ -987,31 +987,33 @@ internal sealed class SettingsService
 			if (!logDir.Exists)
 				return;
 
-			var cutoff = DateTime.UtcNow.AddDays(-_logRetentionDays);
+			var filesToDelete = logDir
+				.EnumerateFiles("*.log", SearchOption.TopDirectoryOnly)
+				.OrderByDescending(static file => file.LastWriteTimeUtc)
+				.ThenByDescending(static file => file.CreationTimeUtc)
+				.Skip(_maxLogFiles)
+				.ToArray();
 			int deleted = 0;
 
-			foreach (var file in logDir.EnumerateFiles("*.log"))
+			foreach (var file in filesToDelete)
 			{
-				if (file.LastWriteTimeUtc < cutoff)
+				try
 				{
-					try
-					{
-						file.Delete();
-						deleted++;
-					}
-					catch (Exception ex)
-					{
-						_logger.LogWarning(ex, "Failed to delete old log file: {File}", file.Name);
-					}
+					file.Delete();
+					deleted++;
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "Failed to delete excess log file: {File}", file.Name);
 				}
 			}
 
 			if (deleted > 0)
-				_logger.LogInformation("Cleaned {Count} old log files (retention: {Days} days)", deleted, _logRetentionDays);
+				_logger.LogInformation("Cleaned {Count} excess log files (maximum retained: {MaxFiles})", deleted, _maxLogFiles);
 		}
 		catch (Exception ex)
 		{
-			_logger.LogWarning(ex, "Failed to clean old log files");
+			_logger.LogWarning(ex, "Failed to clean excess log files");
 		}
 	}
 
@@ -1032,6 +1034,8 @@ internal sealed class SettingsService
 		_autoCheckVersionOnStartup = false;
 		_enableBatchRepair = false;
 		_repairDisclaimerAccepted = false;
+		_autoCleanLogs = true;
+		_maxLogFiles = 20;
 		_showSeparator = true;
 		_separators = [];
 		_tags = [];

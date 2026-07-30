@@ -221,13 +221,13 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
-	public int LogRetentionDays
+	public int MaxLogFiles
 	{
-		get => _settingsService.Initialized ? _settingsService.LogRetentionDays : 7;
+		get => _settingsService.Initialized ? _settingsService.MaxLogFiles : 20;
 		set
 		{
 			OnPropertyChanging();
-			_settingsService.LogRetentionDays = value;
+			_settingsService.MaxLogFiles = value;
 			OnPropertyChanged();
 		}
 	}
@@ -484,7 +484,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(EnableBatchRepair));
 		OnPropertyChanged(nameof(AutoCleanLogs));
 		OnPropertyChanged(nameof(ShowSeparator));
-		OnPropertyChanged(nameof(LogRetentionDays));
+		OnPropertyChanged(nameof(MaxLogFiles));
 		OnPropertyChanged(nameof(NexusApiKey));
 		OnPropertyChanged(nameof(SelectedLanguageCode));
 		OnPropertyChanged(nameof(AvailableLanguages));
@@ -528,7 +528,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 			App.Current.LogLevel = _settingsService.LogLevel;
 
 			// 保存后执行日志清理
-			_settingsService.CleanOldLogs();
+			_settingsService.CleanExcessLogs();
 		}
 		catch (Exception ex)
 		{

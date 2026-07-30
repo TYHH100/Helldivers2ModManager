@@ -35,7 +35,7 @@ internal sealed class ModConflictService
     public string BuildCacheKey(IReadOnlyList<ModData> deploymentMods)
     {
         var builder = new StringBuilder(deploymentMods.Count * 96 + 32);
-        builder.Append("conflict-cache-v2|");
+        builder.Append("conflict-cache-v3|");
 
         for (var index = 0; index < deploymentMods.Count; index++)
         {
@@ -107,6 +107,7 @@ internal sealed class ModConflictService
                         UnitId = unit.FileId,
                         Version = unit.Version,
                         DataSize = unit.DataSize,
+                        GpuSize = unit.GpuSize,
                         DeploymentOrder = deploymentOrder,
                     });
                 }

@@ -1,0 +1,18 @@
+# Helldivers 2 Patch Check & Repair Tool
+
+独立补丁检测与修复工具。无需安装或启动 Helldivers2ModManager，也不读取其模组库、设置或数据库。
+
+使用方式：
+
+1. 运行 `Helldivers2PatchTool.exe`。
+2. 选择任意 Mod 管理器管理的 Mod 根目录或补丁目录。
+3. 工具会自动检测 Steam 游戏目录；未找到时可点击“自动检测”或手动选择。
+4. 点击“开始检测”。
+5. 仅需修复 TOC 元数据时，点击“安全修复”；工具会在原文件旁创建备份并复检后才提交。
+6. 需要根据当前游戏资源修复 Unit 时，确认游戏目录有效后再点击修复。
+
+发布命令：
+
+```powershell
+dotnet publish Helldivers2PatchTool\Helldivers2PatchTool.csproj --configuration Release -o Helldivers2PatchTool\publish
+```
