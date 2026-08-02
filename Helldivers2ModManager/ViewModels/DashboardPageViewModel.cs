@@ -40,6 +40,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private static readonly ProcessStartInfo s_githubStartInfo = new("https://github.com/teutinsa/Helldivers2ModManager") { UseShellExecute = true };
     private static readonly ProcessStartInfo s_githubForkStartInfo = new("https://github.com/TYHH100/Helldivers2ModManager") { UseShellExecute = true };
     private readonly ILogger<DashboardPageViewModel> _logger;
+    private readonly IServiceProvider _provider;
     private readonly Lazy<NavigationStore> _navStore;
     private readonly EditModStore _editModStore;
     private readonly ModService _modService;
@@ -154,6 +155,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         ModGroupSidebarViewModel groupSidebar)
     {
         _logger = logger;
+        _provider = provider;
         _navStore = new(provider.GetRequiredService<NavigationStore>);
         _editModStore = editModStore;
         _settingsService = settingsService;
@@ -1420,6 +1422,20 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         await SaveProfileNowAsync();
 
         _navStore.Value.Navigate<ArmorReusePageViewModel>();
+    }
+
+    [RelayCommand]
+    void PatchResourceViewer()
+    {
+        _navStore.Value.Navigate<PatchResourceViewerPageViewModel>();
+    }
+
+    [RelayCommand]
+    void PreviewModel(ModViewModel modVm)
+    {
+        var page = _provider.GetRequiredService<ModelPreviewPageViewModel>();
+        page.SetInitialMod(modVm.Data);
+        _navStore.Value.Navigate(page);
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]

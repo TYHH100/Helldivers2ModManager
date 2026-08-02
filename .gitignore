@@ -384,3 +384,5 @@ Complete
 docs/
 settings.json
 Test/
+.testagent/
+.agents/

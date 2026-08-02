@@ -1,0 +1,391 @@
+<UserControl x:Class="Helldivers2ModManager.Views.ModelPreviewPageView"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
+             xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vms:ModelPreviewPageViewModel}"
+             d:DesignHeight="620"
+             d:DesignWidth="960">
+    <UserControl.Resources>
+        <Style x:Key="ModelPreviewTabItemStyle" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundSecondaryBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="12 7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TabBorder" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="0 0 0 2" Margin="0 0 4 0">
+                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Margin="0 0 0 12" BorderBrush="{StaticResource NeutralStrokeBrush}" BorderThickness="0 0 0 1">
+            <Grid Margin="0 0 0 10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Command="{Binding GoBackCommand}" Style="{StaticResource FluentIconButton}" Width="36" Margin="0 0 10 0" ToolTip="{loc:Loc Common.Back}">
+                    <TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
+                </Button>
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="{loc:Loc ModelPreviewPage.Title}" FontSize="20" FontWeight="SemiBold"/>
+                    <TextBlock Text="{loc:Loc ModelPreviewPage.Description}" Margin="0 3 0 0" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <Button Grid.Column="2" Command="{Binding RefreshModsCommand}" IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource FluentSecondaryButton}" Padding="12 7">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons" Margin="0 0 7 0"/>
+                        <TextBlock Text="{loc:Loc ModelPreviewPage.Refresh}"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <TextBlock Grid.Row="1" Text="{Binding StatusText}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0 0 0 10"/>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240" MinWidth="180"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource FluentSettingsCard}" Padding="0">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{loc:Loc ModelPreviewPage.Mods}" FontWeight="SemiBold" Margin="14 12 14 8"/>
+                    <ListBox ItemsSource="{Binding Mods}"
+                             SelectedItem="{Binding SelectedMod}"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="12 8" ToolTip="{Binding Manifest.Name}">
+                                    <TextBlock Text="{Binding Manifest.Name}" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="36" ToolTip="{Binding Manifest.Name}"/>
+                                    <TextBlock Text="{Binding Directory.Name}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0 2 0 0" ToolTip="{Binding Directory.Name}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="10"/>
+                    <RowDefinition Height="230"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Style="{StaticResource FluentSettingsCard}" Padding="12" Margin="0 0 0 8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Text="{loc:Loc ModelPreviewPage.PartsHint}"
+                                   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                   TextWrapping="Wrap" Margin="2 0 2 0"/>
+
+                        <WrapPanel Grid.Row="1" HorizontalAlignment="Stretch" Margin="0 8 0 0">
+                            <Border Background="{StaticResource NeutralBackgroundBrush}"
+                                    BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="8 4"
+                                    Margin="0 0 8 0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{loc:Loc ModelPreviewPage.ViewControls}"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0 0 8 0"/>
+                                    <Button Content="{loc:Loc ModelPreviewPage.FrontView}" Style="{StaticResource FluentSecondaryButton}" Height="30" MinWidth="52" Padding="8 4" Margin="0 0 6 0" Click="FrontView_OnClick"/>
+                                    <Button Content="{loc:Loc ModelPreviewPage.SideView}" Style="{StaticResource FluentSecondaryButton}" Height="30" MinWidth="52" Padding="8 4" Margin="0 0 6 0" Click="SideView_OnClick"/>
+                                    <Button Content="{loc:Loc ModelPreviewPage.TopView}" Style="{StaticResource FluentSecondaryButton}" Height="30" MinWidth="52" Padding="8 4" Margin="0 0 6 0" Click="TopView_OnClick"/>
+                                    <Button Content="{loc:Loc ModelPreviewPage.ResetView}" Style="{StaticResource FluentSecondaryButton}" Height="30" MinWidth="52" Padding="8 4" Margin="0" Click="ResetView_OnClick"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="{StaticResource NeutralBackgroundBrush}"
+                                    BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="8 4"
+                                    Visibility="{Binding HasBodyShapeSwitch, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{loc:Loc ModelPreviewPage.BodyShape}"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0 0 8 0"/>
+                                    <RadioButton Content="{loc:Loc ModelPreviewPage.StockyBody}"
+                                                 GroupName="ModelPreviewBodyShape"
+                                                 IsChecked="{Binding IsStockyBodySelected, Mode=TwoWay}"
+                                                 VerticalAlignment="Center"
+                                                 Margin="0 0 8 0"/>
+                                    <RadioButton Content="{loc:Loc ModelPreviewPage.SlimBody}"
+                                                 GroupName="ModelPreviewBodyShape"
+                                                 IsChecked="{Binding IsSlimBodySelected, Mode=TwoWay}"
+                                                 VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="{StaticResource NeutralBackgroundBrush}"
+                                    BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="8 4"
+                                    Margin="0 0 8 0"
+                                    Visibility="{Binding HasArmorSwitch, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{loc:Loc ModelPreviewPage.Armor}"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0 0 8 0"/>
+                                    <ComboBox ItemsSource="{Binding Armors}"
+                                              SelectedItem="{Binding SelectedArmor, Mode=TwoWay}"
+                                              MinWidth="190"
+                                              MaxDropDownHeight="300">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding DisplayName}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Border>
+                        </WrapPanel>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="1" Background="#FF20252A" BorderBrush="{StaticResource NeutralStrokeBrush}" BorderThickness="1" CornerRadius="4">
+                    <Grid>
+                        <Viewport3D x:Name="PreviewViewport"
+                                    ClipToBounds="True"
+                                    MouseLeftButtonDown="PreviewViewport_OnMouseLeftButtonDown"
+                                    MouseLeftButtonUp="PreviewViewport_OnMouseLeftButtonUp"
+                                    MouseMove="PreviewViewport_OnMouseMove"
+                                    MouseWheel="PreviewViewport_OnMouseWheel">
+                            <Viewport3D.Camera>
+                                <PerspectiveCamera x:Name="PreviewCamera" FieldOfView="45" NearPlaneDistance="0.01" FarPlaneDistance="100000"/>
+                            </Viewport3D.Camera>
+                            <ModelVisual3D Content="{Binding ModelGroup}"/>
+                            <ModelVisual3D>
+                                <ModelVisual3D.Content>
+                                    <Model3DGroup>
+                                        <AmbientLight Color="#FF707070"/>
+                                        <DirectionalLight Color="#FFFFFFFF" Direction="-1,-1,-2"/>
+                                        <DirectionalLight Color="#FF707070" Direction="1,0,1"/>
+                                    </Model3DGroup>
+                                </ModelVisual3D.Content>
+                            </ModelVisual3D>
+                        </Viewport3D>
+                        <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#AA20252A" CornerRadius="3" Padding="7 4" Margin="8" IsHitTestVisible="False">
+                            <TextBlock Text="{loc:Loc ModelPreviewPage.OrientationHint}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="11"/>
+                        </Border>
+                        <Border Background="#CC20252A" Visibility="{Binding IsInitialLoading, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <ProgressBar Width="180" Height="4" IsIndeterminate="True"/>
+                                <TextBlock Text="{Binding StatusText}" Margin="0 10 0 0" TextAlignment="Center" TextWrapping="Wrap" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="3" Style="{StaticResource FluentSettingsCard}" Padding="6">
+                    <TabControl Background="{StaticResource NeutralBackgroundBrush}"
+                                Foreground="{StaticResource NeutralForegroundBrush}"
+                                BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                BorderThickness="0"
+                                ItemContainerStyle="{StaticResource ModelPreviewTabItemStyle}">
+                        <TabItem Header="{loc:Loc ModelPreviewPage.PartsAndVariants}">
+                            <Grid Margin="4">
+                                <TextBlock Text="{loc:Loc ModelPreviewPage.NoManifestOptions}"
+                                           Visibility="{Binding HasNoPreviewOptions, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap"/>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              Visibility="{Binding HasPreviewOptions, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <ItemsControl ItemsSource="{Binding PreviewOptions}"
+                                                  IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{StaticResource NeutralBackgroundFillBrush}"
+                                                        BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4"
+                                                        Padding="8"
+                                                        Margin="3"
+                                                        Width="270">
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="48"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Grid.RowSpan="2" Width="42" Height="42" CornerRadius="3" Background="{StaticResource NeutralBackgroundBrush}" VerticalAlignment="Top">
+                                                            <Image Source="{Binding Image}" Stretch="UniformToFill"/>
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Margin="8 0 8 0">
+                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                                                            <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Description}"/>
+                                                        </StackPanel>
+                                                        <CheckBox Grid.Column="2" IsChecked="{Binding Enabled}" VerticalAlignment="Top"/>
+                                                        <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                                                  ItemsSource="{Binding SubOptions}"
+                                                                  SelectedItem="{Binding SelectedSubOption}"
+                                                                  DisplayMemberPath="Name"
+                                                                  IsEnabled="{Binding Enabled}"
+                                                                  Visibility="{Binding HasSubOptions, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                  Margin="8 7 0 0"
+                                                                  MinWidth="130"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </TabItem>
+
+                        <TabItem Header="{loc:Loc ModelPreviewPage.DecodedMeshesTab}">
+                            <Grid Margin="4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Margin="2 0 2 7">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Row="0" Grid.Column="0" Content="{loc:Loc ModelPreviewPage.AutomaticMaterials}" IsChecked="{Binding UseAutomaticMaterials}" VerticalAlignment="Center" Margin="0 0 12 0"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{loc:Loc ModelPreviewPage.Texture}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0 0 6 0"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2"
+                                              ItemsSource="{Binding Textures}"
+                                              SelectedItem="{Binding SelectedTexture}"
+                                              MinWidth="250"
+                                              MaxDropDownHeight="320">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding TextureIdText}" FontFamily="Consolas"/>
+                                                    <TextBlock Text=" · " Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                                    <TextBlock Text="{Binding SizeText}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                                    <TextBlock Text=" · " Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                                    <TextBlock Text="{Binding PreviewRoleText}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <CheckBox Grid.Row="1" Grid.Column="0" Content="{loc:Loc ModelPreviewPage.ShowFilteredMeshes}" IsChecked="{Binding ShowFilteredMeshes}" VerticalAlignment="Center" Margin="0 6 12 0"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding AutomaticallyHiddenMeshSummary}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="11" VerticalAlignment="Center" Margin="0 6 8 0"/>
+                                    <CheckBox Grid.Row="1" Grid.Column="3" Content="{loc:Loc ModelPreviewPage.IsolateMesh}" IsChecked="{Binding IsolateSelectedMesh}" IsEnabled="{Binding SelectedMesh, Converter={StaticResource NullToBoolConverter}}" VerticalAlignment="Center" Margin="8 6 0 0"/>
+                                </Grid>
+                                <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding Meshes}"
+                                  SelectedItem="{Binding SelectedMesh}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal"
+                                  FontSize="11"
+                                  Background="{StaticResource NeutralBackgroundBrush}"
+                                  Foreground="{StaticResource NeutralForegroundBrush}"
+                                  BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                  HorizontalGridLinesBrush="{StaticResource NeutralStrokeBrush}"
+                                  VerticalGridLinesBrush="{StaticResource NeutralStrokeBrush}">
+                            <DataGrid.Resources>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{StaticResource NeutralStrokeBrush}"/>
+                                    <Setter Property="Padding" Value="8 5"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </Style>
+                                <Style TargetType="DataGridCell">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{StaticResource NeutralStrokeBrush}"/>
+                                    <Setter Property="Padding" Value="8 4"/>
+                                </Style>
+                                <Style TargetType="DataGridRow"
+                                       BasedOn="{StaticResource FluentColumnHeadersOnlyDataGridRow}">
+                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundBrush}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{StaticResource NeutralStrokeBrush}"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource SystemAccentBrush}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.Resources>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Status}" Binding="{Binding PreviewStatusText}" Width="145"/>
+                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Patch}" Binding="{Binding PatchFile}" Width="*"/>
+                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Unit}" Binding="{Binding UnitIdText}" Width="145"/>
+                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.MeshInfo}" Binding="{Binding MeshInfoIndex}" Width="65"/>
+                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Stream}" Binding="{Binding StreamIndex}" Width="65"/>
+                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Uv}" Binding="{Binding UvStatusText}" Width="55"/>
+                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Size}" Binding="{Binding BoundsText}" Width="75"/>
+                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Vertices}" Binding="{Binding VertexCount}" Width="80"/>
+                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Triangles}" Binding="{Binding TriangleCount}" Width="80"/>
+                            </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </TabItem>
+                    </TabControl>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

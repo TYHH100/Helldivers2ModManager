@@ -1287,8 +1287,21 @@ internal sealed partial class ModService
 	/// 覆盖扫描和部署共用同一组选项展开规则，避免把未选中的护甲变体误报为覆盖。
 	/// </summary>
 	public IReadOnlyList<FileInfo> GetSelectedPatchFiles(ModData mod)
+		=> GetSelectedPatchFiles(mod, mod.EnabledOptions, mod.SelectedOptions);
+
+	/// <summary>
+	/// Expands a caller-owned option snapshot without changing the active profile. The
+	/// model preview uses this overload for temporary part and variant switches.
+	/// </summary>
+	internal IReadOnlyList<FileInfo> GetSelectedPatchFiles(
+		ModData mod,
+		IReadOnlyList<bool> enabledOptions,
+		IReadOnlyList<int> selectedOptions)
 	{
 		GuardInitialized();
+		ArgumentNullException.ThrowIfNull(mod);
+		ArgumentNullException.ThrowIfNull(enabledOptions);
+		ArgumentNullException.ThrowIfNull(selectedOptions);
 
 		var directories = new List<DirectoryInfo>();
 		void AddDirectory(string relativePath)
@@ -1303,7 +1316,7 @@ internal sealed partial class ModService
 			case LegacyModManifest legacy:
 				if (legacy.Options is { } legacyOptions)
 			{
-					var selected = mod.SelectedOptions is { Length: > 0 } ? mod.SelectedOptions[0] : 0;
+					var selected = selectedOptions.Count > 0 ? selectedOptions[0] : 0;
 					if (selected >= 0 && selected < legacyOptions.Count)
 						AddDirectory(legacyOptions[selected]);
 				}
@@ -1320,7 +1333,7 @@ internal sealed partial class ModService
 
 				for (var i = 0; i < options.Count; i++)
 				{
-					if (i >= mod.EnabledOptions.Length || !mod.EnabledOptions[i])
+					if (i >= enabledOptions.Count || !enabledOptions[i])
 						continue;
 
 					var option = options[i];
@@ -1331,7 +1344,7 @@ internal sealed partial class ModService
 					if (option.SubOptions is not { } subOptions || subOptions.Count == 0)
 						continue;
 
-					var selectedSub = i < mod.SelectedOptions.Length ? mod.SelectedOptions[i] : 0;
+					var selectedSub = i < selectedOptions.Count ? selectedOptions[i] : 0;
 					if (selectedSub >= 0 && selectedSub < subOptions.Count)
 						foreach (var include in subOptions[selectedSub].Include)
 							AddDirectory(include);
@@ -1343,11 +1356,14 @@ internal sealed partial class ModService
 		}
 
 		return directories
-			.SelectMany(static directory => directory.GetFiles().Where(file => GetPatchFileRegex().IsMatch(file.Name)))
+			.SelectMany(static directory => directory.GetFiles().Where(file => IsMainPatchFileName(file.Name)))
 			.GroupBy(static file => file.FullName, StringComparer.OrdinalIgnoreCase)
 			.Select(static group => group.First())
 			.ToArray();
 	}
+
+	internal static bool IsMainPatchFileName(string fileName) =>
+		GetMainPatchFileRegex().IsMatch(fileName);
 
 	private async Task CopyFileAsync(string sourcePath, string destinationPath)
 	{
@@ -1662,6 +1678,9 @@ internal sealed partial class ModService
 
 	[GeneratedRegex(@"^[a-z0-9]{16}\.patch_[0-9]+(\.(stream|gpu_resources))?$")]
 	private static partial Regex GetPatchFileRegex();
+
+	[GeneratedRegex(@"^[a-z0-9]{16}\.patch_[0-9]+$")]
+	private static partial Regex GetMainPatchFileRegex();
 
 	[GeneratedRegex(@"\.patch_[0-9]+")]
 	private static partial Regex GetPatchRegex();

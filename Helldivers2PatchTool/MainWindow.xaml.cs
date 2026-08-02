@@ -385,6 +385,8 @@ public partial class MainWindow : Window
         if (patch.UnitDetails.Any(unit => !unit.DeclaredSizeMatchesInternal ||
                                           (unit.LayoutFormatChecked && !unit.LayoutFormatValid)))
             messages.Add("Unit 内部结构警告");
+        if (patch.UnitDetails.Any(unit => unit.GpuStructureChecked && !unit.GpuStructureValid))
+            messages.Add("GPU Stream 布局或缓冲区异常");
         return messages.Count == 0 ? "结构检查通过" : string.Join("；", messages);
     }
 
@@ -436,6 +438,11 @@ public partial class MainWindow : Window
 
             if (unit.LayoutFormatChecked && !unit.LayoutFormatValid)
                 issues.Add($"{identifier} 的旧版 Layout 格式异常：检测到 {unit.LayoutFormatIssueCount} 个无效 item_format。" + WithMessage(unit.Warning));
+
+            if (unit.GpuStructureChecked && !unit.GpuStructureValid)
+                issues.Add($"{identifier} 的 GPU Stream 结构异常：{unit.GpuStructureIssueCount} 个布局或缓冲区问题。" + WithMessage(unit.Warning));
+            else if (unit.GpuStructureChecked && unit.UnknownGpuComponentCount > 0)
+                issues.Add($"{identifier} 包含 {unit.UnknownGpuComponentCount} 个未知 GPU 顶点组件，未按损坏处理。" + WithMessage(unit.Warning));
         }
 
         if (issues.Count == 0)

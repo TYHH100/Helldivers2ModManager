@@ -31,10 +31,25 @@ internal sealed partial class VersionCheckService
     private const int PatchHeaderMagic = unchecked((int)0xF0000011);
 
     /// <summary>
-    /// Unit 版本阈值：当版本低于此值时，需要检查 Layout Format 格式
-    /// 来自 hd2-repatcher update_patch_file() 的 (v &lt; 0xA4CD36) 判断
+    /// Unit 版本阈值：当版本低于此值时，需要检查旧版 Layout Format 格式。
+    /// 来自 hd2-repatcher update_patch_file() 的 (v &lt; 0xA4CD36) 判断。
     /// </summary>
     private const uint VersionThresholdForLayoutCheck = 0xA4CD36u;
+    private const uint CurrentVerifiedUnitVersion = 10800438u;
+    private const int MaxStreamsPerUnit = 100;
+    private const int MaxComponentsPerStream = 16;
+    private const int StreamInfoSize = 0x1B0;
+    private const int StreamComponentOffset = 0x08;
+    private const int StreamComponentSize = 20;
+    private const int StreamComponentCountOffset = 0x148;
+    private const int StreamVertexCountOffset = 0x160;
+    private const int StreamVertexStrideOffset = 0x164;
+    private const int StreamIndexCountOffset = 0x188;
+    private const int StreamIndexTypeOffset = 0x18C;
+    private const int StreamVertexBufferOffset = 0x1A0;
+    private const int StreamVertexBufferSize = 0x1A4;
+    private const int StreamIndexBufferOffset = 0x1A8;
+    private const int StreamIndexBufferSize = 0x1AC;
     private const long MaxMemoryReadBytes = 512L * 1024 * 1024;
     private const int HeaderSize = 72;
     private const int TypeEntrySize = 32;
@@ -518,7 +533,8 @@ internal sealed partial class VersionCheckService
             !u.LODGroupInBounds || !u.UnitDataInBounds || !u.DeclaredSizeMatchesInternal ||
             (u.LayoutFormatChecked && !u.LayoutFormatValid)));
         analysis.HasGpuResourceIssues = patchAnalyses.Any(p =>
-            !p.GpuResourceBoundsValid || p.GpuAlignmentIssueCount > 0);
+            !p.GpuResourceBoundsValid || p.GpuAlignmentIssueCount > 0 ||
+            p.UnitDetails.Any(u => u.GpuStructureChecked && !u.GpuStructureValid));
         analysis.HasStreamResourceIssues = patchAnalyses.Any(p =>
             !p.StreamBoundsValid || p.StreamAlignmentIssueCount > 0);
         analysis.ResourceTypes = typeDistributions
@@ -703,6 +719,14 @@ internal sealed partial class VersionCheckService
             ValidateMainDataRanges(entries, stream.Length, fileEntriesOffset + fileEntriesLength, analysis);
             ValidateCompanionFiles(companionSource ?? patchFile, entries, analysis);
 
+            var companionFile = companionSource ?? patchFile;
+            var gpuResourcePath = companionFile.Directory is null
+                ? null
+                : Path.Combine(companionFile.Directory.FullName, companionFile.Name + ".gpu_resources");
+            await using FileStream? gpuResourceStream = analysis.HasGpuResources && gpuResourcePath is not null
+                ? OpenPatchReadStream(new FileInfo(gpuResourcePath))
+                : null;
+
             var unitDetails = new List<UnitResourceDetail>();
             for (var i = 0; i < entries.Count; i++)
             {
@@ -711,7 +735,7 @@ internal sealed partial class VersionCheckService
                     continue;
 
                 var detail = await AnalyzeUnitResourceDeepAsync(
-                    patchFile.Name, i + 1, entry, stream, _localizationService);
+                    patchFile.Name, i + 1, entry, stream, _localizationService, gpuResourceStream);
                 unitDetails.Add(detail);
             }
             analysis.UnitDetails = unitDetails;
@@ -821,7 +845,8 @@ internal sealed partial class VersionCheckService
         int entryIndex,
         PatchTocEntry entry,
         FileStream stream,
-        LocalizationService loc)
+        LocalizationService loc,
+        FileStream? gpuResourceStream = null)
     {
         var detail = new UnitResourceDetail
         {
@@ -876,7 +901,9 @@ internal sealed partial class VersionCheckService
         if (!detail.LODGroupInBounds)
             AppendUnitWarning(detail, loc["VersionCheck.LodDataOutOfBounds"]);
 
-        if (detail.Version < VersionThresholdForLayoutCheck)
+        if (detail.Version == CurrentVerifiedUnitVersion)
+            await AnalyzeCurrentGpuStructureAsync(detail, entry, stream, gpuResourceStream, unitHeader, loc);
+        else if (detail.Version < VersionThresholdForLayoutCheck)
             await AnalyzeLegacyLayoutAsync(detail, entry, stream, unitHeader, loc);
 
         return detail;
@@ -1007,6 +1034,239 @@ internal sealed partial class VersionCheckService
     private static FileStream OpenPatchReadStream(FileInfo file)
     {
         return new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess);
+    }
+
+    /// <summary>
+    /// Validates the StreamInfo layout used by Unit 10800438.  The GPU payload is
+    /// deliberately not loaded: offsets and sizes are checked relative to this Unit's
+    /// TOC GPU range, which is sufficient to catch mismatched or truncated buffers.
+    /// Unknown components remain a warning because later game versions can add formats.
+    /// </summary>
+    private static async Task AnalyzeCurrentGpuStructureAsync(
+        UnitResourceDetail detail,
+        PatchTocEntry entry,
+        FileStream stream,
+        FileStream? gpuResourceStream,
+        byte[] unitHeader,
+        LocalizationService loc)
+    {
+        detail.GpuStructureChecked = true;
+        var streamListOffset = MemoryMarshal.Read<int>(unitHeader.AsSpan(0x5C, 4));
+        // Geometry-free Units legitimately have neither StreamInfo nor a GPU allocation.
+        // Keep them valid instead of reporting a missing layout as a damaged resource.
+        if (streamListOffset == 0 && entry.GpuSize == 0)
+            return;
+
+        if (streamListOffset <= 0 || (long)streamListOffset + 4 > entry.TocSize)
+        {
+            AddGpuStructureIssue(detail, loc["VersionCheck.GpuStreamDataOutOfBounds"]);
+            return;
+        }
+
+        var countBuffer = new byte[4];
+        if (!await ReadAtAsync(stream, (long)entry.TocOffset + streamListOffset, countBuffer))
+        {
+            AddGpuStructureIssue(detail, loc["VersionCheck.GpuStreamDataOutOfBounds"]);
+            return;
+        }
+
+        var streamCount = MemoryMarshal.Read<int>(countBuffer);
+        detail.GpuStreamCount = streamCount;
+        var streamTableLength = 8L + streamCount * 8L;
+        if (streamCount < 0 || streamCount > MaxStreamsPerUnit ||
+            (long)streamListOffset + streamTableLength > entry.TocSize)
+        {
+            AddGpuStructureIssue(detail, loc["VersionCheck.GpuStreamDataOutOfBounds"]);
+            return;
+        }
+
+        var offsetsBuffer = new byte[streamCount * 4];
+        if (offsetsBuffer.Length > 0 && !await ReadAtAsync(
+                stream, (long)entry.TocOffset + streamListOffset + 4, offsetsBuffer))
+        {
+            AddGpuStructureIssue(detail, loc["VersionCheck.GpuStreamDataOutOfBounds"]);
+            return;
+        }
+
+        var streamBuffer = new byte[StreamInfoSize];
+        for (var i = 0; i < streamCount; i++)
+        {
+            var relativeOffset = MemoryMarshal.Read<int>(offsetsBuffer.AsSpan(i * 4, 4));
+            var streamStart = (long)streamListOffset + relativeOffset;
+            if (relativeOffset < 0 || streamStart < 0 || streamStart + StreamInfoSize > entry.TocSize ||
+                !await ReadAtAsync(stream, (long)entry.TocOffset + streamStart, streamBuffer))
+            {
+                AddGpuStructureIssue(detail, loc["VersionCheck.GpuStreamDataOutOfBounds"]);
+                continue;
+            }
+
+            var componentCount = MemoryMarshal.Read<ulong>(streamBuffer.AsSpan(StreamComponentCountOffset, 8));
+            if (componentCount > MaxComponentsPerStream)
+            {
+                AddGpuStructureIssue(detail, loc["VersionCheck.GpuStreamLayoutIssues"]);
+                continue;
+            }
+
+            var hasUnknownComponent = false;
+            var componentBytes = 0;
+            var positionOffset = -1;
+            var boneWeightOffset = -1;
+            for (var componentIndex = 0; componentIndex < (int)componentCount; componentIndex++)
+            {
+                var componentOffset = StreamComponentOffset + componentIndex * StreamComponentSize;
+                var type = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(componentOffset, 4));
+                var format = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(componentOffset + 4, 4));
+                if (type > 7 || !TryGetVertexComponentSize(format, out var size))
+                {
+                    detail.UnknownGpuComponentCount++;
+                    hasUnknownComponent = true;
+                    continue;
+                }
+
+                if (type == 0 && format == 2)
+                    positionOffset = componentBytes;
+                else if (type == 7 && format == 35)
+                    boneWeightOffset = componentBytes;
+                componentBytes += size;
+            }
+
+            var vertexCount = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(StreamVertexCountOffset, 4));
+            var vertexStride = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(StreamVertexStrideOffset, 4));
+            var indexCount = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(StreamIndexCountOffset, 4));
+            var indexType = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(StreamIndexTypeOffset, 4));
+            var vertexOffset = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(StreamVertexBufferOffset, 4));
+            var vertexSize = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(StreamVertexBufferSize, 4));
+            var indexOffset = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(StreamIndexBufferOffset, 4));
+            var indexSize = MemoryMarshal.Read<uint>(streamBuffer.AsSpan(StreamIndexBufferSize, 4));
+
+            if (!hasUnknownComponent && (vertexStride == 0 || componentBytes != vertexStride))
+                AddGpuStructureIssue(detail, loc["VersionCheck.GpuStreamLayoutIssues"]);
+
+            var vertexBytes = (ulong)vertexCount * vertexStride;
+            var validVertexBuffer = vertexBytes <= vertexSize && vertexSize - vertexBytes <= 15 &&
+                                    IsRangeInBounds(vertexOffset, vertexSize, entry.GpuSize);
+            var indexElementSize = indexType == 0 ? 2u : indexType == 1 ? 4u : 0u;
+            var indexBytes = (ulong)indexCount * indexElementSize;
+            var validIndexBuffer = indexElementSize != 0 && indexBytes == indexSize &&
+                                   IsRangeInBounds(indexOffset, indexSize, entry.GpuSize);
+            if (!validVertexBuffer || !validIndexBuffer)
+                AddGpuStructureIssue(detail, loc["VersionCheck.GpuStreamBufferIssues"]);
+            else if (!hasUnknownComponent && gpuResourceStream is not null)
+                await ValidateGpuPayloadSamplesAsync(
+                    detail, entry, gpuResourceStream, vertexCount, vertexStride, vertexOffset,
+                    indexCount, indexType, indexOffset, positionOffset, boneWeightOffset, loc);
+        }
+
+        if (detail.UnknownGpuComponentCount > 0)
+            AppendUnitWarning(detail, loc["VersionCheck.UnknownGpuComponentFormats"]
+                .Replace("{count}", detail.UnknownGpuComponentCount.ToString()));
+    }
+
+    /// <summary>
+    /// Reads only the first vertex and three distributed indices from a valid GPU range.
+    /// This catches non-finite positions, invalid skinning weights and out-of-range indices
+    /// without ever loading a complete .gpu_resources file into memory.
+    /// </summary>
+    private static async Task ValidateGpuPayloadSamplesAsync(
+        UnitResourceDetail detail,
+        PatchTocEntry entry,
+        FileStream gpuResourceStream,
+        uint vertexCount,
+        uint vertexStride,
+        uint vertexOffset,
+        uint indexCount,
+        uint indexType,
+        uint indexOffset,
+        int positionOffset,
+        int boneWeightOffset,
+        LocalizationService loc)
+    {
+        if (vertexCount > 0 && vertexStride is > 0 and <= 4096 &&
+            entry.GpuOffset <= (ulong)long.MaxValue - vertexOffset)
+        {
+            var vertex = new byte[(int)vertexStride];
+            if (!await ReadAtAsync(gpuResourceStream, (long)entry.GpuOffset + vertexOffset, vertex))
+            {
+                AddGpuStructureIssue(detail, loc["VersionCheck.GpuSampleDataUnavailable"]);
+                return;
+            }
+
+            if (positionOffset >= 0)
+            {
+                var x = BitConverter.ToSingle(vertex, positionOffset);
+                var y = BitConverter.ToSingle(vertex, positionOffset + 4);
+                var z = BitConverter.ToSingle(vertex, positionOffset + 8);
+                if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(z))
+                    AddGpuStructureIssue(detail, loc["VersionCheck.GpuVertexSampleInvalid"]);
+            }
+
+            if (boneWeightOffset >= 0)
+            {
+                var sum = 0f;
+                for (var i = 0; i < 4; i++)
+                {
+                    var weight = (float)BitConverter.UInt16BitsToHalf(
+                        BitConverter.ToUInt16(vertex, boneWeightOffset + i * 2));
+                    if (!float.IsFinite(weight) || weight < -0.001f)
+                    {
+                        AddGpuStructureIssue(detail, loc["VersionCheck.GpuVertexSampleInvalid"]);
+                        break;
+                    }
+                    sum += weight;
+                }
+
+                // Degenerate vertices can carry four zero weights. For non-empty weights,
+                // allow half-float rounding but reject values that cannot represent skinning.
+                if (sum > 0.001f && MathF.Abs(sum - 1f) > 0.03f)
+                    AddGpuStructureIssue(detail, loc["VersionCheck.GpuVertexSampleInvalid"]);
+            }
+        }
+
+        if (indexCount == 0 || entry.GpuOffset > (ulong)long.MaxValue - indexOffset)
+            return;
+
+        var indexSize = indexType == 0 ? 2 : 4;
+        var sampleIndices = new HashSet<uint> { 0, indexCount / 2, indexCount - 1 };
+        foreach (var sampleIndex in sampleIndices)
+        {
+            var index = new byte[indexSize];
+            var indexPosition = (ulong)indexOffset + (ulong)sampleIndex * (uint)indexSize;
+            if (indexPosition > (ulong)long.MaxValue - entry.GpuOffset ||
+                !await ReadAtAsync(gpuResourceStream, (long)((ulong)entry.GpuOffset + indexPosition), index))
+            {
+                AddGpuStructureIssue(detail, loc["VersionCheck.GpuSampleDataUnavailable"]);
+                return;
+            }
+
+            var value = indexSize == 2
+                ? BitConverter.ToUInt16(index, 0)
+                : BitConverter.ToUInt32(index, 0);
+            if (value >= vertexCount)
+                AddGpuStructureIssue(detail, loc["VersionCheck.GpuIndexSampleInvalid"]);
+        }
+    }
+
+    private static bool TryGetVertexComponentSize(uint format, out int size)
+    {
+        size = format switch
+        {
+            1 => 8,  // float2
+            2 => 12, // float3
+            4 => 4,  // RGBA8
+            28 => 4, // uint8x4
+            30 => 4, // packed octahedral normal
+            33 => 4, // half2
+            35 => 8, // half4
+            _ => 0
+        };
+        return size != 0;
+    }
+
+    private static void AddGpuStructureIssue(UnitResourceDetail detail, string warning)
+    {
+        detail.GpuStructureIssueCount++;
+        detail.GpuStructureValid = false;
+        AppendUnitWarning(detail, warning);
     }
 
     private static string NormalizeGamePackageName(string packageName)

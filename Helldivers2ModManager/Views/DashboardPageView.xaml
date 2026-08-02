@@ -36,6 +36,10 @@
 						</Border.Style>
 						<Border.ContextMenu>
 							<ContextMenu>
+								<MenuItem Header="{loc:Loc DashboardPage.PreviewModel}"
+										  Command="{Binding PlacementTarget.Tag.PreviewModelCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+								<Separator/>
 								<MenuItem Header="{loc:Loc DashboardPage.EditManifest}"
 										  Command="{Binding PlacementTarget.Tag.EditManifestCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
@@ -452,6 +456,14 @@
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
 						<TextBlock Text="{loc:Loc DashboardPage.ArmorReuse}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+					</StackPanel>
+				</Button>
+					<Button Style="{StaticResource FluentNavigationButton}"
+						Command="{Binding PatchResourceViewerCommand}"
+						IsEnabled="{Binding Initialized}">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE9D9;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+						<TextBlock Text="{loc:Loc DashboardPage.PatchResourceViewer}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
 					<Button Style="{StaticResource FluentNavigationButton}"

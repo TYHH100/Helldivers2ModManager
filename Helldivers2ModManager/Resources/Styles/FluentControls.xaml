@@ -654,6 +654,8 @@
                         <ContentPresenter x:Name="ContentSite"
                                           Content="{TemplateBinding SelectionBoxItem}"
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
                                           VerticalAlignment="Center"
                                           Margin="14 0 32 0"
                                           IsHitTestVisible="False"/>
@@ -1009,6 +1011,33 @@
                             <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource SystemAccentBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================ -->
+    <!-- Column-header-only DataGrid row             -->
+    <!-- ============================================ -->
+
+    <!--
+        WPF's default DataGridRow template always creates a DataGridRowHeader.
+        Its Visibility binding searches for an ancestor DataGrid and emits binding
+        error 4 while recycled rows are detached. These grids deliberately use
+        HeadersVisibility="Column", so omit the unused row-header visual entirely.
+    -->
+    <Style x:Key="FluentColumnHeadersOnlyDataGridRow" TargetType="DataGridRow">
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridRow">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}">
+                        <DataGridCellsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                    </Border>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

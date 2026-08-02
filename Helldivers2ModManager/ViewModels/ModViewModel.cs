@@ -681,6 +681,14 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
                                 unit.LayoutFormatChecked, unit.LayoutFormatValid ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"],
                                 unit.LayoutFormatIssueCount));
                         }
+                        if (unit.GpuStructureChecked)
+                        {
+                            sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitGpuStructureInfo"],
+                                unit.GpuStreamCount,
+                                unit.GpuStructureValid ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"],
+                                unit.GpuStructureIssueCount,
+                                unit.UnknownGpuComponentCount));
+                        }
                         if (!string.IsNullOrEmpty(unit.Warning))
                             sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitWarning"], unit.Warning));
                     }

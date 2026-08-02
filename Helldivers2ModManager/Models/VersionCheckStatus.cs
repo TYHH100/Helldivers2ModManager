@@ -88,7 +88,7 @@ internal enum PatchHealthStatus
 /// Unit 资源深度检查结果
 /// 参考 hd2-repatcher 的 update_patch_file() 实现：
 /// - 验证 Unit 内部结构（LOD Group、Joint List）
-/// - 检查 Layout Format 格式（version &lt; 0xA4CD36 时检查布局偏移）
+/// - 检查已验证的 Unit 10800438 StreamInfo、顶点布局和 GPU 缓冲区范围
 /// </summary>
 internal sealed class UnitResourceDetail
 {
@@ -168,7 +168,7 @@ internal sealed class UnitResourceDetail
     public bool UnitDataInBounds { get; set; }
 
     /// <summary>
-    /// 是否执行了 Layout Format 检查（version &lt; 0xA4CD36 时执行）
+    /// 是否执行了旧版 Layout Format 检查。
     /// </summary>
     public bool LayoutFormatChecked { get; set; }
 
@@ -181,6 +181,31 @@ internal sealed class UnitResourceDetail
     /// Layout 中的 item_format 异常数量（format &gt; 16 的条目数）
     /// </summary>
     public int LayoutFormatIssueCount { get; set; }
+
+    /// <summary>
+    /// 是否已对当前已验证的 Unit 版本执行 StreamInfo / GPU 缓冲区结构检查。
+    /// </summary>
+    public bool GpuStructureChecked { get; set; }
+
+    /// <summary>
+    /// StreamInfo 中的顶点布局、顶点缓冲区和索引缓冲区是否自洽。
+    /// </summary>
+    public bool GpuStructureValid { get; set; } = true;
+
+    /// <summary>
+    /// 已知格式下发现的 GPU 缓冲区结构问题数量。
+    /// </summary>
+    public int GpuStructureIssueCount { get; set; }
+
+    /// <summary>
+    /// Unit 中 StreamInfo 的数量。
+    /// </summary>
+    public int GpuStreamCount { get; set; }
+
+    /// <summary>
+    /// 无法识别的顶点 Component Type 或 Format 数量。未知格式只会给出提示，不作为损坏依据。
+    /// </summary>
+    public int UnknownGpuComponentCount { get; set; }
 
     /// <summary>
     /// 针对该 Unit 的警告信息
@@ -626,6 +651,12 @@ internal sealed class CompatibleCheckInfo
                             sb.AppendLine(string.Format("      Layout: checked={0} valid={1} issues={2}",
                                 unit.LayoutFormatChecked, unit.LayoutFormatValid ? "Yes" : "NO",
                                 unit.LayoutFormatIssueCount));
+                        }
+                        if (unit.GpuStructureChecked)
+                        {
+                            sb.AppendLine(string.Format("      GPU streams: {0} valid={1} issues={2} unknown_components={3}",
+                                unit.GpuStreamCount, unit.GpuStructureValid ? "Yes" : "NO",
+                                unit.GpuStructureIssueCount, unit.UnknownGpuComponentCount));
                         }
                         if (!string.IsNullOrEmpty(unit.Warning))
                             sb.AppendLine(string.Format("      Warning: {0}", unit.Warning));
