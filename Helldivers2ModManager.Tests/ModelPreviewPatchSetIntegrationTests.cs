@@ -207,6 +207,26 @@ public sealed class ModelPreviewPatchSetIntegrationTests
     }
 
     [TestMethod]
+    public async Task PreviewModelAsync_AndreaTorsoWithUnlabeledBodyMeshesNeedsPresentationRotation()
+    {
+        var modDirectory = new DirectoryInfo(Path.Combine(
+            FindRepositoryRoot().FullName,
+            "Test", "Mods", "Mods", "2026年5月2日安德莉亚 替换fs37 sc15_93b0ae32"));
+        var patch = new FileInfo(Path.Combine(modDirectory.FullName, "9ba626afa44a3aa3.patch_103"));
+
+        var result = await new PatchResourceInspectionService().PreviewModelAsync(modDirectory, [patch]);
+        var visibleMeshes = ModelPreviewMeshSelector.Select(result.Meshes).VisibleMeshes;
+        var rotation = ModelPreviewCharacterOrientation.GetRequiredRotation(visibleMeshes);
+
+        Assert.IsNull(result.Error, result.Error);
+        Assert.IsTrue(visibleMeshes.Any(mesh => mesh.CustomizationSlot == ModelPreviewCustomizationSlot.Torso));
+        Assert.IsFalse(visibleMeshes.Any(mesh => mesh.CustomizationSlot is ModelPreviewCustomizationSlot.LeftLeg or ModelPreviewCustomizationSlot.RightLeg));
+        Assert.AreEqual(ModelPreviewPresentationRotation.PositiveZToPositiveY, rotation,
+            "Andrea's unlabeled body geometry must use the inverse of its torso-to-remainder axis so the Debug viewport is upright.");
+        Console.WriteLine($"Andrea: visibleMeshes={visibleMeshes.Count}, presentationRotation={rotation}");
+    }
+
+    [TestMethod]
     public async Task PreviewModelAsync_DoesNotInjectBaseGameArmorForProxyUnits()
     {
         var modDirectory = new DirectoryInfo(Path.Combine(

@@ -145,6 +145,40 @@ public sealed class ModelPreviewMaterialTextureTests
     }
 
     [TestMethod]
+    public void CreateMaterial_AutomaticMode_DoesNotUseCachedUnknownTextureWhenSemanticBaseColorIsMissing()
+    {
+        const ulong declaredBaseColorId = 1;
+        const ulong cachedUnknownTextureId = 2;
+        var mesh = new ModelPreviewMesh
+        {
+            PatchFile = "sample.patch_0",
+            UnitId = 1,
+            StreamIndex = 0,
+            Positions = [],
+            TriangleIndices = [],
+            TextureIds = [declaredBaseColorId, cachedUnknownTextureId],
+            ColorTextureId = declaredBaseColorId,
+            MaterialTextures = new ModelPreviewMaterialTextureSet(
+                new Dictionary<ModelPreviewTextureRole, IReadOnlyList<ulong>>
+                {
+                    [ModelPreviewTextureRole.BaseColor] = [declaredBaseColorId]
+                },
+                [declaredBaseColorId, cachedUnknownTextureId],
+                declaredBaseColorId)
+        };
+        var loadedTextures = new Dictionary<ulong, ModelPreviewPageViewModel.LoadedTexturePreview>
+        {
+            [cachedUnknownTextureId] = new(new DrawingImage(), TexturePreviewRole.Unknown, 4)
+        };
+
+        var material = ModelPreviewPageViewModel.CreateMaterial(mesh, loadedTextures, true, null);
+
+        var diffuse = (DiffuseMaterial)material;
+        Assert.IsInstanceOfType<SolidColorBrush>(diffuse.Brush,
+            "A failed semantic BaseColor decode must not fall back to an unrelated cached input.");
+    }
+
+    [TestMethod]
     public void SelectAutomaticTextureIds_SemanticMaterial_KeepsBaseColorAndEmissiveOnly()
     {
         const ulong baseColorId = 1;

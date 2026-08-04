@@ -29,6 +29,8 @@ public sealed class ModelPreviewMaterialFixtureDiagnosticsTests
 
         Assert.IsNull(result.Error, result.Error);
         Assert.IsTrue(result.Meshes.Count > 0, $"Expected decoded meshes in {modRelativePath}.");
+        var visibleMeshes = ModelPreviewMeshSelector.Select(result.Meshes).VisibleMeshes;
+        var presentationRotation = ModelPreviewCharacterOrientation.GetRequiredRotation(visibleMeshes);
         var variants = result.Meshes
             .Where(static mesh => mesh.MaterialId.HasValue && mesh.ColorTextureId.HasValue)
             .GroupBy(static mesh => (mesh.UnitId, mesh.StreamIndex, mesh.MeshInfoIndex, mesh.SourceVertexOffset, mesh.VertexCount, mesh.TriangleCount))
@@ -90,7 +92,10 @@ public sealed class ModelPreviewMaterialFixtureDiagnosticsTests
                 $"Color={(representative.ColorTextureId is ulong id ? $"0x{id:X16}:{textureSizes[id]} Avg={colorAverage}" : "-")} {inputs} Inputs=[{semanticInputs}]");
         }
 
-        Console.WriteLine($"{modDirectory.Name}: materialVariants={variants.Length}, materialBoundMeshes={result.Meshes.Count(mesh => mesh.MaterialId.HasValue)}");
+        Console.WriteLine(
+            $"{modDirectory.Name}: materialVariants={variants.Length}, materialBoundMeshes={result.Meshes.Count(mesh => mesh.MaterialId.HasValue)}, " +
+            $"visibleMeshes={visibleMeshes.Count}, slots=[{string.Join(",", visibleMeshes.Select(mesh => mesh.CustomizationSlot).Distinct())}], " +
+            $"presentationRotation={presentationRotation}");
     }
 
     private static string GetAverageRgb(TexturePreviewData? preview)

@@ -67,6 +67,20 @@ public sealed class ModelPreviewCharacterOrientationTests
     }
 
     [TestMethod]
+    public void GetRequiredRotation_TorsoWithUnlabeledBodyMeshes_UsesDominantBodyAxis()
+    {
+        var rotation = ModelPreviewCharacterOrientation.GetRequiredRotation(
+        [
+            CreateMesh(ModelPreviewCustomizationSlot.Torso, 4, 0, 0),
+            CreateMesh(ModelPreviewCustomizationSlot.Unknown, 0, 0, 0),
+            CreateMesh(ModelPreviewCustomizationSlot.Unknown, 0, 0, 0),
+            CreateMesh(ModelPreviewCustomizationSlot.Unknown, 0, 0, 0)
+        ]);
+
+        Assert.AreEqual(ModelPreviewPresentationRotation.NegativeXToPositiveY, rotation);
+    }
+
+    [TestMethod]
     public void CreatePresentationTransform_PositiveZUp_MapsSourceUpToViewportY()
     {
         var transform = ModelPreviewPageViewModel.CreatePresentationTransform(

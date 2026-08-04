@@ -1020,20 +1020,20 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         ulong? selectedTextureId)
     {
         var textureIds = useAutomaticMaterials
-            ? mesh.MaterialTextures.EnumerateRenderableInputs()
-                .Concat(mesh.TextureIds)
-                .Distinct()
-                .ToArray()
+            ? GetAutomaticMaterialTextureIds(mesh)
             : (GetSelectedTextureIdForMesh(mesh, selectedTextureId) is ulong selected
                 ? [selected]
                 : []);
 
-        var baseColor = useAutomaticMaterials
-            ? mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor)
-                .Concat(mesh.ColorTextureId is ulong color ? [color] : [])
-                .Concat(textureIds)
-                .FirstOrDefault(texturePreviews.ContainsKey)
-            : textureIds.FirstOrDefault(texturePreviews.ContainsKey);
+        var semanticBaseColorIds = mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor)
+            .Concat(mesh.ColorTextureId is ulong color ? [color] : [])
+            .Distinct()
+            .ToArray();
+        var baseColor = !useAutomaticMaterials
+            ? textureIds.FirstOrDefault(texturePreviews.ContainsKey)
+            : semanticBaseColorIds.Length > 0
+                ? semanticBaseColorIds.FirstOrDefault(texturePreviews.ContainsKey)
+                : textureIds.FirstOrDefault(texturePreviews.ContainsKey);
         var baseImage = baseColor != 0 && texturePreviews.TryGetValue(baseColor, out var basePreview)
             ? basePreview.Image
             : null;
@@ -1087,14 +1087,30 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews)
     {
         var ids = useAutomaticMaterials
-            ? mesh.MaterialTextures.EnumerateRenderableInputs()
-                .Concat(mesh.TextureIds)
+            ? GetAutomaticMaterialTextureIds(mesh)
                 .Where(texturePreviews.ContainsKey)
-                .Distinct()
             : (GetSelectedTextureIdForMesh(mesh, selectedTextureId) is ulong selected
                 ? [selected]
                 : Enumerable.Empty<ulong>());
         return string.Join(",", ids.OrderBy(static id => id));
+    }
+
+    private static IReadOnlyList<ulong> GetAutomaticMaterialTextureIds(ModelPreviewMesh mesh)
+    {
+        var semanticBaseColorIds = mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor)
+            .Concat(mesh.ColorTextureId is ulong color ? [color] : [])
+            .Distinct()
+            .ToArray();
+
+        return semanticBaseColorIds.Length > 0
+            ? semanticBaseColorIds
+                .Concat(mesh.MaterialTextures.Get(ModelPreviewTextureRole.Emissive))
+                .Distinct()
+                .ToArray()
+            : mesh.MaterialTextures.Get(ModelPreviewTextureRole.Emissive)
+                .Concat(mesh.TextureIds)
+                .Distinct()
+                .ToArray();
     }
 
     private void UpdateLocalizedPreviewLabels()

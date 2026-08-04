@@ -20,13 +20,39 @@ internal static class ModelPreviewCharacterOrientation
     {
         ArgumentNullException.ThrowIfNull(meshes);
 
-        if (!TryGetCentroid(meshes, TorsoSlots, out var torso) ||
-            !TryGetCentroid(meshes, LegSlots, out var legs))
+        if (!TryGetCentroid(meshes, TorsoSlots, out var torso))
             return ModelPreviewPresentationRotation.None;
 
-        var upX = torso.X - legs.X;
-        var upY = torso.Y - legs.Y;
-        var upZ = torso.Z - legs.Z;
+        if (TryGetCentroid(meshes, LegSlots, out var legs))
+            return GetRotation(torso, legs);
+
+        // Some full-body replacements label only the torso Unit. For those, use the
+        // remaining body geometry as a conservative lower-body proxy, but require
+        // enough independent meshes and vertices to avoid rotating a torso prop.
+        var unlabeledBodyMeshes = meshes
+            .Where(mesh => !TorsoSlots.Contains(mesh.CustomizationSlot) && mesh.Positions.Length >= 3)
+            .ToArray();
+        var torsoPointCount = meshes
+            .Where(mesh => TorsoSlots.Contains(mesh.CustomizationSlot))
+            .Sum(mesh => mesh.Positions.Length / 3);
+        var unlabeledPointCount = unlabeledBodyMeshes.Sum(mesh => mesh.Positions.Length / 3);
+        if (unlabeledBodyMeshes.Length < 3 || unlabeledPointCount < torsoPointCount ||
+            !TryGetCentroid(unlabeledBodyMeshes, null, out var unlabeledBody))
+            return ModelPreviewPresentationRotation.None;
+
+        // Unlike explicitly labeled legs, this remainder also includes the head and
+        // hair. Its centroid points toward the source body's upper end for the
+        // partially labeled character resources, so use the inverse presentation axis.
+        return Reverse(GetRotation(torso, unlabeledBody));
+    }
+
+    private static ModelPreviewPresentationRotation GetRotation(
+        (double X, double Y, double Z) torso,
+        (double X, double Y, double Z) lowerBody)
+    {
+        var upX = torso.X - lowerBody.X;
+        var upY = torso.Y - lowerBody.Y;
+        var upZ = torso.Z - lowerBody.Z;
         var components = new[]
         {
             (Magnitude: Math.Abs(upX), Axis: 0),
@@ -48,9 +74,18 @@ internal static class ModelPreviewCharacterOrientation
         };
     }
 
+    private static ModelPreviewPresentationRotation Reverse(ModelPreviewPresentationRotation rotation) => rotation switch
+    {
+        ModelPreviewPresentationRotation.PositiveXToPositiveY => ModelPreviewPresentationRotation.NegativeXToPositiveY,
+        ModelPreviewPresentationRotation.NegativeXToPositiveY => ModelPreviewPresentationRotation.PositiveXToPositiveY,
+        ModelPreviewPresentationRotation.PositiveZToPositiveY => ModelPreviewPresentationRotation.NegativeZToPositiveY,
+        ModelPreviewPresentationRotation.NegativeZToPositiveY => ModelPreviewPresentationRotation.PositiveZToPositiveY,
+        _ => ModelPreviewPresentationRotation.None
+    };
+
     private static bool TryGetCentroid(
         IReadOnlyList<ModelPreviewMesh> meshes,
-        IReadOnlySet<ModelPreviewCustomizationSlot> slots,
+        IReadOnlySet<ModelPreviewCustomizationSlot>? slots,
         out (double X, double Y, double Z) centroid)
     {
         var x = 0d;
@@ -59,7 +94,7 @@ internal static class ModelPreviewCharacterOrientation
         var pointCount = 0L;
         foreach (var mesh in meshes)
         {
-            if (!slots.Contains(mesh.CustomizationSlot))
+            if (slots is not null && !slots.Contains(mesh.CustomizationSlot))
                 continue;
 
             for (var index = 0; index < mesh.Positions.Length; index += 3)
