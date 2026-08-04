@@ -790,10 +790,33 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
                 Math.Pow(maxY - minY, 2) +
                 Math.Pow(maxZ - minZ, 2)) / 2,
             0.5);
-        group.Transform = new TranslateTransform3D(-center.X, -center.Y, -center.Z);
+        group.Transform = CreatePresentationTransform(
+            center,
+            ModelPreviewCharacterOrientation.GetRequiredRotation(meshes));
         group.Transform.Freeze();
         group.Freeze();
         return new ModelPreviewBuildResult(group, radius);
+    }
+
+    internal static Transform3D CreatePresentationTransform(
+        Vector3D center,
+        ModelPreviewPresentationRotation rotation)
+    {
+        if (rotation == ModelPreviewPresentationRotation.None)
+            return new TranslateTransform3D(-center.X, -center.Y, -center.Z);
+
+        var (axis, angle) = rotation switch
+        {
+            ModelPreviewPresentationRotation.PositiveXToPositiveY => (new Vector3D(0, 0, 1), 90d),
+            ModelPreviewPresentationRotation.NegativeXToPositiveY => (new Vector3D(0, 0, 1), -90d),
+            ModelPreviewPresentationRotation.PositiveZToPositiveY => (new Vector3D(1, 0, 0), -90d),
+            ModelPreviewPresentationRotation.NegativeZToPositiveY => (new Vector3D(1, 0, 0), 90d),
+            _ => throw new ArgumentOutOfRangeException(nameof(rotation), rotation, null)
+        };
+        var transform = new Transform3DGroup();
+        transform.Children.Add(new TranslateTransform3D(-center.X, -center.Y, -center.Z));
+        transform.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(axis, angle)));
+        return transform;
     }
 
     private static CachedMeshGeometry CreateCachedMeshGeometry(ModelPreviewMesh source)

@@ -187,6 +187,26 @@ public sealed class ModelPreviewPatchSetIntegrationTests
     }
 
     [TestMethod]
+    public async Task PreviewModelAsync_VrcMizukiBodySlotsNeedPresentationRotation()
+    {
+        var modDirectory = new DirectoryInfo(Path.Combine(
+            FindRepositoryRoot().FullName,
+            "Test", "Mods", "Mods", "VRC_瑞希 寄染赛车服 替换 CM-10全套 + EX00全套 +CM17头+无畏头_02508ace", "无尾巴"));
+        var patch = new FileInfo(Path.Combine(modDirectory.FullName, "9ba626afa44a3aa3.patch_9"));
+
+        var result = await new PatchResourceInspectionService().PreviewModelAsync(modDirectory, [patch]);
+        var visibleMeshes = ModelPreviewMeshSelector.Select(result.Meshes).VisibleMeshes;
+        var rotation = ModelPreviewCharacterOrientation.GetRequiredRotation(visibleMeshes);
+
+        Assert.IsNull(result.Error, result.Error);
+        Assert.IsTrue(visibleMeshes.Any(mesh => mesh.CustomizationSlot == ModelPreviewCustomizationSlot.Torso));
+        Assert.IsTrue(visibleMeshes.Any(mesh => mesh.CustomizationSlot is ModelPreviewCustomizationSlot.LeftLeg or ModelPreviewCustomizationSlot.RightLeg));
+        Assert.AreNotEqual(ModelPreviewPresentationRotation.None, rotation,
+            "The real VRC Mizuki body slots should expose a clear non-Y-up presentation axis.");
+        Console.WriteLine($"VRC Mizuki: visibleMeshes={visibleMeshes.Count}, presentationRotation={rotation}");
+    }
+
+    [TestMethod]
     public async Task PreviewModelAsync_DoesNotInjectBaseGameArmorForProxyUnits()
     {
         var modDirectory = new DirectoryInfo(Path.Combine(
