@@ -176,6 +176,12 @@ internal sealed class PatchResourceInspectionService
             unitMaterialLayouts = new Dictionary<(string PatchPath, ulong UnitId), ModelPreviewMaterialLayout>();
         }
 
+        var pureBlackBaseColorTextureIds = await FindPureBlackBaseColorTextureIdsAsync(
+            modDirectory,
+            result.Textures,
+            unitMaterialLayouts.Values,
+            cancellationToken);
+
         var patchResults = new ModelPreviewResult[patchFiles.Count];
         await Parallel.ForEachAsync(
             Enumerable.Range(0, patchFiles.Count),
@@ -213,7 +219,14 @@ internal sealed class PatchResourceInspectionService
             cancellationToken.ThrowIfCancellationRequested();
             result.SkippedStreams += patchResult.SkippedStreams;
             result.Error ??= patchResult.Error;
-            foreach (var mesh in patchResult.Meshes)
+            var preferredMeshes = ModelPreviewMaterialVariantSelector.SelectPreferredVariants(
+                patchResult.Meshes,
+                textureId => result.Textures.FirstOrDefault(texture => texture.TextureId == textureId) is { } texture
+                    ? (long)texture.Width * texture.Height
+                    : 0);
+            foreach (var mesh in ModelPreviewMaterialVariantSelector.FilterPureBlackPlaceholders(
+                         preferredMeshes,
+                         pureBlackBaseColorTextureIds))
             {
                 if (!result.TryAddMesh(mesh))
                     result.SkippedStreams++;
@@ -964,6 +977,7 @@ internal sealed class PatchResourceInspectionService
 
         var textureIds = new List<ulong>();
         var texturesByRole = new Dictionary<ModelPreviewTextureRole, List<ulong>>();
+        var inputs = new List<ModelPreviewMaterialInput>();
         ulong? colorTextureId = null;
         for (var index = 0; index < textureCount; index++)
         {
@@ -974,6 +988,7 @@ internal sealed class PatchResourceInspectionService
 
             textureIds.Add(textureId);
             var role = GetTextureRole(semanticId);
+            inputs.Add(new ModelPreviewMaterialInput(semanticId, textureId, role));
             if (!texturesByRole.TryGetValue(role, out var roleIds))
                 texturesByRole[role] = roleIds = [];
             roleIds.Add(textureId);
@@ -987,7 +1002,8 @@ internal sealed class PatchResourceInspectionService
                 colorTextureId,
                 texturesByRole.ToDictionary(
                     static pair => pair.Key,
-                    static pair => (IReadOnlyList<ulong>)pair.Value))
+                    static pair => (IReadOnlyList<ulong>)pair.Value),
+                inputs)
             : null;
     }
 
@@ -999,13 +1015,19 @@ internal sealed class PatchResourceInspectionService
         0x604318CD or // BaseColor
         0x608D8147 or // BaseColorEmissiveMap
         0x848BA63B or // BaseColorMetalMap
+        0xFF2C91CC or // AlbedoIridescence (the character-material color input)
         0x3AA8B87E => ModelPreviewTextureRole.BaseColor,
         // Common semantic hashes from the Stingray material tables. Unknown semantic
         // values stay Unknown so forward-compatible materials are still visible through
         // the first readable input rather than being misclassified as normal maps.
-        0x7668E94B or 0xF5C97D31 or 0x2B33D35F or 0x5A3BC7C0 => ModelPreviewTextureRole.Normal,
-        0xE97A4617 or 0x85C8629F or 0x204EB619 or 0xE6E80465 or 0xE58FF005 => ModelPreviewTextureRole.Mask,
-        0x12A0F5C0 or 0x4DC19F08 or 0x3E6E30E7 => ModelPreviewTextureRole.Emissive,
+        0x7668E94B or 0xF5C97D31 or 0x2B33D35F or 0x5A3BC7C0 or
+        0xCAED6CD6 or // Normal
+        0x1D57DCF3 => ModelPreviewTextureRole.Normal, // NormalXyAoRoughMap
+        0xE97A4617 or 0x85C8629F or 0x204EB619 or 0xE6E80465 or 0xE58FF005 or
+        0x756F6FA6 or // Mra
+        0xCBDE381B => ModelPreviewTextureRole.Mask, // OpacityClipMap
+        0x12A0F5C0 or 0x4DC19F08 or 0x3E6E30E7 or
+        0xCA6F2CF1 => ModelPreviewTextureRole.Emissive, // EmissiveFStop10IntensityMap
         _ => ModelPreviewTextureRole.Unknown
     };
 
@@ -1070,6 +1092,71 @@ internal sealed class PatchResourceInspectionService
 
         var data = new byte[(int)entry.MainSize];
         return await ReadAtAsync(stream, (long)entry.MainOffset, data, cancellationToken) ? data : null;
+    }
+
+    private static async Task<IReadOnlySet<ulong>> FindPureBlackBaseColorTextureIdsAsync(
+        DirectoryInfo modDirectory,
+        IReadOnlyList<TextureInspectionItem> textures,
+        IEnumerable<ModelPreviewMaterialLayout> materialLayouts,
+        CancellationToken cancellationToken)
+    {
+        var referencedColorTextureIds = materialLayouts
+            .SelectMany(static layout => layout.SectionsByStream.Values)
+            .SelectMany(static sections => sections)
+            .Select(static section => section.ColorTextureId)
+            .Where(static textureId => textureId.HasValue)
+            .Select(static textureId => textureId!.Value)
+            .ToHashSet();
+        if (referencedColorTextureIds.Count == 0)
+            return new HashSet<ulong>();
+
+        var candidates = textures
+            .Where(texture => referencedColorTextureIds.Contains(texture.TextureId) &&
+                texture.PayloadKind == "DDS" && texture.DxgiFormat is 98 or 99)
+            .GroupBy(static texture => texture.TextureId)
+            .Select(static group => group.First())
+            .ToArray();
+        var pureBlackIds = new System.Collections.Concurrent.ConcurrentDictionary<ulong, byte>();
+        await Parallel.ForEachAsync(
+            candidates,
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = 2,
+                CancellationToken = cancellationToken
+            },
+            async (texture, token) =>
+            {
+                if (await IsBc7PureBlackPlaceholderAsync(modDirectory, texture, token))
+                    pureBlackIds.TryAdd(texture.TextureId, 0);
+            });
+        return pureBlackIds.Keys.ToHashSet();
+    }
+
+    private static async Task<bool> IsBc7PureBlackPlaceholderAsync(
+        DirectoryInfo modDirectory,
+        TextureInspectionItem texture,
+        CancellationToken cancellationToken)
+    {
+        const int requiredBytes = 64;
+        var patchPath = Path.IsPathFullyQualified(texture.PatchPath)
+            ? texture.PatchPath
+            : Path.Combine(modDirectory.FullName, texture.PatchPath);
+        var payloadPath = texture.PayloadSource.Equals("stream", StringComparison.OrdinalIgnoreCase)
+            ? patchPath + ".stream"
+            : patchPath + ".gpu_resources";
+        if (!File.Exists(payloadPath))
+            return false;
+
+        var payloadOffset = texture.PayloadSource.Equals("stream", StringComparison.OrdinalIgnoreCase)
+            ? texture.StreamOffset
+            : texture.GpuOffset;
+        await using var stream = OpenRead(new FileInfo(payloadPath));
+        if (!IsRangeInBounds(payloadOffset, requiredBytes, stream.Length))
+            return false;
+
+        var headerBlocks = new byte[requiredBytes];
+        return await ReadAtAsync(stream, (long)payloadOffset, headerBlocks, cancellationToken) &&
+            ModelPreviewMaterialVariantSelector.IsBc7PureBlackPlaceholder(headerBlocks);
     }
 
     private static IReadOnlyList<ulong> ScanResourceIds(byte[] data, IReadOnlySet<ulong> ids)
@@ -1457,6 +1544,9 @@ internal sealed class PatchResourceInspectionService
             StreamIndex = source.StreamIndex,
             MeshInfoIndex = section.MeshInfoIndex,
             SourceVertexOffset = section.VertexOffset,
+            SourceVertexCount = section.VertexCount,
+            SourceIndexOffset = section.IndexOffset,
+            SourceIndexCount = section.IndexCount,
             BodyShape = source.BodyShape,
             CustomizationSlot = source.CustomizationSlot,
             Positions = compactPositions,
@@ -1465,6 +1555,7 @@ internal sealed class PatchResourceInspectionService
             TriangleIndices = indices,
             TextureIds = section.TextureIds.Count > 0 ? section.TextureIds : source.TextureIds,
             ColorTextureId = section.ColorTextureId ?? source.ColorTextureId,
+            MaterialId = section.MaterialId,
             MaterialTextures = section.MaterialTextures ?? source.MaterialTextures,
             IsCullingBody = section.IsCullingBody
         };

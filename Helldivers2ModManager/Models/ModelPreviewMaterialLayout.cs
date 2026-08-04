@@ -87,13 +87,25 @@ internal static class ModelPreviewBodyShapeParser
 internal sealed record ModelPreviewMaterialTextures(
     IReadOnlyList<ulong> TextureIds,
     ulong? ColorTextureId,
-    IReadOnlyDictionary<ModelPreviewTextureRole, IReadOnlyList<ulong>>? TexturesByRole = null)
+    IReadOnlyDictionary<ModelPreviewTextureRole, IReadOnlyList<ulong>>? TexturesByRole = null,
+    IReadOnlyList<ModelPreviewMaterialInput>? Inputs = null)
 {
     public ModelPreviewMaterialTextureSet ToTextureSet() => new(
         TexturesByRole ?? new Dictionary<ModelPreviewTextureRole, IReadOnlyList<ulong>>(),
         TextureIds,
-        ColorTextureId);
+        ColorTextureId,
+        Inputs);
 }
+
+/// <summary>
+/// One entry in Stingray's parallel material semantic and texture-ID tables.
+/// Retaining the semantic hash preserves evidence for material types that the preview
+/// does not yet classify into a render role.
+/// </summary>
+internal sealed record ModelPreviewMaterialInput(
+    uint SemanticId,
+    ulong TextureId,
+    ModelPreviewTextureRole Role);
 
 /// <summary>
 /// Semantic texture inputs for one material section. A Stingray material can reference
@@ -103,7 +115,8 @@ internal sealed record ModelPreviewMaterialTextures(
 internal sealed record ModelPreviewMaterialTextureSet(
     IReadOnlyDictionary<ModelPreviewTextureRole, IReadOnlyList<ulong>> ByRole,
     IReadOnlyList<ulong> AllTextureIds,
-    ulong? ColorTextureId)
+    ulong? ColorTextureId,
+    IReadOnlyList<ModelPreviewMaterialInput>? Inputs = null)
 {
     public static ModelPreviewMaterialTextureSet Empty { get; } = new(
         new Dictionary<ModelPreviewTextureRole, IReadOnlyList<ulong>>(),

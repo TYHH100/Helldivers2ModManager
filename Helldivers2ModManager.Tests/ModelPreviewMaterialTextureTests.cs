@@ -38,8 +38,44 @@ public sealed class ModelPreviewMaterialTextureTests
             new[] { normalTextureId, maskTextureId, emissiveTextureId, albedoTextureId },
             textures.TextureIds.ToArray());
         Assert.AreEqual(albedoTextureId, textures.ColorTextureId);
+        CollectionAssert.AreEqual(
+            new uint[] { 0xF5C97D31, 0xE97A4617, 0x4DC19F08, 0xE67AC0C7 },
+            textures.Inputs!.Select(static input => input.SemanticId).ToArray());
         CollectionAssert.AreEqual(new[] { normalTextureId }, textures.TexturesByRole![ModelPreviewTextureRole.Normal].ToArray());
         CollectionAssert.AreEqual(new[] { maskTextureId }, textures.TexturesByRole[ModelPreviewTextureRole.Mask].ToArray());
+        CollectionAssert.AreEqual(new[] { emissiveTextureId }, textures.TexturesByRole[ModelPreviewTextureRole.Emissive].ToArray());
+        CollectionAssert.AreEqual(new[] { albedoTextureId }, textures.TexturesByRole[ModelPreviewTextureRole.BaseColor].ToArray());
+    }
+
+    [TestMethod]
+    public void TryReadMaterialTextures_CharacterMaterialSemantics_ClassifiesOnlyRenderableRoles()
+    {
+        const ulong normalTextureId = 1;
+        const ulong mraTextureId = 2;
+        const ulong emissiveTextureId = 3;
+        const ulong albedoTextureId = 4;
+        const ulong opacityTextureId = 5;
+        var material = new byte[0x140];
+        WriteInt32(material, 0x40, 5);
+        WriteUInt32(material, 0x88, 0xCAED6CD6); // Normal
+        WriteUInt32(material, 0x8C, 0x756F6FA6); // Mra
+        WriteUInt32(material, 0x90, 0xCA6F2CF1); // EmissiveFStop10IntensityMap
+        WriteUInt32(material, 0x94, 0xFF2C91CC); // AlbedoIridescence
+        WriteUInt32(material, 0x98, 0xCBDE381B); // OpacityClipMap
+        WriteUInt64(material, 0x9C, normalTextureId);
+        WriteUInt64(material, 0xA4, mraTextureId);
+        WriteUInt64(material, 0xAC, emissiveTextureId);
+        WriteUInt64(material, 0xB4, albedoTextureId);
+        WriteUInt64(material, 0xBC, opacityTextureId);
+
+        var textures = PatchResourceInspectionService.TryReadMaterialTextures(
+            material,
+            new HashSet<ulong> { normalTextureId, mraTextureId, emissiveTextureId, albedoTextureId, opacityTextureId });
+
+        Assert.IsNotNull(textures);
+        Assert.AreEqual(albedoTextureId, textures.ColorTextureId);
+        CollectionAssert.AreEqual(new[] { normalTextureId }, textures.TexturesByRole![ModelPreviewTextureRole.Normal].ToArray());
+        CollectionAssert.AreEqual(new[] { mraTextureId, opacityTextureId }, textures.TexturesByRole[ModelPreviewTextureRole.Mask].ToArray());
         CollectionAssert.AreEqual(new[] { emissiveTextureId }, textures.TexturesByRole[ModelPreviewTextureRole.Emissive].ToArray());
         CollectionAssert.AreEqual(new[] { albedoTextureId }, textures.TexturesByRole[ModelPreviewTextureRole.BaseColor].ToArray());
     }
