@@ -523,14 +523,36 @@ internal sealed class AssistedUnitRepairAction
     public bool MeshIdsDiffer { get; init; }
     public string CurrentMeshSignature { get; init; } = string.Empty;
     public bool StrongCustomModelSignal { get; init; }
+    public ModelPreviewBodyShape BodyShape { get; init; } = ModelPreviewBodyShape.Unknown;
+    public ModelPreviewCustomizationSlot CustomizationSlot { get; init; } = ModelPreviewCustomizationSlot.Unknown;
     public AssistedLodStrategy LodStrategy { get; init; }
     public bool LodDataDiffers { get; init; }
     public string FriendlyName { get; init; } = string.Empty;
 }
 
+internal enum AssistedMaterialRepairKind
+{
+    ParentReference,
+    LegacyEmissiveSchema
+}
+
+/// <summary>
+/// A Material migration included with assisted repair.
+/// </summary>
+internal sealed class AssistedMaterialRepairAction
+{
+    public required string PatchFilePath { get; init; }
+    public int EntryIndex { get; init; }
+    public long FileId { get; init; }
+    public AssistedMaterialRepairKind Kind { get; init; }
+    public ulong OldParentMaterialId { get; init; }
+    public ulong NewParentMaterialId { get; init; }
+}
+
 internal sealed class AssistedModRepairPlan
 {
     public List<AssistedUnitRepairAction> Actions { get; init; } = [];
+    public List<AssistedMaterialRepairAction> MaterialActions { get; init; } = [];
     public List<string> BlockingReasons { get; init; } = [];
     public int MatchedReferenceCount { get; init; }
     public int MissingReferenceCount { get; init; }
@@ -538,9 +560,13 @@ internal sealed class AssistedModRepairPlan
     public int AutomaticStrongCustomCount { get; init; }
     public int AutomaticPreserveUnitCount { get; init; }
     public int AutomaticGameLodUnitCount { get; init; }
-    public int ActionCount => Actions.Count;
-    public int FileCount => Actions.Select(a => a.PatchFilePath).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-    public bool CanRepair => Actions.Count > 0 && BlockingReasons.Count == 0;
+    public int ActionCount => Actions.Count + MaterialActions.Count;
+    public int FileCount => Actions
+        .Select(a => a.PatchFilePath)
+        .Concat(MaterialActions.Select(a => a.PatchFilePath))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Count();
+    public bool CanRepair => ActionCount > 0 && BlockingReasons.Count == 0;
 }
 
 /// <summary>

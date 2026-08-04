@@ -15,9 +15,55 @@ internal sealed partial class VersionCheckService
 {
     private const long MaxAssistedRepairFileBytes = 256L * 1024 * 1024;
     private const double AutomaticMeshGpuExpansionRatio = 6.0;
-    private const uint AutomaticLargeCustomGpuBytes = 6U * 1024U * 1024U;
+    private const uint AutomaticLargeCustomGpuBytes = 5U * 1024U * 1024U;
     private const double AutomaticLargeCustomGpuExpansionRatio = 8.0;
     private const double AutomaticWholePatchCustomDensity = 0.5;
+    private const long MaterialTypeId = unchecked((long)0xEAC0B497876ADEDFUL);
+    private const int MaterialParentIdOffset = 0x18;
+    private const int MaterialTextureCountOffset = 0x40;
+    private const int MaterialVariableCountOffset = 0x68;
+    private const int MaterialVariableDataSizeOffset = 0x78;
+    private const int MaterialTextureTableOffset = 0x88;
+    private const int MaterialVariableDescriptorSize = 20;
+    private const int LegacyEmissiveMaterialSize = 512;
+    private const int CurrentEmissiveMaterialSize = 480;
+    private const uint CurrentEmissiveMaterialVersion = 0x11F;
+    private const uint CurrentEmissiveMaterialEndOffset = 0x1C8;
+    private const uint CurrentEmissiveOpacityThresholdVariableId = 0x529A4AAF;
+    private const uint CurrentEmissiveRangeVariableId = 0x32C02400;
+    private const ulong LegacyEmissiveMaterialParentId = 0xD3701FC725106C09UL;
+    private const ulong CurrentEmissiveMaterialParentId = 0xC6042E3403385D40UL;
+    private const ulong CurrentEmissiveOpacityTextureId = 0x12D4692531C1FD35UL;
+    private static readonly uint[] s_legacyCharacterMaterialTextureSemantics =
+    [
+        0x7CA0D044, 0xC985395A, 0xA72CB013, 0x479FB1EF, 0xDF3EE984,
+        0xCAED6CD6, 0xD2F99D38, 0xE7BD9019, 0xD47DB28B, 0xFF2C91CC,
+        0x736A0029, 0xF8E31D7B, 0xA59F5E11
+    ];
+    private static readonly uint[] s_legacyEmissiveMaterialTextureSemantics =
+    [
+        0x1D57DCF3, 0xCA6F2CF1, 0x848BA63B
+    ];
+    private static readonly uint[] s_currentEmissiveMaterialTextureSemantics =
+    [
+        0x1D57DCF3, 0xCA6F2CF1, 0x848BA63B, 0xCBDE381B
+    ];
+    private static readonly MaterialScalarVariable[] s_legacyEmissiveMaterialVariables =
+    [
+        new(0xA3351311, 0), new(0x43695F7B, 4), new(0x64AAB07B, 8),
+        new(0x6FD0B9E7, 12), new(0x60E7D2A1, 16), new(0x4A7CD0EF, 20),
+        new(0x4A6796C6, 24), new(0xBD16A396, 28), new(0x32C02400, 56),
+        new(0xC012EFE1, 36), new(0xA83F44CD, 40), new(0x6DDBAE8F, 44),
+        new(0x4B564F57, 48), new(0x9ED04DA2, 52)
+    ];
+    private static readonly MaterialScalarVariable[] s_currentEmissiveMaterialVariables =
+    [
+        new(CurrentEmissiveOpacityThresholdVariableId, 48), new(0xA3351311, 4),
+        new(0x43695F7B, 8), new(0x64AAB07B, 12), new(0x6FD0B9E7, 16),
+        new(0x60E7D2A1, 20), new(0x4A7CD0EF, 24), new(0xBD16A396, 28),
+        new(CurrentEmissiveRangeVariableId, 52), new(0xA83F44CD, 36),
+        new(0x6DDBAE8F, 40), new(0x9ED04DA2, 44)
+    ];
     private static readonly Lazy<IReadOnlyDictionary<long, string>> s_unitFriendlyNames =
         new(LoadUnitFriendlyNames);
 
@@ -25,11 +71,13 @@ internal sealed partial class VersionCheckService
         PatchTocEntry Toc,
         long TableOffset);
 
-    private sealed record UnitReplacement(
+    private sealed record ResourceReplacement(
         ulong OriginalOffset,
         uint OriginalSize,
         byte[] UpdatedData,
         int EntryIndex);
+
+    private readonly record struct MaterialScalarVariable(uint Id, uint Offset);
 
     public Task<AssistedModRepairPlan> CreateAssistedRepairPlanAsync(
         DirectoryInfo modDirectory) =>
@@ -67,10 +115,38 @@ internal sealed partial class VersionCheckService
             };
         }
 
+        var classification = ClassifyAutomaticLodActions(gamePlan.Actions);
+        var mixedPlan = await CreateMixedAssistedRepairPlanAsync(
+            modDirectory,
+            classification.PreserveUnitIds);
+        return new AssistedModRepairPlan
+        {
+            Actions = mixedPlan.Actions,
+            MaterialActions = mixedPlan.MaterialActions,
+            BlockingReasons = mixedPlan.BlockingReasons,
+            MatchedReferenceCount = mixedPlan.MatchedReferenceCount,
+            MissingReferenceCount = mixedPlan.MissingReferenceCount,
+            IsAutomatic = true,
+            AutomaticStrongCustomCount = classification.StrongCustomUnitIds.Count,
+            AutomaticPreserveUnitCount = classification.PreserveUnitIds.Count,
+            AutomaticGameLodUnitCount = Math.Max(
+                0,
+                classification.AutomaticUnitIds.Count - classification.PreserveUnitIds.Count)
+        };
+    }
+
+    internal static (
+        IReadOnlySet<long> PreserveUnitIds,
+        IReadOnlySet<long> StrongCustomUnitIds,
+        IReadOnlySet<long> AutomaticUnitIds) ClassifyAutomaticLodActions(
+            IEnumerable<AssistedUnitRepairAction> actions)
+    {
+        ArgumentNullException.ThrowIfNull(actions);
+
         var preserveIds = new HashSet<long>();
         var strongCustomIds = new HashSet<long>();
         var automaticUnitIds = new HashSet<long>();
-        foreach (var patchGroup in gamePlan.Actions
+        foreach (var patchGroup in actions
                      .Where(action => action.LodDataDiffers)
                      .GroupBy(action => action.PatchFilePath, StringComparer.OrdinalIgnoreCase))
         {
@@ -81,12 +157,16 @@ internal sealed partial class VersionCheckService
                     FileId = group.Key,
                     MeshDiffers = group.Any(action => action.MeshIdsDiffer),
                     StrongCustom = group.Any(action => action.StrongCustomModelSignal),
-                    StrongCustomMesh = group.Any(action =>
-                        action.StrongCustomModelSignal && action.MeshIdsDiffer),
                     MeshSignature = group
                         .Select(action => action.CurrentMeshSignature)
                         .FirstOrDefault(signature => !string.IsNullOrEmpty(signature))
-                        ?? string.Empty
+                        ?? string.Empty,
+                    BodyShape = group
+                        .Select(action => action.BodyShape)
+                        .FirstOrDefault(shape => shape != ModelPreviewBodyShape.Unknown),
+                    CustomizationSlot = group
+                        .Select(action => action.CustomizationSlot)
+                        .FirstOrDefault(slot => slot != ModelPreviewCustomizationSlot.Unknown)
                 })
                 .ToList();
             foreach (var unit in units)
@@ -103,31 +183,39 @@ internal sealed partial class VersionCheckService
             var wholePatchHasCustomMeshes = meshDiffCount > 0 &&
                 meshDiffCount / (double)units.Count >= AutomaticWholePatchCustomDensity;
             var strongCustomMeshSignatures = units
-                .Where(unit => (unit.StrongCustomMesh || unit.MeshDiffers) &&
+                .Where(unit => (unit.StrongCustom || unit.MeshDiffers) &&
                                !string.IsNullOrEmpty(unit.MeshSignature))
                 .Select(unit => unit.MeshSignature)
                 .ToHashSet(StringComparer.Ordinal);
+            var strongCustomSlots = units
+                .Where(unit => unit.StrongCustom &&
+                               unit.CustomizationSlot != ModelPreviewCustomizationSlot.Unknown)
+                .Select(unit => unit.CustomizationSlot)
+                .ToHashSet();
             foreach (var unit in units.Where(unit =>
+                         unit.StrongCustom ||
                          unit.MeshDiffers ||
                          wholePatchIsCustom ||
                          wholePatchHasCustomMeshes ||
-                         (unit.StrongCustom && strongCustomMeshSignatures.Count > 0) ||
+                         strongCustomSlots.Contains(unit.CustomizationSlot) ||
                          strongCustomMeshSignatures.Contains(unit.MeshSignature)))
                 preserveIds.Add(unit.FileId);
         }
 
-        var mixedPlan = await CreateMixedAssistedRepairPlanAsync(modDirectory, preserveIds);
-        return new AssistedModRepairPlan
-        {
-            Actions = mixedPlan.Actions,
-            BlockingReasons = mixedPlan.BlockingReasons,
-            MatchedReferenceCount = mixedPlan.MatchedReferenceCount,
-            MissingReferenceCount = mixedPlan.MissingReferenceCount,
-            IsAutomatic = true,
-            AutomaticStrongCustomCount = strongCustomIds.Count,
-            AutomaticPreserveUnitCount = preserveIds.Count,
-            AutomaticGameLodUnitCount = Math.Max(0, automaticUnitIds.Count - preserveIds.Count)
-        };
+        return (preserveIds, strongCustomIds, automaticUnitIds);
+    }
+
+    internal static bool IsStrongAutomaticLodCustomModel(
+        bool meshIdsDiffer,
+        uint currentGpuSize,
+        uint referenceGpuSize)
+    {
+        var gpuExpansionRatio = referenceGpuSize > 0
+            ? currentGpuSize / (double)referenceGpuSize
+            : currentGpuSize > 0 ? double.PositiveInfinity : 1.0;
+        return (meshIdsDiffer && gpuExpansionRatio >= AutomaticMeshGpuExpansionRatio) ||
+               (currentGpuSize >= AutomaticLargeCustomGpuBytes &&
+                gpuExpansionRatio >= AutomaticLargeCustomGpuExpansionRatio);
     }
 
     private async Task<AssistedModRepairPlan> CreateAssistedRepairPlanInternalAsync(
@@ -135,6 +223,7 @@ internal sealed partial class VersionCheckService
         Func<long, AssistedLodStrategy> lodStrategySelector)
     {
         var actions = new List<AssistedUnitRepairAction>();
+        var materialActions = new List<AssistedMaterialRepairAction>();
         var blockers = new List<string>();
         var patchFiles = modDirectory.GetFiles("*", SearchOption.AllDirectories)
             .Where(f => IsMainPatchFile(f.Name))
@@ -167,10 +256,29 @@ internal sealed partial class VersionCheckService
                 unitIds.Add(unit.FileId);
         }
 
+        if (blockers.Count > 0)
+        {
+            return new AssistedModRepairPlan
+            {
+                BlockingReasons = blockers.Distinct(StringComparer.Ordinal).ToList(),
+                MaterialActions = materialActions
+            };
+        }
+
+        foreach (var (patchFile, _, entries) in patchData)
+        {
+            materialActions.AddRange(await CreateMaterialParentMigrationActionsAsync(
+                patchFile,
+                entries,
+                blockers));
+        }
+
         if (blockers.Count > 0 || unitIds.Count == 0)
         {
             return new AssistedModRepairPlan
             {
+                Actions = actions,
+                MaterialActions = materialActions,
                 BlockingReasons = blockers.Distinct(StringComparer.Ordinal).ToList()
             };
         }
@@ -216,13 +324,11 @@ internal sealed partial class VersionCheckService
                 var meshIdsDiffer = currentMeshIds.Length > 0 &&
                     reference.MeshIds.Length > 0 &&
                     !currentMeshIds.AsSpan().SequenceEqual(reference.MeshIds);
-                var gpuExpansionRatio = reference.GpuSize > 0
-                    ? entry.Toc.GpuSize / (double)reference.GpuSize
-                    : entry.Toc.GpuSize > 0 ? double.PositiveInfinity : 1.0;
-                var strongCustomModelSignal =
-                    (meshIdsDiffer && gpuExpansionRatio >= AutomaticMeshGpuExpansionRatio) ||
-                    (entry.Toc.GpuSize >= AutomaticLargeCustomGpuBytes &&
-                     gpuExpansionRatio >= AutomaticLargeCustomGpuExpansionRatio);
+                var strongCustomModelSignal = IsStrongAutomaticLodCustomModel(
+                    meshIdsDiffer,
+                    entry.Toc.GpuSize,
+                    reference.GpuSize);
+                var customizationInfo = PatchResourceInspectionService.TryReadUnitCustomizationInfo(unitData);
                 var lodStrategy = lodStrategySelector(unit.FileId);
                 var requiresUnitUpdate = unit.Version != reference.Version ||
                     (unit.LayoutFormatChecked && !unit.LayoutFormatValid);
@@ -256,6 +362,8 @@ internal sealed partial class VersionCheckService
                     MeshIdsDiffer = meshIdsDiffer,
                     CurrentMeshSignature = currentMeshSignature,
                     StrongCustomModelSignal = strongCustomModelSignal,
+                    BodyShape = customizationInfo.BodyShape,
+                    CustomizationSlot = customizationInfo.Slot,
                     LodStrategy = lodStrategy,
                     LodDataDiffers = lodDataDiffers,
                     FriendlyName = GetUnitFriendlyName(unit.FileId)
@@ -266,6 +374,7 @@ internal sealed partial class VersionCheckService
         return new AssistedModRepairPlan
         {
             Actions = actions,
+            MaterialActions = materialActions,
             BlockingReasons = blockers.Distinct(StringComparer.Ordinal).ToList(),
             MatchedReferenceCount = referenceLookup.References.Count,
             MissingReferenceCount = referenceLookup.MissingUnitIds.Count
@@ -316,25 +425,45 @@ internal sealed partial class VersionCheckService
                 };
             }
 
-            var referenceLookup = await GetGameUnitReferencesAsync(
-                plan.Actions.Select(a => a.FileId).Distinct().ToArray());
-            if (!string.IsNullOrWhiteSpace(referenceLookup.ErrorMessage) ||
-                referenceLookup.AmbiguousUnitIds.Count > 0 ||
-                plan.Actions.Any(a => !referenceLookup.References.ContainsKey(a.FileId)))
+            var references = new Dictionary<long, GameUnitReferenceData>();
+            if (plan.Actions.Count > 0)
             {
-                return new ModRepairResult
+                var referenceLookup = await GetGameUnitReferencesAsync(
+                    plan.Actions.Select(a => a.FileId).Distinct().ToArray());
+                if (!string.IsNullOrWhiteSpace(referenceLookup.ErrorMessage) ||
+                    referenceLookup.AmbiguousUnitIds.Count > 0 ||
+                    plan.Actions.Any(a => !referenceLookup.References.ContainsKey(a.FileId)))
                 {
-                    ErrorMessage = referenceLookup.ErrorMessage ??
-                                   _localizationService["VersionCheckRepair.ReferenceChanged"]
-                };
+                    return new ModRepairResult
+                    {
+                        ErrorMessage = referenceLookup.ErrorMessage ??
+                                       _localizationService["VersionCheckRepair.ReferenceChanged"]
+                    };
+                }
+
+                references = referenceLookup.References;
             }
 
             var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-            foreach (var fileGroup in plan.Actions.GroupBy(
-                         a => a.PatchFilePath,
-                         StringComparer.OrdinalIgnoreCase))
+            var patchPaths = plan.Actions
+                .Select(action => action.PatchFilePath)
+                .Concat(plan.MaterialActions.Select(action => action.PatchFilePath))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            foreach (var patchPath in patchPaths)
             {
-                var originalFile = new FileInfo(fileGroup.Key);
+                var originalFile = new FileInfo(patchPath);
+                var unitActions = plan.Actions
+                    .Where(action => string.Equals(
+                        action.PatchFilePath,
+                        originalFile.FullName,
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var materialActions = plan.MaterialActions
+                    .Where(action => string.Equals(
+                        action.PatchFilePath,
+                        originalFile.FullName,
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToList();
                 var temporaryPath = Path.Combine(
                     originalFile.DirectoryName!,
                     "." + originalFile.Name + ".hd2mm-repair-" + Guid.NewGuid().ToString("N") + ".tmp");
@@ -350,8 +479,9 @@ internal sealed partial class VersionCheckService
                 await RebuildPatchWithGameReferencesAsync(
                     originalFile,
                     temporaryPath,
-                    fileGroup.ToList(),
-                    referenceLookup.References);
+                    unitActions,
+                    materialActions,
+                    references);
 
                 var validation = await AnalyzeSinglePatchFileStructureAsync(
                     new FileInfo(temporaryPath),
@@ -380,6 +510,10 @@ internal sealed partial class VersionCheckService
                         item.OriginalPath,
                         StringComparison.OrdinalIgnoreCase))
                     .ToList();
+                var materialActionCount = plan.MaterialActions.Count(action => string.Equals(
+                    action.PatchFilePath,
+                    item.OriginalPath,
+                    StringComparison.OrdinalIgnoreCase));
                 var strategies = fileActions
                     .Select(action => action.LodStrategy)
                     .Distinct()
@@ -395,7 +529,7 @@ internal sealed partial class VersionCheckService
                     item.BackupPath,
                     item.OriginalPath,
                     repairKind,
-                    fileActions.Count);
+                    fileActions.Count + materialActionCount);
             }
 
             return new ModRepairResult
@@ -495,6 +629,68 @@ internal sealed partial class VersionCheckService
         return entries;
     }
 
+    private async Task<List<AssistedMaterialRepairAction>> CreateMaterialParentMigrationActionsAsync(
+        FileInfo patchFile,
+        IReadOnlyList<AssistedPatchEntry> entries,
+        List<string> blockers)
+    {
+        var actions = new List<AssistedMaterialRepairAction>();
+        await using var stream = OpenPatchReadStream(patchFile);
+        foreach (var entry in entries.Where(entry => entry.Toc.TypeId == MaterialTypeId))
+        {
+            if (entry.Toc.TocSize > 1024 * 1024)
+            {
+                blockers.Add($"{patchFile.Name}: Material #{entry.Toc.EntryIndex} is too large for parent migration");
+                continue;
+            }
+
+            var materialData = new byte[entry.Toc.TocSize];
+            if (!await ReadAtAsync(stream, checked((long)entry.Toc.TocOffset), materialData))
+            {
+                blockers.Add($"{patchFile.Name}: Material #{entry.Toc.EntryIndex} cannot be read");
+                continue;
+            }
+
+            if (!TryGetLegacyMaterialParentMigration(
+                    materialData,
+                    out var oldParentMaterialId,
+                    out var newParentMaterialId))
+            {
+                if (!TryBuildLegacyEmissiveMaterialMigration(
+                        materialData,
+                        out _))
+                {
+                    continue;
+                }
+
+                oldParentMaterialId = LegacyEmissiveMaterialParentId;
+                newParentMaterialId = CurrentEmissiveMaterialParentId;
+                actions.Add(new AssistedMaterialRepairAction
+                {
+                    PatchFilePath = patchFile.FullName,
+                    EntryIndex = checked((int)entry.Toc.EntryIndex),
+                    FileId = entry.Toc.FileId,
+                    Kind = AssistedMaterialRepairKind.LegacyEmissiveSchema,
+                    OldParentMaterialId = oldParentMaterialId,
+                    NewParentMaterialId = newParentMaterialId
+                });
+                continue;
+            }
+
+            actions.Add(new AssistedMaterialRepairAction
+            {
+                PatchFilePath = patchFile.FullName,
+                EntryIndex = checked((int)entry.Toc.EntryIndex),
+                FileId = entry.Toc.FileId,
+                Kind = AssistedMaterialRepairKind.ParentReference,
+                OldParentMaterialId = oldParentMaterialId,
+                NewParentMaterialId = newParentMaterialId
+            });
+        }
+
+        return actions;
+    }
+
     private bool CanUsePatchForAssistedRepair(
         FileInfo patchFile,
         PatchFileAnalysis analysis,
@@ -525,6 +721,7 @@ internal sealed partial class VersionCheckService
         FileInfo originalFile,
         string temporaryPath,
         IReadOnlyList<AssistedUnitRepairAction> actions,
+        IReadOnlyList<AssistedMaterialRepairAction> materialActions,
         IReadOnlyDictionary<long, GameUnitReferenceData> references)
     {
         var originalData = await File.ReadAllBytesAsync(originalFile.FullName);
@@ -532,7 +729,8 @@ internal sealed partial class VersionCheckService
         var entries = await ReadAssistedPatchEntriesAsync(originalFile, planBlockers)
             ?? throw new InvalidDataException(string.Join(Environment.NewLine, planBlockers));
         var actionByEntry = actions.ToDictionary(a => a.EntryIndex);
-        var replacements = new List<UnitReplacement>();
+        var materialActionByEntry = materialActions.ToDictionary(a => a.EntryIndex);
+        var replacements = new List<ResourceReplacement>();
 
         foreach (var entry in entries)
         {
@@ -560,7 +758,53 @@ internal sealed partial class VersionCheckService
             if (!TryBuildUpdatedUnitData(unitData, reference, action.LodStrategy, out var updatedData, out var error))
                 throw new InvalidDataException($"Unit #{action.EntryIndex} {error}");
 
-            replacements.Add(new UnitReplacement(
+            replacements.Add(new ResourceReplacement(
+                entry.Toc.TocOffset,
+                entry.Toc.TocSize,
+                updatedData,
+                action.EntryIndex));
+        }
+
+        foreach (var entry in entries)
+        {
+            if (!materialActionByEntry.TryGetValue((int)entry.Toc.EntryIndex, out var action))
+                continue;
+            if (entry.Toc.FileId != action.FileId || entry.Toc.TypeId != MaterialTypeId)
+                throw new InvalidDataException("The material migration plan no longer matches the patch.");
+
+            var materialData = originalData.AsSpan(
+                checked((int)entry.Toc.TocOffset),
+                checked((int)entry.Toc.TocSize)).ToArray();
+            byte[] updatedData;
+            switch (action.Kind)
+            {
+                case AssistedMaterialRepairKind.ParentReference:
+                    updatedData = materialData.ToArray();
+                    if (BinaryPrimitives.ReadUInt64LittleEndian(
+                            updatedData.AsSpan(MaterialParentIdOffset, sizeof(ulong))) !=
+                        action.OldParentMaterialId)
+                    {
+                        throw new InvalidDataException("The material parent changed after the assisted repair plan was created.");
+                    }
+
+                    BinaryPrimitives.WriteUInt64LittleEndian(
+                        updatedData.AsSpan(MaterialParentIdOffset, sizeof(ulong)),
+                        action.NewParentMaterialId);
+                    break;
+                case AssistedMaterialRepairKind.LegacyEmissiveSchema:
+                    if (!TryBuildLegacyEmissiveMaterialMigration(materialData, out updatedData) ||
+                        BinaryPrimitives.ReadUInt64LittleEndian(
+                            updatedData.AsSpan(MaterialParentIdOffset, sizeof(ulong))) !=
+                        action.NewParentMaterialId)
+                    {
+                        throw new InvalidDataException("The legacy emissive material changed after the assisted repair plan was created.");
+                    }
+                    break;
+                default:
+                    throw new InvalidDataException("The material migration kind is unsupported.");
+            }
+
+            replacements.Add(new ResourceReplacement(
                 entry.Toc.TocOffset,
                 entry.Toc.TocSize,
                 updatedData,
@@ -613,6 +857,218 @@ internal sealed partial class VersionCheckService
             FileShare.None);
         await stream.FlushAsync();
         stream.Flush(true);
+    }
+
+    internal static bool TryGetLegacyMaterialParentMigration(
+        ReadOnlySpan<byte> materialData,
+        out ulong oldParentMaterialId,
+        out ulong newParentMaterialId)
+    {
+        oldParentMaterialId = 0;
+        newParentMaterialId = 0;
+        if (materialData.Length < MaterialTextureTableOffset ||
+            materialData.Length < MaterialParentIdOffset + sizeof(ulong))
+        {
+            return false;
+        }
+
+        var parentMaterialId = BinaryPrimitives.ReadUInt64LittleEndian(
+            materialData.Slice(MaterialParentIdOffset, sizeof(ulong)));
+        var textureCount = BinaryPrimitives.ReadUInt32LittleEndian(
+            materialData.Slice(MaterialTextureCountOffset, sizeof(uint)));
+        var semanticsLength = checked((long)textureCount * sizeof(uint));
+        if (textureCount > 4096 ||
+            MaterialTextureTableOffset + semanticsLength > materialData.Length)
+        {
+            return false;
+        }
+
+        if (parentMaterialId == 0x54AE9CE1A8FAFE8BUL &&
+            HasExactTextureSemantics(materialData, s_legacyCharacterMaterialTextureSemantics))
+        {
+            oldParentMaterialId = parentMaterialId;
+            newParentMaterialId = 0x8F669F365F24594EUL;
+            return true;
+        }
+
+        // The current replacement for the legacy three-input emissive template adds
+        // an opacity-clip input, so it cannot be migrated as a fixed-width parent edit.
+        return false;
+    }
+
+    internal static bool TryBuildLegacyEmissiveMaterialMigration(
+        ReadOnlySpan<byte> materialData,
+        out byte[] updatedData)
+    {
+        updatedData = [];
+        if (materialData.Length != LegacyEmissiveMaterialSize ||
+            BinaryPrimitives.ReadUInt64LittleEndian(
+                materialData.Slice(MaterialParentIdOffset, sizeof(ulong))) !=
+            LegacyEmissiveMaterialParentId ||
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                materialData.Slice(MaterialTextureCountOffset, sizeof(uint))) !=
+            s_legacyEmissiveMaterialTextureSemantics.Length ||
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                materialData.Slice(MaterialVariableCountOffset, sizeof(uint))) !=
+            s_legacyEmissiveMaterialVariables.Length ||
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                materialData.Slice(MaterialVariableDataSizeOffset, sizeof(uint))) != 60 ||
+            !HasExactTextureSemantics(materialData, s_legacyEmissiveMaterialTextureSemantics))
+        {
+            return false;
+        }
+
+        var sourceTextureIdOffset = GetMaterialTextureIdOffset(
+            s_legacyEmissiveMaterialTextureSemantics.Length);
+        var sourceVariableDescriptorOffset = sourceTextureIdOffset +
+            s_legacyEmissiveMaterialTextureSemantics.Length * sizeof(ulong);
+        var sourceVariableDataOffset = sourceVariableDescriptorOffset +
+            s_legacyEmissiveMaterialVariables.Length * MaterialVariableDescriptorSize;
+        if (sourceVariableDataOffset + 60 != materialData.Length ||
+            !HasExactScalarVariableLayout(
+                materialData,
+                sourceVariableDescriptorOffset,
+                s_legacyEmissiveMaterialVariables,
+                60))
+        {
+            return false;
+        }
+
+        updatedData = new byte[CurrentEmissiveMaterialSize];
+        materialData.Slice(0, MaterialTextureTableOffset).CopyTo(updatedData);
+        BinaryPrimitives.WriteUInt32LittleEndian(updatedData.AsSpan(0, sizeof(uint)),
+            CurrentEmissiveMaterialVersion);
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            updatedData.AsSpan(12, sizeof(uint)),
+            CurrentEmissiveMaterialEndOffset);
+        BinaryPrimitives.WriteUInt64LittleEndian(
+            updatedData.AsSpan(MaterialParentIdOffset, sizeof(ulong)),
+            CurrentEmissiveMaterialParentId);
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            updatedData.AsSpan(MaterialTextureCountOffset, sizeof(uint)),
+            checked((uint)s_currentEmissiveMaterialTextureSemantics.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            updatedData.AsSpan(MaterialVariableCountOffset, sizeof(uint)),
+            checked((uint)s_currentEmissiveMaterialVariables.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            updatedData.AsSpan(MaterialVariableDataSizeOffset, sizeof(uint)), 56);
+
+        var targetTextureIdOffset = GetMaterialTextureIdOffset(
+            s_currentEmissiveMaterialTextureSemantics.Length);
+        for (var index = 0; index < s_currentEmissiveMaterialTextureSemantics.Length; index++)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(
+                updatedData.AsSpan(MaterialTextureTableOffset + index * sizeof(uint), sizeof(uint)),
+                s_currentEmissiveMaterialTextureSemantics[index]);
+        }
+
+        for (var index = 0; index < s_legacyEmissiveMaterialTextureSemantics.Length; index++)
+        {
+            var textureId = BinaryPrimitives.ReadUInt64LittleEndian(materialData.Slice(
+                sourceTextureIdOffset + index * sizeof(ulong),
+                sizeof(ulong)));
+            BinaryPrimitives.WriteUInt64LittleEndian(updatedData.AsSpan(
+                targetTextureIdOffset + index * sizeof(ulong),
+                sizeof(ulong)), textureId);
+        }
+        BinaryPrimitives.WriteUInt64LittleEndian(updatedData.AsSpan(
+            targetTextureIdOffset + s_legacyEmissiveMaterialTextureSemantics.Length * sizeof(ulong),
+            sizeof(ulong)), CurrentEmissiveOpacityTextureId);
+
+        var sourceValuesById = new Dictionary<uint, byte[]>();
+        foreach (var variable in s_legacyEmissiveMaterialVariables)
+        {
+            sourceValuesById[variable.Id] = materialData.Slice(
+                sourceVariableDataOffset + checked((int)variable.Offset),
+                sizeof(uint)).ToArray();
+        }
+        var targetVariableDescriptorOffset = targetTextureIdOffset +
+            s_currentEmissiveMaterialTextureSemantics.Length * sizeof(ulong);
+        var targetVariableDataOffset = targetVariableDescriptorOffset +
+            s_currentEmissiveMaterialVariables.Length * MaterialVariableDescriptorSize;
+        for (var index = 0; index < s_currentEmissiveMaterialVariables.Length; index++)
+        {
+            var variable = s_currentEmissiveMaterialVariables[index];
+            var descriptorOffset = targetVariableDescriptorOffset + index * MaterialVariableDescriptorSize;
+            BinaryPrimitives.WriteUInt32LittleEndian(
+                updatedData.AsSpan(descriptorOffset + 8, sizeof(uint)), variable.Id);
+            BinaryPrimitives.WriteUInt32LittleEndian(
+                updatedData.AsSpan(descriptorOffset + 12, sizeof(uint)), variable.Offset);
+
+            if (variable.Id != CurrentEmissiveRangeVariableId &&
+                sourceValuesById.TryGetValue(variable.Id, out var sourceValue))
+            {
+                sourceValue.CopyTo(updatedData, targetVariableDataOffset + checked((int)variable.Offset));
+                continue;
+            }
+
+            var defaultValue = variable.Id switch
+            {
+                CurrentEmissiveOpacityThresholdVariableId => 0.144f,
+                CurrentEmissiveRangeVariableId => 1.0f,
+                _ => throw new InvalidDataException("The current emissive material layout has an unmapped variable.")
+            };
+            BinaryPrimitives.WriteInt32LittleEndian(
+                updatedData.AsSpan(targetVariableDataOffset + checked((int)variable.Offset), sizeof(uint)),
+                BitConverter.SingleToInt32Bits(defaultValue));
+        }
+
+        return true;
+    }
+
+    private static bool HasExactTextureSemantics(
+        ReadOnlySpan<byte> materialData,
+        ReadOnlySpan<uint> expectedSemantics)
+    {
+        var textureCount = BinaryPrimitives.ReadUInt32LittleEndian(
+            materialData.Slice(MaterialTextureCountOffset, sizeof(uint)));
+        if (textureCount != expectedSemantics.Length)
+            return false;
+
+        for (var index = 0; index < expectedSemantics.Length; index++)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(
+                    materialData.Slice(
+                        MaterialTextureTableOffset + index * sizeof(uint),
+                        sizeof(uint))) != expectedSemantics[index])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static int GetMaterialTextureIdOffset(int textureCount) =>
+        checked(MaterialTextureTableOffset + textureCount * sizeof(uint));
+
+    private static bool HasExactScalarVariableLayout(
+        ReadOnlySpan<byte> materialData,
+        int descriptorOffset,
+        IReadOnlyList<MaterialScalarVariable> expectedVariables,
+        int variableDataSize)
+    {
+        var variableDataOffset = checked(
+            descriptorOffset + expectedVariables.Count * MaterialVariableDescriptorSize);
+        if (descriptorOffset < 0 || variableDataOffset + variableDataSize > materialData.Length)
+            return false;
+
+        for (var index = 0; index < expectedVariables.Count; index++)
+        {
+            var offset = checked(descriptorOffset + index * MaterialVariableDescriptorSize);
+            var expected = expectedVariables[index];
+            if (BinaryPrimitives.ReadUInt32LittleEndian(materialData.Slice(offset, sizeof(uint))) != 0 ||
+                BinaryPrimitives.ReadUInt32LittleEndian(materialData.Slice(offset + 4, sizeof(uint))) != 0 ||
+                BinaryPrimitives.ReadUInt32LittleEndian(materialData.Slice(offset + 8, sizeof(uint))) != expected.Id ||
+                BinaryPrimitives.ReadUInt32LittleEndian(materialData.Slice(offset + 12, sizeof(uint))) != expected.Offset ||
+                BinaryPrimitives.ReadUInt32LittleEndian(materialData.Slice(offset + 16, sizeof(uint))) != 0 ||
+                expected.Offset > variableDataSize - sizeof(uint))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool TryBuildUpdatedUnitData(
