@@ -20,8 +20,10 @@ namespace Helldivers2ModManager.ViewModels;
 internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
 {
     private const int ModelPreviewMaxTexturePixels = 1_048_576; // 1024 x 1024 is sufficient for the viewport.
-    private const int MaxDecodedTextureCacheEntries = 24;
-    private const int MaxModelResultCacheEntries = 2;
+    private const int MaxAutomaticTexturePreviews = 16;
+    private const int MaxActiveTexturePreviewEntries = MaxAutomaticTexturePreviews + 1;
+    private const int MaxDecodedTextureCacheEntries = 12;
+    private const int MaxModelResultCacheEntries = 1;
     private readonly ILogger<ModelPreviewPageViewModel> _logger;
     private readonly Lazy<NavigationStore> _navigationStore;
     private readonly ModService _modService;
@@ -29,11 +31,12 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     private readonly ModelPreviewBackend _previewBackend;
     private readonly LocalizationService _localizationService;
     private readonly Dictionary<ulong, LoadedTexturePreview> _texturePreviews = [];
+    private readonly HashSet<ulong> _automaticTexturePreviewIds = [];
     private readonly Dictionary<TexturePreviewCacheKey, LoadedTexturePreview> _decodedTexturePreviews = [];
     private readonly Queue<TexturePreviewCacheKey> _decodedTextureOrder = [];
     private readonly Dictionary<string, ModelPreviewResult> _modelResultCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Queue<string> _modelResultOrder = [];
-    private readonly ConditionalWeakTable<ModelPreviewMesh, CachedMeshGeometry> _geometryCache = new();
+    private ConditionalWeakTable<ModelPreviewMesh, CachedMeshGeometry> _geometryCache = new();
     private readonly SemaphoreSlim _rebuildGate = new(1, 1);
     private ModelPreviewSelection _selection = new([], 0);
     private Guid? _initialModGuid;
@@ -245,13 +248,10 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         IsLoading = true;
         IsInitialLoading = resetView || ModelGroup is null;
         StatusText = _localizationService["ModelPreviewPage.Loading"].Replace("{name}", mod.Manifest.Name);
-        _texturePreviews.Clear();
+        ClearActiveTexturePreviews();
         if (resetView)
         {
-            _decodedTexturePreviews.Clear();
-            _decodedTextureOrder.Clear();
-            _modelResultCache.Clear();
-            _modelResultOrder.Clear();
+            ClearRetainedPreviewCaches();
             Meshes.Clear();
             Textures.Clear();
             Armors.Clear();
@@ -402,6 +402,68 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
             PreviewOptions.Select(static option => option.SelectedSubOptionIndex).ToArray());
     }
 
+    internal static IReadOnlyList<ulong> SelectAutomaticTextureIds(
+        IReadOnlyList<ModelPreviewMesh> meshes,
+        int maximumCount)
+    {
+        ArgumentNullException.ThrowIfNull(meshes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumCount);
+
+        var candidates = new List<ulong>();
+        var priorities = new Dictionary<ulong, int>();
+
+        static void AddCandidate(
+            ICollection<ulong> target,
+            IDictionary<ulong, int> priorities,
+            ulong textureId,
+            int priority)
+        {
+            if (textureId == 0)
+                return;
+
+            if (priorities.TryGetValue(textureId, out var existingPriority))
+            {
+                priorities[textureId] = Math.Min(existingPriority, priority);
+                return;
+            }
+
+            priorities[textureId] = priority;
+            target.Add(textureId);
+        }
+
+        foreach (var mesh in meshes)
+        {
+            var hasColorBinding = false;
+            foreach (var textureId in mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor))
+            {
+                AddCandidate(candidates, priorities, textureId, priority: 0);
+                hasColorBinding = true;
+            }
+
+            if (mesh.ColorTextureId is ulong colorTextureId)
+            {
+                AddCandidate(candidates, priorities, colorTextureId, priority: 0);
+                hasColorBinding = true;
+            }
+
+            foreach (var textureId in mesh.MaterialTextures.Get(ModelPreviewTextureRole.Emissive))
+                AddCandidate(candidates, priorities, textureId, priority: 1);
+
+            // Older material layouts do not expose semantic bindings. Keep their
+            // texture list as a bounded fallback, but do not preload known normal/mask maps.
+            if (!hasColorBinding)
+            {
+                foreach (var textureId in mesh.TextureIds)
+                    AddCandidate(candidates, priorities, textureId, priority: 2);
+            }
+        }
+
+        return candidates
+            .OrderBy(textureId => priorities[textureId])
+            .Take(maximumCount)
+            .ToArray();
+    }
+
     private bool IsCurrentLoad(ModData mod, int generation) =>
         ReferenceEquals(mod, SelectedMod) && generation == _loadGeneration;
 
@@ -469,18 +531,11 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         CancellationToken cancellationToken)
     {
         var textureMap = ModelPreviewTextureIndex.Create(textures);
-        // Decode the complete material input set, not only one guessed albedo per mesh.
-        // The renderer still chooses BaseColor as its diffuse input, but loading the
-        // normal/mask/emissive siblings here makes multi-texture materials inspectable
-        // and lets the compositor use them when a material has no direct albedo slot.
-        var referencedIds = meshes
-            .SelectMany(static mesh => mesh.MaterialTextures.EnumerateRenderableInputs()
-                .Concat(mesh.TextureIds))
+        // WPF composes BaseColor and Emissive only. Normal and mask maps stay available
+        // through the texture list, but pre-decoding them consumes memory without
+        // affecting the rendered model.
+        var referencedIds = SelectAutomaticTextureIds(meshes, MaxAutomaticTexturePreviews)
             .Where(textureMap.ContainsKey)
-            .Distinct()
-            .OrderBy(textureId => meshes.Any(mesh => mesh.ColorTextureId == textureId) ? 0 : 1)
-            .ThenByDescending(textureId => (long)textureMap[textureId].Width * textureMap[textureId].Height)
-            .Take(64)
             .ToArray();
 
         using var decodeGate = new SemaphoreSlim(2, 2);
@@ -537,6 +592,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
             loaded.Texture.PreviewRole = loaded.Preview.Role;
             loaded.Texture.PreviewRoleText = GetTexturePreviewRoleText(loaded.Preview.Role);
             _texturePreviews[loaded.TextureId] = loaded.Preview;
+            _automaticTexturePreviewIds.Add(loaded.TextureId);
             CacheDecodedTexture(CreateTextureCacheKey(loaded.Texture), loaded.Preview);
         }
     }
@@ -557,6 +613,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
                 TryGetDecodedTexture(texture, out cachedPreview))
             {
                 SelectedTexturePreview = cachedPreview.Image;
+                StoreManualTexturePreview(texture.TextureId, cachedPreview);
                 await RebuildModelGroupAsync();
                 return;
             }
@@ -573,11 +630,12 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
                 texture.PreviewRole = role;
                 texture.PreviewRoleText = GetTexturePreviewRoleText(role);
                 SelectedTexturePreview = bitmap;
-                _texturePreviews[texture.TextureId] = new LoadedTexturePreview(
+                var loaded = new LoadedTexturePreview(
                     bitmap,
                     role,
                     (long)texture.Width * texture.Height);
-                CacheDecodedTexture(CreateTextureCacheKey(texture), _texturePreviews[texture.TextureId]);
+                StoreManualTexturePreview(texture.TextureId, loaded);
+                CacheDecodedTexture(CreateTextureCacheKey(texture), loaded);
                 await RebuildModelGroupAsync();
             }
         }
@@ -834,6 +892,38 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _modelResultOrder.Enqueue(key);
     }
 
+    private void ClearActiveTexturePreviews()
+    {
+        _texturePreviews.Clear();
+        _automaticTexturePreviewIds.Clear();
+    }
+
+    private void ClearRetainedPreviewCaches()
+    {
+        _decodedTexturePreviews.Clear();
+        _decodedTextureOrder.Clear();
+        _modelResultCache.Clear();
+        _modelResultOrder.Clear();
+        // ConditionalWeakTable has no Clear API. Replacing it removes this page's
+        // strong cache root so old WPF MeshGeometry3D instances can be collected.
+        _geometryCache = new ConditionalWeakTable<ModelPreviewMesh, CachedMeshGeometry>();
+    }
+
+    private void StoreManualTexturePreview(ulong textureId, LoadedTexturePreview preview)
+    {
+        _texturePreviews[textureId] = preview;
+        while (_texturePreviews.Count > MaxActiveTexturePreviewEntries)
+        {
+            var evictionCandidate = _texturePreviews.Keys
+                .Where(id => !_automaticTexturePreviewIds.Contains(id) && id != SelectedTexture?.TextureId)
+                .Select(static id => (ulong?)id)
+                .FirstOrDefault();
+            if (evictionCandidate is null)
+                return;
+            _texturePreviews.Remove(evictionCandidate.Value);
+        }
+    }
+
     private bool TryGetDecodedTexture(TextureInspectionItem texture, out LoadedTexturePreview preview)
         => _decodedTexturePreviews.TryGetValue(CreateTextureCacheKey(texture), out preview!);
 
@@ -1025,6 +1115,13 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     protected override void OnDispose()
     {
         _loadCancellation?.Cancel();
+        ModelGroup = null;
+        SelectedTexturePreview = null;
+        ClearActiveTexturePreviews();
+        ClearRetainedPreviewCaches();
+        Meshes.Clear();
+        Textures.Clear();
+        Armors.Clear();
         _rebuildGate.Dispose();
         _localizationService.PropertyChanged -= LocalizationServiceOnPropertyChanged;
     }

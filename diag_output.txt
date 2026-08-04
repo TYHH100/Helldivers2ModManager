@@ -1,0 +1,76 @@
+D:\TYHH10-git\Helldivers2ModManager\Helldivers2ModManager.Tests\bin\Release\net8.0-windows\Helldivers2ModManager.Tests.dll (.NETCoreApp,Version=v8.0)的测试运行
+VSTest 版本 18.0.1 (x64)
+
+正在启动测试执行，请稍候...
+总共 1 个测试文件与指定模式相匹配。
+D:\TYHH10-git\Helldivers2ModManager\Helldivers2ModManager.Tests\bin\Release\net8.0-windows\Helldivers2ModManager.Tests.dll
+  已通过 Diagnose_VRCTellShoulderArmor_BlackMaterial [257 ms]
+  标准输出消息:
+ === 诊断: 715 VRC_Tell 替换RE-1861 肩章轻甲_1a9657a3 ===
+ Error: (无)
+ PatchFileCount: 1
+ Meshes 总数: 32
+ Textures 总数: 11
+ 
+ === 纹理列表 (11) ===
+   0x5B5AF000A7AA1AEB: 512x512 mip=1 dxgi=72 patch=9ba626afa44a3aa3.patch_43
+   0xA510CE14BBC92F4F: 512x512 mip=1 dxgi=72 patch=9ba626afa44a3aa3.patch_43
+   0x51BF5252910BBC50: 2048x2048 mip=1 dxgi=99 patch=9ba626afa44a3aa3.patch_43
+   0xD4ECE43FD6705226: 1024x1024 mip=1 dxgi=99 patch=9ba626afa44a3aa3.patch_43
+   0x18E71433974619A8: 512x512 mip=1 dxgi=72 patch=9ba626afa44a3aa3.patch_43
+   0x38DA9EB5A01A0564: 12288x12288 mip=14 dxgi=28 patch=9ba626afa44a3aa3.patch_43
+   0xE960CE695E7D5C80: 512x512 mip=1 dxgi=72 patch=9ba626afa44a3aa3.patch_43
+   0x2F3F1BDA248F5B3E: 512x512 mip=1 dxgi=72 patch=9ba626afa44a3aa3.patch_43
+   0x45ACF9F9FD936BFC: 512x512 mip=1 dxgi=72 patch=9ba626afa44a3aa3.patch_43
+   0x5A63343523C5B7E1: 512x512 mip=1 dxgi=72 patch=9ba626afa44a3aa3.patch_43
+   0x20A9BFE8B2172180: 512x512 mip=1 dxgi=72 patch=9ba626afa44a3aa3.patch_43
+ 
+ === ModelPreviewMeshSelector 过滤结果 ===
+   可见: 12, 隐藏: 20
+   Unit=0xB10F510B188438D4 St=0 MI=3 SVO=0 VC=32858 TC=51122 Shape=Any Slot=Unknown TexCoords=65716/65716 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0xC57A0C00B4C61712 St=0 MI=3 SVO=0 VC=23610 TC=34402 Shape=Slim Slot=Hip TexCoords=47220/47220 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0x65491D09AC99F93E St=0 MI=3 SVO=0 VC=19000 TC=26402 Shape=Slim Slot=LeftArm TexCoords=38000/38000 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0x1CC915401E7B0488 St=0 MI=3 SVO=0 VC=11786 TC=20066 Shape=Slim Slot=RightArm TexCoords=23572/23572 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0x4440FAB5FE1962B1 St=0 MI=3 SVO=0 VC=16822 TC=26429 Shape=Slim Slot=Torso TexCoords=33644/33644 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0x602C4A614D595850 St=0 MI=3 SVO=0 VC=23610 TC=34402 Shape=Slim Slot=Hip TexCoords=47220/47220 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0xE9F7F8C8EBFAF0FC St=0 MI=3 SVO=0 VC=19000 TC=26402 Shape=Slim Slot=LeftArm TexCoords=38000/38000 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0x2B134768B31A0959 St=0 MI=3 SVO=0 VC=11786 TC=20066 Shape=Slim Slot=RightArm TexCoords=23572/23572 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0x262BE59A39CD4C94 St=0 MI=3 SVO=0 VC=16822 TC=26429 Shape=Slim Slot=Torso TexCoords=33644/33644 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0x2E96BEB8DF711CD4 St=0 MI=3 SVO=0 VC=13604 TC=20810 Shape=Any Slot=LeftLeg TexCoords=27208/27208 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0x8E4FA51D187AD933 St=0 MI=3 SVO=0 VC=12962 TC=19898 Shape=Any Slot=RightLeg TexCoords=25924/25924 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+   Unit=0x382C0939D19C0E49 St=0 MI=3 SVO=0 VC=45976 TC=61536 Shape=Stocky Slot=Torso TexCoords=91952/91952 BaseColor=1(0x38DA9EB5A01A0564) ColorTexId=0x38DA9EB5A01A0564 候选=0x38DA9EB5A01A0564
+ 
+ === 可见 mesh 纹理使用统计 ===
+   0x38DA9EB5A01A0564 (12288x12288): 12 mesh
+ 
+ === BaseColor 纹理颜色分析 ===
+   --- 纹理 0x38DA9EB5A01A0564 ---
+   PayloadSource=gpu_resources PayloadKind=DDS GpuOffset=11595904 GpuSize=805306360 StreamOffset=0 StreamSize=0
+   BgraPixels长度=2359296 EncodedImageBytes长度=null
+   CreateModelBitmapSource => CachedBitmap
+   0x38DA9EB5A01A0564: 768x768 avg BGRA=(103,107,111,0) 黑色像素=36.8% desc=DXGI 28, mip 4
+   前16像素: (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) (220,234,245,0) 
+ 
+ === 模拟完整材质创建链路 ===
+   纹理 0x38DA9EB5A01A0564: 找不到 3 参数构造函数，共1个
+   已加载 0 个纹理到 texturePreviews: 
+   Mesh Unit=0xB10F510B188438D4 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0xC57A0C00B4C61712 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0x65491D09AC99F93E MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0x1CC915401E7B0488 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0x4440FAB5FE1962B1 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0x602C4A614D595850 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0xE9F7F8C8EBFAF0FC MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0x2B134768B31A0959 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0x262BE59A39CD4C94 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0x2E96BEB8DF711CD4 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0x8E4FA51D187AD933 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   Mesh Unit=0x382C0939D19C0E49 MI=3 使用 SolidColorBrush RGB=(184,193,202) 
+   使用 ImageBrush(有纹理): 0, 使用 SolidColorBrush(fallback): 12
+
+
+
+测试运行成功。
+测试总数: 1
+     通过数: 1
+总时间: 0.8458 秒

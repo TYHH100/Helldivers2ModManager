@@ -108,6 +108,57 @@ public sealed class ModelPreviewMaterialTextureTests
         Assert.AreEqual(2, drawing.Children.Count);
     }
 
+    [TestMethod]
+    public void SelectAutomaticTextureIds_SemanticMaterial_KeepsBaseColorAndEmissiveOnly()
+    {
+        const ulong baseColorId = 1;
+        const ulong normalId = 2;
+        const ulong maskId = 3;
+        const ulong emissiveId = 4;
+        var mesh = new ModelPreviewMesh
+        {
+            PatchFile = "sample.patch_0",
+            UnitId = 1,
+            StreamIndex = 0,
+            Positions = [],
+            TriangleIndices = [],
+            TextureIds = [baseColorId, normalId, maskId, emissiveId],
+            ColorTextureId = baseColorId,
+            MaterialTextures = new ModelPreviewMaterialTextureSet(
+                new Dictionary<ModelPreviewTextureRole, IReadOnlyList<ulong>>
+                {
+                    [ModelPreviewTextureRole.BaseColor] = [baseColorId],
+                    [ModelPreviewTextureRole.Normal] = [normalId],
+                    [ModelPreviewTextureRole.Mask] = [maskId],
+                    [ModelPreviewTextureRole.Emissive] = [emissiveId]
+                },
+                [baseColorId, normalId, maskId, emissiveId],
+                baseColorId)
+        };
+
+        var selected = ModelPreviewPageViewModel.SelectAutomaticTextureIds([mesh], maximumCount: 16);
+
+        CollectionAssert.AreEqual(new[] { baseColorId, emissiveId }, selected.ToArray());
+    }
+
+    [TestMethod]
+    public void SelectAutomaticTextureIds_LegacyMaterial_UsesBoundedTextureIdFallback()
+    {
+        var mesh = new ModelPreviewMesh
+        {
+            PatchFile = "sample.patch_0",
+            UnitId = 1,
+            StreamIndex = 0,
+            Positions = [],
+            TriangleIndices = [],
+            TextureIds = [11UL, 12UL, 13UL]
+        };
+
+        var selected = ModelPreviewPageViewModel.SelectAutomaticTextureIds([mesh], maximumCount: 2);
+
+        CollectionAssert.AreEqual(new[] { 11UL, 12UL }, selected.ToArray());
+    }
+
     private static void WriteInt32(byte[] buffer, int offset, int value) =>
         BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(offset, sizeof(int)), value);
 
