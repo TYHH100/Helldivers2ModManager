@@ -77,6 +77,39 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	/// <summary>
+	/// 是否使用自定义背景图片。
+	/// </summary>
+	public bool UseCustomBackground
+	{
+		get => _settingsService.Initialized && _settingsService.BackgroundMode == BackgroundMode.Image;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.BackgroundMode = value ? BackgroundMode.Image : BackgroundMode.Default;
+			OnPropertyChanged();
+		}
+	}
+
+	/// <summary>
+	/// 当前背景图片路径（只读展示，由浏览/清除命令修改）。
+	/// </summary>
+	public string BackgroundImagePath => _settingsService.Initialized ? _settingsService.BackgroundImagePath : string.Empty;
+
+	/// <summary>
+	/// 背景图片不透明度（0..1）。
+	/// </summary>
+	public float BackgroundOpacity
+	{
+		get => _settingsService.Initialized ? _settingsService.BackgroundOpacity : 0.6f;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.BackgroundOpacity = value;
+			OnPropertyChanged();
+		}
+	}
+
 	public ObservableCollection<string> SkipList => _settingsService.Initialized ? _settingsService.SkipList : [];
 
 	public ObservableCollection<string> OrganizationalFolderNames => _settingsService.Initialized ? _settingsService.OrganizationalFolderNames : [];
@@ -259,7 +292,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 	/// <summary>
 	/// 当前选中的选项卡索引
-	/// 0: 路径, 1: 部署, 2: 模组, 3: 日志, 4: 连接, 5: 工具, 6: 主页
+	/// 0: 路径, 1: 部署, 2: 模组, 3: 日志, 4: 连接, 5: 工具, 6: 主页, 7: 外观
 	/// </summary>
 	[ObservableProperty]
 	private int _selectedTabIndex;
@@ -616,6 +649,34 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 					Message = error
 				});
 		}
+	}
+
+	[RelayCommand]
+	void BrowseBackgroundImage()
+	{
+		var dialog = new OpenFileDialog
+		{
+			Multiselect = false,
+			Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp|所有文件|*.*",
+			Title = _localizationService["SettingsPage.BrowseBackgroundImageDialog"]
+		};
+
+		if (dialog.ShowDialog() ?? false)
+		{
+			_settingsService.BackgroundImagePath = dialog.FileName;
+			_settingsService.BackgroundMode = BackgroundMode.Image;
+			OnPropertyChanged(nameof(BackgroundImagePath));
+			OnPropertyChanged(nameof(UseCustomBackground));
+		}
+	}
+
+	[RelayCommand]
+	void ClearBackgroundImage()
+	{
+		_settingsService.BackgroundImagePath = string.Empty;
+		_settingsService.BackgroundMode = BackgroundMode.Default;
+		OnPropertyChanged(nameof(BackgroundImagePath));
+		OnPropertyChanged(nameof(UseCustomBackground));
 	}
 
 	[RelayCommand]

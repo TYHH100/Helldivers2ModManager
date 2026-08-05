@@ -17,7 +17,6 @@
 		MinHeight="600"
 		Content="{Binding CurrentViewModel}"
 		WindowStyle="None"
-		AllowsTransparency="True"
 		WindowStartupLocation="CenterScreen"
 		Background="{StaticResource MicaBackgroundBrush}"
 		d:Background="{StaticResource MicaBackgroundBrush}">
@@ -79,6 +78,14 @@
 									<RowDefinition Height="48"/>
 									<RowDefinition Height="*"/>
 								</Grid.RowDefinitions>
+
+								<!-- 自定义背景图片层（半透明露出深色底，保证前景可读） -->
+								<Image Grid.RowSpan="2"
+									   Source="{Binding BackgroundImageSource}"
+									   Stretch="UniformToFill"
+									   Opacity="{Binding BackgroundImageOpacity}"
+									   IsHitTestVisible="False"
+									   RenderOptions.BitmapScalingMode="HighQuality"/>
 
 								<!-- Title Bar with Mica Effect -->
 								<Border Grid.Row="0"

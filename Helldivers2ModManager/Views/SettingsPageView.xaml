@@ -162,6 +162,22 @@
                         </Style>
                     </Button.Style>
                 </Button>
+                <!-- 外观 选项卡 -->
+                <Button Content="{loc:Loc SettingsPage.TabAppearance}"
+                        Command="{Binding SetTabCommand}"
+                        CommandParameter="7">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="7">
+                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </StackPanel>
         </Border>
 
@@ -885,6 +901,104 @@
                                           Margin="0 8 0 0"/>
                             </StackPanel>
                         </Border>
+                <!-- Tab 7: 外观 -->
+                <Grid>
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="7">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
+                    <StackPanel>
+                        <!-- 窗口背景 -->
+                        <Border Style="{StaticResource FluentSettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="{loc:Loc SettingsPage.Background}"
+                                           Style="{StaticResource FluentSubSectionHeader}"
+                                           Margin="0"/>
+                                <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
+                                    <Run Text="{loc:Loc SettingsPage.BackgroundDesc}"/>
+                                </TextBlock>
+                                <Grid Margin="0 8 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
+                                              IsChecked="{Binding UseCustomBackground}"
+                                              Margin="0 0 12 0"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{loc:Loc SettingsPage.UseCustomBackground}"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                                <Grid Margin="0 12 0 0"
+                                      IsEnabled="{Binding UseCustomBackground}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{loc:Loc SettingsPage.BackgroundImage}"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0 0 8 0"/>
+                                    <TextBox Grid.Column="1"
+                                             Text="{Binding BackgroundImagePath}"
+                                             IsReadOnly="True"
+                                             Style="{StaticResource FluentTextBox}"
+                                             Margin="0 0 8 0"
+                                             VerticalAlignment="Center"/>
+                                    <Button Grid.Column="2"
+                                            Content="{loc:Loc SettingsPage.Browse}"
+                                            Style="{StaticResource FluentSecondaryButton}"
+                                            Command="{Binding BrowseBackgroundImageCommand}"
+                                            Padding="12 6"
+                                            Margin="0 0 8 0"/>
+                                    <Button Grid.Column="3"
+                                            Content="{loc:Loc SettingsPage.Clear}"
+                                            Style="{StaticResource FluentSecondaryButton}"
+                                            Command="{Binding ClearBackgroundImageCommand}"
+                                            Padding="12 6"/>
+                                </Grid>
+                                <Grid Margin="0 16 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="220"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{loc:Loc SettingsPage.BackgroundOpacity}"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0 0 12 0"/>
+                                    <Slider Grid.Column="1"
+                                            Minimum="0"
+                                            Maximum="1"
+                                            Value="{Binding BackgroundOpacity}"
+                                            VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding BackgroundOpacity, StringFormat={}{0:P0}}"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="12 0 0 0"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
                     </StackPanel>
                 </Grid>
                 </StackPanel>

@@ -20,6 +20,11 @@ internal sealed class SettingsService
 	
 	public const float OpacityMin = 0.4f;
 	
+	/// <summary>
+	/// 设置保存后触发（用于界面刷新依赖设置的显示）。
+	/// </summary>
+	public event EventHandler? SettingsChanged;
+
 	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_separators))]
 	[JsonIgnore]
 	public bool Initialized { get; private set; }
@@ -104,6 +109,54 @@ internal sealed class SettingsService
 			GuardInitialized();
 			GuardReadonly();
 			_opacity = Math.Clamp(value, OpacityMin, OpacityMax);
+		}
+	}
+
+	public BackgroundMode BackgroundMode
+	{
+		get
+		{
+			GuardInitialized();
+			return _backgroundMode;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_backgroundMode = value;
+		}
+	}
+
+	public string BackgroundImagePath
+	{
+		get
+		{
+			GuardInitialized();
+			return _backgroundImagePath;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_backgroundImagePath = value ?? string.Empty;
+		}
+	}
+
+	public float BackgroundOpacity
+	{
+		get
+		{
+			GuardInitialized();
+			return _backgroundOpacity;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_backgroundOpacity = Math.Clamp(value, 0f, 1f);
 		}
 	}
 
@@ -515,6 +568,12 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private string _language = string.Empty;
 	[JsonInclude]
+	private BackgroundMode _backgroundMode;
+	[JsonInclude]
+	private string _backgroundImagePath = string.Empty;
+	[JsonInclude]
+	private float _backgroundOpacity = 0.6f;
+	[JsonInclude]
 	private bool _useDeploymentOrder;
 	[JsonInclude]
 	private List<Guid> _deploymentOrderGuids = [];
@@ -640,6 +699,7 @@ internal sealed class SettingsService
 
 		var json = JsonSerializer.Serialize(CreateJsonModel(), s_serializerOptions);
 		await File.WriteAllTextAsync(s_file.FullName, json);
+		SettingsChanged?.Invoke(this, EventArgs.Empty);
 	}
 
 	public bool Validate()
@@ -691,6 +751,13 @@ internal sealed class SettingsService
 			if (IsReadonly)
 				return false;
 			_opacity = Math.Clamp(_opacity, OpacityMin, OpacityMax);
+		}
+
+		if (_backgroundOpacity is < 0f or > 1f)
+		{
+			if (IsReadonly)
+				return false;
+			_backgroundOpacity = Math.Clamp(_backgroundOpacity, 0f, 1f);
 		}
 
 		var elms = _skipList.Where(static elm => elm.Length != 16).ToArray();
@@ -765,6 +832,9 @@ internal sealed class SettingsService
 			}),
 			NexusApiKey = _encryptedNexusApiKey,
 			Language = _language,
+			BackgroundMode = _backgroundMode,
+			BackgroundImagePath = _backgroundImagePath,
+			BackgroundOpacity = _backgroundOpacity,
 			UseDeploymentOrder = _useDeploymentOrder,
 			DeploymentOrderGuids = _deploymentOrderGuids,
 			OptionOrders = _optionOrders.Select(static item => new
@@ -943,6 +1013,13 @@ internal sealed class SettingsService
 			_maxLogFiles = Math.Max(1, prop.GetInt32());
 		if (root.TryGetProperty(nameof(Language), JsonValueKind.String, out prop))
 			_language = prop.GetString() ?? string.Empty;
+		if (root.TryGetProperty(nameof(BackgroundMode), JsonValueKind.Number, out prop))
+			_backgroundMode = (BackgroundMode)prop.GetInt32();
+		if (root.TryGetProperty(nameof(BackgroundImagePath), JsonValueKind.String, out prop))
+			_backgroundImagePath = prop.GetString() ?? string.Empty;
+		if (root.TryGetProperty(nameof(BackgroundOpacity), JsonValueKind.Number, out prop))
+			if (prop.TryGetSingle(out var backgroundOpacity))
+				_backgroundOpacity = Math.Clamp(backgroundOpacity, 0f, 1f);
 		if (root.TryGetProperty(nameof(Tags), JsonValueKind.Array, out var tagsArr))
 		{
 			var tagsList = new List<ModTag>();
@@ -1025,6 +1102,9 @@ internal sealed class SettingsService
 		_tempDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp", "Helldivers2ModManager");
 		_logLevel = LogLevel.Trace;
 		_opacity = 0.8f;
+		_backgroundMode = BackgroundMode.Default;
+		_backgroundImagePath = string.Empty;
+		_backgroundOpacity = 0.6f;
 		_skipList = [];
 		_caseSensitiveSearch = false;
 		_useSymbolicLinks = false;
@@ -1046,4 +1126,13 @@ internal sealed class SettingsService
 		_optionOrders = [];
 		_subOptionOrders = [];
 	}
+}
+
+/// <summary>
+/// 窗口背景模式。
+/// </summary>
+internal enum BackgroundMode
+{
+	Default = 0,
+	Image = 1
 }
