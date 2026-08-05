@@ -57,6 +57,21 @@ public sealed class ModelPreviewBodyShapeSelectionTests
             slots.ToArray());
     }
 
+    [TestMethod]
+    public void GetSwitchableSlots_UsesModOwnedFormsWhenTheyAreOnlyHiddenAsLargeOutliers()
+    {
+        var stockyTorso = CreateMesh(ModelPreviewBodyShape.Stocky, ModelPreviewCustomizationSlot.Torso, 1);
+        var slimTorso = CreateMesh(ModelPreviewBodyShape.Slim, ModelPreviewCustomizationSlot.Torso, 2);
+        stockyTorso.RenderStatus = ModelPreviewMeshRenderStatus.HiddenLargeOutlier;
+        slimTorso.RenderStatus = ModelPreviewMeshRenderStatus.HiddenLargeOutlier;
+
+        var slots = ModelPreviewBodyShapeSelection.GetSwitchableSlots([stockyTorso, slimTorso]);
+
+        CollectionAssert.AreEquivalent(
+            new[] { ModelPreviewCustomizationSlot.Torso },
+            slots.ToArray());
+    }
+
     private static ModelPreviewMesh CreateMesh(
         ModelPreviewBodyShape bodyShape,
         ModelPreviewCustomizationSlot slot,

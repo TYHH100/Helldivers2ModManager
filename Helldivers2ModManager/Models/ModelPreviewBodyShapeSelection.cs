@@ -7,14 +7,13 @@ namespace Helldivers2ModManager.Models;
 internal static class ModelPreviewBodyShapeSelection
 {
     public static IReadOnlySet<ModelPreviewCustomizationSlot> GetSwitchableSlots(
-        IReadOnlyList<ModelPreviewMesh> meshes,
-        IReadOnlyCollection<ModelPreviewMesh>? renderableMeshes = null)
+        IReadOnlyList<ModelPreviewMesh> meshes)
     {
         ArgumentNullException.ThrowIfNull(meshes);
 
-        var candidates = renderableMeshes ?? meshes;
-        return candidates
-            .Where(static mesh => mesh.CustomizationSlot != ModelPreviewCustomizationSlot.Unknown &&
+        return meshes
+            .Where(static mesh => IsBodyFormCandidate(mesh) &&
+                                  mesh.CustomizationSlot != ModelPreviewCustomizationSlot.Unknown &&
                                   mesh.BodyShape is ModelPreviewBodyShape.Slim or ModelPreviewBodyShape.Stocky)
             .GroupBy(static mesh => mesh.CustomizationSlot)
             .Where(static group => group.Any(mesh => mesh.BodyShape == ModelPreviewBodyShape.Slim) &&
@@ -22,6 +21,11 @@ internal static class ModelPreviewBodyShapeSelection
             .Select(static group => group.Key)
             .ToHashSet();
     }
+
+    private static bool IsBodyFormCandidate(ModelPreviewMesh mesh) =>
+        mesh.RenderStatus is not (ModelPreviewMeshRenderStatus.HiddenCullingBody or
+            ModelPreviewMeshRenderStatus.HiddenProxyGeometry or
+            ModelPreviewMeshRenderStatus.HiddenCollisionSphere);
 
     public static IReadOnlyList<ModelPreviewMesh> Filter(
         IReadOnlyList<ModelPreviewMesh> meshes,
@@ -31,7 +35,7 @@ internal static class ModelPreviewBodyShapeSelection
         ArgumentNullException.ThrowIfNull(meshes);
         ArgumentNullException.ThrowIfNull(renderableMeshes);
 
-        var switchableSlots = GetSwitchableSlots(meshes, renderableMeshes);
+        var switchableSlots = GetSwitchableSlots(meshes);
         if (switchableSlots.Count == 0)
             return meshes;
 

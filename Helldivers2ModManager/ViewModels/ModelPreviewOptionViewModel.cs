@@ -20,6 +20,7 @@ internal sealed partial class ModelPreviewOptionViewModel : ObservableObject
     public ImageSource? Image { get; }
     public IReadOnlyList<ModelPreviewSubOptionViewModel> SubOptions { get; }
     public bool HasSubOptions => SubOptions.Count > 0;
+    public bool CanToggle { get; }
 
     [ObservableProperty]
     private bool _enabled;
@@ -46,6 +47,7 @@ internal sealed partial class ModelPreviewOptionViewModel : ObservableObject
         Description = option.Description;
         Image = LoadImage(modDirectory, option.Image);
         _selectionChanged = selectionChanged;
+        CanToggle = true;
         SubOptions = option.SubOptions?
             .Select((subOption, subIndex) => new ModelPreviewSubOptionViewModel(
                 subIndex,
@@ -57,6 +59,39 @@ internal sealed partial class ModelPreviewOptionViewModel : ObservableObject
         _selectedSubOption = SubOptions.Count == 0
             ? null
             : SubOptions[Math.Clamp(selectedSubOption, 0, SubOptions.Count - 1)];
+    }
+
+    /// <summary>
+    /// Legacy manifests expose one mutually-exclusive list of folder variants rather
+    /// than V1's independently enabled options. This preview-local selector keeps the
+    /// dashboard/profile choice untouched while allowing the same variant inspection.
+    /// </summary>
+    public ModelPreviewOptionViewModel(
+        string name,
+        IReadOnlyList<string> legacyOptions,
+        int selectedOption,
+        Action selectionChanged)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(legacyOptions);
+        ArgumentNullException.ThrowIfNull(selectionChanged);
+
+        Index = 0;
+        Name = name;
+        Description = string.Empty;
+        _selectionChanged = selectionChanged;
+        CanToggle = false;
+        SubOptions = legacyOptions
+            .Select((option, optionIndex) => new ModelPreviewSubOptionViewModel(
+                optionIndex,
+                option,
+                string.Empty,
+                null))
+            .ToArray();
+        _enabled = true;
+        _selectedSubOption = SubOptions.Count == 0
+            ? null
+            : SubOptions[Math.Clamp(selectedOption, 0, SubOptions.Count - 1)];
     }
 
     partial void OnEnabledChanged(bool value) => _selectionChanged();

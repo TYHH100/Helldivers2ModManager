@@ -15,3 +15,5 @@
     <ProjectReference Include="..\Helldivers2ModManager\Helldivers2ModManager.csproj" />
   </ItemGroup>
 </Project>
+
+

@@ -60,6 +60,9 @@ internal sealed class ModelPreviewMesh : System.ComponentModel.INotifyPropertyCh
     public required int StreamIndex { get; init; }
     public int MeshInfoIndex { get; init; } = -1;
     public uint SourceVertexOffset { get; init; }
+    public uint SourceVertexCount { get; init; }
+    public uint SourceIndexOffset { get; init; }
+    public uint SourceIndexCount { get; init; }
     public ModelPreviewBodyShape BodyShape { get; init; } = ModelPreviewBodyShape.Unknown;
     public ModelPreviewCustomizationSlot CustomizationSlot { get; init; } = ModelPreviewCustomizationSlot.Unknown;
     public required float[] Positions { get; init; }
@@ -68,6 +71,7 @@ internal sealed class ModelPreviewMesh : System.ComponentModel.INotifyPropertyCh
     public required int[] TriangleIndices { get; init; }
     public IReadOnlyList<ulong> TextureIds { get; init; } = [];
     public ulong? ColorTextureId { get; init; }
+    public ulong? MaterialId { get; init; }
     /// <summary>
     /// All material inputs referenced by this section. ColorTextureId is retained as the
     /// preferred diffuse input for compatibility, while this collection lets the new

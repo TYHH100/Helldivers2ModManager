@@ -254,6 +254,7 @@ internal sealed partial class ModService
 		// 复制源目录内容到存储目录
 		modDir.Parent?.Create();
 		await Task.Run(() => sourceDir.CopyTo(modDir.FullName));
+		modDir.Refresh();
 
 		// 创建清单文件：如果用户提供了自定义选项，则使用 V1 格式；否则根据推断结果决定
 		IModManifest finalManifest;
@@ -512,6 +513,7 @@ internal sealed partial class ModService
 		}
 		modDir.Parent?.Create();
 		await Task.Run(() => tmpDir.CopyTo(modDir.FullName));
+		modDir.Refresh();
 
 		_logger.LogInformation("Adding mod");
 		var mod = new ModData(modDir, manifest);

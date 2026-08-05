@@ -175,14 +175,19 @@ public sealed class ModelPreviewMaterialLayoutTests
             Transform: new ModelPreviewTransform(
                 1, 0, 0, 10,
                 0, 1, 0, 20,
-                0, 0, 1, 30));
+                0, 0, 1, 30),
+            MaterialId: 777);
 
         var mesh = PatchResourceInspectionService.CreateSectionMesh(source, section);
 
         Assert.IsNotNull(mesh);
         Assert.AreEqual(4, mesh.MeshInfoIndex);
         Assert.AreEqual((uint)3, mesh.SourceVertexOffset);
+        Assert.AreEqual((uint)3, mesh.SourceVertexCount);
+        Assert.AreEqual((uint)0, mesh.SourceIndexOffset);
+        Assert.AreEqual((uint)3, mesh.SourceIndexCount);
         Assert.AreEqual((ulong?)42, mesh.ColorTextureId);
+        Assert.AreEqual((ulong?)777, mesh.MaterialId);
         CollectionAssert.AreEqual(
             new float[] { 10, 20, 30, 11, 20, 30, 10, 21, 30 },
             mesh.Positions);
