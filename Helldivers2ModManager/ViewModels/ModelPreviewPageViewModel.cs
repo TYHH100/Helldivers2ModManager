@@ -261,12 +261,12 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _ = LoadSelectedTextureAsync(value);
     }
 
-    private async Task RefreshModsAsync()
+    private Task RefreshModsAsync()
     {
         if (!_modService.Initialized)
         {
             StatusText = _localizationService["ModelPreviewPage.NotReady"];
-            return;
+            return Task.CompletedTask;
         }
 
         var selection = ModelPreviewModSelection.Resolve(
@@ -280,6 +280,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         SelectedMod = selection.SelectedMod;
         if (SelectedMod is null)
             StatusText = _localizationService["ModelPreviewPage.EmptyMods"];
+        return Task.CompletedTask;
     }
 
     private async Task LoadSelectedModAsync(ModData mod, bool resetView)
