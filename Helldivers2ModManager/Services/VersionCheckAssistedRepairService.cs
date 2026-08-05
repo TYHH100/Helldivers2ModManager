@@ -526,6 +526,7 @@ internal sealed partial class VersionCheckService
                             ? ModBackupRepairKind.UseGameLod
                             : ModBackupRepairKind.PreserveModLod;
                 await TryWriteBackupMetadataAsync(
+                    modDirectory,
                     item.BackupPath,
                     item.OriginalPath,
                     repairKind,

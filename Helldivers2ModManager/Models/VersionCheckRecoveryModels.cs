@@ -18,6 +18,14 @@ internal sealed class ModBackupMetadata
     public int SchemaVersion { get; init; } = 1;
     public DateTime CreatedUtc { get; init; }
     public string OriginalFileName { get; init; } = string.Empty;
+    /// <summary>
+    /// Path of the original patch relative to the mod directory (for example
+    /// "Model/Socks/9ba626afa44a3aa3.patch_11"). Restore uses this to locate the
+    /// original file even when the backup was moved out of the original folder, which
+    /// is required for mods whose patches live in nested option folders.
+    /// </summary>
+    public string OriginalRelativePath { get; init; } = string.Empty;
+
     public ModBackupRepairKind RepairKind { get; init; }
     public int ActionCount { get; init; }
     public string BackupSha256 { get; init; } = string.Empty;

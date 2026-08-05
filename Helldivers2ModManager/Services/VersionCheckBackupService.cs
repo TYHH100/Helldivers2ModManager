@@ -103,6 +103,7 @@ internal sealed partial class VersionCheckService
             if (rollbackPath is not null)
             {
                 await TryWriteBackupMetadataAsync(
+                    modDirectory,
                     rollbackPath,
                     originalPath,
                     ModBackupRepairKind.PreRestore,
@@ -246,7 +247,7 @@ internal sealed partial class VersionCheckService
 
             if (!TryGetOriginalBackupFileName(backupFile, match, metadata, out var originalName))
                 return InvalidBackupEntry(backupFile, "The backup file name is not recognized.");
-            originalPath = Path.GetFullPath(Path.Combine(backupFile.DirectoryName!, originalName));
+            originalPath = ResolveOriginalPath(modDirectory, backupFile, originalName, metadata);
             if (!IsPathInside(modDirectory.FullName, originalPath))
                 return InvalidBackupEntry(backupFile, "The backup maps outside the mod directory.", originalPath);
 
@@ -330,7 +331,25 @@ internal sealed partial class VersionCheckService
                IsMainPatchFile(fileName);
     }
 
+    private static string ResolveOriginalPath(
+        DirectoryInfo modDirectory,
+        FileInfo backupFile,
+        string originalName,
+        ModBackupMetadata? metadata)
+    {
+        if (metadata is not null && !string.IsNullOrWhiteSpace(metadata.OriginalRelativePath))
+        {
+            var candidate = Path.GetFullPath(Path.Combine(modDirectory.FullName, metadata.OriginalRelativePath));
+            if (IsPathInside(modDirectory.FullName, candidate) &&
+                string.Equals(Path.GetFileName(candidate), originalName, StringComparison.OrdinalIgnoreCase))
+                return candidate;
+        }
+
+        return Path.GetFullPath(Path.Combine(backupFile.DirectoryName!, originalName));
+    }
+
     private async Task TryWriteBackupMetadataAsync(
+        DirectoryInfo modDirectory,
         string backupPath,
         string repairedPath,
         ModBackupRepairKind repairKind,
@@ -344,6 +363,7 @@ internal sealed partial class VersionCheckService
             {
                 CreatedUtc = DateTime.UtcNow,
                 OriginalFileName = Path.GetFileName(repairedPath),
+                OriginalRelativePath = Path.GetRelativePath(modDirectory.FullName, repairedPath),
                 RepairKind = repairKind,
                 ActionCount = actionCount,
                 BackupSha256 = await ComputeSha256Async(backupPath, cancellationToken),

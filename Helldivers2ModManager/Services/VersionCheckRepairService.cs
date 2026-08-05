@@ -120,6 +120,7 @@ internal sealed partial class VersionCheckService
                     item.OriginalPath,
                     StringComparison.OrdinalIgnoreCase));
                 await TryWriteBackupMetadataAsync(
+                    modDirectory,
                     item.BackupPath,
                     item.OriginalPath,
                     ModBackupRepairKind.SafeMetadata,

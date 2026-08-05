@@ -281,7 +281,9 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         return new BackupHistoryItemViewData
         {
             Entry = entry,
-            Title = entry.OriginalFileName,
+            Title = _currentMessage is { } message
+                ? Path.GetRelativePath(message.ModDirectory.FullName, entry.OriginalPath)
+                : entry.OriginalPath,
             Detail = detail,
             Status = status,
             StatusBrush = statusBrush
