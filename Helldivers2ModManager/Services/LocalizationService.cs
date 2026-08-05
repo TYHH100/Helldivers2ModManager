@@ -60,6 +60,11 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 	/// </summary>
 	private readonly Dictionary<string, LocaleData> _localeCache = [];
 
+	/// <summary>
+	/// 语言文件元数据列表（仅扫描结果，strings 未解析）。
+	/// </summary>
+	private readonly List<LocaleFileInfo> _localeFiles = [];
+
 	private readonly ILogger<LocalizationService> _logger;
 	private readonly string _localesDirectory;
 
@@ -77,18 +82,39 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 		public Dictionary<string, string> Strings { get; init; } = [];
 	}
 
+	/// <summary>
+	/// 语言文件元数据（仅 locale 与显示名，避免构造时解析全部 strings）。
+	/// </summary>
+	private sealed record LocaleMeta
+	{
+		public string Locale { get; init; } = string.Empty;
+		public string LanguageName { get; init; } = string.Empty;
+	}
+
+	/// <summary>
+	/// 语言文件信息（用于按需完整解析）。
+	/// </summary>
+	private sealed record LocaleFileInfo(string FilePath, string Locale, string LanguageName);
+
 	private static readonly JsonSerializerOptions s_jsonOptions = new()
 	{
 		PropertyNameCaseInsensitive = true
 	};
 
 	public LocalizationService(ILogger<LocalizationService> logger)
+		: this(logger, Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Language"))
+	{
+	}
+
+	/// <summary>
+	/// 测试用构造：注入语言目录，避免依赖应用基目录下的资源文件。
+	/// </summary>
+	internal LocalizationService(ILogger<LocalizationService> logger, string localesDirectory)
 	{
 		_logger = logger;
-		// Resources/Language 文件夹位于应用程序基目录下
-		_localesDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Language");
+		_localesDirectory = localesDirectory;
 
-		// 1. 扫描可用 Language 文件
+		// 1. 扫描可用 Language 文件（仅元数据）
 		LoadAvailableLocales();
 
 		// 2. 自动检测系统语言（此时仅记录检测结果，稍后在 ApplyLanguage 中设置）
@@ -129,7 +155,7 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 	}
 
 	/// <summary>
-	/// 扫描 Locales 文件夹，加载所有可用的 locale 文件。
+	/// 扫描 Locales 文件夹，仅解析元数据（locale/显示名），strings 按需完整解析。
 	/// </summary>
 	private void LoadAvailableLocales()
 	{
@@ -150,20 +176,19 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 		{
 			try
 			{
-				var json = File.ReadAllText(file);
-				var data = JsonSerializer.Deserialize<LocaleData>(json, s_jsonOptions);
-				if (data is null || string.IsNullOrEmpty(data.Locale))
+				var meta = JsonSerializer.Deserialize<LocaleMeta>(File.ReadAllText(file), s_jsonOptions);
+				if (meta is null || string.IsNullOrEmpty(meta.Locale))
 				{
 					_logger.LogWarning("本地化文件格式无效: {File}", file);
 					continue;
 				}
 
-				_localeCache[data.Locale] = data;
+				_localeFiles.Add(new LocaleFileInfo(file, meta.Locale, meta.LanguageName));
 				AvailableLanguages.Add(new LanguageItem(
-					data.LanguageName,
-					data.Locale
+					meta.LanguageName,
+					meta.Locale
 				));
-				_logger.LogInformation("已加载本地化文件: {Locale} ({Name})", data.Locale, data.LanguageName);
+				_logger.LogInformation("已扫描本地化文件: {Locale} ({Name})", meta.Locale, meta.LanguageName);
 			}
 			catch (Exception ex)
 			{
@@ -190,23 +215,59 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 			_logger.LogInformation("系统语言: {Culture}", systemCulture);
 
 			// 尝试精确匹配（zh-CN → zh-CN）
-			if (_localeCache.ContainsKey(systemCulture))
+			if (_localeFiles.Any(f => string.Equals(f.Locale, systemCulture, StringComparison.OrdinalIgnoreCase)))
 				return systemCulture;
 
 			// 尝试匹配语言族（zh → zh-CN, zh-TW）
 			var langPrefix = systemCulture.Split('-')[0];
-			var match = _localeCache.Keys.FirstOrDefault(k => k.StartsWith(langPrefix + "-", StringComparison.OrdinalIgnoreCase));
+			var match = _localeFiles.FirstOrDefault(f => f.Locale.StartsWith(langPrefix + "-", StringComparison.OrdinalIgnoreCase));
 			if (match is not null)
-				return match;
+				return match.Locale;
 
 			// 回退到第一个可用语言
-			var first = _localeCache.Keys.FirstOrDefault();
-			return first ?? "en-US";
+			var first = _localeFiles.FirstOrDefault();
+			return first?.Locale ?? "en-US";
 		}
 		catch (Exception ex)
 		{
 			_logger.LogWarning(ex, "自动检测系统语言失败");
 			return "en-US";
+		}
+	}
+
+	/// <summary>
+	/// 获取指定 locale 的完整数据；未解析时按需读取并解析对应 JSON 文件。
+	/// 解析结果缓存在 <see cref="_localeCache"/> 中，后续切换语言直接复用。
+	/// </summary>
+	private LocaleData? GetOrLoadLocale(string locale)
+	{
+		lock (_localeCache)
+		{
+			if (_localeCache.TryGetValue(locale, out var cached))
+				return cached;
+
+			var info = _localeFiles.FirstOrDefault(f => string.Equals(f.Locale, locale, StringComparison.OrdinalIgnoreCase));
+			if (info is null)
+				return null;
+
+			try
+			{
+				var json = File.ReadAllText(info.FilePath);
+				var data = JsonSerializer.Deserialize<LocaleData>(json, s_jsonOptions);
+				if (data is null || string.IsNullOrEmpty(data.Locale))
+				{
+					_logger.LogWarning("本地化文件格式无效: {File}", info.FilePath);
+					return null;
+				}
+
+				_localeCache[data.Locale] = data;
+				return data;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogWarning(ex, "加载本地化文件失败: {File}", info.FilePath);
+				return null;
+			}
 		}
 	}
 
@@ -227,20 +288,27 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 			targetLocale = localeCode;
 		}
 
-		// 确保该 locale 已加载
-		if (!_localeCache.TryGetValue(targetLocale, out var data))
+		// 确保该 locale 已加载（未加载时按需解析）
+		var data = GetOrLoadLocale(targetLocale);
+		if (data is null)
 		{
 			_logger.LogWarning("语言 '{Locale}' 未加载，回退到 en-US", targetLocale);
-			if (!_localeCache.TryGetValue("en-US", out data))
+			data = GetOrLoadLocale("en-US");
+			if (data is null)
 			{
 				// 回退到第一个可用语言
-				var first = _localeCache.Values.FirstOrDefault();
+				var first = _localeFiles.FirstOrDefault();
 				if (first is null)
 				{
 					_logger.LogError("没有可用的本地化资源！");
 					return;
 				}
-				data = first;
+				data = GetOrLoadLocale(first.Locale);
+				if (data is null)
+				{
+					_logger.LogError("没有可用的本地化资源！");
+					return;
+				}
 				targetLocale = data.Locale;
 			}
 			else
