@@ -86,13 +86,27 @@ internal static class ModelPreviewMaterialVariantSelector
             return false;
 
         var firstBlock = data[..blockSize];
-        for (var blockIndex = 0; blockIndex < 4; blockIndex++)
+        for (var blockIndex = 0; blockIndex < data.Length / blockSize; blockIndex++)
         {
             var block = data.Slice(blockIndex * blockSize, blockSize);
             var nonZeroCount = 0;
             foreach (var value in block)
                 nonZeroCount += value == 0 ? 0 : 1;
             if (!block.SequenceEqual(firstBlock) || nonZeroCount > 6)
+                return false;
+        }
+
+        return true;
+    }
+
+    internal static bool IsOpaqueBgraPureBlack(ReadOnlySpan<byte> pixels)
+    {
+        if (pixels.Length < 4 || pixels.Length % 4 != 0)
+            return false;
+
+        for (var offset = 0; offset < pixels.Length; offset += 4)
+        {
+            if (pixels[offset] != 0 || pixels[offset + 1] != 0 || pixels[offset + 2] != 0 || pixels[offset + 3] != byte.MaxValue)
                 return false;
         }
 

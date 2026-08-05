@@ -188,16 +188,20 @@
                 </Border>
 
                 <Border Grid.Row="1" Background="#FF20252A" BorderBrush="{StaticResource NeutralStrokeBrush}" BorderThickness="1" CornerRadius="4">
-                    <Grid>
+                    <Grid x:Name="PreviewInteractionSurface"
+                          Background="Transparent"
+                          MouseLeftButtonDown="PreviewViewport_OnMouseLeftButtonDown"
+                          MouseLeftButtonUp="PreviewViewport_OnMouseLeftButtonUp"
+                          MouseRightButtonDown="PreviewViewport_OnMouseRightButtonDown"
+                          MouseRightButtonUp="PreviewViewport_OnMouseRightButtonUp"
+                          MouseMove="PreviewViewport_OnMouseMove"
+                          MouseWheel="PreviewViewport_OnMouseWheel">
                         <Viewport3D x:Name="PreviewViewport"
-                                    ClipToBounds="True"
-                                    MouseLeftButtonDown="PreviewViewport_OnMouseLeftButtonDown"
-                                    MouseLeftButtonUp="PreviewViewport_OnMouseLeftButtonUp"
-                                    MouseMove="PreviewViewport_OnMouseMove"
-                                    MouseWheel="PreviewViewport_OnMouseWheel">
+                                    ClipToBounds="True">
                             <Viewport3D.Camera>
                                 <PerspectiveCamera x:Name="PreviewCamera" FieldOfView="45" NearPlaneDistance="0.01" FarPlaneDistance="100000"/>
                             </Viewport3D.Camera>
+                            <ModelVisual3D x:Name="GroundGridVisual"/>
                             <ModelVisual3D Content="{Binding ModelGroup}"/>
                             <ModelVisual3D>
                                 <ModelVisual3D.Content>
@@ -209,6 +213,23 @@
                                 </ModelVisual3D.Content>
                             </ModelVisual3D>
                         </Viewport3D>
+                        <Border HorizontalAlignment="Left" VerticalAlignment="Top" Background="#CC20252A" BorderBrush="#668B9BB4" BorderThickness="1" CornerRadius="4" Padding="6" Margin="8" ToolTip="{loc:Loc ModelPreviewPage.GizmoAxisTip}">
+                            <StackPanel>
+                                <Canvas Width="72" Height="72" HorizontalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" Canvas.Left="32" Canvas.Top="32" Fill="#FFD4DCE9"/>
+                                    <Line x:Name="GizmoXAxis" Stroke="#FFEA5864" StrokeThickness="2.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line x:Name="GizmoYAxis" Stroke="#FF6FD682" StrokeThickness="2.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Line x:Name="GizmoZAxis" Stroke="#FF568CFF" StrokeThickness="2.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    <Ellipse x:Name="GizmoXDot" Width="12" Height="12" Fill="#FFEA5864" Stroke="#FF20252A" StrokeThickness="1" Tag="X" Cursor="Hand" MouseLeftButtonDown="GizmoAxis_OnMouseLeftButtonDown"/>
+                                    <Ellipse x:Name="GizmoYDot" Width="12" Height="12" Fill="#FF6FD682" Stroke="#FF20252A" StrokeThickness="1" Tag="Y" Cursor="Hand" MouseLeftButtonDown="GizmoAxis_OnMouseLeftButtonDown"/>
+                                    <Ellipse x:Name="GizmoZDot" Width="12" Height="12" Fill="#FF568CFF" Stroke="#FF20252A" StrokeThickness="1" Tag="Z" Cursor="Hand" MouseLeftButtonDown="GizmoAxis_OnMouseLeftButtonDown"/>
+                                    <TextBlock x:Name="GizmoXLabel" Text="X" Foreground="#FFFFD9DC" FontSize="10" FontWeight="Bold" IsHitTestVisible="False"/>
+                                    <TextBlock x:Name="GizmoYLabel" Text="Y" Foreground="#FFD8FFE0" FontSize="10" FontWeight="Bold" IsHitTestVisible="False"/>
+                                    <TextBlock x:Name="GizmoZLabel" Text="Z" Foreground="#FFDCE7FF" FontSize="10" FontWeight="Bold" IsHitTestVisible="False"/>
+                                </Canvas>
+                                <TextBlock Text="{Binding CameraOrientationText}" HorizontalAlignment="Center" Foreground="{StaticResource NeutralForegroundBrush}" FontSize="11" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
                         <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#AA20252A" CornerRadius="3" Padding="7 4" Margin="8" IsHitTestVisible="False">
                             <TextBlock Text="{loc:Loc ModelPreviewPage.OrientationHint}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="11"/>
                         </Border>
@@ -271,7 +292,7 @@
                                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
                                                             <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Description}"/>
                                                         </StackPanel>
-                                                        <CheckBox Grid.Column="2" IsChecked="{Binding Enabled}" VerticalAlignment="Top"/>
+                                                        <CheckBox Grid.Column="2" IsChecked="{Binding Enabled}" Visibility="{Binding CanToggle, Converter={StaticResource BoolToVisibilityConverter}}" VerticalAlignment="Top"/>
                                                         <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
                                                                   ItemsSource="{Binding SubOptions}"
                                                                   SelectedItem="{Binding SelectedSubOption}"
@@ -297,6 +318,7 @@
                                 </Grid.RowDefinitions>
                                 <Grid Margin="2 0 2 7">
                                     <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
@@ -325,9 +347,11 @@
                                             </DataTemplate>
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
-                                    <CheckBox Grid.Row="1" Grid.Column="0" Content="{loc:Loc ModelPreviewPage.ShowFilteredMeshes}" IsChecked="{Binding ShowFilteredMeshes}" VerticalAlignment="Center" Margin="0 6 12 0"/>
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding AutomaticallyHiddenMeshSummary}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="11" VerticalAlignment="Center" Margin="0 6 8 0"/>
-                                    <CheckBox Grid.Row="1" Grid.Column="3" Content="{loc:Loc ModelPreviewPage.IsolateMesh}" IsChecked="{Binding IsolateSelectedMesh}" IsEnabled="{Binding SelectedMesh, Converter={StaticResource NullToBoolConverter}}" VerticalAlignment="Center" Margin="8 6 0 0"/>
+                                    <CheckBox Grid.Row="1" Grid.Column="0" Content="{loc:Loc ModelPreviewPage.OriginalTextureResolution}" IsChecked="{Binding UseOriginalTextureResolution}" IsEnabled="{Binding SelectedTexture, Converter={StaticResource NullToBoolConverter}}" ToolTip="{loc:Loc ModelPreviewPage.OriginalTextureResolutionTip}" VerticalAlignment="Center" Margin="0 6 12 0"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{loc:Loc ModelPreviewPage.OriginalTextureResolutionTip}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="11" VerticalAlignment="Center" Margin="0 6 0 0" TextTrimming="CharacterEllipsis"/>
+                                    <CheckBox Grid.Row="2" Grid.Column="0" Content="{loc:Loc ModelPreviewPage.ShowFilteredMeshes}" IsChecked="{Binding ShowFilteredMeshes}" VerticalAlignment="Center" Margin="0 6 12 0"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding AutomaticallyHiddenMeshSummary}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="11" VerticalAlignment="Center" Margin="0 6 8 0"/>
+                                    <CheckBox Grid.Row="2" Grid.Column="3" Content="{loc:Loc ModelPreviewPage.IsolateMesh}" IsChecked="{Binding IsolateSelectedMesh}" IsEnabled="{Binding SelectedMesh, Converter={StaticResource NullToBoolConverter}}" VerticalAlignment="Center" Margin="8 6 0 0"/>
                                 </Grid>
                                 <DataGrid Grid.Row="1"
                                   ItemsSource="{Binding Meshes}"

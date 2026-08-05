@@ -38,7 +38,7 @@ internal partial class App : Application
 		builder.Services.AddMemoryCache();
 
 		AddServices(builder.Services);
-		builder.Services.AddSingleton<NavigationStore>(static services => new NavigationStore(services, services.GetRequiredService<DashboardPageViewModel>()));
+		builder.Services.AddSingleton<NavigationStore>(static services => new NavigationStore(services));
 		builder.Services.AddLogging(log =>
 		{
 #if DEBUG

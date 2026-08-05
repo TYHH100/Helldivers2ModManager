@@ -20,6 +20,7 @@ internal sealed class PatchResourceInspectionService
     private const ulong UnitTypeId = 0xE0A48D0BE9A7453FUL;
     private const ulong TextureTypeId = 0xCD4238C6A0C69E32UL;
     private const ulong MaterialTypeId = 0xEAC0B497876ADEDFUL;
+    private const uint LegacyVerifiedUnitVersion = 10800437;
     private const uint CurrentVerifiedUnitVersion = 10800438;
     private const int HeaderSize = 72;
     private const int TypeEntrySize = 32;
@@ -28,9 +29,16 @@ internal sealed class PatchResourceInspectionService
     private const int TextureHeaderOffset = 0xC0;
     private const int TextureHeaderSize = 148;
     private const long MaxPreviewPixels = 4_194_304; // 2048 x 2048
+    // Only the Model Preview page requests this through its explicit source-resolution
+    // checkbox. The standard viewer path continues to use MaxPreviewPixels above.
+    private const long MaxExplicitSourcePreviewPixels = 67_108_864; // 8K x 8K BGRA = 256 MiB
     private const uint MaxEncodedImageBytes = 64 * 1024 * 1024;
-    private const uint MaxPreviewVerticesPerStream = 250_000;
-    private const uint MaxPreviewIndicesPerStream = 750_000;
+    // A single high-detail character section can legitimately exceed the earlier
+    // per-stream limit. The ModelPreviewResult global budgets below still bound the
+    // complete preview, while these limits avoid discarding a face/body section before
+    // that global admission control is reached.
+    private const uint MaxPreviewVerticesPerStream = 500_000;
+    private const uint MaxPreviewIndicesPerStream = 1_500_000;
     private const long MaxPreviewVertexBytes = 64 * 1024 * 1024;
     private const long MaxReferenceScanBytes = 32 * 1024 * 1024;
     private static readonly int MaxPatchReadParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4);
@@ -67,7 +75,7 @@ internal sealed class PatchResourceInspectionService
         ArgumentNullException.ThrowIfNull(modDirectory);
         ArgumentNullException.ThrowIfNull(patchFiles);
         var result = new PatchResourceInspectionResult();
-        if (!modDirectory.Exists)
+        if (!RefreshDirectoryExists(modDirectory))
         {
             result.Error = "Mod directory no longer exists.";
             return result;
@@ -152,7 +160,7 @@ internal sealed class PatchResourceInspectionService
         ArgumentNullException.ThrowIfNull(modDirectory);
         ArgumentNullException.ThrowIfNull(patchFiles);
         var result = new ModelPreviewResult();
-        if (!modDirectory.Exists)
+        if (!RefreshDirectoryExists(modDirectory))
         {
             result.Error = "Mod directory no longer exists.";
             return result;
@@ -252,7 +260,7 @@ internal sealed class PatchResourceInspectionService
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(modDirectory);
-        maxPreviewPixels = Math.Clamp(maxPreviewPixels, 256, (int)MaxPreviewPixels);
+        maxPreviewPixels = Math.Clamp(maxPreviewPixels, 256, (int)MaxExplicitSourcePreviewPixels);
         var patchPath = Path.IsPathFullyQualified(texture.PatchPath)
             ? texture.PatchPath
             : Path.Combine(modDirectory.FullName, texture.PatchPath);
@@ -1137,7 +1145,9 @@ internal sealed class PatchResourceInspectionService
         TextureInspectionItem texture,
         CancellationToken cancellationToken)
     {
-        const int requiredBytes = 64;
+        const int blockSize = 16;
+        const int blocksPerSample = 4;
+        const int sampleByteCount = blockSize * blocksPerSample;
         var patchPath = Path.IsPathFullyQualified(texture.PatchPath)
             ? texture.PatchPath
             : Path.Combine(modDirectory.FullName, texture.PatchPath);
@@ -1150,13 +1160,53 @@ internal sealed class PatchResourceInspectionService
         var payloadOffset = texture.PayloadSource.Equals("stream", StringComparison.OrdinalIgnoreCase)
             ? texture.StreamOffset
             : texture.GpuOffset;
-        await using var stream = OpenRead(new FileInfo(payloadPath));
-        if (!IsRangeInBounds(payloadOffset, requiredBytes, stream.Length))
+        var payloadSize = texture.PayloadSource.Equals("stream", StringComparison.OrdinalIgnoreCase)
+            ? texture.StreamSize
+            : texture.GpuSize;
+        var blockCount = (long)Math.Max(1, (texture.Width + 3) / 4) * Math.Max(1, (texture.Height + 3) / 4);
+        if (blockCount < blocksPerSample || payloadSize < sampleByteCount)
             return false;
 
-        var headerBlocks = new byte[requiredBytes];
-        return await ReadAtAsync(stream, (long)payloadOffset, headerBlocks, cancellationToken) &&
-            ModelPreviewMaterialVariantSelector.IsBc7PureBlackPlaceholder(headerBlocks);
+        var lastSampleStart = blockCount - blocksPerSample;
+        var sampleStarts = new[]
+        {
+            0L,
+            lastSampleStart / 4,
+            lastSampleStart / 2,
+            lastSampleStart - lastSampleStart / 4,
+            lastSampleStart
+        }.Distinct().ToArray();
+        await using var stream = OpenRead(new FileInfo(payloadPath));
+        if (!IsRangeInBounds(payloadOffset, payloadSize, stream.Length))
+            return false;
+
+        var sampledBlocks = new byte[checked(sampleStarts.Length * sampleByteCount)];
+        var sample = new byte[sampleByteCount];
+        for (var sampleIndex = 0; sampleIndex < sampleStarts.Length; sampleIndex++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var sampleOffset = sampleStarts[sampleIndex] * blockSize;
+            if (sampleOffset > payloadSize - sampleByteCount ||
+                payloadOffset > (ulong)long.MaxValue - (ulong)sampleOffset ||
+                !await ReadAtAsync(
+                    stream,
+                    (long)(payloadOffset + (ulong)sampleOffset),
+                    sample,
+                    cancellationToken))
+            {
+                return false;
+            }
+            Buffer.BlockCopy(sample, 0, sampledBlocks, sampleIndex * sampleByteCount, sampleByteCount);
+        }
+
+        if (!ModelPreviewMaterialVariantSelector.IsBc7PureBlackPlaceholder(sampledBlocks))
+            return false;
+
+        // Some exports retain a sparse or empty highest-resolution mip while the
+        // lower mip chain contains the actual albedo. Confirm with decoded pixels so
+        // a real face/body texture is never removed based on compressed headers alone.
+        var preview = await PreviewTextureCoreAsync(modDirectory, texture, 65_536, cancellationToken);
+        return preview?.BgraPixels is { } pixels && ModelPreviewMaterialVariantSelector.IsOpaqueBgraPureBlack(pixels);
     }
 
     private static IReadOnlyList<ulong> ScanResourceIds(byte[] data, IReadOnlySet<ulong> ids)
@@ -1190,7 +1240,7 @@ internal sealed class PatchResourceInspectionService
             return;
 
         var version = MemoryMarshal.Read<uint>(unitHeader.AsSpan(0x2C, 4));
-        if (version != CurrentVerifiedUnitVersion)
+        if (version is not (LegacyVerifiedUnitVersion or CurrentVerifiedUnitVersion))
             return;
 
         var listOffset = MemoryMarshal.Read<int>(unitHeader.AsSpan(0x5C, 4));
@@ -1238,7 +1288,7 @@ internal sealed class PatchResourceInspectionService
                         componentText.Append(" | ");
                     componentText.Append(GetComponentName(type)).Append('[').Append(componentIndex).Append("]: ").Append(GetFormatName(format));
                 }
-                if (!TryGetFormatSize(format, out var size))
+                if (!TryGetFormatSize(format, version, out var size))
                 {
                     // Some base-game streams keep an optional semantic (most commonly
                     // BoneWeight) with format 0 and no bytes in the interleaved vertex.
@@ -1302,45 +1352,291 @@ internal sealed class PatchResourceInspectionService
                     continue;
                 }
 
-            var mesh = await ReadModelMeshAsync(
-                gpuStream, gpuOffset, gpuSize, patchFile, unitId, streamIndex,
-                vertexCount, vertexStride, indexCount, indexType, vertexOffset, vertexSize,
-                indexOffset, indexSize, components, canSample,
-                materialLayout?.BodyShape ?? ModelPreviewBodyShape.Unknown,
-                materialLayout?.CustomizationSlot ?? ModelPreviewCustomizationSlot.Unknown,
-                materialLayout?.FallbackTextureIds ?? [], materialLayout?.FallbackColorTextureId, cancellationToken);
+                var sections = hasConfiguredSections
+                    ? configuredSections
+                    : [];
+                if (sections.Count > 0)
+                {
+                    var addedSection = false;
+                    foreach (var section in sections)
+                    {
+                        var sectionMesh = await ReadModelSectionMeshAsync(
+                            gpuStream, gpuOffset, gpuSize, patchFile, unitId, streamIndex,
+                            vertexCount, vertexStride, indexCount, indexType, vertexOffset, vertexSize,
+                            indexOffset, indexSize, components, canSample,
+                            materialLayout?.BodyShape ?? ModelPreviewBodyShape.Unknown,
+                            materialLayout?.CustomizationSlot ?? ModelPreviewCustomizationSlot.Unknown,
+                            materialLayout?.FallbackTextureIds ?? [], materialLayout?.FallbackColorTextureId,
+                            section, cancellationToken);
+                        if (sectionMesh is null)
+                            continue;
+
+                        addedSection = true;
+                        if (!modelPreview.TryAddMesh(sectionMesh))
+                            modelPreview.SkippedStreams++;
+                    }
+
+                    if (!addedSection)
+                        modelPreview.SkippedStreams++;
+                    continue;
+                }
+
+                var mesh = await ReadModelMeshAsync(
+                    gpuStream, gpuOffset, gpuSize, patchFile, unitId, streamIndex,
+                    vertexCount, vertexStride, indexCount, indexType, vertexOffset, vertexSize,
+                    indexOffset, indexSize, components, canSample,
+                    materialLayout?.BodyShape ?? ModelPreviewBodyShape.Unknown,
+                    materialLayout?.CustomizationSlot ?? ModelPreviewCustomizationSlot.Unknown,
+                    materialLayout?.FallbackTextureIds ?? [], materialLayout?.FallbackColorTextureId, cancellationToken);
                 if (mesh is null)
                 {
                     modelPreview.SkippedStreams++;
                     continue;
                 }
 
-                var sections = hasConfiguredSections
-                    ? configuredSections
-                    : [];
-                if (sections.Count == 0)
-                {
-                    if (!modelPreview.TryAddMesh(mesh))
-                        modelPreview.SkippedStreams++;
-                    continue;
-                }
-
-                var addedSection = false;
-                foreach (var section in sections)
-                {
-                    var sectionMesh = CreateSectionMesh(mesh, section);
-                    if (sectionMesh is null)
-                        continue;
-
-                    addedSection = true;
-                    if (!modelPreview.TryAddMesh(sectionMesh))
-                        modelPreview.SkippedStreams++;
-                }
-
-                if (!addedSection && !modelPreview.TryAddMesh(mesh))
+                if (!modelPreview.TryAddMesh(mesh))
                     modelPreview.SkippedStreams++;
             }
         }
+    }
+
+    /// <summary>
+    /// Decodes one MeshInfo section without materializing the complete backing stream.
+    /// Large character assets commonly pack several LOD windows into one GPU stream;
+    /// the SDK seeks directly to each Section's vertex and index windows.
+    /// </summary>
+    private static async Task<ModelPreviewMesh?> ReadModelSectionMeshAsync(
+        Stream? gpuStream,
+        ulong gpuBaseOffset,
+        uint gpuSize,
+        string patchFile,
+        ulong unitId,
+        int streamIndex,
+        uint streamVertexCount,
+        uint vertexStride,
+        uint streamIndexCount,
+        uint indexType,
+        uint vertexOffset,
+        uint vertexSize,
+        uint indexOffset,
+        uint indexSize,
+        IReadOnlyList<(uint Type, uint Format, int Offset)> components,
+        bool canDecode,
+        ModelPreviewBodyShape bodyShape,
+        ModelPreviewCustomizationSlot customizationSlot,
+        IReadOnlyList<ulong> fallbackTextureIds,
+        ulong? fallbackColorTextureId,
+        ModelPreviewMaterialSection section,
+        CancellationToken cancellationToken)
+    {
+        if (!canDecode || gpuStream is null || vertexStride == 0 || vertexStride > 4096 || indexType is not (0 or 1) ||
+            section.VertexOffset > streamVertexCount || section.VertexCount == 0 ||
+            section.VertexCount > streamVertexCount - section.VertexOffset ||
+            section.IndexOffset > streamIndexCount || section.IndexCount < 3 ||
+            section.IndexCount > streamIndexCount - section.IndexOffset)
+            return null;
+
+        var position = components.FirstOrDefault(static component => component.Type == 0 && component.Format == 2);
+        if (position.Format != 2)
+            return null;
+
+        var uv = components.FirstOrDefault(static component => component.Type == 4 && component.Format is 1 or 29 or 33);
+        var indexElementSize = indexType == 0 ? 2u : 4u;
+        var triangleIndexCount = section.IndexCount - section.IndexCount % 3;
+        if (triangleIndexCount > MaxPreviewIndicesPerStream)
+            return null;
+
+        var indexByteOffset = (long)section.IndexOffset * indexElementSize;
+        var indexByteCount = (long)triangleIndexCount * indexElementSize;
+        if (indexByteCount <= 0 || indexByteCount > int.MaxValue ||
+            indexByteOffset > indexSize || indexByteCount > indexSize - indexByteOffset ||
+            indexOffset > (ulong)long.MaxValue - (ulong)indexByteOffset ||
+            !IsRangeInBounds(indexOffset + (ulong)indexByteOffset, (uint)indexByteCount, gpuSize) ||
+            gpuBaseOffset > (ulong)long.MaxValue - indexOffset - (ulong)indexByteOffset)
+            return null;
+
+        var indexBytes = new byte[(int)indexByteCount];
+        if (!await ReadAtAsync(gpuStream, (long)(gpuBaseOffset + indexOffset + (ulong)indexByteOffset), indexBytes, cancellationToken))
+            return null;
+
+        var rawIndices = new uint[triangleIndexCount];
+        var minimumIndex = uint.MaxValue;
+        var maximumIndex = 0u;
+        for (var index = 0; index < rawIndices.Length; index++)
+        {
+            if ((index & 0x3FFF) == 0)
+                cancellationToken.ThrowIfCancellationRequested();
+
+            var byteOffset = index * (int)indexElementSize;
+            var value = indexType == 0
+                ? MemoryMarshal.Read<ushort>(indexBytes.AsSpan(byteOffset, 2))
+                : MemoryMarshal.Read<uint>(indexBytes.AsSpan(byteOffset, 4));
+            rawIndices[index] = value;
+            minimumIndex = Math.Min(minimumIndex, value);
+            maximumIndex = Math.Max(maximumIndex, value);
+        }
+
+        // The common encoding is section-local, as documented by HD2SDK. Some older
+        // exports retain stream-relative values, so recognize that unambiguously and
+        // rebase only that window instead of discarding otherwise valid geometry.
+        var indicesAreStreamRelative = minimumIndex >= section.VertexOffset &&
+                                       maximumIndex - section.VertexOffset < section.VertexCount;
+        var requiredVertexCount = indicesAreStreamRelative
+            ? maximumIndex - section.VertexOffset + 1
+            : maximumIndex + 1;
+        if (requiredVertexCount == 0 || requiredVertexCount > MaxPreviewVerticesPerStream ||
+            requiredVertexCount > streamVertexCount - section.VertexOffset)
+            return null;
+
+        var vertexByteOffset = (long)section.VertexOffset * vertexStride;
+        var vertexByteCount = (long)requiredVertexCount * vertexStride;
+        if (vertexByteCount <= 0 || vertexByteCount > MaxPreviewVertexBytes || vertexByteCount > int.MaxValue ||
+            vertexByteOffset > vertexSize || vertexByteCount > vertexSize - vertexByteOffset ||
+            vertexOffset > (ulong)long.MaxValue - (ulong)vertexByteOffset ||
+            !IsRangeInBounds(vertexOffset + (ulong)vertexByteOffset, (uint)vertexByteCount, gpuSize) ||
+            gpuBaseOffset > (ulong)long.MaxValue - vertexOffset - (ulong)vertexByteOffset)
+            return null;
+
+        var vertexBytes = new byte[(int)vertexByteCount];
+        if (!await ReadAtAsync(gpuStream, (long)(gpuBaseOffset + vertexOffset + (ulong)vertexByteOffset), vertexBytes, cancellationToken))
+            return null;
+
+        var positions = new float[checked((int)requiredVertexCount * 3)];
+        var textureCoordinates = uv.Format is 1 or 29 or 33
+            ? new float[checked((int)requiredVertexCount * 2)]
+            : null;
+        for (var vertexIndex = 0; vertexIndex < requiredVertexCount; vertexIndex++)
+        {
+            if ((vertexIndex & 0x3FFF) == 0)
+                cancellationToken.ThrowIfCancellationRequested();
+
+            var sourceOffset = checked((int)vertexIndex * (int)vertexStride + position.Offset);
+            var targetOffset = (int)vertexIndex * 3;
+            var transformed = section.Transform.TransformPoint(
+                BitConverter.ToSingle(vertexBytes, sourceOffset),
+                BitConverter.ToSingle(vertexBytes, sourceOffset + 4),
+                BitConverter.ToSingle(vertexBytes, sourceOffset + 8));
+            if (!float.IsFinite(transformed.X) || !float.IsFinite(transformed.Y) || !float.IsFinite(transformed.Z))
+                return null;
+            positions[targetOffset] = transformed.X;
+            positions[targetOffset + 1] = transformed.Y;
+            positions[targetOffset + 2] = transformed.Z;
+
+            if (textureCoordinates is not null)
+            {
+                var uvSourceOffset = checked((int)vertexIndex * (int)vertexStride + uv.Offset);
+                var uvTargetOffset = (int)vertexIndex * 2;
+                if (uv.Format == 1)
+                {
+                    textureCoordinates[uvTargetOffset] = BitConverter.ToSingle(vertexBytes, uvSourceOffset);
+                    textureCoordinates[uvTargetOffset + 1] = BitConverter.ToSingle(vertexBytes, uvSourceOffset + 4);
+                }
+                else
+                {
+                    textureCoordinates[uvTargetOffset] = (float)BitConverter.UInt16BitsToHalf(BitConverter.ToUInt16(vertexBytes, uvSourceOffset));
+                    textureCoordinates[uvTargetOffset + 1] = (float)BitConverter.UInt16BitsToHalf(BitConverter.ToUInt16(vertexBytes, uvSourceOffset + 2));
+                }
+
+                if (!float.IsFinite(textureCoordinates[uvTargetOffset]) || !float.IsFinite(textureCoordinates[uvTargetOffset + 1]))
+                    textureCoordinates = null;
+            }
+        }
+
+        var triangleIndices = new int[rawIndices.Length];
+        for (var index = 0; index < rawIndices.Length; index++)
+        {
+            var localIndex = indicesAreStreamRelative
+                ? rawIndices[index] - section.VertexOffset
+                : rawIndices[index];
+            if (localIndex >= requiredVertexCount)
+                return null;
+            triangleIndices[index] = (int)localIndex;
+        }
+
+        // Section index windows often reference a sparse subset of a large shared
+        // vertex range. Keep only referenced vertices before the global preview budget
+        // is applied; otherwise a few accessory triangles can consume hundreds of
+        // thousands of unused vertices and hide later character details.
+        var compactGeometry = CompactReferencedSectionGeometry(
+            positions,
+            textureCoordinates,
+            triangleIndices);
+
+        return new ModelPreviewMesh
+        {
+            PatchFile = patchFile,
+            UnitId = unitId,
+            StreamIndex = streamIndex,
+            MeshInfoIndex = section.MeshInfoIndex,
+            SourceVertexOffset = section.VertexOffset,
+            SourceVertexCount = requiredVertexCount,
+            SourceIndexOffset = section.IndexOffset,
+            SourceIndexCount = triangleIndexCount,
+            BodyShape = bodyShape,
+            CustomizationSlot = customizationSlot,
+            Positions = compactGeometry.Positions,
+            Normals = BuildSmoothedNormals(compactGeometry.Positions, compactGeometry.TriangleIndices),
+            TextureCoordinates = compactGeometry.TextureCoordinates,
+            TriangleIndices = compactGeometry.TriangleIndices,
+            TextureIds = section.TextureIds.Count > 0 ? section.TextureIds : fallbackTextureIds,
+            ColorTextureId = section.ColorTextureId ?? fallbackColorTextureId,
+            MaterialId = section.MaterialId,
+            MaterialTextures = section.MaterialTextures ?? (fallbackTextureIds.Count == 0
+                ? ModelPreviewMaterialTextureSet.Empty
+                : new ModelPreviewMaterialTextureSet(
+                    new Dictionary<ModelPreviewTextureRole, IReadOnlyList<ulong>>
+                    {
+                        [ModelPreviewTextureRole.Unknown] = fallbackTextureIds
+                    },
+                    fallbackTextureIds,
+                    fallbackColorTextureId)),
+            IsCullingBody = section.IsCullingBody
+        };
+    }
+
+    private static CompactSectionGeometry CompactReferencedSectionGeometry(
+        float[] positions,
+        float[]? textureCoordinates,
+        int[] triangleIndices)
+    {
+        var sourceVertexCount = positions.Length / 3;
+        var remap = new int[sourceVertexCount];
+        Array.Fill(remap, -1);
+        var compactPositions = new List<float>(Math.Min(positions.Length, triangleIndices.Length * 3));
+        var compactCoordinates = textureCoordinates is { Length: > 0 }
+            ? new List<float>(Math.Min(textureCoordinates.Length, triangleIndices.Length * 2))
+            : null;
+        var compactIndices = new int[triangleIndices.Length];
+        for (var index = 0; index < triangleIndices.Length; index++)
+        {
+            var sourceVertex = triangleIndices[index];
+            if (sourceVertex < 0 || sourceVertex >= sourceVertexCount)
+                throw new InvalidDataException("Section index is outside its decoded vertex range.");
+
+            var targetVertex = remap[sourceVertex];
+            if (targetVertex < 0)
+            {
+                targetVertex = compactPositions.Count / 3;
+                remap[sourceVertex] = targetVertex;
+                var positionOffset = sourceVertex * 3;
+                compactPositions.Add(positions[positionOffset]);
+                compactPositions.Add(positions[positionOffset + 1]);
+                compactPositions.Add(positions[positionOffset + 2]);
+                if (compactCoordinates is not null && textureCoordinates is { } sourceCoordinates)
+                {
+                    var coordinateOffset = sourceVertex * 2;
+                    compactCoordinates.Add(sourceCoordinates[coordinateOffset]);
+                    compactCoordinates.Add(sourceCoordinates[coordinateOffset + 1]);
+                }
+            }
+
+            compactIndices[index] = targetVertex;
+        }
+
+        return new CompactSectionGeometry(
+            compactPositions.ToArray(),
+            compactCoordinates?.ToArray(),
+            compactIndices);
     }
 
     private static async Task<ModelPreviewMesh?> ReadModelMeshAsync(
@@ -1376,7 +1672,7 @@ internal sealed class PatchResourceInspectionService
         if (position.Format != 2)
             return null;
 
-        var uv = components.FirstOrDefault(static component => component.Type == 4 && component.Format is 1 or 33);
+        var uv = components.FirstOrDefault(static component => component.Type == 4 && component.Format is 1 or 29 or 33);
 
         var indexElementSize = indexType == 0 ? 2u : 4u;
         var vertexByteCount = (long)vertexCount * vertexStride;
@@ -1397,7 +1693,7 @@ internal sealed class PatchResourceInspectionService
             return null;
 
         var positions = new float[checked((int)vertexCount * 3)];
-        var textureCoordinates = uv.Format is 1 or 33
+        var textureCoordinates = uv.Format is 1 or 29 or 33
             ? new float[checked((int)vertexCount * 2)]
             : null;
         for (var vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
@@ -1644,13 +1940,16 @@ internal sealed class PatchResourceInspectionService
 
     private static string GetFormatName(uint format) => format switch
     {
-        1 => "float2", 2 => "float3", 4 => "RGBA8", 28 => "uint8x4", 30 => "oct-normal",
-        33 => "half2", 35 => "half4", _ => $"Format 0x{format:X}"
+        1 => "float2", 2 => "float3", 4 => "RGBA8", 20 => "uint32x4 (legacy)",
+        24 => "uint8x4 (legacy)", 26 => "oct-normal (legacy)", 28 => "uint8x4", 29 => "half2 (legacy)",
+        30 => "oct-normal", 31 => "half4 (legacy)", 33 => "half2", 35 => "half4", _ => $"Format 0x{format:X}"
     };
 
-    private static bool TryGetFormatSize(uint format, out int size)
+    private static bool TryGetFormatSize(uint format, uint unitVersion, out int size)
     {
-        size = format switch { 1 => 8, 2 => 12, 4 or 28 or 30 or 33 => 4, 35 => 8, _ => 0 };
+        size = unitVersion == LegacyVerifiedUnitVersion
+            ? format switch { 1 => 8, 2 => 12, 4 or 24 or 25 or 26 or 29 => 4, 20 => 16, 31 => 8, _ => 0 }
+            : format switch { 1 => 8, 2 => 12, 4 or 28 or 30 or 33 => 4, 35 => 8, _ => 0 };
         return size != 0;
     }
 
@@ -1677,7 +1976,24 @@ internal sealed class PatchResourceInspectionService
                                   !file.Name.Contains(".hd2mm-", StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
+    /// <summary>
+    /// A Mod directory can be created during the current process after the same
+    /// DirectoryInfo instance has already cached a negative Exists result. Always refresh
+    /// before previewing so newly imported mods do not require an application restart.
+    /// </summary>
+    internal static bool RefreshDirectoryExists(DirectoryInfo directory)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        directory.Refresh();
+        return directory.Exists;
+    }
+
     private static FileStream OpenRead(FileInfo file) => new(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.Asynchronous | FileOptions.RandomAccess);
+
+    private sealed record CompactSectionGeometry(
+        float[] Positions,
+        float[]? TextureCoordinates,
+        int[] TriangleIndices);
 
     private static async Task<bool> ReadAtAsync(
         Stream stream,

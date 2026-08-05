@@ -54,6 +54,28 @@ public sealed class ModelPreviewCharacterOrientationTests
     }
 
     [TestMethod]
+    public void GetRequiredRotation_UnlabeledCharacterWithDominantNegativeZ_MapsNegativeZToViewportUp()
+    {
+        var rotation = ModelPreviewCharacterOrientation.GetRequiredRotation(
+        [
+            CreateMesh(ModelPreviewCustomizationSlot.Unknown, 0, 0, -6),
+            CreateMesh(ModelPreviewCustomizationSlot.Unknown, 0, 1, 0),
+            CreateMesh(ModelPreviewCustomizationSlot.Unknown, 0, 0, 6)
+        ]);
+
+        Assert.AreEqual(ModelPreviewPresentationRotation.NegativeZToPositiveY, rotation);
+    }
+
+    [TestMethod]
+    public void GetSuggestedFrontYaw_UsesRotationSpecificFacingAxis()
+    {
+        Assert.AreEqual(180d, ModelPreviewCharacterOrientation.GetSuggestedFrontYaw(ModelPreviewPresentationRotation.PositiveXToPositiveY));
+        Assert.AreEqual(0d, ModelPreviewCharacterOrientation.GetSuggestedFrontYaw(ModelPreviewPresentationRotation.NegativeXToPositiveY));
+        Assert.AreEqual(-90d, ModelPreviewCharacterOrientation.GetSuggestedFrontYaw(ModelPreviewPresentationRotation.PositiveZToPositiveY));
+        Assert.AreEqual(90d, ModelPreviewCharacterOrientation.GetSuggestedFrontYaw(ModelPreviewPresentationRotation.NegativeZToPositiveY));
+    }
+
+    [TestMethod]
     public void GetRequiredRotation_AmbiguousTorsoToLegsDirection_DoesNotRotate()
     {
         var rotation = ModelPreviewCharacterOrientation.GetRequiredRotation(

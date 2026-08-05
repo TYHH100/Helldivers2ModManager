@@ -1433,9 +1433,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [RelayCommand]
     void PreviewModel(ModViewModel modVm)
     {
-        var page = _provider.GetRequiredService<ModelPreviewPageViewModel>();
-        page.SetInitialMod(modVm.Data);
-        _navStore.Value.Navigate(page);
+        _navStore.Value.Navigate<ModelPreviewPageViewModel>(page => page.SetInitialMod(modVm.Data));
+        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+        {
+            Message = _localizationService["ModelPreviewPage.Disclaimer"]
+        });
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]

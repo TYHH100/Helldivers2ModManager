@@ -10,6 +10,26 @@ namespace Helldivers2ModManager.Tests;
 public sealed class ModelPreviewPatchSetIntegrationTests
 {
     [TestMethod]
+    public async Task PreviewModelAsync_Fs37RetainsLargeFaceBodySectionWithinGlobalCapacity()
+    {
+        var modDirectory = new DirectoryInfo(Path.Combine(
+            FindRepositoryRoot().FullName,
+            "Test", "Mods", "Mods", "fs-37_d65a6162"));
+        var result = await new PatchResourceInspectionService().PreviewModelAsync(
+            modDirectory,
+            [new FileInfo(Path.Combine(modDirectory.FullName, "9ba626afa44a3aa3.patch_0"))]);
+        var faceBodySection = result.Meshes.SingleOrDefault(mesh => mesh.ColorTextureId == 0x4BDC969ECC33E557UL);
+
+        Assert.IsNull(result.Error, result.Error);
+        Assert.IsNotNull(faceBodySection, "The high-detail fs-37 section must not be discarded by a lower per-stream cap.");
+        Assert.IsTrue(faceBodySection.TriangleCount > 250_000);
+        Assert.IsTrue(result.Meshes.Any(mesh => mesh.ColorTextureId == 0x766A4BEE63F19D90UL),
+            "A sparse accessory section must compact its referenced vertices and remain within the global preview budget.");
+        Assert.IsTrue(result.PreviewVertexCount <= 1_000_000);
+        Assert.IsTrue(result.PreviewIndexCount <= 3_000_000);
+    }
+
+    [TestMethod]
     public async Task PreviewModelAsync_UsesOnlyTheSelectedPlumBodyPartsAndMaterialVariant()
     {
         var modDirectory = new DirectoryInfo(Path.Combine(
@@ -66,6 +86,26 @@ public sealed class ModelPreviewPatchSetIntegrationTests
                 .Select(static textureId => textureId!.Value)
                 .Distinct()
                 .ToArray());
+    }
+
+    [TestMethod]
+    public async Task PreviewModelAsync_SelectedPlumCarrierProducesRenderableSectionGeometry()
+    {
+        var modDirectory = new DirectoryInfo(Path.Combine(
+            FindRepositoryRoot().FullName,
+            "Test", "Mods", "Mods", "【学園制服】Plum 替换 CW-9+CE-27+I-92"));
+        var carrierPatch = new FileInfo(Path.Combine(modDirectory.FullName, "Model", "弹挂", "9ba626afa44a3aa3.patch_8"));
+
+        var result = await new PatchResourceInspectionService().PreviewModelAsync(modDirectory, [carrierPatch]);
+        var carrierMeshes = result.Meshes
+            .Where(mesh => Normalize(mesh.PatchFile) == "Model\\弹挂\\9ba626afa44a3aa3.patch_8")
+            .ToArray();
+
+        Assert.IsNull(result.Error, result.Error);
+        Assert.AreEqual(1, result.PatchFileCount);
+        Assert.IsTrue(carrierMeshes.Length > 0,
+            $"The selected carrier patch must not be skipped. Streams skipped: {result.SkippedStreams}.");
+        Assert.IsTrue(carrierMeshes.All(static mesh => mesh.VertexCount > 0 && mesh.TriangleCount > 0));
     }
 
     [TestMethod]
@@ -227,6 +267,26 @@ public sealed class ModelPreviewPatchSetIntegrationTests
     }
 
     [TestMethod]
+    public async Task PreviewModelAsync_UnlabeledManukaCharacterUsesPositiveZPresentationUp()
+    {
+        var modDirectory = new DirectoryInfo(Path.Combine(
+            FindRepositoryRoot().FullName,
+            "Test", "Mods", "Mods", "manuka警员服替换 b08 ce74 fs-38_6d8019f2"));
+        var patch = new FileInfo(Path.Combine(modDirectory.FullName, "9ba626afa44a3aa3.patch_68"));
+
+        var result = await new PatchResourceInspectionService().PreviewModelAsync(modDirectory, [patch]);
+        var visibleMeshes = ModelPreviewMeshSelector.Select(result.Meshes).VisibleMeshes;
+
+        Assert.IsNull(result.Error, result.Error);
+        Assert.IsTrue(visibleMeshes.Count >= 3, "The fixture must retain several visible character sections.");
+        Assert.IsTrue(visibleMeshes.All(static mesh => mesh.CustomizationSlot == ModelPreviewCustomizationSlot.Unknown));
+        Assert.AreEqual(
+            ModelPreviewPresentationRotation.PositiveZToPositiveY,
+            ModelPreviewCharacterOrientation.GetRequiredRotation(visibleMeshes),
+            "Unlabeled upright character geometry must not remain side-on in the Y-up preview.");
+    }
+
+    [TestMethod]
     public async Task PreviewModelAsync_DoesNotInjectBaseGameArmorForProxyUnits()
     {
         var modDirectory = new DirectoryInfo(Path.Combine(
@@ -245,9 +305,7 @@ public sealed class ModelPreviewPatchSetIntegrationTests
                                                 mesh.BodyShape == ModelPreviewBodyShape.Any));
 
         var selection = ModelPreviewMeshSelector.Select(result.Meshes);
-        var switchableSlots = ModelPreviewBodyShapeSelection.GetSwitchableSlots(
-            result.Meshes,
-            selection.VisibleMeshes);
+        var switchableSlots = ModelPreviewBodyShapeSelection.GetSwitchableSlots(result.Meshes);
         Assert.AreEqual(0, switchableSlots.Count,
             "Proxy-only body shapes must not expose a switch that would require original game armor.");
     }

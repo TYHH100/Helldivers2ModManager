@@ -98,9 +98,11 @@ internal sealed class MyService
 
 1. **材质变体去重（同一几何体的不同材质）**：同一 MeshInfo 内，`VertexOffset`/`VertexCount`/`IndexCount` 相同但 `IndexOffset` 不同的 section 引用的是不同索引存储位置但同一组三角形（材质变体）。去重分组键必须使用 `(MeshInfoIndex, VertexOffset, VertexCount, IndexCount)`，**不能包含 `IndexOffset`**，否则变体不会被分到同一组。同组内保留 Albedo 纹理像素数最大的变体（高分辨率正常材质 > 低分辨率纯黑占位）。
 
-2. **纯黑占位材质检测（独立几何体区域的纯黑材质）**：部分 section 使用 BC7 编码的纯黑占位材质（所有块解码后像素为 `(0,0,0,255)`），几何体与正常 section 不同，去重无法处理。检测方法：读取 BaseColor 纹理 GPU 数据前 64 字节（4 个 BC7 块），检查是否全部相同且每块非零字节 ≤ 6 个。跳过纯黑 section 时，**只在 stream 中存在非纯黑 section 时才跳过**，避免移除该 stream 的全部几何体导致模型缺少部分。
+2. **纯黑占位材质检测（独立几何体区域的纯黑材质）**：部分 section 使用 BC7 编码的纯黑占位材质（所有块解码后像素为 `(0,0,0,255)`），几何体与正常 section 不同，去重无法处理。先从顶层纹理的开头、四分位、中间和末尾等至少 5 个位置有界采样 BC7 块；再解码受限尺寸的缩略图，只有每个 BGRA 像素都是 `(0,0,0,255)` 才能判为纯黑。**不能只检查前 64 字节**：真实贴图的起始块可能稀疏或空白，而脸部等有效内容在后续区域。跳过纯黑 section 时，**只在 stream 中存在非纯黑 section 时才跳过**，避免移除该 stream 的全部几何体导致模型缺少部分。
 
 3. **语义 hash 识别**：纹理语义 hash 使用 murmur64 高 32 位算法（`h32(name.lower())`）。`0xCAED6CD6` = h32("normal")，`0x756F6FA6` = h32("mra")，需在 `GetTextureRole` 中正确分类为 `Normal` 和 `Mask`，否则材质贴图匹配会失败。
+
+4. **稀疏 section 的预览容量**：section 的顶点窗口可能覆盖共享缓冲中的大量未引用顶点。全局预览容量统计前，必须按三角形实际引用的索引压缩 position/UV；局部高精度 section 的限制可以高于普通部件，但仍由全模型的顶点和索引总上限兜底。不能把完整顶点窗口直接计入容量，否则角色主体或附件会被错误跳过。
 
 排查类似问题的步骤：先用诊断测试输出每个 mesh 的 `UnitId`/`StreamIndex`/`MeshInfoIndex`/`VertexCount`/`TriangleCount`/`ColorTextureId`；找出相同 Unit/St/MI 但不同 ColorTexId 的成对 mesh；在 `TryReadUnitMaterialSections` 去重逻辑处添加临时 `Console.WriteLine` 输出 section 的 `(VertexOffset, VertexCount, IndexOffset, IndexCount)`，确认变体的 IndexOffset 是否不同；解码关键纹理统计平均颜色确认是否纯黑。
 
@@ -167,8 +169,9 @@ catch (Exception ex)
 | 把取消异常当成崩溃 | `TaskCanceledException` 可能只是防抖或新请求取消；先确认实际使用的功能和取消来源，再判断是否是真故障。 |
 | 用过时断言或并行构建验证 | 按当前 MSTest 版本使用 `Assert.AreEqual` 等兼容断言；涉及共享 `obj` 时串行构建/测试，验证生成代码时不要使用 `--no-build`。 |
 | 只验证 CLI 发布，不验证 VS 发布 | 修改 `Helldivers2PatchTool` 时复现对应 Publish Profile；独立工具不能直接引用自包含 EXE，且共享主程序构建必须固定 `net8.0-windows` 和 `win-x64`。 |
-| 模型预览整体黑色只查材质引用 | 特例模型同时含高分辨率正常材质和 BC7 纯黑占位材质；先按 `(MeshInfoIndex, VO, VC, IC)` 去重材质变体（不含 IO），再检测纯黑 BC7 块（前 64 字节全相同且非零字节 ≤ 6）跳过纯黑 section。详见 §5。 |
-| 自动 Unit 修复只看 Mesh ID 或单个 Unit 的 GPU 大小 | 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；LOD 还承载 MeshInfo/Section 的材质绑定。发现强自定义信号后，必须按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动。静态装备页可能只显示 Slim，仍需验证实际玩家的 Stocky/动态渲染。 |
+| 模型预览整体黑色或局部缺失只查材质引用 | 特例模型同时含高分辨率正常材质和 BC7 纯黑占位材质；先按 `(MeshInfoIndex, VO, VC, IC)` 去重材质变体（不含 IO），再以多点 BC7 采样加解码后的全像素纯黑验证过滤占位，不能只看前 64 字节。对稀疏 section，按三角形引用压缩顶点后再做全局容量判断。详见 §5。 |
+| 自动 Unit 修复只看 Mesh ID 或单个 Unit 的 GPU 大小 |
+| 用根容器直接解析页面 VM 或新增页面后返回主菜单内存不释放 | DI 容器会强引用所有解析过的 `IDisposable`（所有 `PageViewModelBase` 子类）到 `ServiceProviderEngineScope._disposables`，直到根容器/scope 释放；导航页面必须由 `NavigationStore` 通过独立 `IServiceScope` 解析（`Navigate<T>` 内部 `CreateScope`，导航离开时丢弃旧 scope），不要用注入的 `IServiceProvider` 直接 `GetRequiredService<页面VM>` 后手动 `Navigate(page)`，否则该页面及其模型/纹理数据会被容器持有到进程退出。 | 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；LOD 还承载 MeshInfo/Section 的材质绑定。发现强自定义信号后，必须按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动。静态装备页可能只显示 Slim，仍需验证实际玩家的 Stocky/动态渲染。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
 

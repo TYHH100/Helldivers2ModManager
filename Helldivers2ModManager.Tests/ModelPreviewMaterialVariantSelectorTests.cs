@@ -48,6 +48,26 @@ public sealed class ModelPreviewMaterialVariantSelectorTests
     }
 
     [TestMethod]
+    public void IsBc7PureBlackPlaceholder_SparseSamplesWithDifferentLaterBlock_ReturnsFalse()
+    {
+        var bytes = new byte[64 * 5];
+        for (var sample = 0; sample < 5; sample++)
+        {
+            bytes[sample * 64] = 1;
+            bytes[sample * 64 + 3] = 2;
+            bytes[sample * 64 + 16] = 1;
+            bytes[sample * 64 + 19] = 2;
+            bytes[sample * 64 + 32] = 1;
+            bytes[sample * 64 + 35] = 2;
+            bytes[sample * 64 + 48] = 1;
+            bytes[sample * 64 + 51] = 2;
+        }
+        bytes[^1] = 9;
+
+        Assert.IsFalse(ModelPreviewMaterialVariantSelector.IsBc7PureBlackPlaceholder(bytes));
+    }
+
+    [TestMethod]
     public void IsBc7PureBlackPlaceholder_DifferentOrDenseBlock_ReturnsFalse()
     {
         var different = new byte[64];
@@ -57,6 +77,17 @@ public sealed class ModelPreviewMaterialVariantSelectorTests
 
         Assert.IsFalse(ModelPreviewMaterialVariantSelector.IsBc7PureBlackPlaceholder(different));
         Assert.IsFalse(ModelPreviewMaterialVariantSelector.IsBc7PureBlackPlaceholder(dense));
+    }
+
+    [TestMethod]
+    public void IsOpaqueBgraPureBlack_RequiresEveryPixelToBeOpaqueBlack()
+    {
+        Assert.IsTrue(ModelPreviewMaterialVariantSelector.IsOpaqueBgraPureBlack(
+            [0, 0, 0, 255, 0, 0, 0, 255]));
+        Assert.IsFalse(ModelPreviewMaterialVariantSelector.IsOpaqueBgraPureBlack(
+            [0, 0, 0, 0]));
+        Assert.IsFalse(ModelPreviewMaterialVariantSelector.IsOpaqueBgraPureBlack(
+            [0, 0, 1, 255]));
     }
 
     [TestMethod]
