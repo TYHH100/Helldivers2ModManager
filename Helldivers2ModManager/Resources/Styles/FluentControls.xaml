@@ -1066,4 +1066,84 @@
         <Setter Property="Effect" Value="{StaticResource ShadowElevationLevel2}"/>
     </Style>
 
+
+    <!-- ============================================ -->
+    <!-- Expander Style (Fluent)                     -->
+    <!-- ============================================ -->
+
+    <Style x:Key="FluentExpander" TargetType="Expander">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI, Arial"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Expander">
+                    <Border Background="Transparent">
+                        <StackPanel>
+                            <ToggleButton x:Name="HeaderSite"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                          Content="{Binding Header, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press"
+                                          HorizontalContentAlignment="Stretch"
+                                          HorizontalAlignment="Stretch"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          Cursor="Hand">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="HeaderBorder"
+                                                Background="Transparent"
+                                                Padding="8 7"
+                                                CornerRadius="4">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path x:Name="Arrow"
+                                                      Data="M 0,0 L 5,5 L 10,0"
+                                                      Stroke="{StaticResource NeutralForegroundSecondaryBrush}"
+                                                      StrokeThickness="1.5"
+                                                      StrokeStartLineCap="Round"
+                                                      StrokeEndLineCap="Round"
+                                                      VerticalAlignment="Center"
+                                                      Margin="0 0 9 0"
+                                                      RenderTransformOrigin="0.5,0.5"/>
+                                                <ContentPresenter ContentSource="Content"
+                                                                  VerticalAlignment="Center"
+                                                                  TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="HeaderBorder" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="HeaderBorder" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                                                <Setter TargetName="Arrow" Property="Stroke" Value="{StaticResource SystemAccentBrush}"/>
+                                                <Setter TargetName="Arrow" Property="RenderTransform">
+                                                        <Setter.Value>
+                                                            <RotateTransform Angle="90"/>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ExpandSite"
+                                              Visibility="Collapsed"
+                                              Margin="14 0 0 0"
+                                              ContentSource="Content"/>
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

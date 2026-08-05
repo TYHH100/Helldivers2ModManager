@@ -206,6 +206,7 @@
                                Foreground="{StaticResource WarningBrush}"/>
 
                     <Expander Header="{loc:Loc VersionCheckDetail.TechnicalDetails}"
+                              Style="{StaticResource FluentExpander}"
                               IsExpanded="False"
                               Margin="0 8 0 0">
                         <TextBox Text="{Binding TechnicalReport}"
@@ -223,6 +224,7 @@
 
                     <Expander x:Name="backupHistoryExpander"
                               Header="{loc:Loc VersionCheckBackup.HistoryTitle}"
+                              Style="{StaticResource FluentExpander}"
                               IsExpanded="False"
                               Margin="0 12 0 0">
                         <StackPanel Margin="0 10 0 0">
