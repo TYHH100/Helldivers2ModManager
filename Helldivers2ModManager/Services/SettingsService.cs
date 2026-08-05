@@ -160,6 +160,25 @@ internal sealed class SettingsService
 		}
 	}
 
+	/// <summary>
+	/// 卡片不透明度（0.3..1.0），控制主页等页面卡片的半透明程度。
+	/// </summary>
+	public float CardOpacity
+	{
+		get
+		{
+			GuardInitialized();
+			return _cardOpacity;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_cardOpacity = Math.Clamp(value, 0.3f, 1f);
+		}
+	}
+
 	public ObservableCollection<string> SkipList
 	{
 		get
@@ -574,6 +593,8 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private float _backgroundOpacity = 0.6f;
 	[JsonInclude]
+	private float _cardOpacity = 0.7f;
+	[JsonInclude]
 	private bool _useDeploymentOrder;
 	[JsonInclude]
 	private List<Guid> _deploymentOrderGuids = [];
@@ -760,6 +781,13 @@ internal sealed class SettingsService
 			_backgroundOpacity = Math.Clamp(_backgroundOpacity, 0f, 1f);
 		}
 
+		if (_cardOpacity is < 0.3f or > 1f)
+		{
+			if (IsReadonly)
+				return false;
+			_cardOpacity = Math.Clamp(_cardOpacity, 0.3f, 1f);
+		}
+
 		var elms = _skipList.Where(static elm => elm.Length != 16).ToArray();
 		if (elms.Length != 0)
 		{
@@ -835,6 +863,7 @@ internal sealed class SettingsService
 			BackgroundMode = _backgroundMode,
 			BackgroundImagePath = _backgroundImagePath,
 			BackgroundOpacity = _backgroundOpacity,
+			CardOpacity = _cardOpacity,
 			UseDeploymentOrder = _useDeploymentOrder,
 			DeploymentOrderGuids = _deploymentOrderGuids,
 			OptionOrders = _optionOrders.Select(static item => new
@@ -1020,6 +1049,9 @@ internal sealed class SettingsService
 		if (root.TryGetProperty(nameof(BackgroundOpacity), JsonValueKind.Number, out prop))
 			if (prop.TryGetSingle(out var backgroundOpacity))
 				_backgroundOpacity = Math.Clamp(backgroundOpacity, 0f, 1f);
+		if (root.TryGetProperty(nameof(CardOpacity), JsonValueKind.Number, out prop))
+			if (prop.TryGetSingle(out var cardOpacity))
+				_cardOpacity = Math.Clamp(cardOpacity, 0.3f, 1f);
 		if (root.TryGetProperty(nameof(Tags), JsonValueKind.Array, out var tagsArr))
 		{
 			var tagsList = new List<ModTag>();
@@ -1105,6 +1137,7 @@ internal sealed class SettingsService
 		_backgroundMode = BackgroundMode.Default;
 		_backgroundImagePath = string.Empty;
 		_backgroundOpacity = 0.6f;
+		_cardOpacity = 0.7f;
 		_skipList = [];
 		_caseSensitiveSearch = false;
 		_useSymbolicLinks = false;

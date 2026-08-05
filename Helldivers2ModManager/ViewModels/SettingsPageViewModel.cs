@@ -110,6 +110,22 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	/// <summary>
+	/// 卡片不透明度（0.3..1.0），控制主页等页面卡片的半透明程度。
+	/// </summary>
+	public float CardOpacity
+	{
+		get => _settingsService.Initialized ? _settingsService.CardOpacity : 0.7f;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.CardOpacity = value;
+			OnPropertyChanged();
+			// 实时预览：滑块拖动时立即更新全局卡片半透明
+			MainViewModel.ApplyCardOpacity(value);
+		}
+	}
+
 	public ObservableCollection<string> SkipList => _settingsService.Initialized ? _settingsService.SkipList : [];
 
 	public ObservableCollection<string> OrganizationalFolderNames => _settingsService.Initialized ? _settingsService.OrganizationalFolderNames : [];
@@ -292,7 +308,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 	/// <summary>
 	/// 当前选中的选项卡索引
-	/// 0: 路径, 1: 部署, 2: 模组, 3: 日志, 4: 连接, 5: 工具, 6: 主页, 7: 外观
+	/// 0: 路径, 1: 部署, 2: 模组, 3: 日志, 4: 工具, 5: 主页, 6: 外观
 	/// </summary>
 	[ObservableProperty]
 	private int _selectedTabIndex;

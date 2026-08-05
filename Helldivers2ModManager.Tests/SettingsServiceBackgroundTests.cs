@@ -25,6 +25,7 @@ public sealed class SettingsServiceBackgroundTests
             service.BackgroundMode = BackgroundMode.Image;
             service.BackgroundImagePath = @"C:\someackground.png";
             service.BackgroundOpacity = 0.35f;
+            service.CardOpacity = 0.45f;
             await service.SaveAsync();
 
             var reloaded = new SettingsService(NullLogger<SettingsService>.Instance);
@@ -32,6 +33,7 @@ public sealed class SettingsServiceBackgroundTests
             Assert.AreEqual(BackgroundMode.Image, reloaded.BackgroundMode);
             Assert.AreEqual(@"C:\someackground.png", reloaded.BackgroundImagePath);
             Assert.AreEqual(0.35f, reloaded.BackgroundOpacity, 0.001f);
+            Assert.AreEqual(0.45f, reloaded.CardOpacity, 0.001f);
         }
         finally
         {
@@ -58,6 +60,7 @@ public sealed class SettingsServiceBackgroundTests
             Assert.AreEqual(BackgroundMode.Default, service.BackgroundMode);
             Assert.AreEqual(string.Empty, service.BackgroundImagePath);
             Assert.AreEqual(0.6f, service.BackgroundOpacity, 0.001f);
+            Assert.AreEqual(0.7f, service.CardOpacity, 0.001f);
         }
         finally
         {

@@ -43,7 +43,7 @@
         <!-- Tab Bar                                      -->
         <!-- ============================================ -->
         <Border Grid.Row="1"
-                Background="{StaticResource LayerBackgroundBrush}"
+                Background="Transparent"
                 BorderBrush="{StaticResource NeutralStrokeBrush}"
                 BorderThickness="1"
                 CornerRadius="6 6 0 0"
@@ -114,8 +114,8 @@
                         </Style>
                     </Button.Style>
                 </Button>
-                <!-- 连接 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabConnection}"
+                <!-- 工具 选项卡 -->
+                <Button Content="{loc:Loc SettingsPage.TabTools}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="4">
                     <Button.Style>
@@ -130,8 +130,8 @@
                         </Style>
                     </Button.Style>
                 </Button>
-                <!-- 工具 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabTools}"
+                <!-- 主页 选项卡 -->
+                <Button Content="{loc:Loc SettingsPage.TabHome}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="5">
                     <Button.Style>
@@ -146,30 +146,14 @@
                         </Style>
                     </Button.Style>
                 </Button>
-                <!-- 主页 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabHome}"
+                <!-- 外观 选项卡 -->
+                <Button Content="{loc:Loc SettingsPage.TabAppearance}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="6">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="6">
-                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
-                                    <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-                <!-- 外观 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabAppearance}"
-                        Command="{Binding SetTabCommand}"
-                        CommandParameter="7">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="7">
                                     <Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
                                     <Setter Property="Background" Value="{StaticResource NeutralBackgroundFillSecondaryBrush}"/>
                                     <Setter Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
@@ -185,7 +169,7 @@
         <!-- Tab Content Area                             -->
         <!-- ============================================ -->
         <Border Grid.Row="2"
-                Background="{StaticResource LayerBackgroundBrush}"
+                Background="Transparent"
                 BorderBrush="{StaticResource NeutralStrokeBrush}"
                 BorderThickness="1 0 1 1"
                 CornerRadius="0 0 6 6"
@@ -683,56 +667,13 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- Tab 4: 连接 -->
+                <!-- Tab 4: 工具 -->
                 <Grid>
                     <Grid.Style>
                         <Style TargetType="Grid">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedTabIndex}" Value="4">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Grid.Style>
-                    <StackPanel>
-                        <!-- Nexus Mods API Key（预留位置，后续功能启用） -->
-                        <!-- <Border Style="{StaticResource FluentSettingsCard}">
-                            <StackPanel>
-                                <TextBlock Text="Nexus Mods API"
-                                           Style="{StaticResource FluentSubSectionHeader}"
-                                           Margin="0"/>
-                                <TextBlock Text="用于从 Nexus Mods 获取模组信息和更新检测"
-                                           Style="{StaticResource FluentBodyText}"
-                                           Margin="0 4 0 12"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <PasswordBox x:Name="NexusApiKeyPasswordBox"
-                                                Grid.Column="0"
-                                                Style="{StaticResource FluentPasswordBox}"
-                                                VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1"
-                                            Content="验证"
-                                            Style="{StaticResource FluentPrimaryButton}"
-                                            Command="{Binding ValidateNexusApiKeyCommand}"
-                                            Margin="8 0 0 0"
-                                            Padding="12 8"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border> -->
-                    </StackPanel>
-                </Grid>
-
-                <!-- Tab 5: 工具 -->
-                <Grid>
-                    <Grid.Style>
-                        <Style TargetType="Grid">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="5">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -789,13 +730,13 @@
                         </Border>
                     </StackPanel>
                 </Grid>
-                <!-- Tab 6: 主页 -->
+                <!-- Tab 5: 主页 -->
                 <Grid>
                     <Grid.Style>
                         <Style TargetType="Grid">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="6">
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="5">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -901,13 +842,15 @@
                                           Margin="0 8 0 0"/>
                             </StackPanel>
                         </Border>
-                <!-- Tab 7: 外观 -->
+                
+                    </StackPanel>
+                </Grid><!-- Tab 6: 外观 -->
                 <Grid>
                     <Grid.Style>
                         <Style TargetType="Grid">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="7">
+                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="6">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -954,7 +897,7 @@
                                                VerticalAlignment="Center"
                                                Margin="0 0 8 0"/>
                                     <TextBox Grid.Column="1"
-                                             Text="{Binding BackgroundImagePath}"
+                                             Text="{Binding BackgroundImagePath, Mode=OneWay}"
                                              IsReadOnly="True"
                                              Style="{StaticResource FluentTextBox}"
                                              Margin="0 0 8 0"
@@ -995,10 +938,32 @@
                                                VerticalAlignment="Center"
                                                Margin="12 0 0 0"/>
                                 </Grid>
+                                <Grid Margin="0 16 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="220"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{loc:Loc SettingsPage.CardOpacity}"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0 0 12 0"/>
+                                    <Slider Grid.Column="1"
+                                            Minimum="0.3"
+                                            Maximum="1"
+                                            Value="{Binding CardOpacity}"
+                                            VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding CardOpacity, StringFormat={}{0:P0}}"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="12 0 0 0"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
-                    </StackPanel>
-                </Grid>
                     </StackPanel>
                 </Grid>
                 </StackPanel>

@@ -71,6 +71,10 @@
     <SolidColorBrush x:Key="MicaBackgroundBrush" Color="{StaticResource MicaBackgroundColor}"/>
     <SolidColorBrush x:Key="MicaBorderBrush" Color="{StaticResource MicaBorderColor}"/>
 
+    <!-- 半透明卡片背景（alpha 由设置页「外观」滑条控制，运行时更新） -->
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#B32D2D2D"/>
+    <SolidColorBrush x:Key="ElevatedCardBackgroundBrush" Color="#B3383838"/>
+
     <!-- Semantic Colors -->
     <Color x:Key="DangerColor">#C42B1C</Color>
     <Color x:Key="SuccessColor">#107C10</Color>

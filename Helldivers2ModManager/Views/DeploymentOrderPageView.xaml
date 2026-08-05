@@ -60,7 +60,7 @@
 
         <!-- 工具栏 -->
         <Border Grid.Row="2"
-                Background="{StaticResource LayerBackgroundBrush}"
+                Background="Transparent"
                 BorderBrush="{StaticResource NeutralStrokeBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
@@ -110,7 +110,7 @@
 
         <!-- 部署顺序列表（支持拖拽和多选） -->
         <Border Grid.Row="3"
-                Background="{StaticResource LayerBackgroundBrush}"
+                Background="Transparent"
                 BorderBrush="{StaticResource NeutralStrokeBrush}"
                 BorderThickness="1"
                 CornerRadius="6"

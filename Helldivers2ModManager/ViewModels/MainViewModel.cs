@@ -78,8 +78,36 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable
 	{
 		BackgroundImageSource = CreateBackgroundImageSource();
 		OnPropertyChanged(nameof(BackgroundImageSource));
+		ApplyCardOpacity();
 		OnPropertyChanged(nameof(BackgroundImageOpacity));
 		OnPropertyChanged(nameof(HasBackgroundImage));
+	}
+
+	private void ApplyCardOpacity()
+	{
+		ApplyCardOpacity(_settingsService.CardOpacity);
+	}
+
+	/// <summary>
+	/// 应用卡片半透明度到全局卡片背景 brush（设置页滑块实时调用）。
+	/// </summary>
+	internal static void ApplyCardOpacity(float opacity)
+	{
+		UpdateBrushAlpha("CardBackgroundBrush", opacity);
+		UpdateBrushAlpha("ElevatedCardBackgroundBrush", opacity);
+	}
+
+	private static void UpdateBrushAlpha(string key, float opacity)
+	{
+		// 资源 brush 可能被 WPF 冻结（多处引用时自动 Freeze），不能直接改 Color；
+		// 改为替换整个资源键，DynamicResource 引用会自动跟随新值。
+		if (System.Windows.Application.Current.Resources[key] is SolidColorBrush brush)
+		{
+			var color = brush.Color;
+			var updated = new SolidColorBrush(Color.FromArgb((byte)Math.Round(opacity * 255), color.R, color.G, color.B));
+			updated.Freeze();
+			System.Windows.Application.Current.Resources[key] = updated;
+		}
 	}
 
 	private ImageSource? CreateBackgroundImageSource()
