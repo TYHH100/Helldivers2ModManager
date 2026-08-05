@@ -1122,7 +1122,7 @@
                                                 <Setter TargetName="Arrow" Property="Stroke" Value="{StaticResource SystemAccentBrush}"/>
                                                 <Setter TargetName="Arrow" Property="RenderTransform">
                                                         <Setter.Value>
-                                                            <RotateTransform Angle="90"/>
+                                                            <RotateTransform Angle="180"/>
                                                         </Setter.Value>
                                                     </Setter>
                                             </Trigger>
