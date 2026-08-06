@@ -73,6 +73,23 @@ internal sealed partial class VersionCheckService
     private readonly ConcurrentDictionary<string, PatchUnitCacheEntry> _patchUnitCache =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// 补丁深度分析结果缓存（按绝对路径 + 长度 + 修改时间失效）。
+    /// 同一 Patch 在详情弹窗与批量修复中会被反复完整解析，缓存可显著降低重复开销。
+    /// 上限由 <see cref="MaxPatchAnalysisCacheEntries"/> 控制，超限时整体清空，避免无界增长。
+    /// </summary>
+    private readonly ConcurrentDictionary<string, PatchAnalysisCacheEntry> _patchAnalysisCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private const int MaxPatchAnalysisCacheEntries = 512;
+
+    private sealed class PatchAnalysisCacheEntry
+    {
+        public required long Length { get; init; }
+        public required DateTime LastWriteTimeUtc { get; init; }
+        public required PatchFileAnalysis Analysis { get; init; }
+    }
+
     private sealed class PatchUnitCacheEntry
     {
         public required long Length { get; init; }
@@ -618,9 +635,42 @@ internal sealed partial class VersionCheckService
     }
 
     /// <summary>
-    /// 流式解析补丁；不会把大型主文件或伴生 GPU 文件整体加载进内存。
+    /// 分析补丁文件结构（带缓存）。同一文件在长度/修改时间未变化时复用分析结果，
+    /// 避免详情弹窗与批量修复中同一 Patch 被反复完整解析。
+    /// 缓存命中返回深拷贝，调用方可安全修改；未命中时返回原始结果并缓存其副本。
     /// </summary>
     private async Task<PatchFileAnalysis> AnalyzeSinglePatchFileStructureAsync(FileInfo patchFile, FileInfo? companionSource = null)
+    {
+        if (!patchFile.Exists || patchFile.Length < HeaderSize)
+            return await AnalyzeSinglePatchFileStructureUncachedAsync(patchFile, companionSource);
+
+        var length = patchFile.Length;
+        var lastWriteTimeUtc = patchFile.LastWriteTimeUtc;
+        // 键使用绝对路径 + 文件长度 + 修改时间，不依赖文件名（多选项目录经常存在同名 .patch_0）
+        var key = patchFile.FullName + "|" + length + "|" + lastWriteTimeUtc.Ticks + "|" + (companionSource?.FullName ?? string.Empty);
+        if (_patchAnalysisCache.TryGetValue(key, out var cached) &&
+            cached.Length == length &&
+            cached.LastWriteTimeUtc == lastWriteTimeUtc)
+        {
+            return cached.Analysis.Clone();
+        }
+
+        var analysis = await AnalyzeSinglePatchFileStructureUncachedAsync(patchFile, companionSource);
+        if (_patchAnalysisCache.Count >= MaxPatchAnalysisCacheEntries)
+            _patchAnalysisCache.Clear();
+        _patchAnalysisCache[key] = new PatchAnalysisCacheEntry
+        {
+            Length = length,
+            LastWriteTimeUtc = lastWriteTimeUtc,
+            Analysis = analysis.Clone()
+        };
+        return analysis;
+    }
+
+    /// <summary>
+    /// 流式解析补丁；不会把大型主文件或伴生 GPU 文件整体加载进内存。
+    /// </summary>
+    private async Task<PatchFileAnalysis> AnalyzeSinglePatchFileStructureUncachedAsync(FileInfo patchFile, FileInfo? companionSource = null)
     {
         var analysis = new PatchFileAnalysis
         {

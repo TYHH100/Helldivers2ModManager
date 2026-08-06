@@ -212,6 +212,37 @@ internal sealed class UnitResourceDetail
     /// 针对该 Unit 的警告信息
     /// </summary>
     public string? Warning { get; set; }
+
+    /// <summary>
+    /// 深拷贝当前 Unit 深度检查结果（供缓存复用，避免共享可变对象）。
+    /// </summary>
+    public UnitResourceDetail Clone() => new()
+    {
+        FileName = FileName,
+        EntryIndex = EntryIndex,
+        FileId = FileId,
+        Version = Version,
+        DataSize = DataSize,
+        GpuSize = GpuSize,
+        EndingOffset = EndingOffset,
+        ExpectedDataSize = ExpectedDataSize,
+        DeclaredSizeMatchesInternal = DeclaredSizeMatchesInternal,
+        IsTruncated = IsTruncated,
+        LODGroupOffset = LODGroupOffset,
+        JointListOffset = JointListOffset,
+        LODGroupSize = LODGroupSize,
+        LODGroupInBounds = LODGroupInBounds,
+        UnitDataInBounds = UnitDataInBounds,
+        LayoutFormatChecked = LayoutFormatChecked,
+        LayoutFormatValid = LayoutFormatValid,
+        LayoutFormatIssueCount = LayoutFormatIssueCount,
+        GpuStructureChecked = GpuStructureChecked,
+        GpuStructureValid = GpuStructureValid,
+        GpuStructureIssueCount = GpuStructureIssueCount,
+        GpuStreamCount = GpuStreamCount,
+        UnknownGpuComponentCount = UnknownGpuComponentCount,
+        Warning = Warning
+    };
 }
 
 /// <summary>
@@ -342,6 +373,44 @@ internal sealed class PatchFileAnalysis
     /// 错误/警告信息
     /// </summary>
     public string? Message { get; set; }
+
+    /// <summary>
+    /// 深拷贝当前补丁分析结果（供缓存复用，避免共享可变对象）。
+    /// </summary>
+    public PatchFileAnalysis Clone() => new()
+    {
+        FileName = FileName,
+        FileSize = FileSize,
+        HealthStatus = HealthStatus,
+        NumTypes = NumTypes,
+        NumFiles = NumFiles,
+        TotalResources = TotalResources,
+        ResourceTypes = ResourceTypes.Select(static r => new ResourceTypeDistribution
+        {
+            TypeId = r.TypeId,
+            ResourceCount = r.ResourceCount
+        }).ToList(),
+        TypeDistributionValid = TypeDistributionValid,
+        TypeDistributionIssueCount = TypeDistributionIssueCount,
+        HeaderValid = HeaderValid,
+        FileEntriesInBounds = FileEntriesInBounds,
+        MainDataBoundsValid = MainDataBoundsValid,
+        MainDataIssueCount = MainDataIssueCount,
+        EntryIndicesValid = EntryIndicesValid,
+        EntryIndexIssueCount = EntryIndexIssueCount,
+        HasGpuResources = HasGpuResources,
+        RequiresGpuResources = RequiresGpuResources,
+        HasStream = HasStream,
+        RequiresStream = RequiresStream,
+        GpuResourceBoundsValid = GpuResourceBoundsValid,
+        GpuResourceIssueCount = GpuResourceIssueCount,
+        GpuAlignmentIssueCount = GpuAlignmentIssueCount,
+        StreamBoundsValid = StreamBoundsValid,
+        StreamIssueCount = StreamIssueCount,
+        StreamAlignmentIssueCount = StreamAlignmentIssueCount,
+        UnitDetails = UnitDetails.Select(static u => u.Clone()).ToList(),
+        Message = Message
+    };
 }
 
 /// <summary>
