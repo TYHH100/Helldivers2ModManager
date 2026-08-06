@@ -59,11 +59,26 @@ internal sealed partial class ModGroupSidebarViewModel : ObservableObject
 
 	public void RefreshSelectionProperties()
 	{
-		OnPropertyChanged(nameof(SelectedGroup));
-		OnPropertyChanged(nameof(CanModifySelectedGroup));
-		OnPropertyChanged(nameof(SelectedGroupName));
-		DeleteGroupCommand.NotifyCanExecuteChanged();
-		RemoveSelectedModsCommand.NotifyCanExecuteChanged();
+		RunOnUiThread(() =>
+		{
+			OnPropertyChanged(nameof(SelectedGroup));
+			OnPropertyChanged(nameof(CanModifySelectedGroup));
+			OnPropertyChanged(nameof(SelectedGroupName));
+			DeleteGroupCommand.NotifyCanExecuteChanged();
+			RemoveSelectedModsCommand.NotifyCanExecuteChanged();
+		});
+	}
+
+	private static void RunOnUiThread(Action action)
+	{
+		var dispatcher = System.Windows.Application.Current?.Dispatcher;
+		if (dispatcher is null || dispatcher.CheckAccess())
+		{
+			action();
+			return;
+		}
+
+		dispatcher.Invoke(action);
 	}
 
 	[RelayCommand]

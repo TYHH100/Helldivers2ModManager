@@ -609,31 +609,45 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private void ModService_ModAdded(ModData mod)
     {
-        var vm = _modService.GetOrCreateModViewModel(mod, _logger, _settingsService, _nexusModsService);
-        vm.OptionsChanged += ModViewModel_OptionsChanged;
-        vm.PropertyChanged += ModViewModel_PropertyChanged;
-        vm.VersionCheckRefreshed += ModViewModel_VersionCheckRefreshed;
-        _mods.Add(vm);
-        SearchText = string.Empty;
-        _modGroupService.CaptureGroupState(ModGroup.DefaultGroupId, _mods.Select(static vm => vm.Data));
-        GroupSidebar.RefreshSelectionProperties();
-        UpdateView();
-        RequestAutomaticConflictScan();
+        // 事件可能来自后台线程（如 Rescan、TryAddModFromArchive 等通过 BackgroundTaskService 调用），
+        // 操作 ObservableCollection 必须在 UI 线程
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            var vm = _modService.GetOrCreateModViewModel(mod, _logger, _settingsService, _nexusModsService);
+            vm.OptionsChanged += ModViewModel_OptionsChanged;
+            vm.PropertyChanged += ModViewModel_PropertyChanged;
+            vm.VersionCheckRefreshed += ModViewModel_VersionCheckRefreshed;
+            _mods.Add(vm);
+            SearchText = string.Empty;
+            _modGroupService.CaptureGroupState(ModGroup.DefaultGroupId, _mods.Select(static vm => vm.Data));
+            GroupSidebar.RefreshSelectionProperties();
+            UpdateView();
+            RequestAutomaticConflictScan();
+        });
     }
 
     private async void OnModAdded(ModData mod)
     {
-        await _versionCheckVm.CheckSingleModOnAddAsync(mod, _mods);
-        // 通知 UI 属性变更
-        OnPropertyChanged(nameof(VersionCheckSummary));
-        OnPropertyChanged(nameof(HasVersionCheckResult));
+        // 事件可能来自后台线程，OnPropertyChanged 必须在 UI 线程
+        await Application.Current.Dispatcher.InvokeAsync(async () =>
+        {
+            await _versionCheckVm.CheckSingleModOnAddAsync(mod, _mods);
+            // 通知 UI 属性变更
+            OnPropertyChanged(nameof(VersionCheckSummary));
+            OnPropertyChanged(nameof(HasVersionCheckResult));
+        });
     }
 
     private void ModService_ModRemoved(ModData mod)
     {
         // 使用 GUID 查找而不是引用相等性，避免因 ModData 引用不匹配导致界面不同步
         var vm = _mods.FirstOrDefault(vm => vm.Guid == mod.Manifest.Guid);
-        if (vm is not null)
+        if (vm is null)
+            return;
+
+        // 操作 ObservableCollection 必须在 UI 线程；
+        // 此事件可能来自后台线程（如删除模组时 BackgroundTaskService.RunAsync 内调用）
+        Application.Current.Dispatcher.Invoke(() =>
         {
             vm.OptionsChanged -= ModViewModel_OptionsChanged;
             vm.PropertyChanged -= ModViewModel_PropertyChanged;
@@ -643,7 +657,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             GroupSidebar.RefreshSelectionProperties();
             UpdateView();
             RequestAutomaticConflictScan();
-        }
+        });
     }
 
     private void ModViewModel_VersionCheckRefreshed(object? sender, EventArgs e)
