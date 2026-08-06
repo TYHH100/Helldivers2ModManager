@@ -115,9 +115,16 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 }
             }
 
+            // 只有增量检查需要提前计算时间戳（后台一次）；全量扫描无需等待文件枚举
+            Dictionary<Guid, DateTime>? modTimestamps = null;
             if (!needsFullScan)
             {
-                var changedMods = GetNewOrChangedMods(mods).ToList();
+                modTimestamps = await _backgroundTaskService.RunAsync(
+                    _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
+                    VersionCheckSummary,
+                    (_, _) => Task.FromResult(BuildModTimestamps(mods)),
+                    VersionCheckSummary);
+                var changedMods = GetNewOrChangedMods(mods, modTimestamps).ToList();
                 needsFullScan = changedMods.Count == mods.Count;
             }
 
@@ -127,19 +134,26 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             }
             else
             {
-                await IncrementalCheckAsync(mods);
+                await IncrementalCheckAsync(mods, modTimestamps!);
             }
 
             UpdateStatistics(mods);
+            // 立即展示结果摘要；时间戳枚举与数据库保存放到后台完成，避免整体模组规模越大越慢
+            UpdateSummaryText();
 
-            UpdateModTimestampTracking(mods);
-
-            await SaveVersionCheckResultsToDatabaseAsync(mods);
+            await _backgroundTaskService.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
+                VersionCheckSummary,
+                async (_, _) =>
+                {
+                    var timestamps = modTimestamps ?? BuildModTimestamps(mods);
+                    UpdateModTimestampTracking(mods, timestamps);
+                    await SaveVersionCheckResultsToDatabaseAsync(mods, timestamps);
+                },
+                VersionCheckSummary);
 
             if (needsFullScan)
                 await UpdateGameExeTimestampAsync();
-
-            UpdateSummaryText();
         }
         catch (Exception ex)
         {
@@ -155,14 +169,19 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     /// <summary>
     /// 单个模组重新检测后，同步统计、文件时间戳与数据库缓存。
     /// </summary>
-    public async Task RefreshAfterSingleModCheckAsync(ObservableCollection<ModViewModel> mods)
+    public async Task RefreshAfterSingleModCheckAsync(ObservableCollection<ModViewModel> mods, ModViewModel changedVm)
     {
         try
         {
             UpdateStatistics(mods);
-            UpdateModTimestampTracking(mods);
+            // 只计算/保存变化的单个模组：避免整体模组规模越大越慢，也避免重复保存全部模组
+            await Task.Run(async () =>
+            {
+                var timestamps = BuildModTimestamps([changedVm]);
+                s_knownModTimestamps[changedVm.Guid] = timestamps[changedVm.Guid];
+                await SaveVersionCheckResultsToDatabaseAsync([changedVm], timestamps);
+            });
             UpdateSummaryText();
-            await SaveVersionCheckResultsToDatabaseAsync(mods);
         }
         catch (Exception ex)
         {
@@ -301,9 +320,9 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         }
     }
 
-    private async Task IncrementalCheckAsync(ObservableCollection<ModViewModel> mods)
+    private async Task IncrementalCheckAsync(ObservableCollection<ModViewModel> mods, IReadOnlyDictionary<Guid, DateTime> modTimestamps)
     {
-        var changedMods = GetNewOrChangedMods(mods).ToList();
+        var changedMods = GetNewOrChangedMods(mods, modTimestamps).ToList();
         if (changedMods.Count == 0)
             return;
 
@@ -376,6 +395,20 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 一次性计算所有模组的最新修改时间（递归枚举文件，IO 密集）。应在后台线程调用。
+    /// </summary>
+    private static Dictionary<Guid, DateTime> BuildModTimestamps(IEnumerable<ModViewModel> mods)
+    {
+        var timestamps = new Dictionary<Guid, DateTime>();
+        foreach (var vm in mods)
+        {
+            if (!timestamps.ContainsKey(vm.Guid))
+                timestamps[vm.Guid] = GetModContentLastWriteTimeUtc(vm.Data.Directory);
+        }
+        return timestamps;
+    }
+
+    /// <summary>
     /// 获取本次新增或文件变动的模组（与上次跟踪快照对比）
     /// </summary>
     private IEnumerable<ModViewModel> GetNewOrChangedMods(ObservableCollection<ModViewModel> mods)
@@ -394,22 +427,43 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 获取本次新增或文件变动的模组（复用已计算的时间戳，避免重复枚举文件）
+    /// </summary>
+    private IEnumerable<ModViewModel> GetNewOrChangedMods(ObservableCollection<ModViewModel> mods, IReadOnlyDictionary<Guid, DateTime> timestamps)
+    {
+        foreach (var vm in mods)
+        {
+            if (!s_knownModTimestamps.TryGetValue(vm.Guid, out var lastTime))
+            {
+                yield return vm;
+            }
+            else if (!timestamps.TryGetValue(vm.Guid, out var current) || current != lastTime)
+            {
+                yield return vm;
+            }
+        }
+    }
+
+    /// <summary>
     /// 更新模组跟踪快照，记录当前所有模组的 GUID 和目录修改时间
     /// </summary>
-    private void UpdateModTimestampTracking(ObservableCollection<ModViewModel> mods)
+    private void UpdateModTimestampTracking(IEnumerable<ModViewModel> mods, IReadOnlyDictionary<Guid, DateTime> timestamps)
     {
         var currentGuids = mods.Select(static vm => vm.Guid).ToHashSet();
         foreach (var guid in s_knownModTimestamps.Keys.Where(g => !currentGuids.Contains(g)).ToList())
             s_knownModTimestamps.Remove(guid);
 
         foreach (var vm in mods)
-            s_knownModTimestamps[vm.Guid] = GetModContentLastWriteTimeUtc(vm.Data.Directory);
+        {
+            if (timestamps.TryGetValue(vm.Guid, out var lastWrite))
+                s_knownModTimestamps[vm.Guid] = lastWrite;
+        }
     }
 
     /// <summary>
     /// 将当前所有 ModViewModel 的版本检测状态持久化到数据库
     /// </summary>
-    private async Task SaveVersionCheckResultsToDatabaseAsync(ObservableCollection<ModViewModel> mods)
+    private async Task SaveVersionCheckResultsToDatabaseAsync(IEnumerable<ModViewModel> mods, IReadOnlyDictionary<Guid, DateTime> timestamps)
     {
         try
         {
@@ -425,7 +479,9 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                         vm.VersionStatus,
                         vm.GameUnitVersion,
                         vm.LastVersionCheck,
-                        GetModContentLastWriteTimeUtc(vm.Data.Directory));
+                        timestamps.TryGetValue(vm.Guid, out var lastWrite)
+                            ? lastWrite
+                            : GetModContentLastWriteTimeUtc(vm.Data.Directory));
                 }
             }
 

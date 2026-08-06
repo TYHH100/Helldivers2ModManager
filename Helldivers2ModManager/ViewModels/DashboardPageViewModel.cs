@@ -648,7 +648,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private void ModViewModel_VersionCheckRefreshed(object? sender, EventArgs e)
     {
-        _ = _versionCheckVm.RefreshAfterSingleModCheckAsync(_mods);
+        if (sender is ModViewModel vm)
+            _ = _versionCheckVm.RefreshAfterSingleModCheckAsync(_mods, vm);
     }
 
     private void ModViewModel_OptionsChanged()

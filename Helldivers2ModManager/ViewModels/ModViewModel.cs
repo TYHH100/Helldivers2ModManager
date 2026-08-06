@@ -549,7 +549,9 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             _ => _localizationService["Converters.Unknown"]
         };
 
-        var detailResult = await _versionCheckService.CheckSingleModAsync(_mod, GameUnitVersion == 0 ? null : GameUnitVersion, includeDetailedAnalysis: true);
+        // 深度分析 + 游戏参考解析是 CPU/IO 密集操作，放到后台线程执行，避免阻塞 UI
+        var detailResult = await Task.Run(() =>
+            _versionCheckService.CheckSingleModAsync(_mod, GameUnitVersion == 0 ? null : GameUnitVersion, includeDetailedAnalysis: true));
         if (detailResult is not null)
         {
             GameUnitVersion = detailResult.GameVersion;
