@@ -131,6 +131,8 @@ catch (Exception ex)
 
 有总量时进度使用 `0..1`；未知总量使用 `IsIndeterminate`。不要从业务代码直接操作任务集合或后台线程直接改任务属性。
 
+**耗时操作统一走 `BackgroundTaskService.RunAsync(...)`**：它负责后台线程执行（内部 `Task.Run`）并自动管理任务状态生命周期（`Add` → Running → `Complete`/`Fail`/`Cancel`），调用方不要再手写 `Add` + `Task.Run` + `Complete/Fail` 样板。work 委托在后台线程运行，只做计算；需要更新任务页描述/进度时用 `BackgroundTaskContext.Report(...)`（自动切回 UI 线程）；返回结果后由调用方在 UI 线程应用，不要在 work 内直接操作 WPF 集合或绑定属性。`BackgroundTaskService` 单独用 `Add/Update/Complete` 只管理状态、不提供后台线程；`await` 异步方法也不代表 CPU 密集工作离开了 UI 线程——异步 IO 会让出 UI，但同步 CPU 密集代码（LZ4 解码、SHA-256、压缩/解压、大文件解析循环）仍在调用线程（UI）执行并导致界面卡顿。服务内部的 CPU 密集解析（如 `GameUnitReferenceReader` 的索引构建与 Unit 引用解析、`ModService` 的复制/删除/解压）仍应在服务内部后台化，一处修复惠及所有调用方。新增/修改耗时服务方法后，检查所有 UI 入口（`[RelayCommand]`、点击详情等）是否仍会在 UI 线程触发 CPU 密集工作。
+
 ### 日志和设置
 
 - 使用 `ILogger<T>`，按实际严重程度选择 `Trace`、`Debug`、`Information`、`Warning`、`Error`、`Critical`。
@@ -167,6 +169,7 @@ catch (Exception ex)
 | 用 `armornames.txt`、外部映射或冲突缓存替代事实 | Armor 关系/污染检查直接读取已启用 Mod 的 Patch；它是独立扫描，不要自动变成通用冲突或修复流程。 |
 | XAML 重写后只看页面、不查 code-behind | 删除或重命名控件后立即 `rg` 查找旧 `x:Name`；同时检查共享样式、DataTemplate、深色主题默认箭头和所有导航入口。 |
 | 把取消异常当成崩溃 | `TaskCanceledException` 可能只是防抖或新请求取消；先确认实际使用的功能和取消来源，再判断是否是真故障。 |
+| `await` 长任务或手写 `Add`+`Task.Run`+`Complete/Fail` 样板 | 耗时操作统一走 `BackgroundTaskService.RunAsync(...)`（后台线程 + 状态生命周期一把管，见 §6）；`BackgroundTaskService` 单独用 `Add/Update/Complete` 只管理状态、不提供后台线程，`await` 只让出异步 IO，同步 CPU 密集代码（LZ4 解码、SHA-256、压缩/解压、大文件解析）仍在调用线程（UI）执行。服务内部 CPU 密集解析优先在服务内部后台化（参考 `GameUnitReferenceReader`/`ModService`/`ModHashService`/`PatchResourceInspectionService`），改完后检查所有 UI 入口。 |
 | 用过时断言或并行构建验证 | 按当前 MSTest 版本使用 `Assert.AreEqual` 等兼容断言；涉及共享 `obj` 时串行构建/测试，验证生成代码时不要使用 `--no-build`。 |
 | 只验证 CLI 发布，不验证 VS 发布 | 修改 `Helldivers2PatchTool` 时复现对应 Publish Profile；独立工具不能直接引用自包含 EXE，且共享主程序构建必须固定 `net8.0-windows` 和 `win-x64`。 |
 | 模型预览整体黑色或局部缺失只查材质引用 | 特例模型同时含高分辨率正常材质和 BC7 纯黑占位材质；先按 `(MeshInfoIndex, VO, VC, IC)` 去重材质变体（不含 IO），再以多点 BC7 采样加解码后的全像素纯黑验证过滤占位，不能只看前 64 字节。对稀疏 section，按三角形引用压缩顶点后再做全局容量判断。详见 §5。 |
