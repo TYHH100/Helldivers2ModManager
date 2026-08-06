@@ -51,6 +51,23 @@ internal sealed partial class VersionCheckService
         CancellationToken cancellationToken = default)
     {
         await _repairSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            return await RecoverCompanionFilesCoreAsync(modDirectory, cancellationToken);
+        }
+        finally
+        {
+            _repairSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// companion 恢复核心（不加全局锁；由入口持锁，或批量修复持锁后并发调用，仅操作该模组目录）。
+    /// </summary>
+    private async Task<CompanionRecoveryResult> RecoverCompanionFilesCoreAsync(
+        DirectoryInfo modDirectory,
+        CancellationToken cancellationToken)
+    {
         var prepared = new List<PreparedCompanionRecovery>();
         var committed = new List<string>();
         try
@@ -143,7 +160,6 @@ internal sealed partial class VersionCheckService
         {
             foreach (var item in prepared)
                 TryDeleteFile(item.TemporaryPath);
-            _repairSemaphore.Release();
         }
     }
 

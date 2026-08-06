@@ -49,78 +49,109 @@ internal sealed partial class VersionCheckService
         IProgress<BatchModRepairItem>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        foreach (var item in plan.Items.Where(candidate => candidate.State == BatchModRepairState.Repairable))
+        // 批量修复整体持锁：与外部单个修复互斥，避免并发写同一模组；
+        // 内部不同模组之间有限并发（仅操作各自目录，使用不加锁的 Core 变体）。
+        await _repairSemaphore.WaitAsync(cancellationToken);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var directory = new DirectoryInfo(item.ModDirectory);
-            var changed = false;
-            try
-            {
-                if (!await SupportsAutomaticUnitRepairAsync(directory))
+            var candidates = plan.Items
+                .Where(candidate => candidate.State == BatchModRepairState.Repairable)
+                .ToArray();
+            var maxDegree = Math.Max(1, Math.Min(4, Environment.ProcessorCount));
+            await Parallel.ForEachAsync(
+                candidates,
+                new ParallelOptions
                 {
-                    item.State = BatchModRepairState.SkippedUnsupported;
-                    item.Message = _localizationService["VersionCheckBatch.UnsupportedResourceType"];
-                    progress?.Report(item);
-                    continue;
-                }
-
-                var companionPlan = await CreateCompanionRecoveryPlanAsync(directory, cancellationToken);
-                if (companionPlan.MissingCount > 0)
-                {
-                    if (!companionPlan.CanRecover)
-                        throw new InvalidDataException(BuildCompanionBlockMessage(companionPlan));
-                    var companionResult = await RecoverCompanionFilesAsync(directory, cancellationToken);
-                    if (!companionResult.Success)
-                        throw new InvalidDataException(companionResult.ErrorMessage);
-                    item.CompanionRecoveryCount = companionResult.RecoveredCount;
-                    changed |= companionResult.RecoveredCount > 0;
-                }
-
-                var metadataPlan = await CreateRepairPlanAsync(directory);
-                if (metadataPlan.ActionCount > 0 || metadataPlan.BlockingReasons.Count > 0)
-                {
-                    if (!metadataPlan.CanRepair)
-                        throw new InvalidDataException(string.Join(Environment.NewLine, metadataPlan.BlockingReasons));
-                    var metadataResult = await RepairModAsync(directory);
-                    if (!metadataResult.Success)
-                        throw new InvalidDataException(metadataResult.ErrorMessage);
-                    item.MetadataActionCount = metadataResult.AppliedActionCount;
-                    changed |= metadataResult.AppliedActionCount > 0;
-                }
-
-                var assistedPlan = await CreateAutomaticAssistedRepairPlanAsync(directory);
-                if (assistedPlan.CanRepair)
-                {
-                    var assistedResult = await RepairModAutomaticallyAsync(directory);
-                    if (!assistedResult.Success)
-                        throw new InvalidDataException(assistedResult.ErrorMessage);
-                    item.AssistedActionCount = assistedResult.AppliedActionCount;
-                    changed |= assistedResult.AppliedActionCount > 0;
-                }
-                else if (assistedPlan.BlockingReasons.Count > 0)
-                {
-                    throw new InvalidDataException(string.Join(Environment.NewLine, assistedPlan.BlockingReasons));
-                }
-
-                item.State = changed ? BatchModRepairState.Repaired : BatchModRepairState.NoAction;
-                item.Message = changed
-                    ? $"Recovered {item.CompanionRecoveryCount} companion file(s), applied {item.MetadataActionCount} metadata repair(s) and {item.AssistedActionCount} Unit repair(s)."
-                    : "No repair was required after the plan was refreshed.";
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                item.State = BatchModRepairState.Failed;
-                item.Message = ex.Message;
-                _logger.LogError(ex, "Batch repair failed for {Mod}", item.ModName);
-            }
-            progress?.Report(item);
+                    MaxDegreeOfParallelism = maxDegree,
+                    CancellationToken = cancellationToken
+                },
+                async (item, ct) => await RepairSingleBatchItemAsync(item, ct, progress));
+        }
+        finally
+        {
+            _repairSemaphore.Release();
         }
 
         return new BatchModRepairResult { Items = plan.Items };
+    }
+
+    /// <summary>
+    /// 执行单个模组的批量修复（companion 恢复 → 安全元数据修复 → 自动修复）。
+    /// 调用方必须已持有 _repairSemaphore；内部使用不加锁的 Core 变体，仅操作该模组目录。
+    /// </summary>
+    private async Task RepairSingleBatchItemAsync(
+        BatchModRepairItem item,
+        CancellationToken cancellationToken,
+        IProgress<BatchModRepairItem>? progress)
+    {
+        var directory = new DirectoryInfo(item.ModDirectory);
+        var changed = false;
+        try
+        {
+            if (!await SupportsAutomaticUnitRepairAsync(directory))
+            {
+                item.State = BatchModRepairState.SkippedUnsupported;
+                item.Message = _localizationService["VersionCheckBatch.UnsupportedResourceType"];
+                progress?.Report(item);
+                return;
+            }
+
+            var companionPlan = await CreateCompanionRecoveryPlanAsync(directory, cancellationToken);
+            if (companionPlan.MissingCount > 0)
+            {
+                if (!companionPlan.CanRecover)
+                    throw new InvalidDataException(BuildCompanionBlockMessage(companionPlan));
+                var companionResult = await RecoverCompanionFilesCoreAsync(directory, cancellationToken);
+                if (!companionResult.Success)
+                    throw new InvalidDataException(companionResult.ErrorMessage);
+                item.CompanionRecoveryCount = companionResult.RecoveredCount;
+                changed |= companionResult.RecoveredCount > 0;
+            }
+
+            var metadataPlan = await CreateRepairPlanAsync(directory);
+            if (metadataPlan.ActionCount > 0 || metadataPlan.BlockingReasons.Count > 0)
+            {
+                if (!metadataPlan.CanRepair)
+                    throw new InvalidDataException(string.Join(Environment.NewLine, metadataPlan.BlockingReasons));
+                var metadataResult = await RepairModCoreAsync(directory);
+                if (!metadataResult.Success)
+                    throw new InvalidDataException(metadataResult.ErrorMessage);
+                item.MetadataActionCount = metadataResult.AppliedActionCount;
+                changed |= metadataResult.AppliedActionCount > 0;
+            }
+
+            var assistedPlan = await CreateAutomaticAssistedRepairPlanAsync(directory);
+            if (assistedPlan.CanRepair)
+            {
+                var assistedResult = await RepairModWithGameReferencesCoreAsync(
+                    directory,
+                    () => CreateAutomaticAssistedRepairPlanAsync(directory));
+                if (!assistedResult.Success)
+                    throw new InvalidDataException(assistedResult.ErrorMessage);
+                item.AssistedActionCount = assistedResult.AppliedActionCount;
+                changed |= assistedResult.AppliedActionCount > 0;
+            }
+            else if (assistedPlan.BlockingReasons.Count > 0)
+            {
+                throw new InvalidDataException(string.Join(Environment.NewLine, assistedPlan.BlockingReasons));
+            }
+
+            item.State = changed ? BatchModRepairState.Repaired : BatchModRepairState.NoAction;
+            item.Message = changed
+                ? $"Recovered {item.CompanionRecoveryCount} companion file(s), applied {item.MetadataActionCount} metadata repair(s) and {item.AssistedActionCount} Unit repair(s)."
+                : "No repair was required after the plan was refreshed.";
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            item.State = BatchModRepairState.Failed;
+            item.Message = ex.Message;
+            _logger.LogError(ex, "Batch repair failed for {Mod}", item.ModName);
+        }
+        progress?.Report(item);
     }
 
     private async Task PopulateBatchPlanItemAsync(

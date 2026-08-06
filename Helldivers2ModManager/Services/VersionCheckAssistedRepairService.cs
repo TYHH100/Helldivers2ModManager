@@ -385,31 +385,63 @@ internal sealed partial class VersionCheckService
         DirectoryInfo modDirectory) =>
         RepairModWithGameReferencesAsync(modDirectory, AssistedLodStrategy.PreserveMod);
 
-    public Task<ModRepairResult> RepairModWithGameReferencesAsync(
+    public async Task<ModRepairResult> RepairModWithGameReferencesAsync(
         DirectoryInfo modDirectory,
-        AssistedLodStrategy lodStrategy) =>
-        RepairModWithGameReferencesCoreAsync(
-            modDirectory,
-            () => CreateAssistedRepairPlanAsync(modDirectory, lodStrategy));
+        AssistedLodStrategy lodStrategy)
+    {
+        await _repairSemaphore.WaitAsync();
+        try
+        {
+            return await RepairModWithGameReferencesCoreAsync(
+                modDirectory,
+                () => CreateAssistedRepairPlanAsync(modDirectory, lodStrategy));
+        }
+        finally
+        {
+            _repairSemaphore.Release();
+        }
+    }
 
-    public Task<ModRepairResult> RepairModWithMixedGameReferencesAsync(
+    public async Task<ModRepairResult> RepairModWithMixedGameReferencesAsync(
         DirectoryInfo modDirectory,
-        IReadOnlySet<long> preserveModLodUnitIds) =>
-        RepairModWithGameReferencesCoreAsync(
-            modDirectory,
-            () => CreateMixedAssistedRepairPlanAsync(modDirectory, preserveModLodUnitIds));
+        IReadOnlySet<long> preserveModLodUnitIds)
+    {
+        await _repairSemaphore.WaitAsync();
+        try
+        {
+            return await RepairModWithGameReferencesCoreAsync(
+                modDirectory,
+                () => CreateMixedAssistedRepairPlanAsync(modDirectory, preserveModLodUnitIds));
+        }
+        finally
+        {
+            _repairSemaphore.Release();
+        }
+    }
 
-    public Task<ModRepairResult> RepairModAutomaticallyAsync(
-        DirectoryInfo modDirectory) =>
-        RepairModWithGameReferencesCoreAsync(
-            modDirectory,
-            () => CreateAutomaticAssistedRepairPlanAsync(modDirectory));
+    public async Task<ModRepairResult> RepairModAutomaticallyAsync(
+        DirectoryInfo modDirectory)
+    {
+        await _repairSemaphore.WaitAsync();
+        try
+        {
+            return await RepairModWithGameReferencesCoreAsync(
+                modDirectory,
+                () => CreateAutomaticAssistedRepairPlanAsync(modDirectory));
+        }
+        finally
+        {
+            _repairSemaphore.Release();
+        }
+    }
 
+    /// <summary>
+    /// 辅助修复核心（不加全局锁；由入口持锁，或批量修复持锁后并发调用，仅操作该模组目录）。
+    /// </summary>
     private async Task<ModRepairResult> RepairModWithGameReferencesCoreAsync(
         DirectoryInfo modDirectory,
         Func<Task<AssistedModRepairPlan>> createPlanAsync)
     {
-        await _repairSemaphore.WaitAsync();
         var prepared = new List<PreparedRepair>();
         var committed = new List<PreparedRepair>();
         try
@@ -577,7 +609,6 @@ internal sealed partial class VersionCheckService
                         item.TemporaryPath);
                 }
             }
-            _repairSemaphore.Release();
         }
     }
 

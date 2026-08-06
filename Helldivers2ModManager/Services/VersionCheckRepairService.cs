@@ -59,6 +59,21 @@ internal sealed partial class VersionCheckService
     public async Task<ModRepairResult> RepairModAsync(DirectoryInfo modDirectory)
     {
         await _repairSemaphore.WaitAsync();
+        try
+        {
+            return await RepairModCoreAsync(modDirectory);
+        }
+        finally
+        {
+            _repairSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// 安全元数据修复核心（不加全局锁；由入口持锁，或批量修复持锁后并发调用，仅操作该模组目录）。
+    /// </summary>
+    private async Task<ModRepairResult> RepairModCoreAsync(DirectoryInfo modDirectory)
+    {
         var prepared = new List<PreparedRepair>();
         var committed = new List<PreparedRepair>();
         try
@@ -165,7 +180,6 @@ internal sealed partial class VersionCheckService
                     _logger.LogWarning(cleanupException, "Failed to remove repair temp file {File}", item.TemporaryPath);
                 }
             }
-            _repairSemaphore.Release();
         }
     }
 
