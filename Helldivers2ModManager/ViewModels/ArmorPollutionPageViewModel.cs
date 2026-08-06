@@ -94,25 +94,23 @@ internal sealed partial class ArmorPollutionPageViewModel : PageViewModelBase
 
         IsScanning = true;
         SummaryText = _localizationService["ArmorPollutionPage.Scanning"];
-        var backgroundTask = _backgroundTaskService.Add(
-            _localizationService["BackgroundTasksPage.TaskTypeArmorPollutionScan"],
-            SummaryText);
-
         try
         {
             var enabledMods = _modService.Mods
                 .Where(static mod => mod.Enabled)
                 .ToArray();
-            var result = await ScanEnabledModUnitsAsync(enabledMods);
+            // 扫描在后台线程执行（BackgroundTaskService 统一管理状态），结果回 UI 线程应用
+            var result = await _backgroundTaskService.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypeArmorPollutionScan"],
+                SummaryText,
+                (_, _) => ScanEnabledModUnitsAsync(enabledMods),
+                SummaryText);
             ApplyResult(result);
-
-            _backgroundTaskService.Complete(backgroundTask, SummaryText);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to scan enabled mod armor pollution");
             SummaryText = _localizationService["ArmorPollutionPage.ScanFailed"];
-            _backgroundTaskService.Fail(backgroundTask, ex.Message);
         }
         finally
         {

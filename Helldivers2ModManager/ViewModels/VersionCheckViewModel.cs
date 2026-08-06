@@ -93,9 +93,6 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
 
         IsCheckingVersion = true;
         VersionCheckSummary = _localizationService["VersionCheck.ScanningMods"];
-        var backgroundTask = _backgroundTaskService.Add(
-            _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
-            VersionCheckSummary);
 
         try
         {
@@ -126,11 +123,11 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
 
             if (needsFullScan)
             {
-                await FullScanAsync(mods, backgroundTask);
+                await FullScanAsync(mods);
             }
             else
             {
-                await IncrementalCheckAsync(mods, backgroundTask);
+                await IncrementalCheckAsync(mods);
             }
 
             UpdateStatistics(mods);
@@ -143,13 +140,11 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 await UpdateGameExeTimestampAsync();
 
             UpdateSummaryText();
-            _backgroundTaskService.Complete(backgroundTask, VersionCheckSummary);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "版本兼容性检查失败");
             VersionCheckSummary = _localizationService["VersionCheck.CheckFailed"];
-            _backgroundTaskService.Fail(backgroundTask, ex.Message);
         }
         finally
         {
@@ -282,16 +277,19 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
 
     #region Private Methods
 
-    private async Task FullScanAsync(ObservableCollection<ModViewModel> mods, BackgroundTaskItem backgroundTask)
+    private async Task FullScanAsync(ObservableCollection<ModViewModel> mods)
     {
-        _backgroundTaskService.Update(
-            backgroundTask,
+        // 全量扫描（含游戏参考解析）在后台线程执行，结果回 UI 线程应用
+        var results = await _backgroundTaskService.RunAsync(
+            _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
             _localizationService["VersionCheck.ScanningMods"],
-            0,
-            false);
-        var results = await _versionCheckService.CheckAllModsAsync(_modService.Mods);
+            async (context, _) =>
+            {
+                context.Report(_localizationService["VersionCheck.ScanningMods"], 0, false);
+                return await _versionCheckService.CheckAllModsAsync(_modService.Mods);
+            },
+            _localizationService["VersionCheck.ScanningMods"]);
 
-        var processed = 0;
         foreach (var vm in mods)
         {
             if (results.TryGetValue(vm.Guid, out var result))
@@ -300,44 +298,45 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 vm.LastVersionCheck = result.LastChecked;
                 vm.VersionStatus = result.Status;
             }
-
-            processed++;
-            _backgroundTaskService.Update(
-                backgroundTask,
-                vm.Name,
-                mods.Count > 0 ? (double)processed / mods.Count : 1,
-                false);
         }
     }
 
-    private async Task IncrementalCheckAsync(ObservableCollection<ModViewModel> mods, BackgroundTaskItem backgroundTask)
+    private async Task IncrementalCheckAsync(ObservableCollection<ModViewModel> mods)
     {
         var changedMods = GetNewOrChangedMods(mods).ToList();
-        if (changedMods.Count > 0)
-        {
-            VersionCheckSummary = _localizationService["VersionCheck.CheckingChanged"].Replace("{changedModCount}", changedMods.Count.ToString());
-            for (var i = 0; i < changedMods.Count; i++)
+        if (changedMods.Count == 0)
+            return;
+
+        VersionCheckSummary = _localizationService["VersionCheck.CheckingChanged"].Replace("{changedModCount}", changedMods.Count.ToString());
+        // 单模组检查（含游戏参考解析）在后台线程执行，结果回 UI 线程应用
+        var results = await _backgroundTaskService.RunAsync(
+            _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
+            VersionCheckSummary,
+            async (context, _) =>
             {
-                var vm = changedMods[i];
-                _backgroundTaskService.Update(
-                    backgroundTask,
-                    vm.Name,
-                    changedMods.Count > 0 ? (double)i / changedMods.Count : 1,
-                    false);
-
-                var result = await _versionCheckService.CheckSingleModAsync(vm.Data);
-                if (result is not null)
+                var collected = new Dictionary<Guid, ModVersionCheckResult>();
+                for (var i = 0; i < changedMods.Count; i++)
                 {
-                    vm.GameUnitVersion = result.GameVersion;
-                    vm.LastVersionCheck = result.LastChecked;
-                    vm.VersionStatus = result.Status;
+                    var vm = changedMods[i];
+                    context.Report(
+                        vm.Name,
+                        changedMods.Count > 0 ? (double)i / changedMods.Count : 1,
+                        false);
+                    var result = await _versionCheckService.CheckSingleModAsync(vm.Data);
+                    if (result is not null)
+                        collected[vm.Guid] = result;
                 }
+                return collected;
+            },
+            VersionCheckSummary);
 
-                _backgroundTaskService.Update(
-                    backgroundTask,
-                    vm.Name,
-                    changedMods.Count > 0 ? (double)(i + 1) / changedMods.Count : 1,
-                    false);
+        foreach (var vm in changedMods)
+        {
+            if (results.TryGetValue(vm.Guid, out var result))
+            {
+                vm.GameUnitVersion = result.GameVersion;
+                vm.LastVersionCheck = result.LastChecked;
+                vm.VersionStatus = result.Status;
             }
         }
     }

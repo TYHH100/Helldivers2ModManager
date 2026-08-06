@@ -43,6 +43,7 @@ internal sealed partial class DashboardPageViewModel
         try
         {
             var scanned = 0;
+            var modDatas = _mods.Select(static viewModel => viewModel.Data).ToList();
             var progress = new Progress<BatchModRepairItem>(item =>
             {
                 scanned++;
@@ -51,13 +52,16 @@ internal sealed partial class DashboardPageViewModel
                     Title = _localizationService["VersionCheckBatch.ScanTitle"],
                     Message = _localizationService["VersionCheckBatch.ScanProgress"]
                         .Replace("{current}", scanned.ToString())
-                        .Replace("{total}", _mods.Count.ToString())
+                        .Replace("{total}", modDatas.Count.ToString())
                         .Replace("{name}", item.ModName)
                 });
             });
-            var plan = await service.CreateBatchRepairPlanAsync(
-                _mods.Select(static viewModel => viewModel.Data),
-                progress);
+            // 扫描是 CPU/IO 密集操作，由 BackgroundTaskService 统一在后台线程执行并管理任务状态。
+            var plan = await _backgroundTaskService.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypeBatchRepair"],
+                _localizationService["VersionCheckBatch.ScanTitle"],
+                (_, _) => service.CreateBatchRepairPlanAsync(modDatas, progress),
+                _localizationService["VersionCheckBatch.ScanTitle"]);
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
             if (plan.RepairableCount == 0)
             {
@@ -103,6 +107,7 @@ internal sealed partial class DashboardPageViewModel
 
         IsBatchRepairing = true;
         var processed = 0;
+        var repairableCount = plan.RepairableCount;
         WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
         {
             Title = _localizationService["VersionCheckBatch.RepairTitle"],
@@ -118,11 +123,16 @@ internal sealed partial class DashboardPageViewModel
                     Title = _localizationService["VersionCheckBatch.RepairTitle"],
                     Message = _localizationService["VersionCheckBatch.RepairProgress"]
                         .Replace("{current}", processed.ToString())
-                        .Replace("{total}", plan.RepairableCount.ToString())
+                        .Replace("{total}", repairableCount.ToString())
                         .Replace("{name}", item.ModName)
                 });
             });
-            var result = await service.RepairModsBatchAsync(plan, progress);
+            // 修复（备份/写文件/哈希/游戏参考解析）由 BackgroundTaskService 统一在后台线程执行。
+            var result = await _backgroundTaskService.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypeBatchRepair"],
+                _localizationService["VersionCheckBatch.RepairTitle"],
+                (_, _) => service.RepairModsBatchAsync(plan, progress),
+                _localizationService["VersionCheckBatch.RepairTitle"]);
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
             {

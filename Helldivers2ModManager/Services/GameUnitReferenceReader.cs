@@ -106,72 +106,8 @@ internal sealed partial class VersionCheckService
                     BuildGameUnitReferenceIndex(dataDirectory, cacheKey));
             }
 
-            var lookup = new GameUnitReferenceLookup();
-            foreach (var unitId in unitIds)
-            {
-                if (_gameReferenceIndex.PackageNames.TryGetValue(unitId, out var cachedPackageNames))
-                    lookup.PackageNames[unitId] = cachedPackageNames;
-
-                if (_gameReferenceIndex.AmbiguousUnitIds.Contains(unitId))
-                {
-                    lookup.AmbiguousUnitIds.Add(unitId);
-                    continue;
-                }
-
-                if (_gameReferenceIndex.ResolvedReferences.TryGetValue(unitId, out var cached))
-                {
-                    lookup.References[unitId] = cached;
-                    continue;
-                }
-
-                if (!_gameReferenceIndex.UnitLocators.TryGetValue(unitId, out var locators))
-                {
-                    lookup.MissingUnitIds.Add(unitId);
-                    continue;
-                }
-
-                var candidates = new List<GameUnitReferenceData>();
-                foreach (var locator in locators)
-                {
-                    var candidate = TryReadGameUnitReference(
-                        _gameReferenceIndex.Bundles,
-                        unitId,
-                        locator);
-                    if (candidate is not null)
-                        candidates.Add(candidate);
-                }
-
-                var distinctCandidates = candidates
-                    .GroupBy(c => c.Signature, StringComparer.Ordinal)
-                    .Select(g => g.First())
-                    .ToList();
-                if (distinctCandidates.Count == 0)
-                {
-                    lookup.MissingUnitIds.Add(unitId);
-                }
-                else
-                {
-                    var packageNames = candidates
-                        .Select(candidate => candidate.PackageName)
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToArray();
-                    _gameReferenceIndex.PackageNames[unitId] = packageNames;
-                    lookup.PackageNames[unitId] = packageNames;
-
-                    if (distinctCandidates.Count > 1)
-                    {
-                        _gameReferenceIndex.AmbiguousUnitIds.Add(unitId);
-                        lookup.AmbiguousUnitIds.Add(unitId);
-                        continue;
-                    }
-
-                    var resolved = distinctCandidates[0];
-                    _gameReferenceIndex.ResolvedReferences[unitId] = resolved;
-                    lookup.References[unitId] = resolved;
-                }
-            }
-
-            return lookup;
+            // 解析 Unit 引用包含 LZ4 解码（CPU 密集），放到后台线程执行，避免阻塞调用线程（UI）。
+            return await Task.Run(() => ResolveGameUnitReferences(_gameReferenceIndex!, unitIds));
         }
         catch (Exception ex)
         {
@@ -182,6 +118,82 @@ internal sealed partial class VersionCheckService
         {
             _gameReferenceSemaphore.Release();
         }
+    }
+
+    /// <summary>
+    /// 在游戏索引上解析指定 Unit 的参考数据（读缓存字典 + 按需 LZ4 解码）。
+    /// 必须在 _gameReferenceSemaphore 持有期间调用，且不访问 UI 线程。
+    /// </summary>
+    private GameUnitReferenceLookup ResolveGameUnitReferences(
+        GameUnitReferenceIndex index,
+        IReadOnlyCollection<long> unitIds)
+    {
+        var lookup = new GameUnitReferenceLookup();
+        foreach (var unitId in unitIds)
+        {
+            if (index.PackageNames.TryGetValue(unitId, out var cachedPackageNames))
+                lookup.PackageNames[unitId] = cachedPackageNames;
+
+            if (index.AmbiguousUnitIds.Contains(unitId))
+            {
+                lookup.AmbiguousUnitIds.Add(unitId);
+                continue;
+            }
+
+            if (index.ResolvedReferences.TryGetValue(unitId, out var cached))
+            {
+                lookup.References[unitId] = cached;
+                continue;
+            }
+
+            if (!index.UnitLocators.TryGetValue(unitId, out var locators))
+            {
+                lookup.MissingUnitIds.Add(unitId);
+                continue;
+            }
+
+            var candidates = new List<GameUnitReferenceData>();
+            foreach (var locator in locators)
+            {
+                var candidate = TryReadGameUnitReference(
+                    index.Bundles,
+                    unitId,
+                    locator);
+                if (candidate is not null)
+                    candidates.Add(candidate);
+            }
+
+            var distinctCandidates = candidates
+                .GroupBy(c => c.Signature, StringComparer.Ordinal)
+                .Select(g => g.First())
+                .ToList();
+            if (distinctCandidates.Count == 0)
+            {
+                lookup.MissingUnitIds.Add(unitId);
+            }
+            else
+            {
+                var packageNames = candidates
+                    .Select(candidate => candidate.PackageName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                index.PackageNames[unitId] = packageNames;
+                lookup.PackageNames[unitId] = packageNames;
+
+                if (distinctCandidates.Count > 1)
+                {
+                    index.AmbiguousUnitIds.Add(unitId);
+                    lookup.AmbiguousUnitIds.Add(unitId);
+                    continue;
+                }
+
+                var resolved = distinctCandidates[0];
+                index.ResolvedReferences[unitId] = resolved;
+                lookup.References[unitId] = resolved;
+            }
+        }
+
+        return lookup;
     }
 
     private DirectoryInfo? GetConfiguredGameDataDirectory()

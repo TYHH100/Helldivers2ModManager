@@ -1458,19 +1458,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             Message = _localizationService["SettingsPage.PleaseWait"]
         });
 
-        var backgroundTask = _backgroundTaskService.Add(
-            _localizationService["BackgroundTasksPage.TaskTypePurge"],
-            _localizationService["SettingsPage.PleaseWait"]);
-
         try
         {
-            await _modService.PurgeAsync();
-            _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.PurgeComplete"]);
-        }
-        catch (Exception ex)
-        {
-            _backgroundTaskService.Fail(backgroundTask, ex.Message);
-            throw;
+            await _backgroundTaskService.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypePurge"],
+                _localizationService["SettingsPage.PleaseWait"],
+                (_, _) => _modService.PurgeAsync(),
+                _localizationService["BackgroundTasksPage.PurgeComplete"]);
         }
         finally
         {
@@ -1543,17 +1537,18 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         var snapshot = CaptureProfileSnapshot();
         var deploymentMods = GetDeploymentMods(snapshot);
-        var backgroundTask = _backgroundTaskService.Add(
-            _localizationService["BackgroundTasksPage.TaskTypeDeploy"],
-            _localizationService["SettingsPage.PleaseWait"]);
 
         try
         {
-            await SaveProfileNowAsync(false, snapshot);
-
-            await _modService.DeployAsync(deploymentMods);
-
-            _backgroundTaskService.Complete(backgroundTask, _localizationService["DashboardPage.DeploySuccess"]);
+            await _backgroundTaskService.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypeDeploy"],
+                _localizationService["SettingsPage.PleaseWait"],
+                async (_, _) =>
+                {
+                    await SaveProfileNowAsync(false, snapshot);
+                    await _modService.DeployAsync(deploymentMods);
+                },
+                _localizationService["DashboardPage.DeploySuccess"]);
 
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
             {
@@ -1563,7 +1558,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unknown deployment error");
-            _backgroundTaskService.Fail(backgroundTask, ex.Message);
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
                 Message = ex.Message
@@ -1657,30 +1651,31 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             Message = _localizationService["SettingsPage.PleaseWait"]
         });
 
-        var backgroundTask = _backgroundTaskService.Add(
-            _localizationService["BackgroundTasksPage.TaskTypeDelete"],
-            modVm.Name);
-
         try
         {
-            await _modService.RemoveAsync(modVm.Data);
+            await _backgroundTaskService.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypeDelete"],
+                modVm.Name,
+                async (_, _) =>
+                {
+                    await _modService.RemoveAsync(modVm.Data);
 
-            // 删除后同步更新数据库：直接删除该模组对应的记录
-            if (!_settingsService.IsReadonly)
-            {
-                await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, modVm.Guid);
-                await _modGroupService.RemoveModsFromAllGroupsAsync([modVm.Guid]);
-                // 同时删除该模组的版本检测记录
-                await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, modVm.Guid);
-            }
+                    // 删除后同步更新数据库：直接删除该模组对应的记录
+                    if (!_settingsService.IsReadonly)
+                    {
+                        await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, modVm.Guid);
+                        await _modGroupService.RemoveModsFromAllGroupsAsync([modVm.Guid]);
+                        // 同时删除该模组的版本检测记录
+                        await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, modVm.Guid);
+                    }
+                },
+                _localizationService["BackgroundTasksPage.DeleteComplete"].Replace("{name}", modVm.Name));
 
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
-            _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.DeleteComplete"].Replace("{name}", modVm.Name));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unknown mod removal error");
-            _backgroundTaskService.Fail(backgroundTask, ex.Message);
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
                 Message = ex.Message
@@ -1759,27 +1754,27 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         ClearConflictStatuses();
         IsScanningConflicts = true;
         ConflictSummary = _localizationService["DashboardPage.ConflictScanning"];
-        var backgroundTask = _backgroundTaskService.Add(
-            _localizationService["BackgroundTasksPage.TaskTypeConflictScan"],
-            ConflictSummary);
 
         try
         {
-            var result = await _modConflictService.AnalyzeAsync(deploymentMods);
+            // 扫描在后台线程执行（BackgroundTaskService 统一管理状态），结果回 UI 线程应用
+            var result = await _backgroundTaskService.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypeConflictScan"],
+                ConflictSummary,
+                (_, _) => _modConflictService.AnalyzeAsync(deploymentMods),
+                ConflictSummary);
+
             _conflictCache[cacheKey] = result;
             if (!_settingsService.IsReadonly)
                 await _modConflictRepository.SaveAsync(_settingsService.StorageDirectory, cacheKey, result);
 
             if (showReport || string.Equals(GetCurrentConflictCacheKey(), cacheKey, StringComparison.Ordinal))
                 ApplyConflictAnalysisResult(cacheKey, result, showReport);
-
-            _backgroundTaskService.Complete(backgroundTask, ConflictSummary);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to scan mod conflicts");
             ConflictSummary = _localizationService["DashboardPage.ConflictScanFailed"];
-            _backgroundTaskService.Fail(backgroundTask, ex.Message);
             if (showReport)
             {
                 WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage

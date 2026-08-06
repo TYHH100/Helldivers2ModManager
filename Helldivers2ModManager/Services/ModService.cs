@@ -162,7 +162,8 @@ internal sealed partial class ModService
 
 		// 初始化哈希管理服务并触发版本迁移（为新版用户自动计算所有现有模组的文件哈希值）
 		_modHashService.Init(_settingsService);
-		_ = _modHashService.MigrateExistingModsAsync(_mods);
+		// 哈希迁移是 CPU/IO 密集操作，放到后台线程执行，避免阻塞 UI 线程
+		_ = Task.Run(async () => await _modHashService.MigrateExistingModsAsync(_mods));
 
 		return problems.ToArray();
 	}

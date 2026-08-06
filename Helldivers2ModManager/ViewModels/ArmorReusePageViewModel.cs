@@ -72,22 +72,21 @@ internal sealed partial class ArmorReusePageViewModel : PageViewModelBase
 
         IsScanning = true;
         SummaryText = _localizationService["ArmorReusePage.Scanning"];
-        var task = _backgroundTaskService.Add(
-            _localizationService["BackgroundTasksPage.TaskTypeArmorReuseScan"],
-            SummaryText);
-
         try
         {
             var enabledMods = _modService.Mods.Where(static mod => mod.Enabled).ToArray();
-            var result = await _armorReuseService.AnalyzeAsync(enabledMods);
+            // 扫描在后台线程执行（BackgroundTaskService 统一管理状态），结果回 UI 线程应用
+            var result = await _backgroundTaskService.RunAsync(
+                _localizationService["BackgroundTasksPage.TaskTypeArmorReuseScan"],
+                SummaryText,
+                (_, _) => _armorReuseService.AnalyzeAsync(enabledMods),
+                SummaryText);
             ApplyResult(result);
-            _backgroundTaskService.Complete(task, SummaryText);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Armor reuse scan failed");
             SummaryText = _localizationService["ArmorReusePage.ScanFailed"];
-            _backgroundTaskService.Fail(task, ex.Message);
         }
         finally
         {
