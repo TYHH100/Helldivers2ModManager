@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Text;
 
@@ -436,9 +437,15 @@ internal sealed class ModVersionCheckResult
     public ModVersionStatus Status { get; set; } = ModVersionStatus.Unknown;
 
     /// <summary>
-    /// 游戏当前 Unit 版本号
+    /// 游戏当前 Unit 版本号（参考版本，优先来自游戏归档）
     /// </summary>
     public uint GameVersion { get; set; }
+
+    /// <summary>
+    /// 当前游戏归档中无可用参考的 Unit FileId 集合（游戏里不存在或存在歧义的自定义模型），
+    /// 这些 Unit 不参与版本匹配判断。
+    /// </summary>
+    public IReadOnlySet<long> UnitsMissingGameReference { get; set; } = new HashSet<long>();
 
     /// <summary>
     /// 最后检查时间

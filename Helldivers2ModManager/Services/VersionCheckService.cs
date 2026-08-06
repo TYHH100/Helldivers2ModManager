@@ -14,7 +14,7 @@ namespace Helldivers2ModManager.Services;
 /// hd2-repatcher（https://github.com/RaidingForPants/hd2-repatcher）；
 /// 补丁/归档格式常量参考 HD2SDK-CommunityEdition
 /// （https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition）。
-/// 以多数版本作为参考基准，标记偏离的模组。
+/// 参考版本优先从当前游戏归档（bundles*.nxa）读取，游戏数据不可用时回退到多数版本基准。
 /// v1.5.0 新增深度分析：文件结构完整性校验、Unit 内部结构分析、伴生文件检查。
 /// </summary>
 [RegisterService(ServiceLifetime.Singleton)]
@@ -89,10 +89,11 @@ internal sealed partial class VersionCheckService
 
     /// <summary>
     /// 批量检查所有模组的版本兼容性。
-    /// 采用"模组间横向对比"策略：
-    /// 1. 扫描所有模组的补丁文件，收集所有 Unit 版本号
-    /// 2. 以出现频率最高的版本作为参考版本
-    /// 3. 与参考版本不一致的模组标记为不兼容
+    /// 参考版本优先从当前游戏归档读取：
+    /// 1. 扫描所有模组的补丁文件，收集所有 Unit 版本号与 FileId
+    /// 2. 从游戏归档解析这些 Unit 的当前版本，以出现频率最高的版本作为参考版本；
+    ///    游戏数据不可用或没有匹配的游戏 Unit 时，回退到"模组间横向对比"的多数版本
+    /// 3. 与参考版本不一致的模组标记为不兼容（游戏里找不到参考的 Unit 不参与匹配）
     /// </summary>
     /// <param name="mods">模组数据列表</param>
     /// <returns>模组 GUID 到检测结果的映射字典</returns>
@@ -127,30 +128,57 @@ internal sealed partial class VersionCheckService
         await Task.WhenAll(scanTasks);
 
         // 结构已损坏的补丁不能参与参考版本投票，否则大量旧坏包会反向污染基准。
-        var allVersions = allModScans.Values
+        var healthyScans = allModScans.Values
             .Where(v => !HasBlockingStructuralIssues(v.Analysis))
-            .SelectMany(v => v.Versions)
             .ToList();
-        uint? referenceVersion = allVersions.Count > 0 ? GetMostCommonVersion(allVersions) : null;
+        var allVersions = healthyScans.SelectMany(v => v.Versions).ToList();
+
+        // 参考版本优先来自当前游戏归档（bundles*.nxa）：
+        // 游戏资源未变化时复用缓存索引（GameUnitReferenceIndex），变化后自动重建；
+        // 游戏数据不可用或没有匹配的游戏 Unit 时，回退到"模组间横向对比"的多数版本。
+        var allUnitIds = healthyScans.SelectMany(v => v.Infos).Select(i => i.FileId).Distinct().ToArray();
+        var gameLookup = allUnitIds.Length > 0 ? await GetGameUnitReferencesAsync(allUnitIds) : null;
+        var gameDataAvailable = gameLookup is not null && string.IsNullOrEmpty(gameLookup.ErrorMessage);
+        var gameReferences = new Dictionary<long, GameUnitReferenceData>();
+        uint? referenceVersion;
+        if (gameDataAvailable && gameLookup!.References.Count > 0)
+        {
+            gameReferences = gameLookup.References;
+            referenceVersion = GetMostCommonVersion(gameReferences.Values.Select(r => r.Version).ToList());
+            _logger.LogInformation(
+                "Reference Unit version: 0x{Version:X8} (from game archives, {UnitCount} Unit references, {MissingCount} not found)",
+                referenceVersion.Value, gameReferences.Count, gameLookup.MissingUnitIds.Count);
+        }
+        else
+        {
+            referenceVersion = allVersions.Count > 0 ? GetMostCommonVersion(allVersions) : null;
+            _logger.LogInformation(
+                "Game reference unavailable ({Reason}), falling back to mod majority: 0x{Version:X8}",
+                gameLookup?.ErrorMessage ?? "no matching Unit references",
+                referenceVersion ?? 0);
+        }
+
         s_cachedReferenceVersion = referenceVersion;
         s_cachedModCount = allModScans.Values.Count(v => v.Versions.Count > 0);
         s_cachedUnitCount = allVersions.Count;
-
-        if (referenceVersion.HasValue)
-        {
-            _logger.LogInformation("Reference Unit version: 0x{Version:X8} (from {UnitCount} Unit entries across {ModCount} mods)",
-                referenceVersion.Value, s_cachedUnitCount, s_cachedModCount);
-        }
 
         foreach (var mod in modList)
         {
             var scan = allModScans[mod.Manifest.Guid];
             var hasBlockingIssues = HasBlockingStructuralIssues(scan.Analysis);
+            // 参考版本来自游戏时，只比较该模组在当前游戏归档中有参考的 Unit，
+            // 避免自定义模型（游戏里找不到或存在歧义）被误判为版本不匹配。
+            var comparableVersions = gameDataAvailable
+                ? scan.Infos.Where(i => gameReferences.ContainsKey(i.FileId)).Select(i => i.Version).ToList()
+                : scan.Versions;
+            var missingForMod = gameDataAvailable
+                ? scan.Infos.Where(i => !gameReferences.ContainsKey(i.FileId)).Select(i => i.FileId).ToHashSet()
+                : new HashSet<long>();
             var status = hasBlockingIssues
                 ? ModVersionStatus.Incompatible
-                : scan.Versions.Count == 0 || !referenceVersion.HasValue
+                : comparableVersions.Count == 0 || !referenceVersion.HasValue
                     ? ModVersionStatus.Unknown
-                    : scan.Versions.All(v => v == referenceVersion.Value)
+                    : comparableVersions.All(v => v == referenceVersion.Value)
                         ? ModVersionStatus.Compatible
                         : ModVersionStatus.Incompatible;
 
@@ -159,7 +187,8 @@ internal sealed partial class VersionCheckService
                 Status = status,
                 GameVersion = referenceVersion ?? 0,
                 LastChecked = DateTime.Now,
-                PatchUnits = new System.Collections.ObjectModel.ObservableCollection<PatchUnitInfo>(scan.Infos)
+                PatchUnits = new System.Collections.ObjectModel.ObservableCollection<PatchUnitInfo>(scan.Infos),
+                UnitsMissingGameReference = missingForMod
             };
         }
 
@@ -169,6 +198,7 @@ internal sealed partial class VersionCheckService
 
     /// <summary>
     /// 对单个新增或变动模组执行版本与结构检测。
+    /// 参考版本优先从当前游戏归档解析；游戏数据不可用时回退到缓存/多数版本。
     /// </summary>
     public async Task<ModVersionCheckResult?> CheckSingleModAsync(ModData mod, uint? fallbackVersion = null, bool includeDetailedAnalysis = false)
     {
@@ -181,24 +211,46 @@ internal sealed partial class VersionCheckService
         var versions = infos.Select(i => i.Version).ToList();
         var hasBlockingIssues = HasBlockingStructuralIssues(analysis);
 
+        // 优先从当前游戏归档解析本模组 Unit 的游戏参考版本（复用已缓存的游戏索引）。
+        var gameReferences = new Dictionary<long, GameUnitReferenceData>();
+        uint? gameReferenceVersion = null;
+        var gameLookup = infos.Count > 0
+            ? await GetGameUnitReferencesAsync(infos.Select(i => i.FileId).Distinct().ToArray())
+            : null;
+        var gameDataAvailable = gameLookup is not null && string.IsNullOrEmpty(gameLookup.ErrorMessage);
+        if (gameDataAvailable && gameLookup!.References.Count > 0)
+        {
+            gameReferences = gameLookup.References;
+            gameReferenceVersion = GetMostCommonVersion(gameReferences.Values.Select(r => r.Version).ToList());
+        }
+
+        // 游戏参考可用时，只比较在当前游戏归档中有参考的 Unit，避免自定义模型误报。
+        var comparableVersions = gameDataAvailable
+            ? infos.Where(i => gameReferences.ContainsKey(i.FileId)).Select(i => i.Version).ToList()
+            : versions;
+        var missingForMod = gameDataAvailable
+            ? infos.Where(i => !gameReferences.ContainsKey(i.FileId)).Select(i => i.FileId).ToHashSet()
+            : new HashSet<long>();
+        var effectiveReference = gameDataAvailable ? gameReferenceVersion : referenceVersion;
+
         ModVersionStatus status;
         uint reportedVersion;
         if (hasBlockingIssues)
         {
             status = ModVersionStatus.Incompatible;
-            reportedVersion = referenceVersion ?? (versions.Count > 0 ? GetMostCommonVersion(versions) : 0);
+            reportedVersion = effectiveReference ?? (versions.Count > 0 ? GetMostCommonVersion(versions) : 0);
         }
-        else if (versions.Count == 0)
+        else if (comparableVersions.Count == 0)
         {
             status = ModVersionStatus.Unknown;
-            reportedVersion = referenceVersion ?? 0;
+            reportedVersion = effectiveReference ?? 0;
         }
-        else if (referenceVersion.HasValue)
+        else if (effectiveReference.HasValue)
         {
-            status = versions.All(v => v == referenceVersion.Value)
+            status = comparableVersions.All(v => v == effectiveReference.Value)
                 ? ModVersionStatus.Compatible
                 : ModVersionStatus.Incompatible;
-            reportedVersion = referenceVersion.Value;
+            reportedVersion = effectiveReference.Value;
         }
         else
         {
@@ -207,8 +259,8 @@ internal sealed partial class VersionCheckService
         }
 
         _logger.LogInformation(
-            "Mod {Name} compatibility check: {Status}, patches={PatchCount}, corrupted={CorruptedCount}",
-            mod.Manifest.Name, status, analysis.TotalPatchFiles, analysis.CorruptedFileCount);
+            "Mod {Name} compatibility check: {Status}, patches={PatchCount}, corrupted={CorruptedCount}, gameReference={GameReference}",
+            mod.Manifest.Name, status, analysis.TotalPatchFiles, analysis.CorruptedFileCount, gameDataAvailable);
 
         return new ModVersionCheckResult
         {
@@ -216,7 +268,8 @@ internal sealed partial class VersionCheckService
             GameVersion = reportedVersion,
             LastChecked = DateTime.Now,
             PatchUnits = new System.Collections.ObjectModel.ObservableCollection<PatchUnitInfo>(infos),
-            DetailedAnalysis = includeDetailedAnalysis ? analysis : null
+            DetailedAnalysis = includeDetailedAnalysis ? analysis : null,
+            UnitsMissingGameReference = missingForMod
         };
     }
 

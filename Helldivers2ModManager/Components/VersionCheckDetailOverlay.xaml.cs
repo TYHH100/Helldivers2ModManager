@@ -14,6 +14,7 @@ internal sealed class VersionCheckDetailMessage
     public required string ModName { get; init; }
     public required ModVersionStatus Status { get; init; }
     public uint GameVersion { get; init; }
+    public required IReadOnlySet<long> UnitsMissingGameReference { get; init; }
     public DateTime LastChecked { get; init; }
     public required IReadOnlyList<PatchUnitInfo> PatchUnits { get; init; }
     public required ModDetailedAnalysis Analysis { get; init; }
@@ -408,7 +409,8 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         var danger = GetBrush("DangerBrush", Colors.IndianRed);
         var warning = GetBrush("WarningBrush", Colors.Goldenrod);
         var versionMismatches = message.PatchUnits
-            .Where(u => message.GameVersion != 0 && u.Version != message.GameVersion)
+            .Where(u => message.GameVersion != 0 && u.Version != message.GameVersion &&
+                        !message.UnitsMissingGameReference.Contains(u.FileId))
             .ToList();
 
         if (versionMismatches.Count > 0)

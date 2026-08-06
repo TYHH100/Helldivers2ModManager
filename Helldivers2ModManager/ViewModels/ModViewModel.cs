@@ -704,6 +704,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             ModName = Name,
             Status = effectiveStatus,
             GameVersion = effectiveGameVersion,
+            UnitsMissingGameReference = detailResult?.UnitsMissingGameReference ?? new HashSet<long>(),
             LastChecked = LastVersionCheck,
             PatchUnits = patchUnits,
             Analysis = detailedAnalysis ?? new ModDetailedAnalysis(),
