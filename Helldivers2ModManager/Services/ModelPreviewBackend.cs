@@ -45,7 +45,50 @@ internal sealed class ModelPreviewBackend
         var result = await _inspectionService.PreviewModelAsync(modDirectory, patchFiles, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         await AttachArmorMembershipAsync(result, cancellationToken);
+        await AttachAnimationLibrariesAsync(result, cancellationToken);
         return result;
+    }
+
+    private async Task AttachAnimationLibrariesAsync(
+        ModelPreviewResult result,
+        CancellationToken cancellationToken)
+    {
+        result.AnimationLibraries.Clear();
+        var skeletons = result.Meshes
+            .Select(static mesh => mesh.Skinning?.Skeleton)
+            .Where(static skeleton => skeleton is not null)
+            .Select(static skeleton => skeleton!)
+            .Distinct()
+            .ToArray();
+        foreach (var skeleton in skeletons)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                // Model resources may carry creature or vehicle state machines. Preview
+                // animations are intentionally sourced only from the canonical Helldiver
+                // avatar Unit; incompatible skeletons get no animation instead of an
+                // approximate cross-species mapping.
+                var playerLibrary = await _versionCheckService.FindCompatibleGameAnimationLibraryAsync(
+                    skeleton.Bones.Select(static bone => bone.NameHash).ToArray(),
+                    cancellationToken);
+                if (playerLibrary is not null &&
+                    result.AnimationLibraries.All(library =>
+                        library.BonesId != playerLibrary.BonesId ||
+                        library.StateMachineId != playerLibrary.StateMachineId))
+                {
+                    result.AnimationLibraries.Add(playerLibrary);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Unable to attach the Helldiver avatar animation library");
+            }
+        }
     }
 
     private async Task AttachArmorMembershipAsync(

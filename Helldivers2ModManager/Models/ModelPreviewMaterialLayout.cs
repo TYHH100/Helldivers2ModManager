@@ -11,7 +11,8 @@ internal sealed record ModelPreviewMaterialLayout(
     IReadOnlyList<ulong> FallbackTextureIds,
     ulong? FallbackColorTextureId,
     ModelPreviewBodyShape BodyShape,
-    ModelPreviewCustomizationSlot CustomizationSlot = ModelPreviewCustomizationSlot.Unknown);
+    ModelPreviewCustomizationSlot CustomizationSlot = ModelPreviewCustomizationSlot.Unknown,
+    ModelPreviewUnitRig? Rig = null);
 
 internal sealed record ModelPreviewCustomizationInfo(
     ModelPreviewBodyShape BodyShape,
@@ -163,7 +164,9 @@ internal sealed record ModelPreviewMaterialSection(
     bool IsCullingBody,
     ModelPreviewTransform Transform,
     ModelPreviewMaterialTextureSet? MaterialTextures = null,
-    ulong? MaterialId = null);
+    ulong? MaterialId = null,
+    int LodIndex = -1,
+    int MaterialIndex = 0);
 
 internal readonly record struct ModelPreviewTransform(
     float M11, float M12, float M13, float M14,

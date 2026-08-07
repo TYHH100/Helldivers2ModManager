@@ -23,6 +23,7 @@ internal sealed class ModelPreviewResult
     /// armor alternatives choose which Unit package identities are rendered.
     /// </summary>
     public List<ModelPreviewArmorOption> Armors { get; } = [];
+    public List<ModelPreviewAnimationLibrary> AnimationLibraries { get; } = [];
     public int PatchFileCount { get; set; }
     public int SkippedStreams { get; set; }
     public string? Error { get; set; }
@@ -68,6 +69,7 @@ internal sealed class ModelPreviewMesh : System.ComponentModel.INotifyPropertyCh
     public required float[] Positions { get; init; }
     public float[]? Normals { get; init; }
     public float[]? TextureCoordinates { get; init; }
+    public ModelPreviewSkinningData? Skinning { get; init; }
     public required int[] TriangleIndices { get; init; }
     public IReadOnlyList<ulong> TextureIds { get; init; } = [];
     public ulong? ColorTextureId { get; init; }

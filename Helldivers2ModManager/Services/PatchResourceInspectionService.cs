@@ -4,6 +4,7 @@ using BCnEncoder.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using System.Buffers.Binary;
 using System.IO;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -718,14 +719,17 @@ internal sealed class PatchResourceInspectionService
 
             var customizationInfo = TryReadUnitCustomizationInfo(data);
             var sectionsByStream = TryReadUnitMaterialSections(data, materialTextures);
-            if (sectionsByStream.Count > 0 || fallbackTextures.Count > 0 || customizationInfo.BodyShape != ModelPreviewBodyShape.Unknown)
+            var rig = TryReadUnitRig(data);
+            if (sectionsByStream.Count > 0 || fallbackTextures.Count > 0 ||
+                customizationInfo.BodyShape != ModelPreviewBodyShape.Unknown || rig is not null)
             {
                 unitMaterialLayouts[(entry.PatchPath, entry.FileId)] = new ModelPreviewMaterialLayout(
                     sectionsByStream,
                     fallbackTextures.ToArray(),
                     fallbackColorTextureIds.Length == 1 ? fallbackColorTextureIds[0] : null,
                     customizationInfo.BodyShape,
-                    customizationInfo.Slot);
+                    customizationInfo.Slot,
+                    rig);
             }
         }
 
@@ -895,7 +899,7 @@ internal sealed class PatchResourceInspectionService
             var transform = transformIndex >= 0 && transformIndex < transforms.Count
                 ? transforms[transformIndex]
                 : ModelPreviewTransform.Identity;
-            var rawSections = new List<(int SectionIndex, uint Slot, uint VertexOffset, uint VertexCount, uint IndexOffset, uint IndexCount)>();
+            var rawSections = new List<(int SectionIndex, int MaterialIndex, uint Slot, uint VertexOffset, uint VertexCount, uint IndexOffset, uint IndexCount)>();
             for (var sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++)
             {
                 var sectionOffset = checked((int)(sectionsOffset + sectionIndex * meshSectionSize));
@@ -906,6 +910,7 @@ internal sealed class PatchResourceInspectionService
                 var slot = ReadUInt32(data, checked((int)(meshMaterialOffset + materialIndex * sizeof(uint))));
                 rawSections.Add((
                     sectionIndex,
+                    materialIndex,
                     slot,
                     ReadUInt32(data, sectionOffset + meshSectionVertexOffset),
                     ReadUInt32(data, sectionOffset + meshSectionVertexCountOffset),
@@ -950,7 +955,9 @@ internal sealed class PatchResourceInspectionService
                     isCullingBody,
                     transform,
                     materialTextureSet,
-                    materialIdForSection));
+                    materialIdForSection,
+                    lodIndex,
+                    rawSection.MaterialIndex));
             }
         }
 
@@ -1083,6 +1090,177 @@ internal sealed class PatchResourceInspectionService
 
         return transforms;
     }
+
+    private static ModelPreviewUnitRig? TryReadUnitRig(byte[] data)
+    {
+        const int bonesReferenceOffset = 0x08;
+        const int stateMachineReferenceOffset = 0x20;
+        const int transformInfoPointerOffset = 0x34;
+        const int boneInfoPointerOffset = 0x58;
+        const int transformInfoHeaderSize = 16;
+        const int localTransformSize = 64;
+        const int matrixSize = 64;
+        const int transformEntrySize = 4;
+
+        if (data.Length < 0x68)
+            return null;
+
+        var transformInfoOffset = ReadInt32(data, transformInfoPointerOffset);
+        if (!IsRangeInBounds(transformInfoOffset, transformInfoHeaderSize, data.Length))
+            return null;
+
+        var transformCount = ReadInt32(data, transformInfoOffset);
+        if (transformCount <= 0 || transformCount > 4096)
+            return null;
+
+        var matricesOffset = (long)transformInfoOffset + transformInfoHeaderSize + (long)transformCount * localTransformSize;
+        var entriesOffset = matricesOffset + (long)transformCount * matrixSize;
+        var hashesOffset = entriesOffset + (long)transformCount * transformEntrySize;
+        if (!IsRangeInBounds(matricesOffset, (long)transformCount * matrixSize, data.Length) ||
+            !IsRangeInBounds(entriesOffset, (long)transformCount * transformEntrySize, data.Length) ||
+            !IsRangeInBounds(hashesOffset, (long)transformCount * sizeof(uint), data.Length))
+        {
+            return null;
+        }
+
+        var bones = new ModelPreviewSkeletonBone[transformCount];
+        for (var index = 0; index < transformCount; index++)
+        {
+            var matrixOffset = checked((int)(matricesOffset + index * matrixSize));
+            var matrix = new Matrix4x4(
+                BitConverter.ToSingle(data, matrixOffset),
+                BitConverter.ToSingle(data, matrixOffset + 4),
+                BitConverter.ToSingle(data, matrixOffset + 8),
+                BitConverter.ToSingle(data, matrixOffset + 12),
+                BitConverter.ToSingle(data, matrixOffset + 16),
+                BitConverter.ToSingle(data, matrixOffset + 20),
+                BitConverter.ToSingle(data, matrixOffset + 24),
+                BitConverter.ToSingle(data, matrixOffset + 28),
+                BitConverter.ToSingle(data, matrixOffset + 32),
+                BitConverter.ToSingle(data, matrixOffset + 36),
+                BitConverter.ToSingle(data, matrixOffset + 40),
+                BitConverter.ToSingle(data, matrixOffset + 44),
+                BitConverter.ToSingle(data, matrixOffset + 48),
+                BitConverter.ToSingle(data, matrixOffset + 52),
+                BitConverter.ToSingle(data, matrixOffset + 56),
+                BitConverter.ToSingle(data, matrixOffset + 60));
+            if (!IsFinite(matrix))
+                return null;
+
+            var entryOffset = checked((int)(entriesOffset + index * transformEntrySize));
+            var parent = MemoryMarshal.Read<ushort>(data.AsSpan(entryOffset + sizeof(ushort), sizeof(ushort)));
+            var parentIndex = parent < transformCount && parent != index ? parent : -1;
+            var nameHash = ReadUInt32(data, checked((int)(hashesOffset + index * sizeof(uint))));
+            bones[index] = new ModelPreviewSkeletonBone(parentIndex, nameHash, matrix);
+        }
+
+        var palettes = TryReadUnitBonePalettes(data, transformCount, boneInfoPointerOffset);
+        if (palettes.Count == 0)
+            return null;
+
+        return new ModelPreviewUnitRig
+        {
+            Skeleton = new ModelPreviewSkeleton
+            {
+                BonesId = ReadUInt64(data, bonesReferenceOffset),
+                StateMachineId = ReadUInt64(data, stateMachineReferenceOffset),
+                Bones = bones
+            },
+            Palettes = palettes
+        };
+    }
+
+    private static IReadOnlyList<ModelPreviewBonePalette> TryReadUnitBonePalettes(
+        byte[] data,
+        int transformCount,
+        int boneInfoPointerOffset)
+    {
+        var boneInfoOffset = ReadInt32(data, boneInfoPointerOffset);
+        if (!IsRangeInBounds(boneInfoOffset, sizeof(uint), data.Length))
+            return [];
+
+        var paletteCount = ReadInt32(data, boneInfoOffset);
+        var paletteOffsetsStart = (long)boneInfoOffset + sizeof(uint);
+        if (paletteCount <= 0 || paletteCount > 256 ||
+            !IsRangeInBounds(paletteOffsetsStart, (long)paletteCount * sizeof(uint), data.Length))
+        {
+            return [];
+        }
+
+        var palettes = new ModelPreviewBonePalette[paletteCount];
+        for (var paletteIndex = 0; paletteIndex < paletteCount; paletteIndex++)
+        {
+            var relativeOffset = ReadUInt32(data, checked((int)(paletteOffsetsStart + paletteIndex * sizeof(uint))));
+            var paletteOffset = (long)boneInfoOffset + relativeOffset;
+            if (!IsRangeInBounds(paletteOffset, 16, data.Length))
+                return [];
+
+            var boneCount = ReadInt32(data, checked((int)paletteOffset));
+            var realIndicesRelativeOffset = ReadUInt32(data, checked((int)paletteOffset + 8));
+            var remapsRelativeOffset = ReadUInt32(data, checked((int)paletteOffset + 12));
+            if (boneCount <= 0 || boneCount > transformCount)
+                return [];
+
+            var realIndicesOffset = paletteOffset + realIndicesRelativeOffset;
+            if (!IsRangeInBounds(realIndicesOffset, (long)boneCount * sizeof(uint), data.Length))
+                return [];
+
+            var transformIndices = new int[boneCount];
+            for (var index = 0; index < boneCount; index++)
+            {
+                var transformIndex = ReadUInt32(data, checked((int)(realIndicesOffset + index * sizeof(uint))));
+                transformIndices[index] = transformIndex < transformCount ? (int)transformIndex : -1;
+            }
+
+            var remapsOffset = paletteOffset + remapsRelativeOffset;
+            if (!IsRangeInBounds(remapsOffset, sizeof(uint), data.Length))
+                return [];
+
+            var remapCount = ReadInt32(data, checked((int)remapsOffset));
+            var remapHeadersOffset = remapsOffset + sizeof(uint);
+            if (remapCount <= 0 || remapCount > 4096 ||
+                !IsRangeInBounds(remapHeadersOffset, (long)remapCount * 8, data.Length))
+            {
+                return [];
+            }
+
+            var remaps = new IReadOnlyList<int>[remapCount];
+            for (var remapIndex = 0; remapIndex < remapCount; remapIndex++)
+            {
+                var headerOffset = checked((int)(remapHeadersOffset + remapIndex * 8));
+                var relativeRemapOffset = ReadUInt32(data, headerOffset);
+                var remapBoneCount = ReadInt32(data, headerOffset + sizeof(uint));
+                var remapOffset = remapsOffset + relativeRemapOffset;
+                if (remapBoneCount < 0 || remapBoneCount > 4096 ||
+                    !IsRangeInBounds(remapOffset, (long)remapBoneCount * sizeof(uint), data.Length))
+                {
+                    return [];
+                }
+
+                var remap = new int[remapBoneCount];
+                for (var index = 0; index < remap.Length; index++)
+                {
+                    var realIndex = ReadUInt32(data, checked((int)(remapOffset + index * sizeof(uint))));
+                    remap[index] = realIndex < boneCount ? (int)realIndex : -1;
+                }
+                remaps[remapIndex] = remap;
+            }
+
+            palettes[paletteIndex] = new ModelPreviewBonePalette
+            {
+                TransformIndices = transformIndices,
+                Remaps = remaps
+            };
+        }
+
+        return palettes;
+    }
+
+    private static bool IsFinite(Matrix4x4 value) =>
+        float.IsFinite(value.M11) && float.IsFinite(value.M12) && float.IsFinite(value.M13) && float.IsFinite(value.M14) &&
+        float.IsFinite(value.M21) && float.IsFinite(value.M22) && float.IsFinite(value.M23) && float.IsFinite(value.M24) &&
+        float.IsFinite(value.M31) && float.IsFinite(value.M32) && float.IsFinite(value.M33) && float.IsFinite(value.M34) &&
+        float.IsFinite(value.M41) && float.IsFinite(value.M42) && float.IsFinite(value.M43) && float.IsFinite(value.M44);
 
     private static async Task<byte[]?> ReadMainResourceAsync(
         PatchTocInspectionItem entry,
@@ -1367,7 +1545,7 @@ internal sealed class PatchResourceInspectionService
                             materialLayout?.BodyShape ?? ModelPreviewBodyShape.Unknown,
                             materialLayout?.CustomizationSlot ?? ModelPreviewCustomizationSlot.Unknown,
                             materialLayout?.FallbackTextureIds ?? [], materialLayout?.FallbackColorTextureId,
-                            section, cancellationToken);
+                            materialLayout?.Rig, section, cancellationToken);
                         if (sectionMesh is null)
                             continue;
 
@@ -1426,6 +1604,7 @@ internal sealed class PatchResourceInspectionService
         ModelPreviewCustomizationSlot customizationSlot,
         IReadOnlyList<ulong> fallbackTextureIds,
         ulong? fallbackColorTextureId,
+        ModelPreviewUnitRig? rig,
         ModelPreviewMaterialSection section,
         CancellationToken cancellationToken)
     {
@@ -1441,6 +1620,12 @@ internal sealed class PatchResourceInspectionService
             return null;
 
         var uv = components.FirstOrDefault(static component => component.Type == 4 && component.Format is 1 or 29 or 33);
+        var boneIndex = components.FirstOrDefault(static component => component.Type == 6 && component.Format is 24 or 28);
+        var boneWeight = components.FirstOrDefault(static component => component.Type == 7 && component.Format is 0 or 4 or 31 or 35);
+        var palette = rig is not null && section.LodIndex >= 0 && section.LodIndex < rig.Palettes.Count
+            ? rig.Palettes[section.LodIndex]
+            : null;
+        var canDecodeSkinning = palette is not null && boneIndex.Type == 6 && boneWeight.Type == 7;
         var indexElementSize = indexType == 0 ? 2u : 4u;
         var triangleIndexCount = section.IndexCount - section.IndexCount % 3;
         if (triangleIndexCount > MaxPreviewIndicesPerStream)
@@ -1505,6 +1690,18 @@ internal sealed class PatchResourceInspectionService
         var textureCoordinates = uv.Format is 1 or 29 or 33
             ? new float[checked((int)requiredVertexCount * 2)]
             : null;
+        var transformIndices = canDecodeSkinning
+            ? new int[checked((int)requiredVertexCount * ModelPreviewSkinningData.InfluencesPerVertex)]
+            : null;
+        var weights = canDecodeSkinning
+            ? new float[checked((int)requiredVertexCount * ModelPreviewSkinningData.InfluencesPerVertex)]
+            : null;
+        if (transformIndices is not null)
+            Array.Fill(transformIndices, -1);
+        var skinnedVertexCount = 0;
+        var decodedWeights = canDecodeSkinning
+            ? new float[ModelPreviewSkinningData.InfluencesPerVertex]
+            : null;
         for (var vertexIndex = 0; vertexIndex < requiredVertexCount; vertexIndex++)
         {
             if ((vertexIndex & 0x3FFF) == 0)
@@ -1540,6 +1737,35 @@ internal sealed class PatchResourceInspectionService
                 if (!float.IsFinite(textureCoordinates[uvTargetOffset]) || !float.IsFinite(textureCoordinates[uvTargetOffset + 1]))
                     textureCoordinates = null;
             }
+
+            if (transformIndices is not null && weights is not null && palette is not null)
+            {
+                var vertexSourceOffset = checked((int)vertexIndex * (int)vertexStride);
+                var influenceOffset = checked((int)vertexIndex * ModelPreviewSkinningData.InfluencesPerVertex);
+                if (decodedWeights is null ||
+                    !TryDecodeBoneWeights(vertexBytes, vertexSourceOffset + boneWeight.Offset, boneWeight.Format, decodedWeights))
+                    continue;
+
+                var weightTotal = 0f;
+                for (var influence = 0; influence < ModelPreviewSkinningData.InfluencesPerVertex; influence++)
+                {
+                    var rawBoneIndex = vertexBytes[vertexSourceOffset + boneIndex.Offset + influence];
+                    var weight = decodedWeights[influence];
+                    if (weight <= 0 || !palette.TryResolve(section.MaterialIndex, rawBoneIndex, out var transformIndex))
+                        continue;
+
+                    transformIndices[influenceOffset + influence] = transformIndex;
+                    weights[influenceOffset + influence] = weight;
+                    weightTotal += weight;
+                }
+
+                if (weightTotal <= 0.00001f)
+                    continue;
+
+                for (var influence = 0; influence < ModelPreviewSkinningData.InfluencesPerVertex; influence++)
+                    weights[influenceOffset + influence] /= weightTotal;
+                skinnedVertexCount++;
+            }
         }
 
         var triangleIndices = new int[rawIndices.Length];
@@ -1560,6 +1786,8 @@ internal sealed class PatchResourceInspectionService
         var compactGeometry = CompactReferencedSectionGeometry(
             positions,
             textureCoordinates,
+            skinnedVertexCount > 0 ? transformIndices : null,
+            skinnedVertexCount > 0 ? weights : null,
             triangleIndices);
 
         return new ModelPreviewMesh
@@ -1577,6 +1805,14 @@ internal sealed class PatchResourceInspectionService
             Positions = compactGeometry.Positions,
             Normals = BuildSmoothedNormals(compactGeometry.Positions, compactGeometry.TriangleIndices),
             TextureCoordinates = compactGeometry.TextureCoordinates,
+            Skinning = compactGeometry.TransformIndices is not null && compactGeometry.Weights is not null && rig is not null
+                ? new ModelPreviewSkinningData
+                {
+                    Skeleton = rig.Skeleton,
+                    TransformIndices = compactGeometry.TransformIndices,
+                    Weights = compactGeometry.Weights
+                }
+                : null,
             TriangleIndices = compactGeometry.TriangleIndices,
             TextureIds = section.TextureIds.Count > 0 ? section.TextureIds : fallbackTextureIds,
             ColorTextureId = section.ColorTextureId ?? fallbackColorTextureId,
@@ -1597,6 +1833,8 @@ internal sealed class PatchResourceInspectionService
     private static CompactSectionGeometry CompactReferencedSectionGeometry(
         float[] positions,
         float[]? textureCoordinates,
+        int[]? transformIndices,
+        float[]? weights,
         int[] triangleIndices)
     {
         var sourceVertexCount = positions.Length / 3;
@@ -1605,6 +1843,12 @@ internal sealed class PatchResourceInspectionService
         var compactPositions = new List<float>(Math.Min(positions.Length, triangleIndices.Length * 3));
         var compactCoordinates = textureCoordinates is { Length: > 0 }
             ? new List<float>(Math.Min(textureCoordinates.Length, triangleIndices.Length * 2))
+            : null;
+        var compactTransformIndices = transformIndices is { Length: > 0 }
+            ? new List<int>(Math.Min(transformIndices.Length, triangleIndices.Length * ModelPreviewSkinningData.InfluencesPerVertex))
+            : null;
+        var compactWeights = weights is { Length: > 0 }
+            ? new List<float>(Math.Min(weights.Length, triangleIndices.Length * ModelPreviewSkinningData.InfluencesPerVertex))
             : null;
         var compactIndices = new int[triangleIndices.Length];
         for (var index = 0; index < triangleIndices.Length; index++)
@@ -1628,6 +1872,16 @@ internal sealed class PatchResourceInspectionService
                     compactCoordinates.Add(sourceCoordinates[coordinateOffset]);
                     compactCoordinates.Add(sourceCoordinates[coordinateOffset + 1]);
                 }
+                if (compactTransformIndices is not null && compactWeights is not null &&
+                    transformIndices is { } sourceTransformIndices && weights is { } sourceWeights)
+                {
+                    var influenceOffset = sourceVertex * ModelPreviewSkinningData.InfluencesPerVertex;
+                    for (var influence = 0; influence < ModelPreviewSkinningData.InfluencesPerVertex; influence++)
+                    {
+                        compactTransformIndices.Add(sourceTransformIndices[influenceOffset + influence]);
+                        compactWeights.Add(sourceWeights[influenceOffset + influence]);
+                    }
+                }
             }
 
             compactIndices[index] = targetVertex;
@@ -1636,7 +1890,43 @@ internal sealed class PatchResourceInspectionService
         return new CompactSectionGeometry(
             compactPositions.ToArray(),
             compactCoordinates?.ToArray(),
+            compactTransformIndices?.ToArray(),
+            compactWeights?.ToArray(),
             compactIndices);
+    }
+
+    private static bool TryDecodeBoneWeights(
+        byte[] vertexBytes,
+        int offset,
+        uint format,
+        float[] weights)
+    {
+        Array.Clear(weights);
+        switch (format)
+        {
+            case 0:
+                var scalar = BitConverter.ToSingle(vertexBytes, offset);
+                if (!float.IsFinite(scalar))
+                    return false;
+                weights[0] = Math.Clamp(scalar, 0f, 1f);
+                return true;
+            case 4:
+                for (var index = 0; index < weights.Length; index++)
+                    weights[index] = vertexBytes[offset + index] / 255f;
+                return true;
+            case 31:
+            case 35:
+                for (var index = 0; index < weights.Length; index++)
+                {
+                    var value = (float)BitConverter.UInt16BitsToHalf(BitConverter.ToUInt16(vertexBytes, offset + index * sizeof(ushort)));
+                    if (!float.IsFinite(value))
+                        return false;
+                    weights[index] = Math.Clamp(value, 0f, 1f);
+                }
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static async Task<ModelPreviewMesh?> ReadModelMeshAsync(
@@ -1940,7 +2230,7 @@ internal sealed class PatchResourceInspectionService
 
     private static string GetFormatName(uint format) => format switch
     {
-        1 => "float2", 2 => "float3", 4 => "RGBA8", 20 => "uint32x4 (legacy)",
+        0 => "float", 1 => "float2", 2 => "float3", 4 => "RGBA8", 20 => "uint32x4 (legacy)",
         24 => "uint8x4 (legacy)", 26 => "oct-normal (legacy)", 28 => "uint8x4", 29 => "half2 (legacy)",
         30 => "oct-normal", 31 => "half4 (legacy)", 33 => "half2", 35 => "half4", _ => $"Format 0x{format:X}"
     };
@@ -1948,8 +2238,8 @@ internal sealed class PatchResourceInspectionService
     private static bool TryGetFormatSize(uint format, uint unitVersion, out int size)
     {
         size = unitVersion == LegacyVerifiedUnitVersion
-            ? format switch { 1 => 8, 2 => 12, 4 or 24 or 25 or 26 or 29 => 4, 20 => 16, 31 => 8, _ => 0 }
-            : format switch { 1 => 8, 2 => 12, 4 or 28 or 30 or 33 => 4, 35 => 8, _ => 0 };
+            ? format switch { 0 => 4, 1 => 8, 2 => 12, 4 or 24 or 25 or 26 or 29 => 4, 20 => 16, 31 => 8, _ => 0 }
+            : format switch { 0 => 4, 1 => 8, 2 => 12, 4 or 28 or 30 or 33 => 4, 35 => 8, _ => 0 };
         return size != 0;
     }
 
@@ -1993,6 +2283,8 @@ internal sealed class PatchResourceInspectionService
     private sealed record CompactSectionGeometry(
         float[] Positions,
         float[]? TextureCoordinates,
+        int[]? TransformIndices,
+        float[]? Weights,
         int[] TriangleIndices);
 
     private static async Task<bool> ReadAtAsync(

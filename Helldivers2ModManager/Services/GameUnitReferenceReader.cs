@@ -1,3 +1,4 @@
+using Helldivers2ModManager.Models;
 using K4os.Compression.LZ4;
 using Microsoft.Extensions.Logging;
 using System.IO;
@@ -19,6 +20,11 @@ internal sealed partial class VersionCheckService
     private const byte DsarCompressionLz4 = 3;
     private const byte DsarChunkStart = 2;
     private const int MaxBundleResourceBytes = 64 * 1024 * 1024;
+    private const long BonesTypeId = 0x18DEAD01056B72E9;
+    private const long AnimationTypeId = unchecked((long)0x931E336D7646CC26UL);
+    private const long StateMachineTypeId = unchecked((long)0xA486D4045106165CUL);
+    private const long HelldiverAvatarUnitId = 5556372446766824087;
+    private const int MaxAnimationsPerPreview = 256;
     private readonly SemaphoreSlim _gameReferenceSemaphore = new(1, 1);
     private GameUnitReferenceIndex? _gameReferenceIndex;
 
@@ -52,6 +58,7 @@ internal sealed partial class VersionCheckService
         public required string CacheKey { get; init; }
         public required BundleInfo[] Bundles { get; init; }
         public required Dictionary<long, List<GameUnitLocator>> UnitLocators { get; init; }
+        public required Dictionary<(long FileId, long TypeId), List<GameUnitLocator>> AnimationResourceLocators { get; init; }
         public Dictionary<long, GameUnitReferenceData> ResolvedReferences { get; } = [];
         public Dictionary<long, IReadOnlyList<string>> PackageNames { get; } = [];
         public HashSet<long> AmbiguousUnitIds { get; } = [];
@@ -78,7 +85,8 @@ internal sealed partial class VersionCheckService
     }
 
     private async Task<GameUnitReferenceLookup> GetGameUnitReferencesAsync(
-        IReadOnlyCollection<long> unitIds)
+        IReadOnlyCollection<long> unitIds,
+        CancellationToken cancellationToken = default)
     {
         var dataDirectory = GetConfiguredGameDataDirectory();
         if (dataDirectory is null)
@@ -96,18 +104,25 @@ internal sealed partial class VersionCheckService
             "|",
             bundleFiles.Select(f => $"{f.Name}:{f.Length}:{f.LastWriteTimeUtc.Ticks}"));
 
-        await _gameReferenceSemaphore.WaitAsync();
+        await _gameReferenceSemaphore.WaitAsync(cancellationToken);
         try
         {
             if (_gameReferenceIndex is null ||
                 !string.Equals(_gameReferenceIndex.CacheKey, cacheKey, StringComparison.Ordinal))
             {
-                _gameReferenceIndex = await Task.Run(() =>
-                    BuildGameUnitReferenceIndex(dataDirectory, cacheKey));
+                _gameReferenceIndex = await Task.Run(
+                    () => BuildGameUnitReferenceIndex(dataDirectory, cacheKey),
+                    cancellationToken);
             }
 
             // 解析 Unit 引用包含 LZ4 解码（CPU 密集），放到后台线程执行，避免阻塞调用线程（UI）。
-            return await Task.Run(() => ResolveGameUnitReferences(_gameReferenceIndex!, unitIds));
+            return await Task.Run(
+                () => ResolveGameUnitReferences(_gameReferenceIndex!, unitIds),
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -118,6 +133,149 @@ internal sealed partial class VersionCheckService
         {
             _gameReferenceSemaphore.Release();
         }
+    }
+
+    internal async Task<ModelPreviewAnimationLibrary?> FindCompatibleGameAnimationLibraryAsync(
+        IReadOnlyCollection<uint> transformNameHashes,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transformNameHashes);
+        if (transformNameHashes.Count == 0)
+            return null;
+
+        _ = await GetGameUnitReferencesAsync([], cancellationToken);
+        await _gameReferenceSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            if (_gameReferenceIndex is null)
+                return null;
+            return await Task.Run(
+                () => FindCompatibleGameAnimationLibrary(
+                    _gameReferenceIndex,
+                    transformNameHashes,
+                    cancellationToken),
+                cancellationToken);
+        }
+        finally
+        {
+            _gameReferenceSemaphore.Release();
+        }
+    }
+
+    private static ModelPreviewAnimationLibrary? FindCompatibleGameAnimationLibrary(
+        GameUnitReferenceIndex index,
+        IReadOnlyCollection<uint> transformNameHashes,
+        CancellationToken cancellationToken)
+    {
+        var transformHashes = transformNameHashes.Where(static hash => hash != 0).ToHashSet();
+        if (transformHashes.Count == 0)
+            return null;
+
+        var references = ResolveGameUnitAnimationReferences(
+            index,
+            [HelldiverAvatarUnitId],
+            cancellationToken);
+        if (!references.TryGetValue(HelldiverAvatarUnitId, out var reference))
+            return null;
+
+        var library = ReadGameAnimationLibrary(
+            index,
+            reference.BonesId,
+            reference.StateMachineId,
+            cancellationToken);
+        if (library is null)
+            return null;
+
+        var animationHashes = library.BoneHashes.Where(static hash => hash != 0).ToHashSet();
+        var matchingBones = animationHashes.Count(transformHashes.Contains);
+        return matchingBones >= ModelPreviewAnimationCompatibility.MinimumMatchingBones &&
+               matchingBones >= animationHashes.Count * ModelPreviewAnimationCompatibility.MinimumBoneCoverage &&
+               matchingBones >= transformHashes.Count * ModelPreviewAnimationCompatibility.MinimumBoneCoverage
+            ? library
+            : null;
+    }
+
+    private static IReadOnlyDictionary<long, ModelPreviewAnimationResourceReference>
+        ResolveGameUnitAnimationReferences(
+            GameUnitReferenceIndex index,
+            IReadOnlyCollection<long> unitIds,
+            CancellationToken cancellationToken)
+    {
+        var references = new Dictionary<long, ModelPreviewAnimationResourceReference>();
+        foreach (var unitId in unitIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!index.UnitLocators.TryGetValue(unitId, out var locators))
+                continue;
+
+            foreach (var locator in locators)
+            {
+                var unitData = TryReadGameResource(index.Bundles, locator);
+                if (unitData is null || unitData.Length < 0x28)
+                    continue;
+
+                var bonesId = BinaryPrimitives.ReadUInt64LittleEndian(unitData.AsSpan(0x08, sizeof(ulong)));
+                var stateMachineId = BinaryPrimitives.ReadUInt64LittleEndian(unitData.AsSpan(0x20, sizeof(ulong)));
+                if (bonesId == 0 || stateMachineId == 0)
+                    continue;
+
+                references[unitId] = new ModelPreviewAnimationResourceReference(bonesId, stateMachineId);
+                break;
+            }
+        }
+        return references;
+    }
+
+    private static ModelPreviewAnimationLibrary? ReadGameAnimationLibrary(
+        GameUnitReferenceIndex index,
+        ulong bonesId,
+        ulong stateMachineId,
+        CancellationToken cancellationToken)
+    {
+        var bonesData = TryReadIndexedGameResource(index, unchecked((long)bonesId), BonesTypeId);
+        var stateMachineData = TryReadIndexedGameResource(index, unchecked((long)stateMachineId), StateMachineTypeId);
+        if (bonesData is null || stateMachineData is null)
+            return null;
+
+        var boneHashes = ModelPreviewAnimationLibraryParser.ParseBoneHashes(bonesData);
+        var references = ModelPreviewAnimationLibraryParser.ParseStateMachineAnimations(stateMachineData);
+        var animations = new List<ModelPreviewAnimationOption>(Math.Min(references.Count, MaxAnimationsPerPreview));
+        foreach (var reference in references.Take(MaxAnimationsPerPreview))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var animationData = TryReadIndexedGameResource(
+                index,
+                unchecked((long)reference.AnimationId),
+                AnimationTypeId);
+            if (animationData is null ||
+                !ModelPreviewAnimationParser.TryParse(
+                    animationData,
+                    reference.AnimationId,
+                    out var clip,
+                    out _) ||
+                clip is null || clip.BoneCount > boneHashes.Count)
+            {
+                continue;
+            }
+
+            animations.Add(new ModelPreviewAnimationOption
+            {
+                AnimationId = reference.AnimationId,
+                StateNameHash = reference.StateNameHash,
+                LayerIndex = reference.LayerIndex,
+                Clip = clip
+            });
+        }
+
+        return animations.Count == 0
+            ? null
+            : new ModelPreviewAnimationLibrary
+            {
+                BonesId = bonesId,
+                StateMachineId = stateMachineId,
+                BoneHashes = boneHashes,
+                Animations = animations
+            };
     }
 
     /// <summary>
@@ -233,6 +391,7 @@ internal sealed partial class VersionCheckService
         }
 
         var locators = new Dictionary<long, List<GameUnitLocator>>();
+        var animationResourceLocators = new Dictionary<(long FileId, long TypeId), List<GameUnitLocator>>();
         for (var packageIndex = 0; packageIndex < packageCount; packageIndex++)
         {
             var recordOffset = checked(0x18 + packageIndex * 0x18);
@@ -290,7 +449,12 @@ internal sealed partial class VersionCheckService
                 continue;
             }
 
-            IndexPackageUnitLocators(packageName, items, tocData, locators);
+            IndexPackageUnitLocators(
+                packageName,
+                items,
+                tocData,
+                locators,
+                animationResourceLocators);
             if (packageIndex > 0 && packageIndex % 1000 == 0)
             {
                 _logger.LogInformation(
@@ -309,7 +473,8 @@ internal sealed partial class VersionCheckService
         {
             CacheKey = cacheKey,
             Bundles = bundles,
-            UnitLocators = locators
+            UnitLocators = locators,
+            AnimationResourceLocators = animationResourceLocators
         };
     }
 
@@ -317,7 +482,8 @@ internal sealed partial class VersionCheckService
         string packageName,
         PackageItem[] items,
         byte[] tocData,
-        Dictionary<long, List<GameUnitLocator>> locators)
+        Dictionary<long, List<GameUnitLocator>> locators,
+        Dictionary<(long FileId, long TypeId), List<GameUnitLocator>> animationResourceLocators)
     {
         if (tocData.Length < HeaderSize ||
             BinaryPrimitives.ReadInt32LittleEndian(tocData.AsSpan(0, 4)) != PatchHeaderMagic)
@@ -338,25 +504,35 @@ internal sealed partial class VersionCheckService
         {
             var entryOffset = checked((int)(entryStart + (long)i * FileEntrySize));
             var typeId = BinaryPrimitives.ReadInt64LittleEndian(tocData.AsSpan(entryOffset + 8, 8));
-            if (typeId != UnitTypeId)
-                continue;
-
             var fileId = BinaryPrimitives.ReadInt64LittleEndian(tocData.AsSpan(entryOffset, 8));
             var resourceOffset = BinaryPrimitives.ReadUInt64LittleEndian(tocData.AsSpan(entryOffset + 16, 8));
             var resourceSize = BinaryPrimitives.ReadUInt32LittleEndian(tocData.AsSpan(entryOffset + 56, 4));
             var gpuSize = BinaryPrimitives.ReadUInt32LittleEndian(tocData.AsSpan(entryOffset + 64, 4));
-            if (!locators.TryGetValue(fileId, out var entries))
-            {
-                entries = [];
-                locators[fileId] = entries;
-            }
-
-            entries.Add(new GameUnitLocator(
+            var locator = new GameUnitLocator(
                 packageName,
                 items,
                 resourceOffset,
                 resourceSize,
-                gpuSize));
+                gpuSize);
+            if (typeId == UnitTypeId)
+            {
+                if (!locators.TryGetValue(fileId, out var entries))
+                {
+                    entries = [];
+                    locators[fileId] = entries;
+                }
+                entries.Add(locator);
+            }
+            else if (typeId is BonesTypeId or StateMachineTypeId or AnimationTypeId)
+            {
+                var key = (fileId, typeId);
+                if (!animationResourceLocators.TryGetValue(key, out var entries))
+                {
+                    entries = [];
+                    animationResourceLocators[key] = entries;
+                }
+                entries.Add(locator);
+            }
         }
     }
 
@@ -412,6 +588,47 @@ internal sealed partial class VersionCheckService
             GpuSize = locator.GpuSize,
             PackageName = locator.PackageName
         };
+    }
+
+    private static byte[]? TryReadIndexedGameResource(
+        GameUnitReferenceIndex index,
+        long fileId,
+        long typeId)
+    {
+        if (!index.AnimationResourceLocators.TryGetValue((fileId, typeId), out var locators))
+            return null;
+
+        foreach (var locator in locators)
+        {
+            var data = TryReadGameResource(index.Bundles, locator);
+            if (data is not null)
+                return data;
+        }
+
+        return null;
+    }
+
+    private static byte[]? TryReadGameResource(BundleInfo[] bundles, GameUnitLocator locator)
+    {
+        var item = locator.Items.LastOrDefault(candidate => candidate.ArchiveOffset <= locator.ResourceOffset);
+        if (item is null || locator.ResourceSize == 0 || locator.ResourceSize > MaxBundleResourceBytes)
+            return null;
+
+        try
+        {
+            var bundleOffset = checked(item.BundleOffset + locator.ResourceOffset - item.ArchiveOffset);
+            var data = ReadBundleResource(bundles[item.BundleIndex], bundleOffset, MaxBundleResourceBytes);
+            if (data.Length < locator.ResourceSize)
+                return null;
+            return data.Length == locator.ResourceSize
+                ? data
+                : data.AsSpan(0, checked((int)locator.ResourceSize)).ToArray();
+        }
+        catch
+        {
+            // Duplicate package entries are common; the caller can try another locator.
+            return null;
+        }
     }
 
     private static uint[] ReadUnitMeshIds(byte[] unitData, int declaredLength)

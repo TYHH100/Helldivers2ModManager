@@ -59,9 +59,7 @@ internal partial class ModelPreviewPageView
 
     private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(ModelPreviewPageViewModel.ModelGroup) or
-            nameof(ModelPreviewPageViewModel.SuggestedCameraDistance) or
-            nameof(ModelPreviewPageViewModel.SuggestedCameraYaw))
+        if (e.PropertyName == nameof(ModelPreviewPageViewModel.CameraResetVersion))
             Dispatcher.BeginInvoke(ResetCamera);
     }
 

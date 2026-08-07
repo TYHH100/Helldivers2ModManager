@@ -139,6 +139,59 @@
                                     BorderThickness="1"
                                     CornerRadius="4"
                                     Padding="8 4"
+                                    Margin="0 0 8 0"
+                                    Visibility="{Binding HasAnimations, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{loc:Loc ModelPreviewPage.Animation}"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0 0 8 0"/>
+                                    <ComboBox ItemsSource="{Binding Animations}"
+                                              SelectedItem="{Binding SelectedAnimation, Mode=TwoWay}"
+                                              MinWidth="210"
+                                              MaxWidth="300"
+                                              MaxDropDownHeight="300"
+                                              Margin="0 0 6 0">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Button Command="{Binding ToggleAnimationPlaybackCommand}"
+                                            Style="{StaticResource FluentIconButton}"
+                                            Width="30" Height="30"
+                                            ToolTip="{Binding AnimationPlaybackToolTip}"
+                                            Margin="0 0 4 0">
+                                        <TextBlock Text="{Binding AnimationPlaybackGlyph}" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                                    </Button>
+                                    <Button Command="{Binding ResetAnimationCommand}"
+                                            Style="{StaticResource FluentIconButton}"
+                                            Width="30" Height="30"
+                                            ToolTip="{loc:Loc ModelPreviewPage.ResetAnimation}"
+                                            Margin="0 0 6 0">
+                                        <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                                    </Button>
+                                    <Slider Minimum="0"
+                                            Maximum="{Binding SelectedAnimationDuration}"
+                                            Value="{Binding AnimationTimeSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="110"
+                                            VerticalAlignment="Center"
+                                            IsMoveToPointEnabled="True"
+                                            Margin="0 0 6 0"/>
+                                    <TextBlock Text="{Binding AnimationTimeText}"
+                                               MinWidth="78"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="{StaticResource NeutralBackgroundBrush}"
+                                    BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="8 4"
                                     Visibility="{Binding HasBodyShapeSwitch, Converter={StaticResource BoolToVisibilityConverter}}"
                                     IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
                                 <StackPanel Orientation="Horizontal">
