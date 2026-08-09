@@ -21,6 +21,7 @@ internal sealed class PatchResourceInspectionService
     private const ulong UnitTypeId = 0xE0A48D0BE9A7453FUL;
     private const ulong TextureTypeId = 0xCD4238C6A0C69E32UL;
     private const ulong MaterialTypeId = 0xEAC0B497876ADEDFUL;
+    private const uint OriginalUnitVersion = 1;
     private const uint LegacyVerifiedUnitVersion = 10800437;
     private const uint CurrentVerifiedUnitVersion = 10800438;
     private const int HeaderSize = 72;
@@ -1418,8 +1419,10 @@ internal sealed class PatchResourceInspectionService
             return;
 
         var version = MemoryMarshal.Read<uint>(unitHeader.AsSpan(0x2C, 4));
-        if (version is not (LegacyVerifiedUnitVersion or CurrentVerifiedUnitVersion))
+        if (version is not (OriginalUnitVersion or LegacyVerifiedUnitVersion or CurrentVerifiedUnitVersion))
             return;
+
+        var usesLegacyVertexFormats = version != CurrentVerifiedUnitVersion;
 
         var listOffset = MemoryMarshal.Read<int>(unitHeader.AsSpan(0x5C, 4));
         if (listOffset <= 0 || (long)listOffset + 4 > mainSize)
@@ -1466,7 +1469,7 @@ internal sealed class PatchResourceInspectionService
                         componentText.Append(" | ");
                     componentText.Append(GetComponentName(type)).Append('[').Append(componentIndex).Append("]: ").Append(GetFormatName(format));
                 }
-                if (!TryGetFormatSize(format, version, out var size))
+                if (!TryGetFormatSize(format, usesLegacyVertexFormats, out var size))
                 {
                     // Some base-game streams keep an optional semantic (most commonly
                     // BoneWeight) with format 0 and no bytes in the interleaved vertex.
@@ -2235,9 +2238,9 @@ internal sealed class PatchResourceInspectionService
         30 => "oct-normal", 31 => "half4 (legacy)", 33 => "half2", 35 => "half4", _ => $"Format 0x{format:X}"
     };
 
-    private static bool TryGetFormatSize(uint format, uint unitVersion, out int size)
+    private static bool TryGetFormatSize(uint format, bool usesLegacyVertexFormats, out int size)
     {
-        size = unitVersion == LegacyVerifiedUnitVersion
+        size = usesLegacyVertexFormats
             ? format switch { 0 => 4, 1 => 8, 2 => 12, 4 or 24 or 25 or 26 or 29 => 4, 20 => 16, 31 => 8, _ => 0 }
             : format switch { 0 => 4, 1 => 8, 2 => 12, 4 or 28 or 30 or 33 => 4, 35 => 8, _ => 0 };
         return size != 0;

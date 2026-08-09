@@ -25,6 +25,8 @@ internal sealed partial class VersionCheckService
     private const int MaterialVariableDataSizeOffset = 0x78;
     private const int MaterialTextureTableOffset = 0x88;
     private const int MaterialVariableDescriptorSize = 20;
+    private const ulong LegacyCharacterMaterialParentId = 0x54AE9CE1A8FAFE8BUL;
+    private const ulong CurrentCharacterMaterialParentId = 0x8F669F365F24594EUL;
     private const int LegacyEmissiveMaterialSize = 512;
     private const int CurrentEmissiveMaterialSize = 480;
     private const uint CurrentEmissiveMaterialVersion = 0x11F;
@@ -119,6 +121,7 @@ internal sealed partial class VersionCheckService
         var mixedPlan = await CreateMixedAssistedRepairPlanAsync(
             modDirectory,
             classification.PreserveUnitIds);
+        var automaticActions = mixedPlan.Actions.Where(action => action.LodDataDiffers).ToList();
         return new AssistedModRepairPlan
         {
             Actions = mixedPlan.Actions,
@@ -128,10 +131,10 @@ internal sealed partial class VersionCheckService
             MissingReferenceCount = mixedPlan.MissingReferenceCount,
             IsAutomatic = true,
             AutomaticStrongCustomCount = classification.StrongCustomUnitIds.Count,
-            AutomaticPreserveUnitCount = classification.PreserveUnitIds.Count,
-            AutomaticGameLodUnitCount = Math.Max(
-                0,
-                classification.AutomaticUnitIds.Count - classification.PreserveUnitIds.Count)
+            AutomaticPreserveUnitCount = automaticActions.Count(action =>
+                action.LodStrategy == AssistedLodStrategy.PreserveMod),
+            AutomaticGameLodUnitCount = automaticActions.Count(action =>
+                action.LodStrategy == AssistedLodStrategy.UseGameReference)
         };
     }
 
@@ -218,6 +221,31 @@ internal sealed partial class VersionCheckService
                 gpuExpansionRatio >= AutomaticLargeCustomGpuExpansionRatio);
     }
 
+    internal static bool RequiresCurrentGameLodForLegacyCharacterMaterial(
+        uint currentVersion,
+        uint referenceVersion,
+        ReadOnlySpan<byte> unitData,
+        IReadOnlySet<long> legacyCharacterMaterialIds)
+    {
+        if (currentVersion != 1 ||
+            referenceVersion != VersionThresholdForLayoutCheck ||
+            legacyCharacterMaterialIds.Count == 0 ||
+            unitData.Length < sizeof(ulong))
+        {
+            return false;
+        }
+
+        for (var offset = 0; offset <= unitData.Length - sizeof(ulong); offset++)
+        {
+            var resourceId = unchecked((long)BinaryPrimitives.ReadUInt64LittleEndian(
+                unitData.Slice(offset, sizeof(ulong))));
+            if (legacyCharacterMaterialIds.Contains(resourceId))
+                return true;
+        }
+
+        return false;
+    }
+
     private async Task<AssistedModRepairPlan> CreateAssistedRepairPlanInternalAsync(
         DirectoryInfo modDirectory,
         Func<long, AssistedLodStrategy> lodStrategySelector)
@@ -284,6 +312,12 @@ internal sealed partial class VersionCheckService
         }
 
         var referenceLookup = await GetGameUnitReferencesAsync(unitIds);
+        var legacyCharacterMaterialIds = materialActions
+            .Where(action => action.Kind == AssistedMaterialRepairKind.ParentReference &&
+                             action.OldParentMaterialId == LegacyCharacterMaterialParentId &&
+                             action.NewParentMaterialId == CurrentCharacterMaterialParentId)
+            .Select(action => action.FileId)
+            .ToHashSet();
         if (!string.IsNullOrWhiteSpace(referenceLookup.ErrorMessage))
             blockers.Add(referenceLookup.ErrorMessage);
         foreach (var ambiguousId in referenceLookup.AmbiguousUnitIds)
@@ -329,7 +363,15 @@ internal sealed partial class VersionCheckService
                     entry.Toc.GpuSize,
                     reference.GpuSize);
                 var customizationInfo = PatchResourceInspectionService.TryReadUnitCustomizationInfo(unitData);
-                var lodStrategy = lodStrategySelector(unit.FileId);
+                var requiresCurrentGameLodForLegacyMaterial =
+                    RequiresCurrentGameLodForLegacyCharacterMaterial(
+                        unit.Version,
+                        reference.Version,
+                        unitData,
+                        legacyCharacterMaterialIds);
+                var lodStrategy = requiresCurrentGameLodForLegacyMaterial
+                    ? AssistedLodStrategy.UseGameReference
+                    : lodStrategySelector(unit.FileId);
                 var requiresUnitUpdate = unit.Version != reference.Version ||
                     (unit.LayoutFormatChecked && !unit.LayoutFormatValid);
                 var requiresLodReplacement =
@@ -688,9 +730,7 @@ internal sealed partial class VersionCheckService
                     out var oldParentMaterialId,
                     out var newParentMaterialId))
             {
-                if (!TryBuildLegacyEmissiveMaterialMigration(
-                        materialData,
-                        out _))
+                if (!TryBuildLegacyEmissiveMaterialMigration(materialData, out _))
                 {
                     continue;
                 }
@@ -915,11 +955,11 @@ internal sealed partial class VersionCheckService
             return false;
         }
 
-        if (parentMaterialId == 0x54AE9CE1A8FAFE8BUL &&
+        if (parentMaterialId == LegacyCharacterMaterialParentId &&
             HasExactTextureSemantics(materialData, s_legacyCharacterMaterialTextureSemantics))
         {
             oldParentMaterialId = parentMaterialId;
-            newParentMaterialId = 0x8F669F365F24594EUL;
+            newParentMaterialId = CurrentCharacterMaterialParentId;
             return true;
         }
 

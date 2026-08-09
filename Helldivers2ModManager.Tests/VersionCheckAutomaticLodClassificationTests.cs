@@ -1,6 +1,7 @@
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Buffers.Binary;
 
 namespace Helldivers2ModManager.Tests;
 
@@ -144,6 +145,46 @@ public sealed class VersionCheckAutomaticLodClassificationTests
         Assert.AreEqual(actions.Length, classification.AutomaticUnitIds.Count);
         Assert.IsTrue(actions.All(action =>
             !classification.PreserveUnitIds.Contains(action.FileId)));
+    }
+
+    [TestMethod]
+    public void RequiresCurrentGameLodForLegacyCharacterMaterial_ExactLegacyBinding_UsesGameLod()
+    {
+        const ulong materialId = 0x6CCE349BE4AA72DCUL;
+        var unitData = new byte[32];
+        BinaryPrimitives.WriteUInt64LittleEndian(unitData.AsSpan(7), materialId);
+
+        var requiresGameLod = VersionCheckService.RequiresCurrentGameLodForLegacyCharacterMaterial(
+            currentVersion: 1,
+            referenceVersion: 0x00A4CD36,
+            unitData,
+            new HashSet<long> { unchecked((long)materialId) });
+
+        Assert.IsTrue(requiresGameLod);
+    }
+
+    [TestMethod]
+    public void RequiresCurrentGameLodForLegacyCharacterMaterial_UnknownBindingOrVersion_PreservesExistingStrategy()
+    {
+        const ulong materialId = 0x6CCE349BE4AA72DCUL;
+        var unitData = new byte[32];
+        BinaryPrimitives.WriteUInt64LittleEndian(unitData.AsSpan(8), materialId);
+
+        Assert.IsFalse(VersionCheckService.RequiresCurrentGameLodForLegacyCharacterMaterial(
+            currentVersion: 0x00A4CD36,
+            referenceVersion: 0x00A4CD36,
+            unitData,
+            new HashSet<long> { unchecked((long)materialId) }));
+        Assert.IsFalse(VersionCheckService.RequiresCurrentGameLodForLegacyCharacterMaterial(
+            currentVersion: 1,
+            referenceVersion: 0x10800438,
+            unitData,
+            new HashSet<long> { unchecked((long)materialId) }));
+        Assert.IsFalse(VersionCheckService.RequiresCurrentGameLodForLegacyCharacterMaterial(
+            currentVersion: 1,
+            referenceVersion: 0x00A4CD36,
+            unitData,
+            new HashSet<long> { unchecked((long)(materialId + 1)) }));
     }
 
     private static AssistedUnitRepairAction CreateAction(

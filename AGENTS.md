@@ -162,6 +162,7 @@ catch (Exception ex)
 | 混淆二进制偏移基址 | 每个字段先标明所属记录和相对/绝对关系；MeshInfo 的材料/Section 偏移相对 MeshInfo 起点，GPU 顶点偏移要叠加正确的 Unit/Stream 基址，并用真实样例验证。 |
 | 把整份多 GB 文件读入内存或无界哈希 | `.gpu_resources` 只做有界随机读取；使用 64 位偏移、范围检查和有限并发，避免为了诊断复制或扫描整个文件。 |
 | 解析失败后静默退回整 Stream 或用球体/方盒掩盖 | 失败必须可观测、可测试；按每个 MeshInfo、Section、Transform 解码，优先修正数据模型，不增加形状猜测规则。 |
+| 资源查看器显示 `0 个 GPU Stream` 就认定 GPU 损坏 | 先检查 Unit 版本门槛。版本 `1` 使用与 `10800437` 相同的旧顶点格式（如 `26/29/31/24`），应按旧格式表有界读取；只有实际 StreamInfo、步长、GPU 窗口或顶点样本失败才可判为 GPU 异常。 |
 | 只限制每个 Patch，忘记全局容量 | 合并结果时再次检查总 Mesh、顶点和索引上限；并发数、读取上限和缓存上限都要有明确总量。 |
 | 用旧快照或数据库覆盖主页选择 | 部署使用用户操作时捕获的 Profile/启用状态快照；单 Mod 刷新后同时更新 `ModViewModel`、主页摘要和缓存。 |
 | Manifest 每改一个字段就立即保存 | `Done()` 中组装最终清单并一次保存；保留 `NexusData`，Legacy 修改跨入 V1 后立即重建运行时选项和主页状态。 |
@@ -173,7 +174,10 @@ catch (Exception ex)
 | 用过时断言或并行构建验证 | 按当前 MSTest 版本使用 `Assert.AreEqual` 等兼容断言；涉及共享 `obj` 时串行构建/测试，验证生成代码时不要使用 `--no-build`。 |
 | 只验证 CLI 发布，不验证 VS 发布 | 修改 `Helldivers2PatchTool` 时复现对应 Publish Profile；独立工具不能直接引用自包含 EXE，且共享主程序构建必须固定 `net8.0-windows` 和 `win-x64`。 |
 | 模型预览整体黑色或局部缺失只查材质引用 | 特例模型同时含高分辨率正常材质和 BC7 纯黑占位材质；先按 `(MeshInfoIndex, VO, VC, IC)` 去重材质变体（不含 IO），再以多点 BC7 采样加解码后的全像素纯黑验证过滤占位，不能只看前 64 字节。对稀疏 section，按三角形引用压缩顶点后再做全局容量判断。详见 §5。 |
-| 自动 Unit 修复只看 Mesh ID 或单个 Unit 的 GPU 大小 |
+| 旧角色材质只替换父模板 ID | 先与同一装备的可用 Mod 对照。已验证 DP-00 的 `0x102/1280B/248B` 角色材质在当前游戏仍保留旧结构，只需将父模板 `0x54AE...` 替为 `0x8F66...`；不要凭另一份样例把变量表、结束偏移或材质版本重建。没有同资源证据的 emissive/未知 schema 仅警告，不自动重写。 |
+| 旧角色材质包一律保留 Mod LOD | 对已验证的旧角色签名，`Unit=1`、游戏引用为 `0x00A4CD36` 且 Unit 实际引用待迁移的 `0x54AE...` 角色材质时，旧 LOD/Section 材质绑定会导致进舰船崩溃；自动修复必须改用当前游戏 LOD，同时保留 Mod 的 GPU 几何与纹理。未知材质或其他 Unit 版本仍按原有自定义模型策略处理。 |
+| 自动 Unit 修复只看 Mesh ID 或单个 Unit 的 GPU 大小 | 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；应按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动，不能只用单个 GPU 大小决定修复策略。 |
+| 把所有当前 Unit 都当成 `10800438` | 当前游戏的 DP-00 资源实际使用 `0x00A4CD36`，其他资源可能使用 `0x10800438`；应从同 File ID 的游戏引用读取版本，并让 GPU 结构检查同时识别两个已验证版本。 |
 | 用根容器直接解析页面 VM 或新增页面后返回主菜单内存不释放 | DI 容器会强引用所有解析过的 `IDisposable`（所有 `PageViewModelBase` 子类）到 `ServiceProviderEngineScope._disposables`，直到根容器/scope 释放；导航页面必须由 `NavigationStore` 通过独立 `IServiceScope` 解析（`Navigate<T>` 内部 `CreateScope`，导航离开时丢弃旧 scope），不要用注入的 `IServiceProvider` 直接 `GetRequiredService<页面VM>` 后手动 `Navigate(page)`，否则该页面及其模型/纹理数据会被容器持有到进程退出。 | 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；LOD 还承载 MeshInfo/Section 的材质绑定。发现强自定义信号后，必须按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动。静态装备页可能只显示 Slim，仍需验证实际玩家的 Stocky/动态渲染。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。

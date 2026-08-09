@@ -35,6 +35,8 @@ internal sealed partial class VersionCheckService
     /// 来自 hd2-repatcher update_patch_file() 的 (v &lt; 0xA4CD36) 判断。
     /// </summary>
     private const uint VersionThresholdForLayoutCheck = 0xA4CD36u;
+    // Current game bundles can contain both the A4CD36 DP-00 schema and the
+    // newer 10800438 schema. Both use the current GPU StreamInfo layout.
     private const uint CurrentVerifiedUnitVersion = 10800438u;
     private const int MaxStreamsPerUnit = 100;
     private const int MaxComponentsPerStream = 16;
@@ -1004,7 +1006,7 @@ internal sealed partial class VersionCheckService
         if (!detail.LODGroupInBounds)
             AppendUnitWarning(detail, loc["VersionCheck.LodDataOutOfBounds"]);
 
-        if (detail.Version == CurrentVerifiedUnitVersion)
+        if (detail.Version is VersionThresholdForLayoutCheck or CurrentVerifiedUnitVersion)
             await AnalyzeCurrentGpuStructureAsync(detail, entry, stream, gpuResourceStream, unitHeader, loc);
         else if (detail.Version < VersionThresholdForLayoutCheck)
             await AnalyzeLegacyLayoutAsync(detail, entry, stream, unitHeader, loc);
