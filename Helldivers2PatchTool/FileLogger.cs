@@ -14,8 +14,8 @@ internal static class PatchToolLogging
     /// <summary>logs 目录中保留的最大日志文件数量。</summary>
     public const int MaxLogFiles = 5;
 
-    /// <summary>创建带文件输出的日志工厂（默认记录 Information 及以上，覆盖整个扫描/修复流程）。</summary>
-    public static LoggerFactory CreateFactory(LogLevel minLevel = LogLevel.Information)
+    /// <summary>创建带文件输出的日志工厂（默认记录 Debug 及以上，输出非常详细的扫描/修复流程）。</summary>
+    public static LoggerFactory CreateFactory(LogLevel minLevel = LogLevel.Debug)
     {
         return new LoggerFactory(new ILoggerProvider[]
         {
@@ -165,4 +165,3 @@ internal sealed class PatchToolFileLogger(
         }
     }
 }
-

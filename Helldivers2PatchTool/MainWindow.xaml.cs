@@ -255,6 +255,18 @@ public partial class MainWindow : Window
                 return;
 
             var companionPlan = await _versionCheckService.CreateCompanionRecoveryPlanAsync(_targetDirectory!);
+            foreach (var item in companionPlan.Items)
+            {
+                _logger.LogInformation("companion 计划：{Companion}（对应 {Patch}，后缀 {Suffix}）要求={Required} 缺失={Missing} 可恢复={CanRecover} 来源={Source}{Extra}",
+                    Path.GetFileName(item.CompanionPath),
+                    Path.GetFileName(item.PatchPath),
+                    item.Suffix,
+                    item.IsRequired,
+                    item.IsMissing,
+                    item.CanRecover,
+                    item.SourceKind,
+                    string.IsNullOrWhiteSpace(item.SourcePath) ? string.Empty : $"，来源路径：{item.SourcePath}");
+            }
             if (companionPlan.MissingCount > 0 && !companionPlan.CanRecover)
             {
                 _logger.LogWarning("缺失的 companion 文件无法安全恢复：{Reason}", BuildCompanionBlockMessage(companionPlan));
@@ -263,6 +275,17 @@ public partial class MainWindow : Window
             }
 
             var safePlan = await _versionCheckService.CreateRepairPlanAsync(_targetDirectory!);
+            foreach (var action in safePlan.Actions)
+            {
+                _logger.LogInformation("元数据修复动作：{Kind} 文件={File} 偏移=0x{Offset:X} 宽度={Width}B 值 0x{Old:X}->0x{New:X}{Extra}",
+                    action.Kind,
+                    Path.GetFileName(action.PatchFilePath),
+                    action.Offset,
+                    action.Width,
+                    action.OldValue,
+                    action.NewValue,
+                    action.EntryIndex > 0 ? $"，Entry #{action.EntryIndex}（ID 0x{unchecked((ulong)action.FileId):X16}）" : string.Empty);
+            }
             if (safePlan.BlockingReasons.Count > 0)
             {
                 _logger.LogWarning("元数据修复无法执行：{Reason}", string.Join("；", safePlan.BlockingReasons));
@@ -273,6 +296,36 @@ public partial class MainWindow : Window
             var assistedPlan = safePlan.ActionCount == 0 && companionPlan.MissingCount == 0
                 ? await _versionCheckService.CreateAutomaticAssistedRepairPlanAsync(_targetDirectory!)
                 : null;
+            if (assistedPlan is not null)
+            {
+                foreach (var action in assistedPlan.Actions)
+                {
+                    _logger.LogInformation("Unit 修复动作：0x{FileId:X16} 版本 0x{OldVer:X8}->0x{NewVer:X8} LOD {OldLod}->{NewLod}B GPU {OldGpu}->{NewGpu}B 网格差异={MeshDiff} 强自定义={StrongCustom} 体型={Body} 槽位={Slot} 策略={Strategy} 文件={File}",
+                        unchecked((ulong)action.FileId),
+                        action.CurrentVersion,
+                        action.ReferenceVersion,
+                        action.CurrentLodSize,
+                        action.ReferenceLodSize,
+                        action.CurrentGpuSize,
+                        action.ReferenceGpuSize,
+                        action.MeshIdsDiffer,
+                        action.StrongCustomModelSignal,
+                        action.BodyShape,
+                        action.CustomizationSlot,
+                        action.LodStrategy,
+                        Path.GetFileName(action.PatchFilePath));
+                }
+                foreach (var material in assistedPlan.MaterialActions)
+                {
+                    _logger.LogInformation("材质修复动作：0x{FileId:X16} 类型={Kind} 父模板 0x{Old:X16}->0x{New:X16} 文件={File}",
+                        unchecked((ulong)material.FileId),
+                        material.Kind,
+                        material.OldParentMaterialId,
+                        material.NewParentMaterialId,
+                        Path.GetFileName(material.PatchFilePath));
+                }
+            }
+
             if (assistedPlan is { BlockingReasons.Count: > 0 })
             {
                 _logger.LogWarning("Unit 智能修复无法执行：{Reason}", string.Join("；", assistedPlan.BlockingReasons));
@@ -308,6 +361,8 @@ public partial class MainWindow : Window
                     throw new InvalidDataException("companion 恢复失败：" + recoveryResult.ErrorMessage);
                 recoveredCount = recoveryResult.RecoveredCount;
                 _logger.LogInformation("已恢复 {Count} 个缺失的 companion 文件。", recoveredCount);
+                foreach (var path in recoveryResult.RecoveredPaths)
+                    _logger.LogInformation("  恢复文件：{Path}", path);
             }
 
             var metadataActionCount = 0;
@@ -324,6 +379,8 @@ public partial class MainWindow : Window
                 metadataActionCount = metadataResult.AppliedActionCount;
                 backupCount += metadataResult.BackupPaths.Count;
                 _logger.LogInformation("元数据修复完成：应用 {Count} 项，创建 {Backups} 份备份。", metadataActionCount, metadataResult.BackupPaths.Count);
+                foreach (var path in metadataResult.BackupPaths)
+                    _logger.LogInformation("  元数据修复备份：{Path}", path);
             }
 
             var refreshedAssistedPlan = await _versionCheckService.CreateAutomaticAssistedRepairPlanAsync(_targetDirectory!);
@@ -339,6 +396,8 @@ public partial class MainWindow : Window
                 assistedActionCount = assistedResult.AppliedActionCount;
                 backupCount += assistedResult.BackupPaths.Count;
                 _logger.LogInformation("Unit/材质智能修复完成：应用 {Count} 项，创建 {Backups} 份备份。", assistedActionCount, assistedResult.BackupPaths.Count);
+                foreach (var path in assistedResult.BackupPaths)
+                    _logger.LogInformation("  Unit 智能修复备份：{Path}", path);
             }
 
             var successMessage = $"一键修复完成：恢复 {recoveredCount} 个 companion 文件，应用 {metadataActionCount} 项元数据修复和 {assistedActionCount} 项 Unit/材质修复，创建 {backupCount} 份补丁备份。";
@@ -423,6 +482,44 @@ public partial class MainWindow : Window
             emptyResultsPanel.Visibility = Visibility.Collapsed;
             foreach (var patch in analysis.PatchFiles.OrderBy(p => p.FileName, StringComparer.OrdinalIgnoreCase))
             {
+                _logger.LogInformation(
+                    "补丁 {File}：大小 {Size} 字节，健康状态 {Health}，{Entries} 个文件条目，{Types} 种类型，声明资源 {Total}，Unit 数量 {UnitCount}。",
+                    patch.FileName,
+                    patch.FileSize,
+                    GetHealthText(patch.HealthStatus),
+                    patch.NumFiles,
+                    patch.NumTypes,
+                    patch.TotalResources,
+                    patch.UnitDetails.Count);
+
+                var patchIssues = BuildDetailIssueTexts(patch);
+                if (patchIssues.Count > 0)
+                    _logger.LogWarning("补丁 {File} 存在问题：{Issues}", patch.FileName, string.Join("；", patchIssues));
+
+                foreach (var unit in patch.UnitDetails)
+                {
+                    var layoutText = unit.LayoutFormatChecked
+                        ? (unit.LayoutFormatValid ? "通过" : $"异常({unit.LayoutFormatIssueCount})")
+                        : "未检查";
+                    var gpuText = unit.GpuStructureChecked
+                        ? (unit.GpuStructureValid ? $"通过({unit.GpuStreamCount} 个流)" : $"异常({unit.GpuStructureIssueCount})")
+                        : "未检查";
+                    _logger.LogInformation(
+                        "  Unit #{Entry}（ID 0x{FileId:X16}）版本 0x{Version:X8}，数据 {DataSize}B（内部 {Expected}B{SizeState}），LOD [{LodOffset},{LodEnd})，GPU {GpuSize}B，布局 {Layout}，GPU 结构 {Gpu}{Warning}",
+                        unit.EntryIndex,
+                        unchecked((ulong)unit.FileId),
+                        unit.Version,
+                        unit.DataSize,
+                        unit.ExpectedDataSize,
+                        unit.DeclaredSizeMatchesInternal ? string.Empty : "，TOC/内部不一致",
+                        unit.LODGroupOffset,
+                        unit.LODGroupOffset + unit.LODGroupSize,
+                        unit.GpuSize,
+                        layoutText,
+                        gpuText,
+                        string.IsNullOrWhiteSpace(unit.Warning) ? string.Empty : $"，警告：{unit.Warning}");
+                }
+
                 Results.Add(new PatchResultRow(
                     patch.FileName,
                     GetHealthText(patch.HealthStatus),
@@ -471,6 +568,13 @@ public partial class MainWindow : Window
 
     private static string BuildDetails(PatchFileAnalysis patch)
     {
+        var messages = BuildDetailIssueTexts(patch);
+        return messages.Count == 0 ? "结构检查通过" : string.Join("；", messages);
+    }
+
+    /// <summary>汇总补丁级问题（供 UI 与详细日志共用）。</summary>
+    private static List<string> BuildDetailIssueTexts(PatchFileAnalysis patch)
+    {
         var messages = new List<string>();
         if (!patch.HeaderValid || !patch.FileEntriesInBounds)
             messages.Add("TOC 无效");
@@ -495,7 +599,7 @@ public partial class MainWindow : Window
             messages.Add("Unit 内部结构警告");
         if (patch.UnitDetails.Any(unit => unit.GpuStructureChecked && !unit.GpuStructureValid))
             messages.Add("GPU Stream 布局或缓冲区异常");
-        return messages.Count == 0 ? "结构检查通过" : string.Join("；", messages);
+        return messages;
     }
 
     private static string BuildDiagnosticReport(PatchFileAnalysis patch)
