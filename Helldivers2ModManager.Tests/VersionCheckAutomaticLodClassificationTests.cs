@@ -187,6 +187,31 @@ public sealed class VersionCheckAutomaticLodClassificationTests
             new HashSet<long> { unchecked((long)(materialId + 1)) }));
     }
 
+    [TestMethod]
+    public void RequiresCurrentGameLodForLegacyCharacterPack_AnyPackUnitUsesGameLod()
+    {
+        // 旧角色材质包：patch 内存在 0x54AE→0x8F66 迁移时，即使当前 Unit 没有直接引用
+        // 旧角色材质，也必须改用游戏 LOD（否则同包 Torso 等槽位会保留旧 LOD 导致选装备崩溃）。
+        Assert.IsTrue(VersionCheckService.RequiresCurrentGameLodForLegacyCharacterPack(
+            patchHasLegacyCharacterMaterial: true,
+            currentVersion: 1,
+            referenceVersion: 0x00A4CD36));
+
+        // 版本不满足旧角色签名时保持原有分类策略。
+        Assert.IsFalse(VersionCheckService.RequiresCurrentGameLodForLegacyCharacterPack(
+            patchHasLegacyCharacterMaterial: true,
+            currentVersion: 0x00A4CD36,
+            referenceVersion: 0x00A4CD36));
+        Assert.IsFalse(VersionCheckService.RequiresCurrentGameLodForLegacyCharacterPack(
+            patchHasLegacyCharacterMaterial: true,
+            currentVersion: 1,
+            referenceVersion: 0x10800438));
+        Assert.IsFalse(VersionCheckService.RequiresCurrentGameLodForLegacyCharacterPack(
+            patchHasLegacyCharacterMaterial: false,
+            currentVersion: 1,
+            referenceVersion: 0x00A4CD36));
+    }
+
     private static AssistedUnitRepairAction CreateAction(
         long fileId,
         string meshSignature,

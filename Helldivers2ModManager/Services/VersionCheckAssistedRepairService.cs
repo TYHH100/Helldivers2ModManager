@@ -246,6 +246,19 @@ internal sealed partial class VersionCheckService
         return false;
     }
 
+    /// <summary>
+    /// 旧角色材质包整体判定：当 patch 中存在 0x54AE→0x8F66 角色材质迁移时，
+    /// 整个包都应按旧角色材质签名处理。只对直接引用该材质的 Unit 使用游戏 LOD，
+    /// 会让同包内其他 Unit（如 Torso 槽位）保留旧版 LOD，进游戏选择装备时崩溃。
+    /// </summary>
+    internal static bool RequiresCurrentGameLodForLegacyCharacterPack(
+        bool patchHasLegacyCharacterMaterial,
+        uint currentVersion,
+        uint referenceVersion) =>
+        patchHasLegacyCharacterMaterial &&
+        currentVersion == 1 &&
+        referenceVersion == VersionThresholdForLayoutCheck;
+
     private async Task<AssistedModRepairPlan> CreateAssistedRepairPlanInternalAsync(
         DirectoryInfo modDirectory,
         Func<long, AssistedLodStrategy> lodStrategySelector)
@@ -328,6 +341,11 @@ internal sealed partial class VersionCheckService
 
         foreach (var (patchFile, analysis, entries) in patchData)
         {
+            var patchHasLegacyCharacterMaterial = materialActions.Any(action =>
+                string.Equals(action.PatchFilePath, patchFile.FullName, StringComparison.OrdinalIgnoreCase) &&
+                action.Kind == AssistedMaterialRepairKind.ParentReference &&
+                action.OldParentMaterialId == LegacyCharacterMaterialParentId &&
+                action.NewParentMaterialId == CurrentCharacterMaterialParentId);
             var entryByIndex = entries.ToDictionary(e => (int)e.Toc.EntryIndex);
             await using var stream = OpenPatchReadStream(patchFile);
             foreach (var unit in analysis.UnitDetails)
@@ -364,6 +382,10 @@ internal sealed partial class VersionCheckService
                     reference.GpuSize);
                 var customizationInfo = PatchResourceInspectionService.TryReadUnitCustomizationInfo(unitData);
                 var requiresCurrentGameLodForLegacyMaterial =
+                    RequiresCurrentGameLodForLegacyCharacterPack(
+                        patchHasLegacyCharacterMaterial,
+                        unit.Version,
+                        reference.Version) ||
                     RequiresCurrentGameLodForLegacyCharacterMaterial(
                         unit.Version,
                         reference.Version,
