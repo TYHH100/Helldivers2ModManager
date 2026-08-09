@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private readonly ILoggerFactory _loggerFactory;
     private readonly SettingsService _settingsService;
     private readonly VersionCheckService _versionCheckService;
+    private readonly ILogger<MainWindow> _logger;
     private DirectoryInfo? _targetDirectory;
 
     public ObservableCollection<PatchResultRow> Results { get; } = [];
@@ -32,7 +33,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = this;
 
-        _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Warning));
+        _loggerFactory = PatchToolLogging.CreateFactory();
+        PatchToolLogging.CleanExcessLogs();
         _settingsService = new SettingsService(_loggerFactory.CreateLogger<SettingsService>());
         _settingsService.InitDefault();
         var localizationService = new LocalizationService(_loggerFactory.CreateLogger<LocalizationService>());
@@ -40,6 +42,8 @@ public partial class MainWindow : Window
             _loggerFactory.CreateLogger<VersionCheckService>(),
             _settingsService,
             localizationService);
+        _logger = _loggerFactory.CreateLogger<MainWindow>();
+        _logger.LogInformation("Patch tool 启动：日志将写入 logs 目录（最多保留 {MaxFiles} 个）", PatchToolLogging.MaxLogFiles);
 
         Loaded += async (_, _) => await DetectGameDirectoryAsync(showNotFoundMessage: false);
     }
@@ -89,12 +93,14 @@ public partial class MainWindow : Window
         {
             gamePathBox.Text = path;
             UpdateGameDirectoryHint(path, detectedAutomatically: true);
+            _logger.LogInformation("自动检测到游戏目录：{Path}", path);
             if (showNotFoundMessage)
                 statusText.Text = "已自动检测到 Helldivers 2 游戏目录，可用于 Unit 智能修复。";
             return;
         }
 
         gamePathHint.Text = "未自动检测到游戏；智能修复前请手动选择。";
+        _logger.LogWarning("未自动检测到 Helldivers 2 游戏目录，智能修复前需手动选择。");
         if (showNotFoundMessage)
             statusText.Text = "未找到 Helldivers 2。请确认 Steam 已安装游戏，或使用“手动选择”。";
     }
@@ -234,11 +240,13 @@ public partial class MainWindow : Window
             return;
 
         SetBusy(true, "正在生成修复计划…");
+        _logger.LogInformation("开始生成修复计划，目标目录：{Path}", _targetDirectory!.FullName);
         try
         {
             var analysis = await _versionCheckService.AnalyzePatchDirectoryAsync(_targetDirectory!);
             if (!analysis.PatchFiles.Any(patch => patch.UnitDetails.Count > 0))
             {
+                _logger.LogWarning("已跳过：目标目录没有包含 Unit 资源的补丁，仅支持模型模组自动修复。");
                 statusText.Text = "已跳过：自动修复目前仅支持包含 Unit 资源的模型模组；音频及其他非 Unit 资源不会创建备份或修改文件。";
                 return;
             }
@@ -249,6 +257,7 @@ public partial class MainWindow : Window
             var companionPlan = await _versionCheckService.CreateCompanionRecoveryPlanAsync(_targetDirectory!);
             if (companionPlan.MissingCount > 0 && !companionPlan.CanRecover)
             {
+                _logger.LogWarning("缺失的 companion 文件无法安全恢复：{Reason}", BuildCompanionBlockMessage(companionPlan));
                 statusText.Text = "缺失的 companion 文件无法安全恢复：" + BuildCompanionBlockMessage(companionPlan);
                 return;
             }
@@ -256,6 +265,7 @@ public partial class MainWindow : Window
             var safePlan = await _versionCheckService.CreateRepairPlanAsync(_targetDirectory!);
             if (safePlan.BlockingReasons.Count > 0)
             {
+                _logger.LogWarning("元数据修复无法执行：{Reason}", string.Join("；", safePlan.BlockingReasons));
                 statusText.Text = "元数据修复无法执行：" + string.Join("；", safePlan.BlockingReasons);
                 return;
             }
@@ -265,15 +275,19 @@ public partial class MainWindow : Window
                 : null;
             if (assistedPlan is { BlockingReasons.Count: > 0 })
             {
+                _logger.LogWarning("Unit 智能修复无法执行：{Reason}", string.Join("；", assistedPlan.BlockingReasons));
                 statusText.Text = "Unit 智能修复无法执行：" + string.Join("；", assistedPlan.BlockingReasons);
                 return;
             }
 
             if (companionPlan.MissingCount == 0 && safePlan.ActionCount == 0 && assistedPlan is { CanRepair: false })
             {
+                _logger.LogInformation("没有检测到可安全自动修复的问题。");
                 statusText.Text = "没有检测到可安全自动修复的问题。";
                 return;
             }
+
+            _logger.LogInformation("修复计划：companion 缺失 {Missing} 个（可恢复 {Recoverable}），元数据修复 {SafeCount} 项（{SafeFiles} 个补丁），Unit/材质智能修复 {AssistedCount} 项（{AssistedFiles} 个补丁）。", companionPlan.MissingCount, companionPlan.RecoverableCount, safePlan.ActionCount, safePlan.FileCount, assistedPlan?.ActionCount ?? 0, assistedPlan?.FileCount ?? 0);
 
             var confirmation = System.Windows.MessageBox.Show(
                 BuildRepairConfirmation(companionPlan, safePlan, assistedPlan),
@@ -281,7 +295,10 @@ public partial class MainWindow : Window
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
             if (confirmation != MessageBoxResult.Yes)
+            {
+                _logger.LogInformation("用户取消了修复确认。");
                 return;
+            }
 
             var recoveredCount = 0;
             if (companionPlan.MissingCount > 0)
@@ -290,6 +307,7 @@ public partial class MainWindow : Window
                 if (!recoveryResult.Success)
                     throw new InvalidDataException("companion 恢复失败：" + recoveryResult.ErrorMessage);
                 recoveredCount = recoveryResult.RecoveredCount;
+                _logger.LogInformation("已恢复 {Count} 个缺失的 companion 文件。", recoveredCount);
             }
 
             var metadataActionCount = 0;
@@ -305,6 +323,7 @@ public partial class MainWindow : Window
                     throw new InvalidDataException("元数据修复失败：" + metadataResult.ErrorMessage);
                 metadataActionCount = metadataResult.AppliedActionCount;
                 backupCount += metadataResult.BackupPaths.Count;
+                _logger.LogInformation("元数据修复完成：应用 {Count} 项，创建 {Backups} 份备份。", metadataActionCount, metadataResult.BackupPaths.Count);
             }
 
             var refreshedAssistedPlan = await _versionCheckService.CreateAutomaticAssistedRepairPlanAsync(_targetDirectory!);
@@ -319,14 +338,17 @@ public partial class MainWindow : Window
                     throw new InvalidDataException("Unit 智能修复失败：" + assistedResult.ErrorMessage);
                 assistedActionCount = assistedResult.AppliedActionCount;
                 backupCount += assistedResult.BackupPaths.Count;
+                _logger.LogInformation("Unit/材质智能修复完成：应用 {Count} 项，创建 {Backups} 份备份。", assistedActionCount, assistedResult.BackupPaths.Count);
             }
 
             var successMessage = $"一键修复完成：恢复 {recoveredCount} 个 companion 文件，应用 {metadataActionCount} 项元数据修复和 {assistedActionCount} 项 Unit/材质修复，创建 {backupCount} 份补丁备份。";
+            _logger.LogInformation("一键修复完成：{Message}", successMessage);
             await AnalyzeAsync();
             statusText.Text = successMessage;
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "一键修复失败：{Message}", ex.Message);
             statusText.Text = "修复失败：" + ex.Message;
         }
         finally
@@ -340,6 +362,7 @@ public partial class MainWindow : Window
         var path = gamePathBox.Text.Trim();
         if (!IsValidGameDirectory(path))
         {
+            _logger.LogWarning("游戏目录无效，无法执行一键修复：{Path}", path);
             statusText.Text = "一键修复需要有效的 Helldivers 2 游戏目录，以便恢复 companion 文件并执行 Unit/材质智能修复。";
             return false;
         }
@@ -392,6 +415,7 @@ public partial class MainWindow : Window
     private async Task AnalyzeAsync()
     {
         SetBusy(true, "正在检查补丁结构和伴生文件…");
+        _logger.LogInformation("开始扫描目标目录：{Path}", _targetDirectory!.FullName);
         try
         {
             var analysis = await _versionCheckService.AnalyzePatchDirectoryAsync(_targetDirectory!);
@@ -414,9 +438,16 @@ public partial class MainWindow : Window
             statusText.Text = analysis.TotalPatchFiles == 0
                 ? "未找到 .patch_* 主补丁文件。"
                 : $"检测完成：{analysis.TotalPatchFiles} 个补丁，正常 {analysis.HealthyFileCount} 个，警告 {analysis.WarningFileCount} 个，异常 {analysis.CorruptedFileCount} 个。";
+            _logger.LogInformation(
+                "扫描完成：{Total} 个补丁，正常 {Healthy} 个，警告 {Warning} 个，异常 {Corrupted} 个。",
+                analysis.TotalPatchFiles,
+                analysis.HealthyFileCount,
+                analysis.WarningFileCount,
+                analysis.CorruptedFileCount);
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "扫描目标目录失败：{Path}", _targetDirectory!.FullName);
             Results.Clear();
             emptyResultsPanel.Visibility = Visibility.Visible;
             diagnosticTitle.Text = "详细诊断";

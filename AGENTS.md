@@ -138,6 +138,7 @@ catch (Exception ex)
 - 使用 `ILogger<T>`，按实际严重程度选择 `Trace`、`Debug`、`Information`、`Warning`、`Error`、`Critical`。
 - 设置持久化路径为程序目录下的 `settings.json`，具体字段和迁移逻辑以 `SettingsService.cs` 为准。
 - 日志清理由 `AutoCleanLogs` 和 `MaxLogFiles` 控制，按数量保留最新日志，适合低频打开应用的场景；修改时同步设置页面、本地化和加载兼容逻辑。
+- Helldivers2PatchTool（独立工具）的文件日志由 Helldivers2PatchTool/FileLogger.cs 提供：写入程序目录 logs/，每次启动最多保留最新 5 个 .log（PatchToolLogging.CleanExcessLogs）；最低记录级别为 Information 以覆盖扫描/修复全流程。不能直接复用主程序 FileLogger（它依赖主程序 App.Current.LogLevel）。修改独立工具日志时同步检查 MainWindow.xaml.cs 的 _loggerFactory 初始化与流程日志。
 - 路径设置必须验证目录和必要游戏文件；部署默认复制文件，符号链接仅在用户明确开启且权限满足时使用。
 
 ## 7. 安全和变更边界
