@@ -42,6 +42,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     private readonly ModService _modService;
     private readonly PatchResourceInspectionService _inspectionService;
     private readonly ModelPreviewBackend _previewBackend;
+    private readonly GpuSkinningService _gpuSkinningService;
     private readonly LocalizationService _localizationService;
     private readonly Dictionary<ulong, LoadedTexturePreview> _texturePreviews = [];
     private readonly HashSet<ulong> _automaticTexturePreviewIds = [];
@@ -193,6 +194,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         ModService modService,
         PatchResourceInspectionService inspectionService,
         ModelPreviewBackend previewBackend,
+        GpuSkinningService gpuSkinningService,
         LocalizationService localizationService)
     {
         _logger = logger;
@@ -200,6 +202,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _modService = modService;
         _inspectionService = inspectionService;
         _previewBackend = previewBackend;
+        _gpuSkinningService = gpuSkinningService;
         _localizationService = localizationService;
         _localizationService.PropertyChanged += LocalizationServiceOnPropertyChanged;
         _animationTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -487,6 +490,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         if (resetView)
         {
             ClearRetainedPreviewCaches();
+            _gpuSkinningService.ReleaseMeshes(Meshes);
             Meshes.Clear();
             Textures.Clear();
             StopAnimationPlayback();
@@ -1127,6 +1131,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
                         selectedAnimation,
                         sample.TimeSeconds,
                         _animationBindings,
+                        _gpuSkinningService,
                         cancellationToken),
                     cancellationToken);
                 if (renderGeneration == _renderGeneration &&
@@ -1162,6 +1167,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         ModelPreviewAnimationChoice selectedAnimation,
         float animationTimeSeconds,
         ConcurrentDictionary<AnimationBindingCacheKey, ModelPreviewAnimationBinding> animationBindings,
+        GpuSkinningService gpuSkinningService,
         CancellationToken cancellationToken)
     {
         var transformsBySkeleton = new Dictionary<ModelPreviewSkeleton, IReadOnlyList<System.Numerics.Matrix4x4>>();
@@ -1188,11 +1194,15 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
                 transformsBySkeleton[skinning.Skeleton] = transforms;
             }
 
-            var skinned = ModelPreviewCpuSkinner.Skin(mesh, transforms, skinNormals: false);
-            var positions = CreatePoint3DCollection(skinned.Positions);
-            var normals = skinned.Normals is null
-                ? null
-                : CreateVector3DCollection(skinned.Normals);
+            var skinnedPositions = gpuSkinningService.TrySkinPositions(
+                mesh,
+                transforms,
+                cancellationToken,
+                out var gpuPositions)
+                ? gpuPositions
+                : ModelPreviewCpuSkinner.Skin(mesh, transforms, skinNormals: false).Positions;
+            var positions = CreatePoint3DCollection(skinnedPositions);
+            Vector3DCollection? normals = null;
             updates[meshIndex] = new AnimationGeometryUpdate(mesh, positions, normals);
         }
         return updates;
@@ -1327,10 +1337,12 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
                     previews,
                     useAutomaticMaterials,
                     selectedTextureId,
-                    selectedAnimation,
-                    animationTimeSeconds,
-                    _animationBindings,
-                    _geometryCache),
+                     selectedAnimation,
+                     animationTimeSeconds,
+                     _animationBindings,
+                     _geometryCache,
+                     _gpuSkinningService,
+                     cancellationToken),
                 cancellationToken);
             if (Volatile.Read(ref _isDisposed) != 0 || renderGeneration != _renderGeneration)
                 return;
@@ -1367,7 +1379,9 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         ModelPreviewAnimationChoice? selectedAnimation,
         float animationTimeSeconds,
         ConcurrentDictionary<AnimationBindingCacheKey, ModelPreviewAnimationBinding> animationBindings,
-        ConditionalWeakTable<ModelPreviewMesh, CachedMeshGeometry> geometryCache)
+        ConditionalWeakTable<ModelPreviewMesh, CachedMeshGeometry> geometryCache,
+        GpuSkinningService gpuSkinningService,
+        CancellationToken cancellationToken)
     {
         var group = new Model3DGroup();
         var materials = new Dictionary<string, Material>(StringComparer.Ordinal);
@@ -1382,6 +1396,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
 
         foreach (var source in meshes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             CachedMeshGeometry cachedGeometry;
             if (selectedAnimation is not null && source.Skinning is { } skinning &&
                 ModelPreviewAnimationCompatibility.IsCompatible(
@@ -1405,11 +1420,17 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
                     skinningTransforms[skinning.Skeleton] = transforms;
                 }
 
-                var animatedGeometry = ModelPreviewCpuSkinner.Skin(source, transforms);
+                var animatedPositions = gpuSkinningService.TrySkinPositions(
+                    source,
+                    transforms,
+                    cancellationToken,
+                    out var gpuPositions)
+                    ? gpuPositions
+                    : ModelPreviewCpuSkinner.Skin(source, transforms, skinNormals: false).Positions;
                 cachedGeometry = CreateCachedMeshGeometry(
                     source,
-                    animatedGeometry.Positions,
-                    animatedGeometry.Normals);
+                    animatedPositions,
+                    source.Normals);
             }
             else
             {
@@ -1664,6 +1685,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         // strong cache root so old WPF MeshGeometry3D instances can be collected.
         _geometryCache = new ConditionalWeakTable<ModelPreviewMesh, CachedMeshGeometry>();
         _animationBindings.Clear();
+        _gpuSkinningService.ReleaseMeshes(Meshes);
         _liveMeshGeometries.Clear();
         ClearAnimationFrameCache();
     }
@@ -1925,6 +1947,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _loadCancellation?.Cancel();
         Interlocked.Increment(ref _renderGeneration);
         ModelGroup = null;
+        _gpuSkinningService.ReleaseMeshes(Meshes);
         _liveMeshGeometries.Clear();
         ClearAnimationFrameCache();
         SelectedTexturePreview = null;

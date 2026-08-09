@@ -713,29 +713,60 @@
 			<TextBlock Text="{Binding GroupSidebar.ToggleGlyph}" FontFamily="Segoe Fluent Icons" FontSize="16"/>
 		</Button>
 
+		<!-- 分组侧边栏：覆盖式抽屉，用 RenderTransform 平移替代 Width 布局动画，
+			 避免每帧触发整个 Grid 的 Measure+Arrange 导致卡顿掉帧 -->
 		<Border Grid.Row="0"
 				Grid.RowSpan="3"
-				Grid.Column="3"
-				Width="0"
-				Opacity="0"
-				ClipToBounds="True">
+				Grid.Column="1"
+				Panel.ZIndex="1"
+				Width="260"
+				HorizontalAlignment="Right"
+				VerticalAlignment="Stretch">
+			<Border.RenderTransform>
+				<TranslateTransform X="260"/>
+			</Border.RenderTransform>
 			<Border.Style>
 				<Style TargetType="Border">
+					<!-- 关闭态默认值：透明、不响应点击、平移到右侧外 -->
+					<Setter Property="Opacity" Value="0"/>
+					<Setter Property="IsHitTestVisible" Value="False"/>
 					<Style.Triggers>
 						<DataTrigger Binding="{Binding GroupSidebar.IsOpen}" Value="True">
+							<!-- 打开期间允许交互 -->
+							<Setter Property="IsHitTestVisible" Value="True"/>
 							<DataTrigger.EnterActions>
 								<BeginStoryboard>
 									<Storyboard>
-										<DoubleAnimation Storyboard.TargetProperty="Width" To="260" Duration="0:0:0.18"/>
-										<DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.14"/>
+										<DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+														 To="0" Duration="0:0:0.18">
+											<DoubleAnimation.EasingFunction>
+												<CubicEase EasingMode="EaseOut"/>
+											</DoubleAnimation.EasingFunction>
+										</DoubleAnimation>
+										<DoubleAnimation Storyboard.TargetProperty="Opacity"
+														 To="1" Duration="0:0:0.14">
+											<DoubleAnimation.EasingFunction>
+												<CubicEase EasingMode="EaseOut"/>
+											</DoubleAnimation.EasingFunction>
+										</DoubleAnimation>
 									</Storyboard>
 								</BeginStoryboard>
 							</DataTrigger.EnterActions>
 							<DataTrigger.ExitActions>
 								<BeginStoryboard>
 									<Storyboard>
-										<DoubleAnimation Storyboard.TargetProperty="Width" To="0" Duration="0:0:0.16"/>
-										<DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.12"/>
+										<DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+														 To="260" Duration="0:0:0.16">
+											<DoubleAnimation.EasingFunction>
+												<CubicEase EasingMode="EaseIn"/>
+											</DoubleAnimation.EasingFunction>
+										</DoubleAnimation>
+										<DoubleAnimation Storyboard.TargetProperty="Opacity"
+														 To="0" Duration="0:0:0.12">
+											<DoubleAnimation.EasingFunction>
+												<CubicEase EasingMode="EaseIn"/>
+											</DoubleAnimation.EasingFunction>
+										</DoubleAnimation>
 									</Storyboard>
 								</BeginStoryboard>
 							</DataTrigger.ExitActions>
@@ -743,8 +774,7 @@
 					</Style.Triggers>
 				</Style>
 			</Border.Style>
-			<views:ModGroupSidebarView Width="260"
-									DataContext="{Binding GroupSidebar}"/>
+			<views:ModGroupSidebarView DataContext="{Binding GroupSidebar}"/>
 		</Border>
 
 		<!-- Bottom Action Bar -->

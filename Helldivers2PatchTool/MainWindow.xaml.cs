@@ -236,58 +236,94 @@ public partial class MainWindow : Window
         SetBusy(true, "正在生成修复计划…");
         try
         {
+            var analysis = await _versionCheckService.AnalyzePatchDirectoryAsync(_targetDirectory!);
+            if (!analysis.PatchFiles.Any(patch => patch.UnitDetails.Count > 0))
+            {
+                statusText.Text = "已跳过：自动修复目前仅支持包含 Unit 资源的模型模组；音频及其他非 Unit 资源不会创建备份或修改文件。";
+                return;
+            }
+
+            if (!TryConfigureGameDirectory())
+                return;
+
+            var companionPlan = await _versionCheckService.CreateCompanionRecoveryPlanAsync(_targetDirectory!);
+            if (companionPlan.MissingCount > 0 && !companionPlan.CanRecover)
+            {
+                statusText.Text = "缺失的 companion 文件无法安全恢复：" + BuildCompanionBlockMessage(companionPlan);
+                return;
+            }
+
             var safePlan = await _versionCheckService.CreateRepairPlanAsync(_targetDirectory!);
-            if (safePlan.CanRepair)
+            if (safePlan.BlockingReasons.Count > 0)
             {
-                var confirmation = System.Windows.MessageBox.Show(
-                    $"将修复 {safePlan.FileCount} 个文件中的 {safePlan.ActionCount} 项元数据。\n\n"
-                    + "每个原文件都会在同目录自动创建备份。是否继续？",
-                    "确认安全修复",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
-                if (confirmation != MessageBoxResult.Yes)
-                    return;
-
-                var repairResult = await _versionCheckService.RepairModAsync(_targetDirectory!);
-                statusText.Text = repairResult.Success
-                    ? $"安全修复完成：已应用 {repairResult.AppliedActionCount} 项修改，并创建 {repairResult.BackupPaths.Count} 份备份。"
-                    : $"安全修复失败：{repairResult.ErrorMessage}";
-                await AnalyzeAsync();
+                statusText.Text = "元数据修复无法执行：" + string.Join("；", safePlan.BlockingReasons);
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(gamePathBox.Text) || !Directory.Exists(gamePathBox.Text))
+            var assistedPlan = safePlan.ActionCount == 0 && companionPlan.MissingCount == 0
+                ? await _versionCheckService.CreateAutomaticAssistedRepairPlanAsync(_targetDirectory!)
+                : null;
+            if (assistedPlan is { BlockingReasons.Count: > 0 })
             {
-                statusText.Text = safePlan.BlockingReasons.Count > 0
-                    ? "安全修复无法执行：" + string.Join("；", safePlan.BlockingReasons)
-                    : "未找到可安全修复的元数据问题。若需要 Unit 智能修复，请先选择游戏目录。";
+                statusText.Text = "Unit 智能修复无法执行：" + string.Join("；", assistedPlan.BlockingReasons);
                 return;
             }
 
-            _settingsService.GameDirectory = gamePathBox.Text.Trim();
-            var assistedPlan = await _versionCheckService.CreateAutomaticAssistedRepairPlanAsync(_targetDirectory!);
-            if (!assistedPlan.CanRepair)
+            if (companionPlan.MissingCount == 0 && safePlan.ActionCount == 0 && assistedPlan is { CanRepair: false })
             {
-                statusText.Text = assistedPlan.BlockingReasons.Count > 0
-                    ? "智能修复无法执行：" + string.Join("；", assistedPlan.BlockingReasons)
-                    : "没有检测到可自动修复的 Unit 问题。";
+                statusText.Text = "没有检测到可安全自动修复的问题。";
                 return;
             }
 
-            var assistedConfirmation = System.Windows.MessageBox.Show(
-                $"将参考当前游戏文件修复 {assistedPlan.FileCount} 个补丁中的 {assistedPlan.ActionCount} 个 Unit。\n\n"
-                + "工具会自动备份原文件；修复后请在游戏中验证。是否继续？",
-                "确认 Unit 智能修复",
+            var confirmation = System.Windows.MessageBox.Show(
+                BuildRepairConfirmation(companionPlan, safePlan, assistedPlan),
+                "确认一键修复",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
-            if (assistedConfirmation != MessageBoxResult.Yes)
+            if (confirmation != MessageBoxResult.Yes)
                 return;
 
-            var assistedResult = await _versionCheckService.RepairModAutomaticallyAsync(_targetDirectory!);
-            statusText.Text = assistedResult.Success
-                ? $"Unit 智能修复完成：已应用 {assistedResult.AppliedActionCount} 项修改，并创建 {assistedResult.BackupPaths.Count} 份备份。"
-                : $"Unit 智能修复失败：{assistedResult.ErrorMessage}";
+            var recoveredCount = 0;
+            if (companionPlan.MissingCount > 0)
+            {
+                var recoveryResult = await _versionCheckService.RecoverCompanionFilesAsync(_targetDirectory!);
+                if (!recoveryResult.Success)
+                    throw new InvalidDataException("companion 恢复失败：" + recoveryResult.ErrorMessage);
+                recoveredCount = recoveryResult.RecoveredCount;
+            }
+
+            var metadataActionCount = 0;
+            var backupCount = 0;
+            var refreshedSafePlan = await _versionCheckService.CreateRepairPlanAsync(_targetDirectory!);
+            if (refreshedSafePlan.ActionCount > 0)
+            {
+                if (!refreshedSafePlan.CanRepair)
+                    throw new InvalidDataException(string.Join(Environment.NewLine, refreshedSafePlan.BlockingReasons));
+
+                var metadataResult = await _versionCheckService.RepairModAsync(_targetDirectory!);
+                if (!metadataResult.Success)
+                    throw new InvalidDataException("元数据修复失败：" + metadataResult.ErrorMessage);
+                metadataActionCount = metadataResult.AppliedActionCount;
+                backupCount += metadataResult.BackupPaths.Count;
+            }
+
+            var refreshedAssistedPlan = await _versionCheckService.CreateAutomaticAssistedRepairPlanAsync(_targetDirectory!);
+            if (refreshedAssistedPlan.BlockingReasons.Count > 0)
+                throw new InvalidDataException("Unit 智能修复无法执行：" + string.Join("；", refreshedAssistedPlan.BlockingReasons));
+
+            var assistedActionCount = 0;
+            if (refreshedAssistedPlan.CanRepair)
+            {
+                var assistedResult = await _versionCheckService.RepairModAutomaticallyAsync(_targetDirectory!);
+                if (!assistedResult.Success)
+                    throw new InvalidDataException("Unit 智能修复失败：" + assistedResult.ErrorMessage);
+                assistedActionCount = assistedResult.AppliedActionCount;
+                backupCount += assistedResult.BackupPaths.Count;
+            }
+
+            var successMessage = $"一键修复完成：恢复 {recoveredCount} 个 companion 文件，应用 {metadataActionCount} 项元数据修复和 {assistedActionCount} 项 Unit/材质修复，创建 {backupCount} 份补丁备份。";
             await AnalyzeAsync();
+            statusText.Text = successMessage;
         }
         catch (Exception ex)
         {
@@ -297,6 +333,47 @@ public partial class MainWindow : Window
         {
             SetBusy(false, null);
         }
+    }
+
+    private bool TryConfigureGameDirectory()
+    {
+        var path = gamePathBox.Text.Trim();
+        if (!IsValidGameDirectory(path))
+        {
+            statusText.Text = "一键修复需要有效的 Helldivers 2 游戏目录，以便恢复 companion 文件并执行 Unit/材质智能修复。";
+            return false;
+        }
+
+        _settingsService.GameDirectory = path;
+        return true;
+    }
+
+    private static string BuildRepairConfirmation(
+        CompanionRecoveryPlan companionPlan,
+        ModRepairPlan safePlan,
+        AssistedModRepairPlan? assistedPlan)
+    {
+        var steps = new List<string>();
+        if (companionPlan.MissingCount > 0)
+            steps.Add($"恢复 {companionPlan.RecoverableCount} 个缺失的 companion 文件");
+        if (safePlan.ActionCount > 0)
+            steps.Add($"修复 {safePlan.FileCount} 个补丁中的 {safePlan.ActionCount} 项元数据");
+        if (assistedPlan is { CanRepair: true })
+            steps.Add($"参考当前游戏修复 {assistedPlan.FileCount} 个补丁中的 {assistedPlan.ActionCount} 个 Unit/材质项");
+        if (assistedPlan is null)
+            steps.Add("在前置修复后重新生成 Unit/材质智能修复计划");
+
+        return "将按管理器同样的安全顺序执行：\n\n"
+            + string.Join("\n", steps.Select((step, index) => $"{index + 1}. {step}"))
+            + "\n\n补丁写入前会创建备份，且每个阶段完成后都会重新检查。是否继续？";
+    }
+
+    private static string BuildCompanionBlockMessage(CompanionRecoveryPlan plan)
+    {
+        var reasons = plan.Items
+            .Where(item => item.IsMissing && !item.CanRecover)
+            .Select(item => $"{Path.GetFileName(item.CompanionPath)}：{item.Reason}");
+        return string.Join("；", reasons);
     }
 
     private bool TryPrepareTargetDirectory()

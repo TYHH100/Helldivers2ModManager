@@ -173,7 +173,8 @@
                             <TextBlock Text="扫描补丁结构、资源类型表与 Unit 边界" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" />
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button x:Name="repairButton" Content="安全修复" Margin="0,0,8,0" Click="Repair_Click" />
+                            <Button x:Name="repairButton" Content="一键修复" Margin="0,0,8,0" Click="Repair_Click"
+                                    ToolTip="按 companion 恢复、元数据修复和 Unit/材质智能修复的顺序执行" />
                             <Button x:Name="analyzeButton" Style="{StaticResource PrimaryButton}" Content="开始检测" Click="Analyze_Click" />
                         </StackPanel>
                     </Grid>
