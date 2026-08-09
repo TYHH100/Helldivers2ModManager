@@ -496,30 +496,6 @@ public partial class MainWindow : Window
                 if (patchIssues.Count > 0)
                     _logger.LogWarning("补丁 {File} 存在问题：{Issues}", patch.FileName, string.Join("；", patchIssues));
 
-                foreach (var unit in patch.UnitDetails)
-                {
-                    var layoutText = unit.LayoutFormatChecked
-                        ? (unit.LayoutFormatValid ? "通过" : $"异常({unit.LayoutFormatIssueCount})")
-                        : "未检查";
-                    var gpuText = unit.GpuStructureChecked
-                        ? (unit.GpuStructureValid ? $"通过({unit.GpuStreamCount} 个流)" : $"异常({unit.GpuStructureIssueCount})")
-                        : "未检查";
-                    _logger.LogInformation(
-                        "  Unit #{Entry}（ID 0x{FileId:X16}）版本 0x{Version:X8}，数据 {DataSize}B（内部 {Expected}B{SizeState}），LOD [{LodOffset},{LodEnd})，GPU {GpuSize}B，布局 {Layout}，GPU 结构 {Gpu}{Warning}",
-                        unit.EntryIndex,
-                        unchecked((ulong)unit.FileId),
-                        unit.Version,
-                        unit.DataSize,
-                        unit.ExpectedDataSize,
-                        unit.DeclaredSizeMatchesInternal ? string.Empty : "，TOC/内部不一致",
-                        unit.LODGroupOffset,
-                        unit.LODGroupOffset + unit.LODGroupSize,
-                        unit.GpuSize,
-                        layoutText,
-                        gpuText,
-                        string.IsNullOrWhiteSpace(unit.Warning) ? string.Empty : $"，警告：{unit.Warning}");
-                }
-
                 Results.Add(new PatchResultRow(
                     patch.FileName,
                     GetHealthText(patch.HealthStatus),
