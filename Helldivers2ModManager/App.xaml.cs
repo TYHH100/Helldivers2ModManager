@@ -76,6 +76,13 @@ internal partial class App : Application
 	/// 必须在创建依赖 SettingsService 的 ViewModel 之前调用，
 	/// 避免 ViewModel 构造函数访问设置属性时抛出 "Object not initialized"。
 	/// </summary>
+	/// <remarks>
+	/// 实现说明：用 <see cref="Task.Run{TResult}(Func{Task{TResult}})"/> 把 InitAsync 放到线程池线程执行，
+	/// 再同步等待结果。原因：SettingsService.ReadAsyncFallback 内部的 await 未使用 ConfigureAwait(false)，
+	/// 若直接在 UI 线程上 <c>GetAwaiter().GetResult()</c> 阻塞等待，await 续接会尝试回到被阻塞的 UI 线程，导致死锁。
+	/// 线程池线程无 SynchronizationContext，await 续接不会回到 UI 线程，从而避免死锁。
+	/// 此时尚未显示窗口，短暂阻塞 UI 线程可接受。
+	/// </remarks>
 	private void InitializeSettingsAndLanguageSync()
 	{
 		try
@@ -83,8 +90,8 @@ internal partial class App : Application
 			var settingsService = Host.Services.GetRequiredService<SettingsService>();
 			var localizationService = Host.Services.GetRequiredService<LocalizationService>();
 
-			// 同步等待初始化完成（文件 I/O 在此阶段可接受，尚未显示窗口）
-			bool initOk = settingsService.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+			// 在线程池线程上运行 InitAsync，避免 UI 线程死锁
+			bool initOk = Task.Run(() => settingsService.InitAsync()).GetAwaiter().GetResult();
 			if (initOk)
 			{
 				if (!string.IsNullOrEmpty(settingsService.Language))
