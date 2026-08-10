@@ -62,8 +62,9 @@ internal partial class App : Application
 		// 初始化 SharpSevenZip：提取嵌入式 7z.dll 并设置库路径
 		InitializeSharpSevenZip();
 
-		// 尽早加载设置并应用已保存的语言偏好（在显示主窗口之前）
-		InitializeLanguagePreference();
+		// 先同步初始化 SettingsService 并应用已保存的语言偏好（在创建 MainWindow 之前）
+		// 必须在 MainWindow/MainViewModel 创建之前完成，否则 ViewModel 构造函数访问设置会抛 "Object not initialized"
+		InitializeSettingsAndLanguageSync();
 
 		MainWindow = Host.Services.GetRequiredService<MainWindow>();
 		MainWindow.Show();
@@ -71,37 +72,31 @@ internal partial class App : Application
 	}
 
 	/// <summary>
-	/// 在启动时尽早加载设置并应用已保存的语言偏好，
-	/// 避免使用自动检测（系统语言）覆盖用户手动指定的语言。
-	/// 异步执行以避免阻塞 UI 线程导致死锁。
+	/// 同步初始化 SettingsService 并应用已保存的语言偏好。
+	/// 必须在创建依赖 SettingsService 的 ViewModel 之前调用，
+	/// 避免 ViewModel 构造函数访问设置属性时抛出 "Object not initialized"。
 	/// </summary>
-	private void InitializeLanguagePreference()
-	{
-		_ = InitializeLanguageAsync();
-	}
-
-	private async Task InitializeLanguageAsync()
+	private void InitializeSettingsAndLanguageSync()
 	{
 		try
 		{
 			var settingsService = Host.Services.GetRequiredService<SettingsService>();
 			var localizationService = Host.Services.GetRequiredService<LocalizationService>();
 
-			if (await settingsService.InitAsync().ConfigureAwait(false))
+			// 同步等待初始化完成（文件 I/O 在此阶段可接受，尚未显示窗口）
+			bool initOk = settingsService.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+			if (initOk)
 			{
 				if (!string.IsNullOrEmpty(settingsService.Language))
 				{
-					await Dispatcher.InvokeAsync(() =>
-					{
-						localizationService.SelectedLanguage = settingsService.Language;
-						_logger?.LogInformation("Applied saved language preference: {Lang}", settingsService.Language);
-					});
+					localizationService.SelectedLanguage = settingsService.Language;
+					_logger?.LogInformation("Applied saved language preference: {Lang}", settingsService.Language);
 				}
 			}
 		}
 		catch (Exception ex)
 		{
-			_logger?.LogWarning(ex, "Failed to initialize language preference, using auto-detect");
+			_logger?.LogWarning(ex, "Failed to initialize settings / language preference, using auto-detect");
 		}
 	}
 

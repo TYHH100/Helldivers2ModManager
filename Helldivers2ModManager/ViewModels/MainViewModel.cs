@@ -27,8 +27,9 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable
 
 	/// <summary>
 	/// 自定义背景图片不透明度（0..1），半透明露出深色底保证前景可读。
+	/// 防御性：SettingsService 未初始化时返回默认 0.6。
 	/// </summary>
-	public double BackgroundImageOpacity => _settingsService.BackgroundOpacity;
+	public double BackgroundImageOpacity => _settingsService.Initialized ? _settingsService.BackgroundOpacity : 0.6f;
 
 	/// <summary>
 	/// 是否已启用自定义背景图片。
@@ -85,7 +86,9 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable
 
 	private void ApplyCardOpacity()
 	{
-		ApplyCardOpacity(_settingsService.CardOpacity);
+		// 防御性：SettingsService 未初始化时使用默认卡片不透明度 0.7
+		float opacity = _settingsService.Initialized ? _settingsService.CardOpacity : 0.7f;
+		ApplyCardOpacity(opacity);
 	}
 
 	/// <summary>
@@ -112,6 +115,10 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable
 
 	private ImageSource? CreateBackgroundImageSource()
 	{
+		// 防御性：SettingsService 未初始化时不加载背景图片，返回 null
+		if (!_settingsService.Initialized)
+			return null;
+
 		if (_settingsService.BackgroundMode != BackgroundMode.Image)
 			return null;
 
