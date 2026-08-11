@@ -138,12 +138,14 @@
 				<!-- Tag Selection List -->
 				<ListBox x:Name="tagSelectionList"
 						 Grid.Row="1"
+						 MaxHeight="360"
 						 Margin="0 0 0 16"
 						 FontSize="14"
 						 Background="Transparent"
 						 BorderThickness="0"
 						 Visibility="Collapsed"
 						 SelectionMode="Multiple"
+						 ScrollViewer.VerticalScrollBarVisibility="Auto"
 						 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
 					<ListBox.ItemTemplate>
 						<DataTemplate>
