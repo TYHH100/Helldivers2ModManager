@@ -128,7 +128,6 @@
 										</ToolTip>
 									</TextBlock.ToolTip>
 								</TextBlock>
-								</StackPanel>
 								<StackPanel Orientation="Horizontal" Margin="0 4 0 0">
 									<ItemsControl ItemsSource="{Binding DisplayTags}">
 										<ItemsControl.ItemsPanel>
@@ -185,6 +184,7 @@
 										</Border.ToolTip>
 									</Border>
 								</StackPanel>
+							</StackPanel>
 
 							<!-- Mod Description -->
 							<TextBlock Grid.Column="1"
