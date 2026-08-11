@@ -420,7 +420,8 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
                 if (File.Exists(iconFullPath))
                 {
                     bmp.UriSource = new Uri(iconFullPath);
-                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    // 使用默认的 OnDemand 缓存模式：EndInit 时只登记 URI 不做解码，
+                    // 渲染时才按需解码并缓存，避免启动加载大量模组时在 UI 线程全量解码卡顿
                 }
                 else
                 {
