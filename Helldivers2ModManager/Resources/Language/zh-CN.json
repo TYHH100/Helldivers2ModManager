@@ -207,6 +207,7 @@
     "DashboardPage.MoveToPositionTitle": "移动位置",
     "DashboardPage.MoveToPositionMsg": "输入目标位置（1 到 {count}）：",
     "DashboardPage.MoveToPositionInvalid": "无效的位置，请输入 1 到 {count} 之间的整数。",
+    "DashboardPage.PositionNumberHint": "模组在列表中的序号，右键菜单的“移动到指定位置”使用该编号。",
     "DashboardPage.CreateSeparator": "创建分隔符",
     "DashboardPage.Rename": "重命名",
     "DashboardPage.ChangeColor": "更改颜色",

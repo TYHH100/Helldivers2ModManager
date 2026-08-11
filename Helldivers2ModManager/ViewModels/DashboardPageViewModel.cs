@@ -279,6 +279,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             // 分隔符未启用时，只显示所有模组
             foreach (var mod in groupedMods)
                 _orderedItems.Add(mod);
+            RefreshPositionNumbers();
             OnPropertyChanged(nameof(Mods));
             return;
         }
@@ -302,7 +303,18 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             }
         }
 
+        RefreshPositionNumbers();
         OnPropertyChanged(nameof(Mods));
+    }
+
+    /// <summary>
+    /// 按 _orderedItems 中模组的当前顺序刷新显示序号（1 基，不含分隔符）
+    /// </summary>
+    private void RefreshPositionNumbers()
+    {
+        int position = 1;
+        foreach (var vm in _orderedItems.OfType<ModViewModel>())
+            vm.PositionNumber = position++;
     }
 
     private void UpdateView()
@@ -892,6 +904,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             group.ModGuids.Clear();
             foreach (var vm in displayOrder)
                 group.ModGuids.Add(vm.Guid);
+            RefreshPositionNumbers();
             return;
         }
 
@@ -904,6 +917,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 _mods.Move(currentIdx, Math.Min(i, _mods.Count - 1));
             }
         }
+
+        RefreshPositionNumbers();
     }
 
     /// <summary>

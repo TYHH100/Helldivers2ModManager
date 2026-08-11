@@ -79,6 +79,7 @@
 								<ColumnDefinition Width="Auto"/>
 								<ColumnDefinition Width="Auto"/>
 								<ColumnDefinition Width="Auto"/>
+								<ColumnDefinition Width="Auto"/>
 							</Grid.ColumnDefinitions>
 							<Grid.RowDefinitions>
 								<RowDefinition Height="*"/>
@@ -108,16 +109,16 @@
 							</Viewbox>
 
 							<!-- Mod Name and Tags -->
-							<StackPanel Grid.Column="1"
+								<StackPanel Grid.Column="1"
 									   Grid.Row="0"
 									   Orientation="Vertical"
 									   VerticalAlignment="Center">
-								<TextBlock Text="{Binding Name}"
-										   FontSize="18"
-										   FontWeight="SemiBold"
-										   Foreground="{StaticResource NeutralForegroundBrush}"
-										   TextWrapping="NoWrap"
-										   TextTrimming="CharacterEllipsis">
+									<TextBlock Text="{Binding Name}"
+											   FontSize="18"
+											   FontWeight="SemiBold"
+											   Foreground="{StaticResource NeutralForegroundBrush}"
+											   TextWrapping="NoWrap"
+											   TextTrimming="CharacterEllipsis">
 									<TextBlock.ToolTip>
 										<ToolTip>
 											<TextBlock Text="{Binding Name}"
@@ -127,6 +128,7 @@
 										</ToolTip>
 									</TextBlock.ToolTip>
 								</TextBlock>
+								</StackPanel>
 								<StackPanel Orientation="Horizontal" Margin="0 4 0 0">
 									<ItemsControl ItemsSource="{Binding DisplayTags}">
 										<ItemsControl.ItemsPanel>
@@ -150,7 +152,7 @@
 									<Border Background="#FF6B7280"
 											CornerRadius="4"
 											Padding="6 2"
-											Margin="0 0 4 0"
+									Margin="0,-4,-6,0"
 											Visibility="{Binding HasHiddenTags, Converter={StaticResource BoolToVisibilityConverter}}">
 										<TextBlock Text="{Binding HiddenTagCount, StringFormat='+{0}'}"
 												   FontSize="11"
@@ -183,7 +185,6 @@
 										</Border.ToolTip>
 									</Border>
 								</StackPanel>
-							</StackPanel>
 
 							<!-- Mod Description -->
 							<TextBlock Grid.Column="1"
@@ -238,6 +239,21 @@
 										   FontSize="16"
 										   Foreground="{StaticResource DangerBrush}"/>
 							</Button>
+
+							<!-- 模组序号：与右键菜单“移动到指定位置”的编号一致 -->
+							<Border Grid.Column="5"
+									Grid.Row="0"
+									HorizontalAlignment="Right"
+									VerticalAlignment="Top"
+									Margin="0 0 4 0"
+									Background="#FF6B7280"
+									CornerRadius="4"
+									Padding="5 1"
+									ToolTip="{loc:Loc DashboardPage.PositionNumberHint}">
+								<TextBlock Text="{Binding PositionNumber}"
+										   FontSize="11"
+										   Foreground="White"/>
+							</Border>
 
 							<!-- 版本状态指示器 -->
 			<Border Grid.Column="0"

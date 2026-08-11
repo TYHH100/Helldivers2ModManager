@@ -220,6 +220,12 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// 在 Dashboard 列表中的显示序号（1 基，与右键菜单“移动到指定位置”的编号一致）
+    /// </summary>
+    [ObservableProperty]
+    private int _positionNumber;
+
+    /// <summary>
     /// 多选状态 —— 在 Dashboard 列表中标记选中，用于批量操作
     /// </summary>
     [ObservableProperty]

@@ -207,6 +207,7 @@
     "DashboardPage.MoveToPositionTitle": "Move Position",
     "DashboardPage.MoveToPositionMsg": "Enter target position (1 to {count}):",
     "DashboardPage.MoveToPositionInvalid": "Invalid position. Enter an integer between 1 and {count}.",
+    "DashboardPage.PositionNumberHint": "Mod position in the list. The \"Move to Position...\" context menu uses this number.",
     "DashboardPage.CreateSeparator": "Create Separator",
     "DashboardPage.Rename": "Rename",
     "DashboardPage.ChangeColor": "Change Color",
