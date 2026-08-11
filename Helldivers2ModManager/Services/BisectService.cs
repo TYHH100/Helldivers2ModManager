@@ -61,6 +61,12 @@ internal sealed class BisectService
 		public List<Guid> Suspects { get; } = [];
 
 		public List<BisectRoundRecord> Rounds { get; } = [];
+
+		/// <summary>
+		/// 会话内是否出现过崩溃报告（含迭代验证部署的崩溃）。
+		/// 全程未崩溃时收敛结果不能作为嫌疑依据。
+		/// </summary>
+		public bool HasCrashed { get; set; }
 	}
 
 	public sealed class BisectRoundRecord
@@ -195,12 +201,24 @@ internal sealed class BisectService
 		var testedGuids = round.TestedMods.Select(static mod => mod.Manifest.Guid).ToArray();
 		session.Candidates = BisectCore.ApplyReport(session.Candidates, testedGuids, crashed).ToList();
 
+		if (crashed)
+			session.HasCrashed = true;
+
 		session.Rounds.Add(new BisectRoundRecord
 		{
 			RoundIndex = session.Rounds.Count + 1,
 			TestedModNames = round.TestedMods.Select(static mod => mod.Manifest.Name).ToArray(),
 			Crashed = crashed,
 		});
+	}
+
+	/// <summary>
+	/// 记录迭代验证部署（剩余模组全量部署）发生崩溃，成为后续二分的崩溃证据。
+	/// </summary>
+	public void RecordVerificationCrashed()
+	{
+		var session = Current ?? throw new InvalidOperationException("No bisect session.");
+		session.HasCrashed = true;
 	}
 
 	/// <summary>

@@ -204,6 +204,11 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 				{
 					if (session.Candidates.Count == 1)
 					{
+						// 只有出现过崩溃报告，收敛到的候选才能判定为嫌疑；
+						// 全程未崩溃说明没有失效模组，直接结束
+						if (!session.HasCrashed)
+							break;
+
 						await _bisectService.DisableSuspectAsync();
 						UpdateSessionDisplay();
 					}
@@ -240,6 +245,7 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 					if (verifyReport == _localizationService["Bisect.NotCrashed"])
 						break;
 
+					_bisectService.RecordVerificationCrashed();
 					_bisectService.ContinueWithRemaining(remaining);
 					UpdateSessionDisplay();
 					continue;
