@@ -31,7 +31,18 @@ internal sealed class V1ModManifest : IModManifest
     {
         var guid = Guid.Parse(root.GetProperty<string>(nameof(Guid)));
         var name = root.GetProperty<string>(nameof(Name));
-        var description = root.GetProperty<string>(nameof(Description));
+        // 部分作者漏写 Description 字段，直接报错会导致整个模组导入失败；
+        // 缺失或类型不对时用空字符串兜底，仅记录警告。
+        string description;
+        if (root.TryGetProperty(nameof(Description), JsonValueKind.String, out var descProp))
+        {
+            description = descProp.GetString() ?? string.Empty;
+        }
+        else
+        {
+            logger?.LogWarning($"Manifest \"{nameof(Description)}\" is missing or not a string, using an empty string as fallback.");
+            description = string.Empty;
+        }
         string? iconPath = null;
         if (root.TryGetProperty(nameof(IconPath), JsonValueKind.String, out var prop))
             iconPath = prop.GetString()!;

@@ -34,21 +34,15 @@ internal static class ModManifest
     {
         var root = doc.RootElement;
         var version = ManifestVersion.Legacy;
-        
-        if (root.TryGetProperty(nameof(IModManifest.Version), JsonValueKind.Number, out var prop))
+
+        if (root.TryGetProperty(nameof(IModManifest.Version), out var prop))
         {
-            if (prop.TryGetInt32(out var value))
-                version = value switch
-                {
-                    1 => ManifestVersion.V1,
-                    2 => ManifestVersion.V2,
-                    _ => throw new UnknownManifestVersionException()
-                };
-            else
-                {
-                    logger?.LogWarning($"Could not convert value of property \"{nameof(IModManifest.Version)}\" to `{typeof(int).Name}`! Automatically converting to v1.");
-                    version = ManifestVersion.V1;
-                }
+            // 部分作者误把模组自身的版本号（如 2、5、1.0 等）写入清单的 Version 字段，
+            // 导致导入失败。只要 Version 存在且不是 1，就自动按 V1 宽容处理。
+            var isOne = prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var value) && value == 1;
+            if (!isOne)
+                logger?.LogWarning($"Manifest \"{nameof(IModManifest.Version)}\" is not 1, automatically treating the manifest as V1.");
+            version = ManifestVersion.V1;
         }
 
         return version switch
