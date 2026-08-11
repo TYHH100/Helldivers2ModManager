@@ -2417,6 +2417,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             });
             _backgroundTaskService.Complete(backgroundTask, _localizationService["BackgroundTasksPage.ExportComplete"].Replace("{name}", vm.Name));
             // Don't auto-close - user clicks OK to dismiss and see final ratio/speed
+
+            // 导出成功后自动打开压缩包所在文件夹并选中文件
+            try
+            {
+                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{outputPath}\"") { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to open export folder after export completed");
+            }
         }
         catch (Exception ex)
         {
