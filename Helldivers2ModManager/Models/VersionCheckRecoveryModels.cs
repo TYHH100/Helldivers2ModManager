@@ -69,6 +69,12 @@ internal sealed class ModBackupOperationResult
     public string? RestoredPath { get; init; }
     public string? RollbackBackupPath { get; init; }
     public int DeletedCount { get; init; }
+    /// <summary>整模组回滚时实际恢复的文件数</summary>
+    public int RestoredCount { get; init; }
+    /// <summary>整模组回滚时跳过的文件数（当前已匹配目标备份或无目标时间前的备份）</summary>
+    public int SkippedCount { get; init; }
+    /// <summary>整模组回滚时失败的文件明细（文件名 + 原因）</summary>
+    public List<string> FailedItems { get; init; } = [];
 }
 
 internal enum CompanionRecoverySourceKind

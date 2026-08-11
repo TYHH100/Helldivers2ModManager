@@ -233,6 +233,41 @@
                                        Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
                                        TextWrapping="Wrap"
                                        Margin="2 0 0 8"/>
+                            <!-- 整模组回滚（含所有选项文件夹） -->
+                            <Grid x:Name="rollbackPanel"
+                                  Margin="0 0 0 8"
+                                  Visibility="Collapsed">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="{loc:Loc VersionCheckBackup.RollbackTimeLabel}"
+                                           FontSize="12"
+                                           Foreground="{StaticResource NeutralForegroundBrush}"
+                                           VerticalAlignment="Center"
+                                           Margin="2 0 8 0"/>
+                                <ComboBox x:Name="rollbackPointCombo"
+                                          Grid.Column="1"
+                                          Width="150"
+                                          FontSize="12"
+                                          Padding="4 3"
+                                          IsEnabled="False"/>
+                                <Button x:Name="rollbackButton"
+                                        Grid.Column="2"
+                                        HorizontalAlignment="Left"
+                                        Style="{StaticResource FluentSecondaryButton}"
+                                        Padding="12 5"
+                                        Margin="8 0 0 0"
+                                        IsEnabled="False"
+                                        Click="RollbackButton_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="12" Margin="0 0 6 0"/>
+                                        <TextBlock Text="{loc:Loc VersionCheckBackup.RollbackButton}"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
                             <TextBlock x:Name="backupHistoryLoading"
                                        Text="{loc:Loc VersionCheckBackup.Loading}"
                                        FontSize="12"
@@ -241,55 +276,68 @@
                             <ItemsControl x:Name="backupHistoryItems">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Style="{StaticResource FluentSettingsCard}"
-                                                Margin="0 0 0 8"
-                                                Padding="12">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Title}"
-                                                               FontSize="13"
-                                                               FontWeight="SemiBold"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Detail}"
-                                                               FontSize="11"
-                                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-                                                               Margin="0 3 0 0"
-                                                               TextWrapping="Wrap"/>
-                                                    <TextBlock Text="{Binding Status}"
-                                                               FontSize="11"
-                                                               Foreground="{Binding StatusBrush}"
-                                                               Margin="0 4 0 0"
-                                                               TextWrapping="Wrap"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="1"
-                                                        Width="34"
-                                                        Height="34"
-                                                        Margin="10 0 4 0"
-                                                        VerticalAlignment="Center"
-                                                        Style="{StaticResource FluentIconButton}"
-                                                        ToolTip="{loc:Loc VersionCheckBackup.Restore}"
-                                                        Tag="{Binding Entry}"
-                                                        IsEnabled="{Binding CanRestore}"
-                                                        Click="RestoreBackupButton_Click">
-                                                    <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
-                                                </Button>
-                                                <Button Grid.Column="2"
-                                                        Width="34"
-                                                        Height="34"
-                                                        VerticalAlignment="Center"
-                                                        Style="{StaticResource FluentIconButton}"
-                                                        ToolTip="{loc:Loc VersionCheckBackup.Delete}"
-                                                        Tag="{Binding Entry}"
-                                                        Click="DeleteBackupButton_Click">
-                                                    <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
-                                                </Button>
-                                            </Grid>
-                                        </Border>
+                                        <Expander Header="{Binding Title}"
+                                                  Style="{StaticResource FluentExpander}"
+                                                  IsExpanded="True"
+                                                  Margin="0 0 0 8">
+                                            <StackPanel Margin="0 6 0 0">
+                                                <TextBlock Text="{Binding EntryCountText}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                                           Margin="2 0 0 6"/>
+                                                <ItemsControl ItemsSource="{Binding Entries}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource FluentSettingsCard}"
+                                                                    Margin="0 0 0 8"
+                                                                    Padding="12">
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <StackPanel>
+                                                                        <TextBlock Text="{Binding Detail}"
+                                                                                   FontSize="11"
+                                                                                   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                                                                   Margin="0 0 0 0"
+                                                                                   TextWrapping="Wrap"/>
+                                                                        <TextBlock Text="{Binding Status}"
+                                                                                   FontSize="11"
+                                                                                   Foreground="{Binding StatusBrush}"
+                                                                                   Margin="0 4 0 0"
+                                                                                   TextWrapping="Wrap"/>
+                                                                    </StackPanel>
+                                                                    <Button Grid.Column="1"
+                                                                            Width="34"
+                                                                            Height="34"
+                                                                            Margin="10 0 4 0"
+                                                                            VerticalAlignment="Center"
+                                                                            Style="{StaticResource FluentIconButton}"
+                                                                            ToolTip="{loc:Loc VersionCheckBackup.Restore}"
+                                                                            Tag="{Binding Entry}"
+                                                                            IsEnabled="{Binding CanRestore}"
+                                                                            Click="RestoreBackupButton_Click">
+                                                                        <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                                                                    </Button>
+                                                                    <Button Grid.Column="2"
+                                                                            Width="34"
+                                                                            Height="34"
+                                                                            VerticalAlignment="Center"
+                                                                            Style="{StaticResource FluentIconButton}"
+                                                                            ToolTip="{loc:Loc VersionCheckBackup.Delete}"
+                                                                            Tag="{Binding Entry}"
+                                                                            Click="DeleteBackupButton_Click">
+                                                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                                                                    </Button>
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Expander>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

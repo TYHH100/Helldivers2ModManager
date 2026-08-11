@@ -55,11 +55,6 @@ internal sealed partial class VersionCheckService
         CancellationToken cancellationToken = default)
     {
         await _repairSemaphore.WaitAsync(cancellationToken);
-        string? temporaryPath = null;
-        string? rollbackPath = null;
-        string? originalPath = null;
-        var originalExisted = false;
-        var committed = false;
         try
         {
             var history = await GetBackupHistoryAsync(modDirectory, cancellationToken);
@@ -70,6 +65,110 @@ internal sealed partial class VersionCheckService
             if (!entry.CanRestore)
                 return new ModBackupOperationResult { ErrorMessage = entry.ValidationMessage };
 
+            return await RestoreBackupCoreAsync(modDirectory, entry, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to restore backup {Backup} in {ModDirectory}", backupPath, modDirectory.FullName);
+            return new ModBackupOperationResult { ErrorMessage = ex.Message };
+        }
+        finally
+        {
+            _repairSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// 将整个模组（含所有选项/子选项目录下的补丁文件）回滚到指定时间点：
+    /// 对每个原始文件选择创建时间不晚于目标时间的最新备份进行恢复。
+    /// 当前状态已与目标备份一致的文件跳过；没有不晚于目标时间的备份时保持现状。
+    /// </summary>
+    /// <param name="modDirectory">模组目录</param>
+    /// <param name="targetLocal">目标时间点（本地时间，精度到分钟）</param>
+    /// <returns>汇总结果（恢复数、跳过数、失败明细）</returns>
+    public async Task<ModBackupOperationResult> RollbackModToAsync(
+        DirectoryInfo modDirectory,
+        DateTime targetLocal,
+        CancellationToken cancellationToken = default)
+    {
+        await _repairSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var history = await GetBackupHistoryAsync(modDirectory, cancellationToken);
+            var restoredCount = 0;
+            var skippedCount = 0;
+            var failedItems = new List<string>();
+
+            foreach (var group in history.Entries
+                         .GroupBy(entry => entry.OriginalPath, StringComparer.OrdinalIgnoreCase))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var targetEntry = group
+                    .Where(entry => entry.CreatedLocal <= targetLocal)
+                    .OrderByDescending(entry => entry.CreatedLocal)
+                    .FirstOrDefault();
+                if (targetEntry is null)
+                {
+                    // 该文件在目标时间点没有备份，当前状态即目标状态
+                    skippedCount++;
+                    continue;
+                }
+
+                if (!targetEntry.CanRestore)
+                {
+                    failedItems.Add($"{targetEntry.OriginalFileName} ({targetEntry.ValidationMessage})");
+                    continue;
+                }
+
+                if (targetEntry.CurrentMatchesBackup)
+                {
+                    skippedCount++;
+                    continue;
+                }
+
+                var single = await RestoreBackupCoreAsync(modDirectory, targetEntry, cancellationToken);
+                if (single.Success)
+                    restoredCount++;
+                else
+                    failedItems.Add($"{targetEntry.OriginalFileName} ({single.ErrorMessage})");
+            }
+
+            return new ModBackupOperationResult
+            {
+                Success = failedItems.Count == 0,
+                RestoredCount = restoredCount,
+                SkippedCount = skippedCount,
+                FailedItems = failedItems
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to roll back mod {ModDirectory} to {Time}", modDirectory.FullName, targetLocal);
+            return new ModBackupOperationResult { ErrorMessage = ex.Message };
+        }
+        finally
+        {
+            _repairSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// 恢复单个备份的核心逻辑（调用方需持有 <see cref="_repairSemaphore"/>）。
+    /// 先校验备份结构，再原子替换当前文件，最后校验哈希并保留回滚快照。
+    /// </summary>
+    private async Task<ModBackupOperationResult> RestoreBackupCoreAsync(
+        DirectoryInfo modDirectory,
+        ModBackupEntry entry,
+        CancellationToken cancellationToken)
+    {
+        string? temporaryPath = null;
+        string? rollbackPath = null;
+        string? originalPath = null;
+        var originalExisted = false;
+        var committed = false;
+        try
+        {
             originalPath = entry.OriginalPath;
             var originalFile = new FileInfo(originalPath);
             Directory.CreateDirectory(originalFile.DirectoryName!);
@@ -121,7 +220,7 @@ internal sealed partial class VersionCheckService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to restore backup {Backup} in {ModDirectory}", backupPath, modDirectory.FullName);
+            _logger.LogError(ex, "Failed to restore backup {Backup} in {ModDirectory}", entry.BackupPath, modDirectory.FullName);
             if (committed && originalPath is not null)
             {
                 try
@@ -142,7 +241,6 @@ internal sealed partial class VersionCheckService
         {
             if (temporaryPath is not null)
                 TryDeleteFile(temporaryPath);
-            _repairSemaphore.Release();
         }
     }
 

@@ -71,6 +71,23 @@ internal sealed class BackupHistoryItemViewData
     public bool CanRestore => Entry.CanRestore;
 }
 
+/// <summary>按原始补丁文件分组的备份历史（带选项的模组每个选项目录一组）</summary>
+internal sealed class BackupHistoryGroupViewData
+{
+    public required string Title { get; init; }
+    public required string EntryCountText { get; init; }
+    public required IReadOnlyList<BackupHistoryItemViewData> Entries { get; init; }
+}
+
+/// <summary>整模组回滚的时间点选项</summary>
+internal sealed class RollbackPointViewData
+{
+    public required DateTime Time { get; init; }
+    public required string DisplayText { get; init; }
+
+    public override string ToString() => DisplayText;
+}
+
 internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<VersionCheckDetailMessage>
 {
     private const int MaxVisibleIssues = 50;
@@ -126,6 +143,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
         repairProgress.Visibility = Visibility.Collapsed;
         backupHistoryItems.ItemsSource = null;
         backupHistorySummary.Text = string.Empty;
+        rollbackPanel.Visibility = Visibility.Collapsed;
         backupHistoryLoading.Visibility = Visibility.Visible;
         backupOperationStatus.Text = string.Empty;
         cleanBackupsButton.IsEnabled = false;
@@ -224,9 +242,22 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
                 return;
 
             _backupHistory = history;
-            backupHistoryItems.ItemsSource = history.Entries
-                .Select(BuildBackupHistoryItem)
+            var groups = history.Entries
+                .GroupBy(entry => entry.OriginalPath, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new BackupHistoryGroupViewData
+                {
+                    Title = _currentMessage is { } message
+                        ? Path.GetRelativePath(message.ModDirectory.FullName, group.Key)
+                        : group.Key,
+                    EntryCountText = group.Count().ToString(),
+                    Entries = group
+                        .OrderByDescending(entry => entry.CreatedLocal)
+                        .Select(BuildBackupHistoryItem)
+                        .ToList(),
+                })
                 .ToList();
+            backupHistoryItems.ItemsSource = groups;
             backupHistorySummary.Text = history.Entries.Count == 0
                 ? L("VersionCheckBackup.None", "No HD2MM repair backups were found for this mod.")
                 : L(
@@ -238,6 +269,8 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             cleanBackupsButton.IsEnabled = history.Entries
                 .GroupBy(entry => entry.OriginalPath, StringComparer.OrdinalIgnoreCase)
                 .Any(group => group.Count() > 3);
+
+            PopulateRollbackPoints(history);
         }
         catch (Exception ex)
         {
@@ -289,6 +322,120 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             Status = status,
             StatusBrush = statusBrush
         };
+    }
+
+    /// <summary>
+    /// 用备份历史填充整模组回滚的时间点下拉（去重到分钟，新到旧），
+    /// 并决定回滚按钮是否可用。
+    /// </summary>
+    private void PopulateRollbackPoints(ModBackupHistory history)
+    {
+        var points = history.Entries
+            .Select(entry => new DateTime(
+                entry.CreatedLocal.Year, entry.CreatedLocal.Month, entry.CreatedLocal.Day,
+                entry.CreatedLocal.Hour, entry.CreatedLocal.Minute, 0))
+            .Distinct()
+            .OrderByDescending(time => time)
+            .Select(time => new RollbackPointViewData
+            {
+                Time = time,
+                DisplayText = time.ToString("yyyy-MM-dd HH:mm"),
+            })
+            .ToList();
+
+        rollbackPointCombo.ItemsSource = points;
+        rollbackPointCombo.SelectedIndex = points.Count > 0 ? 0 : -1;
+        rollbackButton.IsEnabled = points.Count > 0;
+        rollbackPointCombo.IsEnabled = points.Count > 0;
+        rollbackPanel.Visibility = points.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void RollbackButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentMessage is null ||
+            rollbackPointCombo.SelectedItem is not RollbackPointViewData point)
+            return;
+
+        var pendingCount = _backupHistory.Entries
+            .GroupBy(entry => entry.OriginalPath, StringComparer.OrdinalIgnoreCase)
+            .Count(group =>
+            {
+                var target = group
+                    .Where(entry => entry.CreatedLocal <= point.Time)
+                    .OrderByDescending(entry => entry.CreatedLocal)
+                    .FirstOrDefault();
+                return target is not null && target.CanRestore && !target.CurrentMatchesBackup;
+            });
+
+        if (pendingCount == 0)
+        {
+            backupOperationStatus.Text = L("VersionCheckBackup.RollbackNothing", "Nothing to roll back at this time point.");
+            backupOperationStatus.Foreground = GetBrush("WarningBrush", Colors.Goldenrod);
+            return;
+        }
+
+        var confirmText = L(
+                "VersionCheckBackup.RollbackConfirm",
+                "Roll the whole mod (including all option folders) back to {time}? {count} file(s) will be restored, and the current files will be backed up first.")
+            .Replace("{time}", point.DisplayText)
+            .Replace("{count}", pendingCount.ToString());
+        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+        {
+            Title = L("VersionCheckBackup.RollbackTitle", "Roll back whole mod"),
+            Message = confirmText,
+            Confirm = () => _ = ExecuteRollbackAsync(point)
+        });
+    }
+
+    private async Task ExecuteRollbackAsync(RollbackPointViewData point)
+    {
+        if (_versionCheckService is null || _currentMessage is null)
+            return;
+
+        backupOperationStatus.Text = L("VersionCheckBackup.RollingBack", "Rolling back to {time}...")
+            .Replace("{time}", point.DisplayText);
+        backupOperationStatus.Foreground = GetBrush("SystemAccentBrush", Colors.DodgerBlue);
+        SetRepairControlsBusy(true);
+
+        try
+        {
+            var result = await _versionCheckService.RollbackModToAsync(
+                _currentMessage.ModDirectory,
+                point.Time);
+
+            if (!result.Success && string.IsNullOrEmpty(result.RestoredPath) && result.FailedItems.Count == 0)
+            {
+                backupOperationStatus.Text = L("VersionCheckBackup.RestoreFailed", "Backup restore failed: {message}")
+                    .Replace("{message}", result.ErrorMessage);
+                backupOperationStatus.Foreground = GetBrush("DangerBrush", Colors.IndianRed);
+                return;
+            }
+
+            backupOperationStatus.Text = L(
+                    "VersionCheckBackup.RollbackResult",
+                    "Rolled back to {time}: {restored} restored, {skipped} skipped, {failed} failed.")
+                .Replace("{time}", point.DisplayText)
+                .Replace("{restored}", result.RestoredCount.ToString())
+                .Replace("{skipped}", result.SkippedCount.ToString())
+                .Replace("{failed}", result.FailedItems.Count.ToString());
+            backupOperationStatus.Foreground = result.FailedItems.Count == 0
+                ? GetBrush("SuccessBrush", Colors.ForestGreen)
+                : GetBrush("WarningBrush", Colors.Goldenrod);
+
+            if (_currentMessage.RefreshAsync is { } refresh)
+                await refresh();
+            await LoadBackupHistoryAsync(_currentMessage);
+        }
+        catch (Exception ex)
+        {
+            backupOperationStatus.Text = L("VersionCheckBackup.RestoreFailed", "Backup restore failed: {message}")
+                .Replace("{message}", ex.Message);
+            backupOperationStatus.Foreground = GetBrush("DangerBrush", Colors.IndianRed);
+        }
+        finally
+        {
+            SetRepairControlsBusy(false);
+        }
     }
 
     private string GetBackupKindLabel(ModBackupRepairKind kind)
