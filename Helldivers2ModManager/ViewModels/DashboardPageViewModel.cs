@@ -1460,6 +1460,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _navStore.Value.Navigate<PatchResourceViewerPageViewModel>();
     }
 
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    async Task Bisect()
+    {
+        await SaveProfileNowAsync();
+
+        _navStore.Value.Navigate<BisectPageViewModel>();
+    }
+
     [RelayCommand]
     void PreviewModel(ModViewModel modVm)
     {
@@ -1503,48 +1511,15 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     /// <summary>
-    /// 根据当前设置获取按部署顺序排列的主页快照模组
-    /// 如果 UseDeploymentOrder 启用，按 DeploymentOrderGuids 顺序；否则按 Dashboard 顺序；最后应用部署方向设置
+    /// 根据当前设置获取按部署顺序排列的主页快照模组（排序逻辑与二分排查共用 DeploymentOrderHelper）
     /// </summary>
     private ModData[] GetDeploymentMods(ProfileSnapshot snapshot)
     {
-        var enabledMods = snapshot.Mods.Where(static mod => mod.Enabled).ToArray();
-        if (_settingsService.UseDeploymentOrder && _settingsService.DeploymentOrderGuids.Count > 0)
-        {
-            var enabledGuids = enabledMods.Select(static mod => mod.Guid).ToArray();
-            var enabledSet = enabledGuids.ToHashSet();
-            var modsByGuid = enabledMods.ToDictionary(static mod => mod.Guid);
-            var result = new List<ModData>();
-
-            foreach (var guid in _settingsService.DeploymentOrderGuids)
-            {
-                if (enabledSet.Contains(guid))
-                {
-                    result.Add(modsByGuid[guid].CreateDeploymentMod());
-                    enabledSet.Remove(guid);
-                }
-            }
-
-            // 添加不在 DeploymentOrderGuids 中的已启用模组（防御性）
-            result.AddRange(enabledGuids
-                .Where(enabledSet.Contains)
-                .Select(guid => modsByGuid[guid].CreateDeploymentMod()));
-
-            if (_settingsService.DeployBottomToTop)
-                result.Reverse();
-
-            _logger.LogDebug("Using custom deployment order for {} mods", result.Count);
-            return result.ToArray();
-        }
-        else
-        {
-            var mods = enabledMods.Select(static mod => mod.CreateDeploymentMod()).ToArray();
-
-            if (_settingsService.DeployBottomToTop)
-                Array.Reverse(mods);
-
-            return mods;
-        }
+        return DeploymentOrderHelper.BuildDeploymentMods(
+            snapshot,
+            _settingsService.UseDeploymentOrder,
+            _settingsService.DeploymentOrderGuids,
+            _settingsService.DeployBottomToTop);
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]

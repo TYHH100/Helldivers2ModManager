@@ -1,0 +1,91 @@
+<UserControl x:Class="Helldivers2ModManager.Views.BisectPageView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
+      mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="1000">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Margin="0 0 0 16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Command="{Binding GoBackCommand}" Style="{StaticResource FluentIconButton}" ToolTip="{loc:Loc Common.Back}" Margin="0 0 12 0">
+                <TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
+            </Button>
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="{loc:Loc Bisect.Title}" FontSize="22" FontWeight="SemiBold"/>
+                <TextBlock Text="{loc:Loc Bisect.Description}" Margin="0 4 0 0" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextWrapping="Wrap"/>
+                <TextBlock Text="{loc:Loc Bisect.CrashHint}" Margin="0 6 0 0" FontSize="12" Foreground="{StaticResource WarningBrush}" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1" Style="{StaticResource FluentSettingsCard}" Margin="0 0 0 16">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{Binding GroupInfoText}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding SessionInfoText}" Margin="0 4 0 0" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                    <TextBlock Text="{Binding SuspectsText}" Margin="0 6 0 0" FontSize="12" Foreground="{StaticResource SystemAccentBrush}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0 12 0 0">
+                    <Button Command="{Binding StartCommand}"
+                            Style="{StaticResource FluentPrimaryButton}"
+                            Padding="18 8"
+                            Visibility="{Binding NoSessionVisibility}">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE768;" FontFamily="Segoe Fluent Icons" Margin="0 0 7 0"/><TextBlock Text="{loc:Loc Bisect.Start}"/></StackPanel>
+                    </Button>
+                    <Button Command="{Binding ResumeCommand}"
+                            Style="{StaticResource FluentPrimaryButton}"
+                            Padding="18 8"
+                            Visibility="{Binding ActiveSessionVisibility}">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE768;" FontFamily="Segoe Fluent Icons" Margin="0 0 7 0"/><TextBlock Text="{loc:Loc Bisect.Resume}"/></StackPanel>
+                    </Button>
+                    <Button Command="{Binding AbortCommand}"
+                            Style="{StaticResource FluentSecondaryButton}"
+                            Padding="18 8"
+                            Margin="8 0 0 0"
+                            Visibility="{Binding ActiveSessionVisibility}">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" Margin="0 0 7 0"/><TextBlock Text="{loc:Loc Bisect.Abort}"/></StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2"
+                Style="{StaticResource FluentSettingsCard}"
+                Visibility="{Binding ActiveSessionVisibility}"
+                Padding="14">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid Margin="0 0 0 8">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="96"/></Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{loc:Loc Bisect.RoundColumn}" FontWeight="SemiBold" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                    <TextBlock Grid.Column="1" Text="{loc:Loc Bisect.ModsColumn}" FontWeight="SemiBold" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                    <TextBlock Grid.Column="2" Text="{loc:Loc Bisect.ResultColumn}" FontWeight="SemiBold" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                </Grid>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Rounds}">
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                            <Border BorderBrush="{StaticResource NeutralStrokeBrush}" BorderThickness="0 0 0 1" Padding="0 6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="96"/></Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding RoundIndex}" VerticalAlignment="Center" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding ModsText}" VerticalAlignment="Center" TextWrapping="Wrap" FontSize="12"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding ResultText}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

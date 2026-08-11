@@ -178,6 +178,37 @@ internal sealed class ModGroupService
 		SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
 	}
 
+	/// <summary>
+	/// 把模组加入分组，启用/选项状态从传入模组的当前运行时状态复制（而非默认组）。
+	/// 供二分排查等需要完整保留当前状态（含选项开启状态）的场景使用。
+	/// </summary>
+	public async Task AddModsToGroupWithCurrentStateAsync(Guid groupId, IEnumerable<ModData> mods)
+	{
+		GuardInitialized();
+		var group = Groups.FirstOrDefault(group => group.Id == groupId);
+		if (group is null || group.IsDefault)
+			return;
+
+		var added = false;
+		foreach (var mod in mods)
+		{
+			var guid = mod.Manifest.Guid;
+			if (group.ModGuids.Contains(guid))
+				continue;
+
+			group.ModGuids.Add(guid);
+			CopyCurrentStateToGroup(group.Id, mod);
+			added = true;
+		}
+
+		if (!added)
+			return;
+
+		await SaveGroupsAsync();
+		await SaveGroupStateAsync(group.Id);
+		SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
+	}
+
 	public async Task RemoveModsFromGroupAsync(Guid groupId, IEnumerable<ModData> mods)
 	{
 		GuardInitialized();
@@ -367,6 +398,25 @@ internal sealed class ModGroupService
 			Enabled = sourceState.Enabled,
 			Toggled = sourceState.Toggled.ToArray(),
 			Selected = sourceState.Selected.ToArray(),
+			SortOrder = targetStates.Count,
+		};
+	}
+
+	/// <summary>
+	/// 从模组当前运行时状态复制到目标分组缓存（保留启用与选项开启状态）。
+	/// </summary>
+	private void CopyCurrentStateToGroup(Guid groupId, ModData mod)
+	{
+		if (!_stateCache.TryGetValue(groupId, out var targetStates))
+			targetStates = _stateCache[groupId] = [];
+
+		targetStates[mod.Manifest.Guid] = new GroupedEnabledData
+		{
+			GroupId = groupId,
+			Guid = mod.Manifest.Guid,
+			Enabled = mod.Enabled,
+			Toggled = mod.EnabledOptions.ToArray(),
+			Selected = mod.SelectedOptions.ToArray(),
 			SortOrder = targetStates.Count,
 		};
 	}

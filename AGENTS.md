@@ -181,6 +181,9 @@ catch (Exception ex)
 | 自动 Unit 修复只看 Mesh ID 或单个 Unit 的 GPU 大小 | 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；应按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动，不能只用单个 GPU 大小决定修复策略。 |
 | 把所有当前 Unit 都当成 `10800438` | 当前游戏的 DP-00 资源实际使用 `0x00A4CD36`，其他资源可能使用 `0x10800438`；应从同 File ID 的游戏引用读取版本，并让 GPU 结构检查同时识别两个已验证版本。 |
 | 用根容器直接解析页面 VM 或新增页面后返回主菜单内存不释放 | DI 容器会强引用所有解析过的 `IDisposable`（所有 `PageViewModelBase` 子类）到 `ServiceProviderEngineScope._disposables`，直到根容器/scope 释放；导航页面必须由 `NavigationStore` 通过独立 `IServiceScope` 解析（`Navigate<T>` 内部 `CreateScope`，导航离开时丢弃旧 scope），不要用注入的 `IServiceProvider` 直接 `GetRequiredService<页面VM>` 后手动 `Navigate(page)`，否则该页面及其模型/纹理数据会被容器持有到进程退出。 | 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；LOD 还承载 MeshInfo/Section 的材质绑定。发现强自定义信号后，必须按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动。静态装备页可能只显示 Slim，仍需验证实际玩家的 Stocky/动态渲染。 |
+| 用 `TaskCompletionSource` 桥接弹窗后不处理用户点“取消”按钮 | `MessageBoxSelectionMessage` 的取消按钮默认只隐藏覆盖层、不触发任何回调；`MessageBoxConfirmMessage` 的“否”按钮才触发 `Abort`。凡是用 TCS 等待弹窗结果的调用方必须给 `MessageBoxSelectionMessage` 传 `Abort` 回调（如 `Abort = () => tcs.TrySetResult(取消值)`），否则用户点取消后流程永久挂起。 | 
+| 保存分组状态时覆盖了用户的自定义排序 | `SaveAllAsync`/`SaveStatesAsync` 按快照 `Mods` 顺序写 `SortOrder`；在非 Dashboard 页面保存分组状态时，必须保留原分组顺序：优先用 `ProfileSaveCoordinator.GetCurrentOrder()` 过滤出成员后作为 `preferredOrder` 传入 `Capture`（Dashboard 导航前已保存过用户顺序），取不到时退回 ModService 加载顺序。 |
+| 会话结束/取消后仍读取已清空的会话对象 | 结束类方法（如 `FinishAsync`）内部会清空会话（`Current = null`），总结弹窗、结果展示必须在调用结束方法之前捕获会话引用并传入，不能在之后从服务重新读取。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
 
