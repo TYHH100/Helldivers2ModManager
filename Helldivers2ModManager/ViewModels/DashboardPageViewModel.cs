@@ -1640,6 +1640,127 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _mods.Move(index, index + 1);
     }
 
+    /// <summary>
+    /// 将模组（或全部选中模组）移动到列表顶部
+    /// </summary>
+    [RelayCommand]
+    void MoveToTop(ModViewModel modVm)
+    {
+        var mods = GetModsForReorder(modVm);
+        if (mods.Count == 0)
+            return;
+
+        foreach (var mod in mods)
+            _orderedItems.Remove(mod);
+
+        for (int i = 0; i < mods.Count; i++)
+            _orderedItems.Insert(i, mods[i]);
+
+        AfterModsReordered();
+    }
+
+    /// <summary>
+    /// 将模组（或全部选中模组）移动到列表底部
+    /// </summary>
+    [RelayCommand]
+    void MoveToBottom(ModViewModel modVm)
+    {
+        var mods = GetModsForReorder(modVm);
+        if (mods.Count == 0)
+            return;
+
+        foreach (var mod in mods)
+            _orderedItems.Remove(mod);
+
+        foreach (var mod in mods)
+            _orderedItems.Add(mod);
+
+        AfterModsReordered();
+    }
+
+    /// <summary>
+    /// 将模组（或全部选中模组）移动到指定位置（1 到列表模组总数）
+    /// </summary>
+    [RelayCommand]
+    void MoveToPosition(ModViewModel modVm)
+    {
+        if (!_orderedItems.Contains(modVm))
+            return;
+
+        var totalCount = _orderedItems.OfType<ModViewModel>().Count();
+        if (totalCount < 2)
+            return;
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+        {
+            Title = _localizationService["DashboardPage.MoveToPositionTitle"],
+            Message = _localizationService["DashboardPage.MoveToPositionMsg"].Replace("{count}", totalCount.ToString()),
+            MaxLength = 6,
+            InitialText = (_orderedItems.OfType<ModViewModel>().ToList().IndexOf(modVm) + 1).ToString(),
+            Confirm = input =>
+            {
+                if (!int.TryParse(input, out var position) || position < 1 || position > totalCount)
+                {
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+                    {
+                        Message = _localizationService["DashboardPage.MoveToPositionInvalid"].Replace("{count}", totalCount.ToString())
+                    });
+                    return;
+                }
+
+                MoveModsToTargetPosition(modVm, position);
+            }
+        });
+    }
+
+    /// <summary>
+    /// 获取参与重排序的模组列表：右键的模组已选中时移动全部选中项，否则只移动该模组
+    /// </summary>
+    private List<ModViewModel> GetModsForReorder(ModViewModel source)
+    {
+        if (!_orderedItems.Contains(source))
+            return [];
+
+        var ordered = _orderedItems.OfType<ModViewModel>().ToList();
+        return source.IsSelected
+            ? ordered.Where(static vm => vm.IsSelected).ToList()
+            : [source];
+    }
+
+    /// <summary>
+    /// 将模组集合移动到目标位置（1 基，基于只含模组的显示序列），并保留分隔符的相对位置
+    /// </summary>
+    private void MoveModsToTargetPosition(ModViewModel source, int targetPosition)
+    {
+        var mods = GetModsForReorder(source);
+        if (mods.Count == 0)
+            return;
+
+        foreach (var mod in mods)
+            _orderedItems.Remove(mod);
+
+        var displayMods = _orderedItems.OfType<ModViewModel>().ToList();
+        var targetIndex = Math.Clamp(targetPosition - 1, 0, displayMods.Count);
+        var insertIndex = targetIndex >= displayMods.Count
+            ? _orderedItems.Count
+            : _orderedItems.IndexOf(displayMods[targetIndex]);
+
+        for (int i = 0; i < mods.Count; i++)
+            _orderedItems.Insert(insertIndex + i, mods[i]);
+
+        AfterModsReordered();
+    }
+
+    /// <summary>
+    /// 重排序后同步顺序、保存配置并刷新冲突扫描
+    /// </summary>
+    private void AfterModsReordered()
+    {
+        SyncModsOrderFromDisplay();
+        RequestProfileSave();
+        RequestAutomaticConflictScan();
+    }
+
     [RelayCommand]
     void Remove(ModViewModel modVm)
     {

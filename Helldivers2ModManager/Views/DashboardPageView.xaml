@@ -60,6 +60,16 @@
 								<MenuItem Header="{loc:Loc ModGroup.AddToGroup}"
 										  Command="{Binding PlacementTarget.Tag.AddModsToGroupCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
+								<Separator/>
+								<MenuItem Header="{loc:Loc DashboardPage.MoveToTop}"
+										  Command="{Binding PlacementTarget.Tag.MoveToTopCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+								<MenuItem Header="{loc:Loc DashboardPage.MoveToBottom}"
+										  Command="{Binding PlacementTarget.Tag.MoveToBottomCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
+								<MenuItem Header="{loc:Loc DashboardPage.MoveToPosition}"
+										  Command="{Binding PlacementTarget.Tag.MoveToPositionCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
+										  CommandParameter="{Binding}"/>
 							</ContextMenu>
 						</Border.ContextMenu>
 						<Grid>
