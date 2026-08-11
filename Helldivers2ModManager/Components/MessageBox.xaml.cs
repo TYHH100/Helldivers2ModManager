@@ -120,6 +120,9 @@ internal sealed class MessageBoxSelectionMessage
 	public required IEnumerable<object> Options { get; init; }
 
 	public required Action<object> Confirm { get; init; }
+
+	/// <summary>用户点取消按钮（不选择任何选项）时调用；可选。</summary>
+	public Action? Abort { get; init; }
 }
 
 internal sealed class MessageBoxTagSelectionMessage
@@ -172,6 +175,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	private Action? _abortAction;
 	private Action? _confirmAction;
 	private Action<object>? _selectionAction;
+	private Action? _selectionAbortAction;
 	private Action<IEnumerable<Models.TagSelectionItem>>? _tagSelectionAction;
 	private Action<IReadOnlyList<ChecklistSelectionItem>>? _checklistAction;
 	private Action<string>? _colorPickerAction;
@@ -409,6 +413,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		Reset();
 
 		_selectionAction = message.Confirm;
+		_selectionAbortAction = message.Abort;
 
 		title.Text = message.Title;
 		brush.Color = Colors.White;
@@ -516,6 +521,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		_abortAction = null;
 		_confirmAction = null;
 		_selectionAction = null;
+		_selectionAbortAction = null;
 		_tagSelectionAction = null;
 		_checklistAction = null;
 		_colorPickerAction = null;
@@ -604,6 +610,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	private void CancelButton_Click(object sender, RoutedEventArgs e)
 	{
 		Receive(new MessageBoxHideMessage());
+		_selectionAbortAction?.Invoke();
 	}
 
 	private void ColorBorder_Click(object sender, MouseButtonEventArgs e)
