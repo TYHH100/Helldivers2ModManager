@@ -283,7 +283,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 	public bool ShowSeparator
 	{
-		get => _settingsService.Initialized ? _settingsService.ShowSeparator : true;
+		get => _settingsService.Initialized ? _settingsService.ShowSeparator : false;
 		set
 		{
 			OnPropertyChanging();

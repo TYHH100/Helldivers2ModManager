@@ -575,7 +575,7 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private bool _autoCleanLogs = true;
 	[JsonInclude]
-	private bool _showSeparator = true;
+	private bool _showSeparator = false;
 	[JsonInclude]
 	private ObservableCollection<ModSeparator> _separators = null!;
 	[JsonInclude]
@@ -764,7 +764,7 @@ internal sealed class SettingsService
 		{
 			if (IsReadonly)
 				return false;
-			_logLevel = LogLevel.Trace;
+			_logLevel = LogLevel.Warning;
 		}
 
 		if (_opacity is > OpacityMax or < OpacityMin)
@@ -1132,7 +1132,7 @@ internal sealed class SettingsService
 		_gameDirectory = string.Empty;
 		_storageDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Helldivers2ModManager");
 		_tempDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp", "Helldivers2ModManager");
-		_logLevel = LogLevel.Trace;
+		_logLevel = LogLevel.Warning;
 		_opacity = 0.8f;
 		_backgroundMode = BackgroundMode.Default;
 		_backgroundImagePath = string.Empty;
@@ -1149,7 +1149,7 @@ internal sealed class SettingsService
 		_repairDisclaimerAccepted = false;
 		_autoCleanLogs = true;
 		_maxLogFiles = 20;
-		_showSeparator = true;
+		_showSeparator = false;
 		_separators = [];
 		_tags = [];
 		_organizationalFolderNames = ["Models", "Model"];
