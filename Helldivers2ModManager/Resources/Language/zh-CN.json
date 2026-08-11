@@ -126,6 +126,7 @@
     "Bisect.TempGroupName": "二分排查-临时",
     "Bisect.TempGroupPrefix": "二分排查",
     "Bisect.ReportTitle": "本轮测试结果",
+    "Bisect.SingleVerifyMessage": "已收敛到最后一个候选模组「{name}」，现在单独部署它进行验证：\n\n游戏已自动启动，请验证是否崩溃，然后选择结果。\n若单独启用也崩溃，即可确认它是问题模组；若未崩溃，则它本身正常（崩溃可能由多个模组共同作用导致）。",
     "Bisect.ReportMessage": "已清理并部署，本轮启用 {count} 个模组进行测试：\n{names}\n\n游戏已自动启动，请验证是否崩溃，然后选择结果。",
     "Bisect.Crashed": "崩溃了",
     "Bisect.NotCrashed": "没崩溃",

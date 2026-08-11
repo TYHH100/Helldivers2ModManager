@@ -126,6 +126,7 @@
     "Bisect.TempGroupName": "Bisect-Temp",
     "Bisect.TempGroupPrefix": "Bisect",
     "Bisect.ReportTitle": "Round Result",
+    "Bisect.SingleVerifyMessage": "Converged to the last candidate \"{name}\"; deploying it alone for verification:\n\nThe game was launched automatically, verify whether it crashes, then choose a result.\nIf it crashes alone, it is confirmed as the problem mod; if it does not crash, the mod itself is fine (the crash may be caused by a combination of mods).",
     "Bisect.ReportMessage": "Cleaned and deployed. This round tests {count} mod(s):\n{names}\n\nThe game was launched automatically, verify whether it crashes, then choose a result.",
     "Bisect.Crashed": "Crashed",
     "Bisect.NotCrashed": "Did not crash",

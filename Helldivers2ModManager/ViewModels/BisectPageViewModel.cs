@@ -204,17 +204,36 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 				{
 					if (session.Candidates.Count == 1)
 					{
-						// 只有出现过崩溃报告，收敛到的候选才能判定为嫌疑；
-						// 全程未崩溃说明没有失效模组，直接结束
-						if (!session.HasCrashed)
-							break;
-
-						await _bisectService.DisableSuspectAsync();
+						// 收敛后单独验证：该候选可能是二分推断出来的，从未单独部署测试过。
+						// 单独部署它再问一次：崩才标记嫌疑，没崩则不标记
+						var sole = await _bisectService.PrepareSingleVerificationAsync();
 						UpdateSessionDisplay();
+
+						if (!await DeployWithProgressAsync())
+						{
+							await CancelAndNotifyAsync();
+							break;
+						}
+
+						var singleVerifyReport = await AskReportAsync(
+							_localizationService["Bisect.SingleVerifyMessage"]
+								.Replace("{name}", sole.Manifest.Name));
+						if (singleVerifyReport == _localizationService["Bisect.Cancel"])
+						{
+							await CancelAndNotifyAsync();
+							break;
+						}
+
+						if (singleVerifyReport == _localizationService["Bisect.Crashed"])
+						{
+							await _bisectService.DisableSuspectAsync();
+							UpdateSessionDisplay();
+						}
 					}
 
 					var remaining = _bisectService.GetRemainingEnabledMods();
-					if (remaining.Count == 0)
+					// 剩余 0 个，或只剩单独验证过且未确认有问题的模组：结束
+					if (remaining.Count <= 1)
 						break;
 
 					var continueConfirmed = await AskConfirmAsync(
@@ -245,7 +264,6 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 					if (verifyReport == _localizationService["Bisect.NotCrashed"])
 						break;
 
-					_bisectService.RecordVerificationCrashed();
 					_bisectService.ContinueWithRemaining(remaining);
 					UpdateSessionDisplay();
 					continue;
