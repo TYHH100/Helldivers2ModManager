@@ -8,6 +8,7 @@ using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows;
 
 namespace Helldivers2ModManager.ViewModels;
@@ -23,6 +24,8 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 	private readonly BisectService _bisectService;
 	private readonly BackgroundTaskService _backgroundTaskService;
 	private readonly LocalizationService _localizationService;
+
+	private static readonly ProcessStartInfo s_gameStartInfo = new("steam://run/553850") { UseShellExecute = true };
 
 	public override string Title => _localizationService["Bisect.Title"];
 
@@ -220,7 +223,11 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 						break;
 
 					// 先部署剩余全部模组验证是否仍崩溃，为下一轮二分建立前提
-					await DeployWithProgressAsync();
+					if (!await DeployWithProgressAsync())
+					{
+						await CancelAndNotifyAsync();
+						break;
+					}
 					var verifyReport = await AskReportAsync(
 						_localizationService["Bisect.VerifyRemainingMessage"]
 							.Replace("{count}", remaining.Count.ToString())
@@ -241,7 +248,11 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 				var round = await _bisectService.PrepareRoundAsync();
 				UpdateSessionDisplay();
 
-				await DeployWithProgressAsync();
+				if (!await DeployWithProgressAsync())
+				{
+					await CancelAndNotifyAsync();
+					break;
+				}
 
 				var report = await AskReportAsync(
 					_localizationService["Bisect.ReportMessage"]
@@ -272,8 +283,20 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 		}
 	}
 
-	private async Task DeployWithProgressAsync()
+	private async Task<bool> DeployWithProgressAsync()
 	{
+		// 游戏运行时部署不会生效：弹窗确认后自动关闭游戏再部署
+		if (IsGameRunning())
+		{
+			var confirmed = await AskConfirmAsync(
+				_localizationService["Bisect.GameRunningTitle"],
+				_localizationService["Bisect.GameRunningMessage"]);
+			if (!confirmed)
+				return false;
+
+			await CloseGameAsync();
+		}
+
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
 		{
 			Title = _localizationService["Bisect.Deploying"],
@@ -287,11 +310,68 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 				_localizationService["SettingsPage.PleaseWait"],
 				(_, _) => _bisectService.DeployAsync(),
 				_localizationService["DashboardPage.DeploySuccess"]);
+
+			LaunchGame();
 		}
 		finally
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
 		}
+
+		return true;
+	}
+
+	/// <summary>
+	/// 每轮部署完成后通过 Steam 启动游戏，方便立即测试本轮组合。
+	/// </summary>
+	private void LaunchGame()
+	{
+		try
+		{
+			Process.Start(s_gameStartInfo);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to launch game via Steam after bisect deploy");
+		}
+	}
+
+	private static bool IsGameRunning()
+	{
+		return Process.GetProcessesByName("helldivers2").Length > 0;
+	}
+
+	/// <summary>
+	/// 关闭游戏进程：先尝试优雅关闭主窗口，超时后强制结束。
+	/// </summary>
+	private static async Task CloseGameAsync()
+	{
+		foreach (var process in Process.GetProcessesByName("helldivers2"))
+		{
+			try
+			{
+				if (process.CloseMainWindow())
+				{
+					if (!process.WaitForExit(5000))
+						process.Kill();
+				}
+				else
+				{
+					process.Kill();
+				}
+			}
+			catch
+			{
+				// 进程可能已经退出
+			}
+			finally
+			{
+				process.Dispose();
+			}
+		}
+
+		// 留出进程完全退出的时间，避免文件仍被占用
+		await Task.Delay(1000);
 	}
 
 	private Task<string> AskReportAsync(string message)
