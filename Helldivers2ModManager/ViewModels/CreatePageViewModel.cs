@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
@@ -42,6 +44,22 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	/// <summary>模组图标文件路径（显示相对路径，如 icon.png）</summary>
 	[ObservableProperty]
 	private string _iconPath = string.Empty;
+
+	/// <summary>是否使用 V1 清单格式（false 表示旧版 Legacy 格式），默认为 V1</summary>
+	[ObservableProperty]
+	private bool _isV1Manifest = true;
+
+	/// <summary>是否使用旧版 Legacy 清单格式（IsV1Manifest 的反向，用于单选 UI）</summary>
+	public bool IsNotV1Manifest
+	{
+		get => !IsV1Manifest;
+		set => IsV1Manifest = !value;
+	}
+
+	partial void OnIsV1ManifestChanged(bool value)
+	{
+		OnPropertyChanged(nameof(IsNotV1Manifest));
+	}
 
 	/// <summary>是否正在创建中</summary>
 	[ObservableProperty]
@@ -164,7 +182,8 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 			CopyImageFiles(sourceDir);
 
 			var problems = await _modService.TryAddModFromDirectoryAsync(
-				sourceDir, ModName, ModDescription, modOptions, IconPath);
+				sourceDir, ModName, ModDescription, modOptions, IconPath,
+				IsV1Manifest ? ManifestVersion.V1 : ManifestVersion.Legacy);
 
 			if (problems.Length > 0)
 			{
@@ -266,6 +285,35 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 	[RelayCommand]
 	void AddOption()
 	{
+		if (!IsV1Manifest)
+		{
+			// Legacy 模式：选项即目录，点击后从源目录树选择文件夹生成选项
+			if (string.IsNullOrWhiteSpace(SourceDirectory) || !Directory.Exists(SourceDirectory))
+			{
+				WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
+				{
+					Message = _localizationService["CreatePage.SetSourceDirFirst"]
+				});
+				return;
+			}
+
+			var picker = new Views.Create.IncludeDirectoryPicker(SourceDirectory);
+			picker.Owner = System.Windows.Application.Current.MainWindow;
+			if (picker.ShowDialog() == true && picker.SelectedRelativePaths.Count > 0)
+			{
+				foreach (var path in picker.SelectedRelativePaths)
+				{
+					Options.Add(new CreateModOptionViewModel
+					{
+						SourceDirectory = SourceDirectory,
+						Name = path,
+						IncludePaths = path,
+					});
+				}
+			}
+			return;
+		}
+
 		Options.Add(new CreateModOptionViewModel { SourceDirectory = SourceDirectory });
 	}
 

@@ -475,6 +475,13 @@
     "CreatePage.SourceDirDesc1": "选择包含模组文件的目录。",
     "CreatePage.SourceDirDesc2": "（点击 \"浏览...\" 选择目录）",
     "CreatePage.BrowseSource": "浏览...",
+    "CreatePage.ManifestFormat": "清单格式",
+    "CreatePage.ManifestFormatDesc": "选择创建的清单格式（默认为 V1）。",
+    "CreatePage.ManifestFormatV1": "V1（新版，推荐）",
+    "CreatePage.ManifestFormatLegacy": "旧版（Legacy）",
+    "CreatePage.LegacyHint": "旧版格式仅支持简单的选项名称列表：不支持选项描述、图标、Include 路径和子选项。每个选项名称即部署时使用的目录名。",
+    "CreatePage.SetSourceDirFirst": "请先设置源目录后再添加选项。",
+    "CreatePage.AddOptionHint": "添加选项（旧版格式下点击后从源目录选择文件夹生成选项）",
     "CreatePage.Options": "选项",
     "CreatePage.OptionsDesc": "添加模组的可选项（如颜色切换等），每个选项可包含子选项。",
     "CreatePage.DragHint": "提示：选项和子选项均可拖拽排序",
@@ -506,7 +513,8 @@
     "ManifestEditPage.Name": "名称",
 
     "ManifestEditPage.Icon": "图标",
-    "ManifestEditPage.LegacyUpgradeHint": "此模组为旧版格式，添加选项后保存时将自动升级为 V1 格式。",
+    "ManifestEditPage.LegacyUpgradeHint": "此模组为旧版格式：选项名称即模组目录名，请使用文件夹选择添加选项。若为选项配置描述、Include、图标或子选项，保存时将自动升级为 V1 格式。",
+    "ManifestEditPage.SetSourceDirFirst": "无法读取模组目录，请确认模组文件夹存在后再添加选项。",
 
     "EditPage.Title": "模组选项",
     "EditPage.PreviewHint": "悬停选项图片可查看大图预览，但是下拉列表需要点开后才能预览",

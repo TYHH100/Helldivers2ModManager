@@ -102,9 +102,6 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	/// <summary>模组选项集合（可编辑）</summary>
 	public ObservableCollection<CreateModOptionViewModel> EditOptions { get; } = [];
 
-	/// <summary>原始 Legacy 选项的快照（用于判断选项是否被修改）</summary>
-	private string[]? _originalLegacyOptions;
-
 	/// <summary>当前表单正在编辑的清单版本及其不在表单中的元数据。</summary>
 	private IModManifest? _draftManifest;
 
@@ -153,7 +150,6 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 
 		// 加载已有选项
 		EditOptions.Clear();
-		_originalLegacyOptions = null;
 		if (manifest is V1ModManifest v1Manifest)
 		{
 			var sourceDir = EditMod?.Data.Directory.FullName ?? string.Empty;
@@ -189,7 +185,6 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		{
 			// Legacy 格式的选项只是简单的字符串数组，作为选项名称导入
 			var legacyOptions = legacyManifest.Options;
-			_originalLegacyOptions = legacyOptions?.ToArray();
 			if (legacyOptions is not null)
 			{
 				foreach (var optName in legacyOptions)
@@ -277,33 +272,25 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		}
 	}
 
-	/// <summary>判断选项是否被修改（仅针对 Legacy 格式）</summary>
-	/// <returns>如果选项被添加、删除或修改返回 true；否则返回 false</returns>
-	private bool OptionsWereModified()
+	/// <summary>
+	/// 判断选项是否需要升级为 V1 格式。
+	/// 只有选项使用了 V1 特有能力（描述、自定义 Include 路径、图标、子选项）时才需要升级；
+	/// Legacy 模式下通过文件夹选择的选项（名称即目录）保持 Legacy 格式不变。
+	/// </summary>
+	/// <returns>选项包含 V1 特有结构时返回 true</returns>
+	private bool OptionsRequireV1Upgrade()
 	{
-		if (_originalLegacyOptions is null)
+		foreach (var option in EditOptions)
 		{
-			return EditOptions.Count > 0;
-		}
-
-		if (_originalLegacyOptions.Length != EditOptions.Count)
-		{
-			return true;
-		}
-
-		for (int i = 0; i < _originalLegacyOptions.Length; i++)
-		{
-			var option = EditOptions[i];
-			if (_originalLegacyOptions[i] != option.Name
-				|| !string.IsNullOrWhiteSpace(option.Description)
-				|| !string.IsNullOrWhiteSpace(option.IncludePaths)
-				|| !string.IsNullOrWhiteSpace(option.ImagePath)
-				|| option.SubOptions.Count > 0)
-			{
+			if (!string.IsNullOrWhiteSpace(option.Description))
 				return true;
-			}
+			if (!string.IsNullOrWhiteSpace(option.ImagePath))
+				return true;
+			if (option.SubOptions.Count > 0)
+				return true;
+			if (!string.IsNullOrWhiteSpace(option.IncludePaths) && option.IncludePaths != option.Name)
+				return true;
 		}
-
 		return false;
 	}
 
@@ -316,7 +303,7 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		var modDir = EditMod.Data.Directory.FullName;
 		var iconPath = ResolveAndCopyIconPath(modDir);
 
-		if (currentManifest is LegacyModManifest && !OptionsWereModified())
+		if (currentManifest is LegacyModManifest && !OptionsRequireV1Upgrade())
 		{
 			EditMod.Data.Manifest = new LegacyModManifest
 			{
@@ -371,6 +358,35 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	void AddOption()
 	{
 		var sourceDir = EditMod?.Data.Directory.FullName ?? string.Empty;
+		if (IsLegacyManifest)
+		{
+			// Legacy 模式：选项即目录，点击后从模组目录树选择文件夹生成选项
+			if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
+			{
+				WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
+				{
+					Message = _localizationService["ManifestEditPage.SetSourceDirFirst"]
+				});
+				return;
+			}
+
+			var picker = new Views.Create.IncludeDirectoryPicker(sourceDir);
+			picker.Owner = System.Windows.Application.Current.MainWindow;
+			if (picker.ShowDialog() == true && picker.SelectedRelativePaths.Count > 0)
+			{
+				foreach (var path in picker.SelectedRelativePaths)
+				{
+					EditOptions.Add(new CreateModOptionViewModel
+					{
+						SourceDirectory = sourceDir,
+						Name = path,
+						IncludePaths = path,
+					});
+				}
+			}
+			return;
+		}
+
 		EditOptions.Add(new CreateModOptionViewModel { SourceDirectory = sourceDir });
 	}
 

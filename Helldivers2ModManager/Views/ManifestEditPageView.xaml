@@ -195,74 +195,91 @@
 														<ColumnDefinition Width="Auto"/>
 														<ColumnDefinition Width="*"/>
 													</Grid.ColumnDefinitions>
-													<!-- 选项图片预览 -->
-													<Border Grid.Column="0"
-															Width="64"
-															Height="64"
-															CornerRadius="4"
-															Background="#20FFFFFF"
-															Margin="0 0 12 0"
-															VerticalAlignment="Top">
-														<Image Source="{Binding ImagePreview}"
-															   Stretch="Uniform"
-															   VerticalAlignment="Center"
-															   HorizontalAlignment="Center"/>
-													</Border>
-													<!-- 选项名称、描述、Include 路径 -->
-													<StackPanel Grid.Column="1">
-														<TextBlock Text="{loc:Loc CreatePage.OptionName}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
-														<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
-																 FontSize="14"
+												<!-- 选项图片预览 -->
+												<Border Grid.Column="0"
+														Width="64"
+														Height="64"
+														CornerRadius="4"
+														Background="#20FFFFFF"
+														Margin="0 0 12 0"
+														VerticalAlignment="Top"
+														Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}">
+													<Image Source="{Binding ImagePreview}"
+														   Stretch="Uniform"
+														   VerticalAlignment="Center"
+														   HorizontalAlignment="Center"/>
+												</Border>
+												<!-- 选项名称、描述、Include 路径 -->
+												<StackPanel Grid.Column="1">
+													<TextBlock Text="{loc:Loc CreatePage.OptionName}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+													<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+															 FontSize="14"
+															 Padding="4 2"
+															 Margin="0 0 0 6"
+															 Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+													<!-- Legacy 模式：选项名即文件夹名，只读展示 -->
+													<TextBlock Text="{Binding Name}"
+															   FontSize="14"
+															   FontWeight="SemiBold"
+															   Foreground="{StaticResource NeutralForegroundBrush}"
+															   Padding="4 2"
+															   Margin="0 0 0 6"
+															   TextTrimming="CharacterEllipsis"
+															   Visibility="{Binding DataContext.IsLegacyManifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+													<TextBlock Text="{loc:Loc CreatePage.OptionDesc}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"
+															   Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+													<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+															 FontSize="13"
+															 Padding="4 2"
+															 Margin="0 0 0 6"
+															 Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+													<TextBlock Text="{loc:Loc CreatePage.OptionInclude}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"
+															   Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+													<Grid Margin="0 0 0 6"
+														  Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}">
+														<Grid.ColumnDefinitions>
+															<ColumnDefinition Width="*"/>
+															<ColumnDefinition Width="Auto"/>
+														</Grid.ColumnDefinitions>
+														<TextBox Grid.Column="0"
+																 Text="{Binding IncludePaths, UpdateSourceTrigger=PropertyChanged}"
+																 FontSize="12"
 																 Padding="4 2"
-																 Margin="0 0 0 6"/>
-														<TextBlock Text="{loc:Loc CreatePage.OptionDesc}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
-														<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
-																 FontSize="13"
+																 VerticalAlignment="Center"/>
+														<Button Grid.Column="1"
+																Content="{loc:Loc CreatePage.OptionBrowse}"
+																Style="{StaticResource FluentSecondaryButton}"
+																Command="{Binding BrowseIncludeCommand}"
+																Margin="4 0 0 0"
+																Padding="8 4"
+																FontSize="12"/>
+													</Grid>
+													<!-- 选项图标选择 -->
+													<TextBlock Text="{loc:Loc CreatePage.OptionIcon}"
+															   FontSize="12"
+															   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+															   Margin="0 0 2 2"
+															   Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+													<Grid Margin="0 0 0 6"
+														  Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}">
+														<Grid.ColumnDefinitions>
+															<ColumnDefinition Width="*"/>
+															<ColumnDefinition Width="Auto"/>
+														</Grid.ColumnDefinitions>
+														<TextBox Grid.Column="0"
+																 Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"
+																 FontSize="12"
 																 Padding="4 2"
-																 Margin="0 0 0 6"/>
-														<TextBlock Text="{loc:Loc CreatePage.OptionInclude}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
-														<Grid Margin="0 0 0 6">
-															<Grid.ColumnDefinitions>
-																<ColumnDefinition Width="*"/>
-																<ColumnDefinition Width="Auto"/>
-															</Grid.ColumnDefinitions>
-															<TextBox Grid.Column="0"
-																	 Text="{Binding IncludePaths, UpdateSourceTrigger=PropertyChanged}"
-																	 FontSize="12"
-																	 Padding="4 2"
-																	 VerticalAlignment="Center"/>
-															<Button Grid.Column="1"
-																	Content="{loc:Loc CreatePage.OptionBrowse}"
-																	Style="{StaticResource FluentSecondaryButton}"
-																	Command="{Binding BrowseIncludeCommand}"
-																	Margin="4 0 0 0"
-																	Padding="8 4"
-																	FontSize="12"/>
-														</Grid>
-														<!-- 选项图标选择 -->
-														<TextBlock Text="{loc:Loc CreatePage.OptionIcon}"
-																   FontSize="12"
-																   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-																   Margin="0 0 2 2"/>
-														<Grid Margin="0 0 0 6">
-															<Grid.ColumnDefinitions>
-																<ColumnDefinition Width="*"/>
-																<ColumnDefinition Width="Auto"/>
-															</Grid.ColumnDefinitions>
-															<TextBox Grid.Column="0"
-																	 Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"
-																	 FontSize="12"
-																	 Padding="4 2"
-																	 VerticalAlignment="Center"/>
-															<Button Grid.Column="1"
-																	Content="{loc:Loc CreatePage.SelectIcon}"
-																	Style="{StaticResource FluentSecondaryButton}"
-																	Command="{Binding BrowseImageCommand}"
-																	Margin="4 0 0 0"
-																	Padding="8 4"
-																	FontSize="12"/>
-														</Grid>
-													</StackPanel>
+																 VerticalAlignment="Center"/>
+														<Button Grid.Column="1"
+																Content="{loc:Loc CreatePage.SelectIcon}"
+																Style="{StaticResource FluentSecondaryButton}"
+																Command="{Binding BrowseImageCommand}"
+																Margin="4 0 0 0"
+																Padding="8 4"
+																FontSize="12"/>
+													</Grid>
+												</StackPanel>
 												</Grid>
 
 												<!-- 子选项区域 -->
@@ -271,14 +288,16 @@
 														   FontWeight="SemiBold"
 														   Foreground="{StaticResource NeutralForegroundBrush}"
 														   VerticalAlignment="Center"
-														   Margin="0 4 0 4"/>
+														   Margin="0 4 0 4"
+														   Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
 												<!-- 子选项列表（支持拖拽排序） -->
 												<ItemsControl ItemsSource="{Binding SubOptions}"
 															  Margin="0 4 0 0"
 															  dd:DragDrop.IsDragSource="True"
 															  dd:DragDrop.IsDropTarget="True"
-															  local:DragDropAutoScrollBehavior.IsEnabled="True">
+															  local:DragDropAutoScrollBehavior.IsEnabled="True"
+															  Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}">
 													<ItemsControl.ItemTemplate>
 														<DataTemplate DataType="{x:Type cvms:CreateModSubOptionViewModel}">
 															<Border Background="#15FFFFFF"
@@ -393,7 +412,8 @@
 														HorizontalAlignment="Center"
 														Margin="0 8 0 0"
 														Padding="12 6"
-														FontSize="12"/>
+														FontSize="12"
+														Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
 											</StackPanel>
 										</Border>
 									</DataTemplate>
@@ -405,7 +425,8 @@
 									HorizontalAlignment="Center"
 									Margin="0 8 0 0"
 									Padding="20 8"
-									FontSize="13"/>
+									FontSize="13"
+									ToolTip="{loc:Loc CreatePage.AddOptionHint}"/>
 						</StackPanel>
 					</Border>
 				</StackPanel>

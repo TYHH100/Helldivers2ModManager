@@ -180,7 +180,8 @@ internal sealed partial class ModService
 	/// <returns>遇到的问题列表</returns>
 	public async Task<ModProblem[]> TryAddModFromDirectoryAsync(
 		DirectoryInfo sourceDir, string modName, string modDescription,
-		List<ModOption>? customOptions = null, string? iconPath = null)
+		List<ModOption>? customOptions = null, string? iconPath = null,
+		ManifestVersion targetVersion = ManifestVersion.V1)
 	{
 		GuardInitialized();
 
@@ -257,41 +258,37 @@ internal sealed partial class ModService
 		await Task.Run(() => sourceDir.CopyTo(modDir.FullName));
 		modDir.Refresh();
 
-		// 创建清单文件：如果用户提供了自定义选项，则使用 V1 格式；否则根据推断结果决定
+		// 创建清单文件：按用户选择的格式生成（默认 V1）
 		IModManifest finalManifest;
-		if (customOptions is { Count: > 0 })
+		if (targetVersion == ManifestVersion.V1)
 		{
-			// 用户自定义了选项，使用 V1 格式清单
 			finalManifest = new V1ModManifest
 			{
 				Guid = manifest.Guid,
 				Name = finalName,
 				Description = finalDescription,
 				IconPath = finalIconPath,
-				Options = customOptions,
+				Options = customOptions is { Count: > 0 } ? customOptions : null,
 			};
 		}
 		else
 		{
-			// 没有自定义选项，根据推断结果决定清单格式
-			finalManifest = manifest.Version switch
+			if (customOptions is { Count: > 0 } && customOptions.Any(static o => o.SubOptions is { Count: > 0 }))
+				_logger.LogWarning("Legacy manifest does not support sub-options; sub-options will be dropped for \"{}\"", finalName);
+			// Legacy 选项名即部署目录名，丢弃空名称选项避免误部署整个模组根目录
+			var legacyOptionNames = customOptions?
+				.Where(static o => !string.IsNullOrWhiteSpace(o.Name))
+				.Select(static o => o.Name.Trim())
+				.ToArray();
+			if (customOptions is { Count: > 0 } && legacyOptionNames!.Length != customOptions.Count)
+				_logger.LogWarning("Dropped {} legacy option(s) with empty names for \"{}\"", customOptions.Count - legacyOptionNames!.Length, finalName);
+			finalManifest = new LegacyModManifest
 			{
-				ManifestVersion.V1 => new V1ModManifest
-				{
-					Guid = manifest.Guid,
-					Name = finalName,
-					Description = finalDescription,
-					IconPath = finalIconPath,
-					Options = (manifest as V1ModManifest)?.Options,
-				},
-				_ => new LegacyModManifest
-				{
-					Guid = manifest.Guid,
-					Name = finalName,
-					Description = finalDescription,
-					IconPath = finalIconPath,
-					Options = (manifest as LegacyModManifest)?.Options,
-				},
+				Guid = manifest.Guid,
+				Name = finalName,
+				Description = finalDescription,
+				IconPath = finalIconPath,
+				Options = legacyOptionNames is { Length: > 0 } ? legacyOptionNames : null,
 			};
 		}
 

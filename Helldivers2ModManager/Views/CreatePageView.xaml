@@ -198,6 +198,41 @@
 								VerticalAlignment="Center"/>
 					</Grid>
 
+					<!-- 清单格式 -->
+					<TextBlock Text="{loc:Loc CreatePage.ManifestFormat}"
+							   FontSize="16"
+							   FontWeight="SemiBold"
+							   Foreground="{StaticResource NeutralForegroundBrush}"/>
+					<TextBlock Text="{loc:Loc CreatePage.ManifestFormatDesc}"
+							   FontSize="13"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Margin="0 4 0 8"/>
+					<StackPanel Orientation="Horizontal" Margin="0 0 0 24">
+						<RadioButton GroupName="ManifestFormat"
+									 IsChecked="{Binding IsV1Manifest}"
+									 VerticalContentAlignment="Center"
+									 Style="{StaticResource FluentRadioButton}"
+									 Margin="0 0 24 0">
+							<TextBlock Text="{loc:Loc CreatePage.ManifestFormatV1}" FontSize="14"/>
+						</RadioButton>
+						<RadioButton GroupName="ManifestFormat"
+									 IsChecked="{Binding IsNotV1Manifest}"
+									 VerticalContentAlignment="Center"
+									 Style="{StaticResource FluentRadioButton}">
+							<TextBlock Text="{loc:Loc CreatePage.ManifestFormatLegacy}" FontSize="14"/>
+						</RadioButton>
+					</StackPanel>
+					<Border Background="{StaticResource NeutralBackgroundFillBrush}"
+							CornerRadius="4"
+							Padding="10 8"
+							Margin="0 -12 0 24"
+							Visibility="{Binding IsNotV1Manifest, Converter={StaticResource BoolToVisibilityConverter}}">
+						<TextBlock Text="{loc:Loc CreatePage.LegacyHint}"
+								   FontSize="12"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   TextWrapping="Wrap"/>
+					</Border>
+
 					<!-- 选项区域 -->
 					<TextBlock Text="{loc:Loc CreatePage.Options}"
 							   FontSize="16"
@@ -269,7 +304,8 @@
 													CornerRadius="4"
 													Background="#20FFFFFF"
 													Margin="0 0 12 0"
-													VerticalAlignment="Top">
+													VerticalAlignment="Top"
+													Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}">
 												<Image Source="{Binding ImagePreview}"
 													   Stretch="Uniform"
 													   VerticalAlignment="Center"
@@ -281,14 +317,28 @@
 											<TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
 													 FontSize="14"
 													 Padding="4 2"
-													 Margin="0 0 0 6"/>
-											<TextBlock Text="{loc:Loc CreatePage.OptionDesc}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
+													 Margin="0 0 0 6"
+													 Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+											<!-- Legacy 模式：选项名即文件夹名，只读展示 -->
+											<TextBlock Text="{Binding Name}"
+													   FontSize="14"
+													   FontWeight="SemiBold"
+													   Foreground="{StaticResource NeutralForegroundBrush}"
+													   Padding="4 2"
+													   Margin="0 0 0 6"
+													   TextTrimming="CharacterEllipsis"
+													   Visibility="{Binding DataContext.IsNotV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+											<TextBlock Text="{loc:Loc CreatePage.OptionDesc}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"
+													   Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
 												<TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
 														 FontSize="13"
 														 Padding="4 2"
-														 Margin="0 0 0 6"/>
-												<TextBlock Text="{loc:Loc CreatePage.OptionInclude}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"/>
-												<Grid Margin="0 0 0 6">
+														 Margin="0 0 0 6"
+														 Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+												<TextBlock Text="{loc:Loc CreatePage.OptionInclude}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" Margin="0 0 2 2"
+														   Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+												<Grid Margin="0 0 0 6"
+													  Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}">
 													<Grid.ColumnDefinitions>
 														<ColumnDefinition Width="*"/>
 														<ColumnDefinition Width="Auto"/>
@@ -310,8 +360,10 @@
 												<TextBlock Text="{loc:Loc CreatePage.OptionIcon}"
 														   FontSize="12"
 														   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-														   Margin="0 0 2 2"/>
-												<Grid Margin="0 0 0 6">
+														   Margin="0 0 2 2"
+														   Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+												<Grid Margin="0 0 0 6"
+													  Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}">
 													<Grid.ColumnDefinitions>
 														<ColumnDefinition Width="*"/>
 														<ColumnDefinition Width="Auto"/>
@@ -338,14 +390,16 @@
 												   FontWeight="SemiBold"
 												   Foreground="{StaticResource NeutralForegroundBrush}"
 												   VerticalAlignment="Center"
-												   Margin="0 4 0 4"/>
+												   Margin="0 4 0 4"
+												   Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
 										<!-- 子选项列表（支持拖拽排序） -->
 										<ItemsControl ItemsSource="{Binding SubOptions}"
 													  Margin="0 4 0 0"
 													  dd:DragDrop.IsDragSource="True"
 													  dd:DragDrop.IsDropTarget="True"
-													  bhv:DragDropAutoScrollBehavior.IsEnabled="True">
+													  bhv:DragDropAutoScrollBehavior.IsEnabled="True"
+													  Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}">
 											<ItemsControl.ItemTemplate>
 												<DataTemplate DataType="{x:Type cvms:CreateModSubOptionViewModel}">
 													<Border Background="#15FFFFFF"
@@ -461,7 +515,8 @@
 												HorizontalAlignment="Center"
 												Margin="0 8 0 0"
 												Padding="12 6"
-												FontSize="12"/>
+												FontSize="12"
+												Visibility="{Binding DataContext.IsV1Manifest, RelativeSource={RelativeSource AncestorType=Page}, Converter={StaticResource BoolToVisibilityConverter}}"/>
 									</StackPanel>
 								</Border>
 							</DataTemplate>
@@ -473,7 +528,8 @@
 						HorizontalAlignment="Center"
 						Margin="0 8 0 0"
 						Padding="20 8"
-						FontSize="13"/>
+						FontSize="13"
+						ToolTip="{loc:Loc CreatePage.AddOptionHint}"/>
 				</StackPanel>
 			</Border>
 			</StackPanel>
