@@ -82,55 +82,24 @@ internal sealed partial class ModService
 		var dirs = modsDir.GetDirectories();
 		_logger.LogInformation("Found {} folders in \"Mods\" directory", dirs.Length);
 
-		foreach (var dir in dirs)
+		// 每个目录的解析（manifest 读取/反序列化 + 路径校验）互不依赖且以磁盘 IO 为主，
+		// 并行执行显著缩短启动加载时间；结果按目录顺序存放，汇总阶段保持确定性顺序。
+		var parsedResults = new (DirectoryInfo Dir, ModData? Mod, ModProblem[] Problems)[dirs.Length];
+		Parallel.For(0, dirs.Length, index =>
 		{
-			_logger.LogDebug("Processing \"{}\"", dir.FullName);
+			parsedResults[index] = ParseModDirectory(dirs[index]);
+		});
 
-			_logger.LogDebug("Checking for \"manifest.json\"");
-			var manifestFile = new FileInfo(Path.Combine(dir.FullName, "manifest.json"));
-			if (manifestFile.Exists)
+		foreach (var (dir, mod, dirProblems) in parsedResults)
+		{
+			problems.AddRange(dirProblems);
+
+			// 重复 GUID 是跨目录检查，必须放在汇总（单线程）阶段进行
+			if (mod is not null)
 			{
-				IModManifest manifest;
-
-				try
+				if (_mods.Any(data => data.Manifest.Guid == mod.Manifest.Guid))
 				{
-					_logger.LogDebug("Parsing manifest");
-					manifest = ModManifest.DeserializeFromFile(manifestFile);
-				}
-				catch (UnknownManifestVersionException)
-				{
-					_logger.LogError("Manifest \"{}\" has unknown", manifestFile.FullName);
-					problems.Add(new ModProblem
-					{
-						Directory = dir,
-						Kind = ModProblemKind.UnknownManifestVersion,
-					});
-					continue; // skip
-				}
-				catch (EndOfLifeException)
-				{
-					_logger.LogError("Manifest \"{}\" is unsupported version 2", manifestFile.FullName);
-					problems.Add(new ModProblem
-					{
-						Directory = dir,
-						Kind = ModProblemKind.OutOfSupportManifest,
-					});
-					continue; // skip
-				}
-				catch (Exception ex)
-				{
-					_logger.LogError(ex, "Unable to parse manifest \"{}\"", manifestFile.FullName);
-					problems.Add(new ModProblem
-					{
-						Directory = dir,
-						Kind = ModProblemKind.CantParseManifest,
-					});
-					continue; // skip
-				}
-
-				if (_mods.Any(data => data.Manifest.Guid == manifest.Guid))
-				{
-					_logger.LogError("Mod \"{}\" has a duplicate guid of \"{}\"", dir.FullName, manifest.Guid);
+					_logger.LogError("Mod \"{}\" has a duplicate guid of \"{}\"", dir.FullName, mod.Manifest.Guid);
 					problems.Add(new ModProblem
 					{
 						Directory = dir,
@@ -139,20 +108,7 @@ internal sealed partial class ModService
 					continue; // skip
 				}
 
-				if (!CheckPaths(manifest, problems, dir, manifestFile))
-					continue;
-
-				_mods.Add(new ModData(dir, manifest));
-			}
-			else
-			{
-				_logger.LogWarning("No manifest found in \"{}\", deleting", dir.FullName);
-				problems.Add(new ModProblem
-				{
-					Directory = dir,
-					Kind = ModProblemKind.NoManifestFound,
-				});
-				dir.Delete(true);
+				_mods.Add(mod);
 			}
 		}
 
@@ -166,6 +122,73 @@ internal sealed partial class ModService
 		_ = Task.Run(async () => await _modHashService.MigrateExistingModsAsync(_mods));
 
 		return problems.ToArray();
+	}
+
+	/// <summary>
+	/// 解析单个模组目录的清单并校验路径（仅在后台并行加载阶段调用）。
+	/// </summary>
+	private (DirectoryInfo Dir, ModData? Mod, ModProblem[] Problems) ParseModDirectory(DirectoryInfo dir)
+	{
+		var problems = new List<ModProblem>();
+
+		_logger.LogDebug("Processing \"{}\"", dir.FullName);
+
+		_logger.LogDebug("Checking for \"manifest.json\"");
+		var manifestFile = new FileInfo(Path.Combine(dir.FullName, "manifest.json"));
+		if (manifestFile.Exists)
+		{
+			IModManifest manifest;
+
+			try
+			{
+				_logger.LogDebug("Parsing manifest");
+				manifest = ModManifest.DeserializeFromFile(manifestFile);
+			}
+			catch (UnknownManifestVersionException)
+			{
+				_logger.LogError("Manifest \"{}\" has unknown", manifestFile.FullName);
+				problems.Add(new ModProblem
+				{
+					Directory = dir,
+					Kind = ModProblemKind.UnknownManifestVersion,
+				});
+				return (dir, null, problems.ToArray());
+			}
+			catch (EndOfLifeException)
+			{
+				_logger.LogError("Manifest \"{}\" is unsupported version 2", manifestFile.FullName);
+				problems.Add(new ModProblem
+				{
+					Directory = dir,
+					Kind = ModProblemKind.OutOfSupportManifest,
+				});
+				return (dir, null, problems.ToArray());
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Unable to parse manifest \"{}\"", manifestFile.FullName);
+				problems.Add(new ModProblem
+				{
+					Directory = dir,
+					Kind = ModProblemKind.CantParseManifest,
+				});
+				return (dir, null, problems.ToArray());
+			}
+
+			if (!CheckPaths(manifest, problems, dir, manifestFile))
+				return (dir, null, problems.ToArray());
+
+			return (dir, new ModData(dir, manifest), problems.ToArray());
+		}
+
+		_logger.LogWarning("No manifest found in \"{}\", deleting", dir.FullName);
+		problems.Add(new ModProblem
+		{
+			Directory = dir,
+			Kind = ModProblemKind.NoManifestFound,
+		});
+		dir.Delete(true);
+		return (dir, null, problems.ToArray());
 	}
 	
 	/// <summary>
