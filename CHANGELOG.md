@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### 变更
+
+- **拖拽滚动体验优化**：重写 `DragDropAutoScrollBehavior`，边界自动滚动改为按贴近边缘程度加速（时间积分、与刷新率无关），滚动后合成冒泡 `DragOver` 实时刷新插入指示线；拖拽期间通过 `WH_MOUSE_LL` 钩子支持鼠标滚轮滚动列表（OLE 拖拽循环会吞掉滚轮消息），并修复 ListBox（部署顺序页）因 ScrollViewer 是视觉后代而无法自动滚动的问题
+
 ## [1.5.0] - 2026-06-23
 
 ### 新增

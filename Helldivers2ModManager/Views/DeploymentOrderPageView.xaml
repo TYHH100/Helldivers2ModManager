@@ -67,12 +67,12 @@
                 Padding="8"
                 Margin="0 0 0 8">
                 <WrapPanel Orientation="Horizontal">
-                <Button Content="{loc:Loc DeploymentOrderPage.MoveTop}"
+                <Button Content="{loc:Loc DashboardPage.MoveToTop}"
                         Command="{Binding MoveToTopCommand}"
                         IsEnabled="{Binding CanMoveToTop}"
                         Style="{StaticResource FluentSecondaryButton}"
                         Margin="0 0 6 4"/>
-                <Button Content="{loc:Loc DeploymentOrderPage.MoveBottom}"
+                <Button Content="{loc:Loc DashboardPage.MoveToBottom}"
                         Command="{Binding MoveToBottomCommand}"
                         IsEnabled="{Binding CanMoveToBottom}"
                         Style="{StaticResource FluentSecondaryButton}"

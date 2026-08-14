@@ -363,7 +363,7 @@
                             </Grid>
                         </TabItem>
 
-                        <TabItem Header="{loc:Loc ModelPreviewPage.DecodedMeshesTab}">
+                        <TabItem Header="{loc:Loc ModelPreviewPage.Meshes}">
                             <Grid Margin="4">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
@@ -449,7 +449,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Status}" Binding="{Binding PreviewStatusText}" Width="145"/>
                                 <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Patch}" Binding="{Binding PatchFile}" Width="*"/>
-                                <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Unit}" Binding="{Binding UnitIdText}" Width="145"/>
+                                <DataGridTextColumn Header="{loc:Loc ConflictDetail.Unit}" Binding="{Binding UnitIdText}" Width="145"/>
                                 <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.MeshInfo}" Binding="{Binding MeshInfoIndex}" Width="65"/>
                                 <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Stream}" Binding="{Binding StreamIndex}" Width="65"/>
                                 <DataGridTextColumn Header="{loc:Loc ModelPreviewPage.Uv}" Binding="{Binding UvStatusText}" Width="55"/>

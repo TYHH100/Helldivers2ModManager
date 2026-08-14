@@ -106,7 +106,7 @@
                             <Border Grid.Column="3" Background="{StaticResource NeutralStrokeBrush}" Margin="0 2"/>
                             <StackPanel Grid.Column="4" HorizontalAlignment="Center">
                                 <TextBlock Text="{Binding ModParticipantCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="{loc:Loc ConflictDetail.Participants}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                <TextBlock Text="{loc:Loc ArmorPollutionPage.AffectedMods}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
                             </StackPanel>
                         </Grid>
                     </Border>

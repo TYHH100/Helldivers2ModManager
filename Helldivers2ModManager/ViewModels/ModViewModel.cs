@@ -405,48 +405,74 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// 图标加载序号，用于丢弃过期的异步解码结果（快速刷新时避免旧图标覆盖新图标）。
+    /// </summary>
+    private int _iconLoadGeneration;
+
     public void LoadIcon()
+    {
+        var generation = ++_iconLoadGeneration;
+        var path = _mod.Manifest.IconPath;
+        string? iconFullPath = null;
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            var candidate = Path.Combine(_mod.Directory.FullName, path);
+            if (File.Exists(candidate))
+                iconFullPath = candidate;
+            else
+                _logger.LogWarning("Icon file not found at \"{Path}\", using default icon for mod \"{Name}\"", candidate, _mod.Manifest.Name);
+        }
+
+        if (iconFullPath is null)
+        {
+            SetDefaultIcon();
+            return;
+        }
+
+        // 后台线程解码并冻结：避免启动加载大量模组时在 UI 线程全量解码卡顿；
+        // OnLoad 在 EndInit 时把像素读入内存并立即释放文件句柄，
+        // 删除模组时目录不再被已显示的图标占用。
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(iconFullPath);
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.EndInit();
+                bmp.Freeze();
+                return bmp;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load icon for mod \"{Name}\", falling back to default icon", _mod.Manifest.Name);
+                return null;
+            }
+        }).ContinueWith(t =>
+        {
+            if (generation != _iconLoadGeneration)
+                return; // 过期结果不回写
+            Icon = t.Result is { } bmp ? bmp : null;
+            if (t.Result is null)
+                SetDefaultIcon();
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private void SetDefaultIcon()
     {
         try
         {
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            var path = _mod.Manifest.IconPath;
-            if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(path))
-                bmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
-            else
-            {
-                var iconFullPath = Path.Combine(_mod.Directory.FullName, path);
-                if (File.Exists(iconFullPath))
-                {
-                    bmp.UriSource = new Uri(iconFullPath);
-                    // 使用默认的 OnDemand 缓存模式：EndInit 时只登记 URI 不做解码，
-                    // 渲染时才按需解码并缓存，避免启动加载大量模组时在 UI 线程全量解码卡顿
-                }
-                else
-                {
-                    _logger.LogWarning("Icon file not found at \"{Path}\", using default icon for mod \"{Name}\"", iconFullPath, _mod.Manifest.Name);
-                    bmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
-                }
-            }
-            bmp.EndInit();
-            Icon = bmp;
+            var defaultBmp = new BitmapImage();
+            defaultBmp.BeginInit();
+            defaultBmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
+            defaultBmp.EndInit();
+            Icon = defaultBmp;
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogWarning(ex, "Failed to load icon for mod \"{Name}\", falling back to default icon", _mod.Manifest.Name);
-            try
-            {
-                var defaultBmp = new BitmapImage();
-                defaultBmp.BeginInit();
-                defaultBmp.UriSource = new Uri(@"..\Resources\Images\logo_icon.png", UriKind.Relative);
-                defaultBmp.EndInit();
-                Icon = defaultBmp;
-            }
-            catch
-            {
-                Icon = null;
-            }
+            Icon = null;
         }
     }
 
@@ -552,7 +578,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             ModVersionStatus.Incompatible => _localizationService["Converters.Incompatible"],
             ModVersionStatus.Unknown => _localizationService["Converters.UnableToConfirm"],
             ModVersionStatus.Checking => _localizationService["Converters.Checking"],
-            ModVersionStatus.Error => _localizationService["Converters.CheckFailed"],
+            ModVersionStatus.Error => _localizationService["VersionCheck.CheckFailed"],
             _ => _localizationService["Converters.Unknown"]
         };
 
@@ -578,7 +604,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             ModVersionStatus.Incompatible => _localizationService["Converters.Incompatible"],
             ModVersionStatus.Unknown => _localizationService["Converters.UnableToConfirm"],
             ModVersionStatus.Checking => _localizationService["Converters.Checking"],
-            ModVersionStatus.Error => _localizationService["Converters.CheckFailed"],
+            ModVersionStatus.Error => _localizationService["VersionCheck.CheckFailed"],
             _ => _localizationService["Converters.Unknown"]
         };
 
@@ -648,7 +674,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
                 sb.AppendLine(string.Format(_localizationService["ModViewModel.FileInfoSummary"], pf.FileSize, pf.HealthStatus));
                 sb.AppendLine(string.Format(_localizationService["ModViewModel.FileHeaderInfo"],
                     pf.HeaderValid ? _localizationService["ModViewModel.Valid"] : _localizationService["ModViewModel.Invalid"],
-                    pf.FileEntriesInBounds ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"]));
+                    pf.FileEntriesInBounds ? _localizationService["CreateWizard.Yes"] : _localizationService["CreateWizard.No"]));
                 sb.AppendLine(string.Format(_localizationService["ModViewModel.FileTypeCounts"],
                     pf.NumTypes, pf.NumFiles, pf.TotalResources));
                 sb.AppendLine(string.Format(_localizationService["ModViewModel.FileTypeDistributionInfo"],
@@ -681,20 +707,20 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
                             unit.EntryIndex, unit.FileId, unit.Version));
                         sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitSizeInfo"],
                             unit.DataSize, unit.ExpectedDataSize,
-                            unit.DeclaredSizeMatchesInternal ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"]));
+                            unit.DeclaredSizeMatchesInternal ? _localizationService["CreateWizard.Yes"] : _localizationService["CreateWizard.No"]));
                         sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitLodInfo"],
-                            unit.LODGroupOffset, unit.LODGroupSize, unit.LODGroupInBounds ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"]));
+                            unit.LODGroupOffset, unit.LODGroupSize, unit.LODGroupInBounds ? _localizationService["CreateWizard.Yes"] : _localizationService["CreateWizard.No"]));
                         if (unit.LayoutFormatChecked)
                         {
                             sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitLayoutInfo"],
-                                unit.LayoutFormatChecked, unit.LayoutFormatValid ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"],
+                                unit.LayoutFormatChecked, unit.LayoutFormatValid ? _localizationService["CreateWizard.Yes"] : _localizationService["CreateWizard.No"],
                                 unit.LayoutFormatIssueCount));
                         }
                         if (unit.GpuStructureChecked)
                         {
                             sb.AppendLine(string.Format(_localizationService["ModViewModel.UnitGpuStructureInfo"],
                                 unit.GpuStreamCount,
-                                unit.GpuStructureValid ? _localizationService["ModViewModel.Yes"] : _localizationService["ModViewModel.No"],
+                                unit.GpuStructureValid ? _localizationService["CreateWizard.Yes"] : _localizationService["CreateWizard.No"],
                                 unit.GpuStructureIssueCount,
                                 unit.UnknownGpuComponentCount));
                         }
@@ -739,6 +765,8 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _iconLoadGeneration++;
+        Icon = null;
         _mod.PropertyChanged -= ModData_PropertyChanged;
     }
 }

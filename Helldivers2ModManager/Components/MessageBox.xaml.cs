@@ -136,6 +136,17 @@ internal sealed class MessageBoxTagSelectionMessage
 	public required Action<IEnumerable<Models.TagSelectionItem>> Confirm { get; init; }
 }
 
+internal sealed class MessageBoxGroupSelectionMessage
+{
+	public required string Title { get; init; }
+
+	public required string Message { get; init; }
+
+	public required List<Models.ModGroupSelectionItem> Groups { get; init; }
+
+	public required Action<IEnumerable<Models.ModGroupSelectionItem>> Confirm { get; init; }
+}
+
 internal sealed class ChecklistSelectionItem
 {
     public required long Value { get; init; }
@@ -163,7 +174,7 @@ internal sealed class MessageBoxColorPickerMessage
 	public required Action<string> Confirm { get; init; }
 }
 
-internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxExportProgressMessage>, IRecipient<MessageBoxExportProgressUpdateMessage>, IRecipient<MessageBoxUpdateProgressMessage>, IRecipient<MessageBoxUpdateProgressUpdateMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxChecklistMessage>, IRecipient<MessageBoxColorPickerMessage>
+internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxExportProgressMessage>, IRecipient<MessageBoxExportProgressUpdateMessage>, IRecipient<MessageBoxUpdateProgressMessage>, IRecipient<MessageBoxUpdateProgressUpdateMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxGroupSelectionMessage>, IRecipient<MessageBoxChecklistMessage>, IRecipient<MessageBoxColorPickerMessage>
 {
 	public static bool IsRegistered { get; private set; }
 
@@ -177,6 +188,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	private Action<object>? _selectionAction;
 	private Action? _selectionAbortAction;
 	private Action<IEnumerable<Models.TagSelectionItem>>? _tagSelectionAction;
+	private Action<IEnumerable<Models.ModGroupSelectionItem>>? _groupSelectionAction;
 	private Action<IReadOnlyList<ChecklistSelectionItem>>? _checklistAction;
 	private Action<string>? _colorPickerAction;
 	private string? _selectedColor;
@@ -198,6 +210,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		WeakReferenceMessenger.Default.Register<MessageBoxConfirmMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxSelectionMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxTagSelectionMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxGroupSelectionMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxChecklistMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxColorPickerMessage>(this);
 
@@ -343,7 +356,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 			progressPanel.Visibility = Visibility.Hidden;
 			progress.Visibility = Visibility.Hidden;
 			updateProgressPanel.Visibility = Visibility.Collapsed;
-			this.message.Text = LocalizationService?["MessageBox.UpdateDone"] ?? "模组更新完成";
+			this.message.Text = LocalizationService?["DashboardPage.UpdateModDone"] ?? "模组更新完成";
 			okButton.Visibility = Visibility.Visible;
 		}
 		else
@@ -362,8 +375,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 				updateCurrentFile.Text = "";
 
 			updateFileCount.Text = message.CacheHits > 0
-				? $"{LocalizationService?["MessageBox.ProcessedPrefix"]}{message.ProcessedCount}{LocalizationService?["MessageBox.ProcessedSep"]}{message.TotalCount}{LocalizationService?["MessageBox.ProcessedSuffix"]} ({LocalizationService?["MessageBox.CacheHitPrefix"]}{message.CacheHits}{LocalizationService?["MessageBox.CacheHitSuffix"]})"
-				: $"{LocalizationService?["MessageBox.ProcessedPrefix"]}{message.ProcessedCount}{LocalizationService?["MessageBox.ProcessedSep"]}{message.TotalCount}{LocalizationService?["MessageBox.ProcessedSuffix"]}";
+				? $"{LocalizationService?["MessageBox.ProcessedPrefix"]}{message.ProcessedCount}{LocalizationService?["MessageBox.ProcessedSep"]}{message.TotalCount}{LocalizationService?["MessageBox.NeedUpdateSuffix"]} ({LocalizationService?["MessageBox.CacheHitPrefix"]}{message.CacheHits}{LocalizationService?["MessageBox.CacheHitSuffix"]})"
+				: $"{LocalizationService?["MessageBox.ProcessedPrefix"]}{message.ProcessedCount}{LocalizationService?["MessageBox.ProcessedSep"]}{message.TotalCount}{LocalizationService?["MessageBox.NeedUpdateSuffix"]}";
 
 			if (message.NeedUpdateCount > 0)
 				updateNeedUpdateCount.Text = $"{LocalizationService?["MessageBox.NeedUpdatePrefix"]}{message.NeedUpdateCount}{LocalizationService?["MessageBox.NeedUpdateSuffix"]}";
@@ -438,6 +451,23 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		this.message.Margin = new Thickness(0, 0, 0, 8);
 		tagSelectionList.ItemsSource = message.Tags;
 		tagSelectionList.Visibility = Visibility.Visible;
+		cancelButton.Visibility = Visibility.Visible;
+		okButton.Visibility = Visibility.Visible;
+		Visibility = Visibility.Visible;
+	}
+
+	public void Receive(MessageBoxGroupSelectionMessage message)
+	{
+		Reset();
+
+		_groupSelectionAction = message.Confirm;
+
+		title.Text = message.Title;
+		brush.Color = Colors.White;
+		this.message.Text = message.Message;
+		this.message.Margin = new Thickness(0, 0, 0, 8);
+		groupSelectionList.ItemsSource = message.Groups;
+		groupSelectionList.Visibility = Visibility.Visible;
 		cancelButton.Visibility = Visibility.Visible;
 		okButton.Visibility = Visibility.Visible;
 		Visibility = Visibility.Visible;
@@ -523,6 +553,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		_selectionAction = null;
 		_selectionAbortAction = null;
 		_tagSelectionAction = null;
+		_groupSelectionAction = null;
 		_checklistAction = null;
 		_colorPickerAction = null;
 		_selectedColor = null;
@@ -537,6 +568,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		selectionComboBox.Visibility = Visibility.Collapsed;
 		tagSelectionList.Visibility = Visibility.Collapsed;
 		tagSelectionList.ItemsSource = null;
+		groupSelectionList.Visibility = Visibility.Collapsed;
+		groupSelectionList.ItemsSource = null;
 		checklistSelectionList.Visibility = Visibility.Collapsed;
 		checklistSelectionList.ItemsSource = null;
 		colorPickerPanel.Visibility = Visibility.Collapsed;
@@ -578,6 +611,11 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		{
 			var selectedTags = tagSelectionList.ItemsSource.Cast<Models.TagSelectionItem>().Where(t => t.IsSelected).ToList();
 			_tagSelectionAction(selectedTags);
+		}
+		else if (_groupSelectionAction != null)
+		{
+			var selectedGroups = groupSelectionList.ItemsSource.Cast<Models.ModGroupSelectionItem>().Where(g => g.IsSelected).ToList();
+			_groupSelectionAction(selectedGroups);
 		}
 		else if (_checklistAction != null)
 		{

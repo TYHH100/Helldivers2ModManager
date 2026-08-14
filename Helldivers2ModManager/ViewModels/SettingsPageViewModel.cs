@@ -860,7 +860,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
 		{
-			Title = _localizationService["SettingsPage.ValidatingApiKeyTitle"],
+			Title = _localizationService["SettingsPage.ValidatingApiKey"],
 			Message = _localizationService["SettingsPage.ValidatingApiKeyMsg"]
 		});
 

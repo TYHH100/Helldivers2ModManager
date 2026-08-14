@@ -108,7 +108,7 @@
                     </StackPanel>
                 </Button>
 
-                <TextBlock Grid.Column="1" Text="{loc:Loc BackgroundTasksPage.Title}" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0 8 0 8" />
+                <TextBlock Grid.Column="1" Text="{loc:Loc DashboardPage.BackgroundTasks}" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0 8 0 8" />
 
                 <Button Grid.Column="2"
                         Command="{Binding ClearCompletedCommand}"

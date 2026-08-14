@@ -386,3 +386,5 @@ settings.json
 Test/
 .testagent/
 .agents/
+# ReShade addon build
+Hd2Vfs/build/

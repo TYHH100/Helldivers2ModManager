@@ -23,12 +23,12 @@
                 <TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
             </Button>
             <StackPanel Grid.Column="1">
-                <TextBlock Text="{loc:Loc ArmorReusePage.Title}" FontSize="22" FontWeight="SemiBold"/>
+                <TextBlock Text="{loc:Loc DashboardPage.ArmorReuse}" FontSize="22" FontWeight="SemiBold"/>
                 <TextBlock Text="{loc:Loc ArmorReusePage.Description}" Margin="0 4 0 0" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextWrapping="Wrap"/>
                 <TextBlock Text="{loc:Loc ArmorReusePage.Attribution}" Margin="0 5 0 0" FontSize="11" Foreground="{StaticResource NeutralForegroundTertiaryBrush}" TextWrapping="Wrap"/>
             </StackPanel>
             <Button Grid.Column="2" Command="{Binding RefreshCommand}" IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource FluentSecondaryButton}" Padding="14 8">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons" Margin="0 0 7 0"/><TextBlock Text="{loc:Loc ArmorReusePage.Refresh}"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons" Margin="0 0 7 0"/><TextBlock Text="{loc:Loc ArmorPollutionPage.Refresh}"/></StackPanel>
             </Button>
         </Grid>
 
@@ -37,9 +37,9 @@
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <TextBlock Grid.ColumnSpan="4" Text="{Binding SummaryText}" Margin="0 0 0 12" TextWrapping="Wrap" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
-                <StackPanel Grid.Row="1" Grid.Column="0" HorizontalAlignment="Center"><TextBlock Text="{Binding ScannedModCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorReusePage.ScannedMods}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
-                <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center"><TextBlock Text="{Binding ScannedPatchCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorReusePage.ScannedPatches}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
-                <StackPanel Grid.Row="1" Grid.Column="2" HorizontalAlignment="Center"><TextBlock Text="{Binding AffectedModCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorReusePage.AffectedMods}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="0" HorizontalAlignment="Center"><TextBlock Text="{Binding ScannedModCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorPollutionPage.ScannedMods}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center"><TextBlock Text="{Binding ScannedPatchCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorPollutionPage.ScannedPatches}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="2" HorizontalAlignment="Center"><TextBlock Text="{Binding AffectedModCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorPollutionPage.AffectedMods}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
                 <StackPanel Grid.Row="1" Grid.Column="3" HorizontalAlignment="Center"><TextBlock Text="{Binding ReusedArmorCount}" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource SystemAccentBrush}" HorizontalAlignment="Center"/><TextBlock Text="{loc:Loc ArmorReusePage.ReusedArmors}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/></StackPanel>
             </Grid>
         </Border>

@@ -130,7 +130,7 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
                 else
                 {
                     SelectedFile = ModFiles.FirstOrDefault(f => f.IsPrimary == true) ?? ModFiles.FirstOrDefault();
-                    StatusMessage = $"{_localizationService["NexusDownloadPage.FoundPrefix"]}{ModFiles.Count}{_localizationService["NexusDownloadPage.FoundSuffix"]}";
+                    StatusMessage = $"{_localizationService["NexusDownloadPage.FoundPrefix"]}{ModFiles.Count}{_localizationService["MessageBox.NeedUpdateSuffix"]}";
                 }
             }
             catch (Exception ex)
@@ -264,7 +264,7 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
 
     private void ShowPremiumRequiredMessage()
     {
-        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.PremiumRequiredMsg"] });
+        WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["NexusDownloadPage.PremiumMsg"] });
     }
 
     private (string GameDomain, string ModId)? ParseNexusUrl(string url)

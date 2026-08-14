@@ -48,10 +48,26 @@ internal static class ModManifest
         return version switch
         {
             ManifestVersion.Legacy => LegacyModManifest.Deserialize(root, logger),
-            ManifestVersion.V1 => V1ModManifest.Deserialize(root),
+            ManifestVersion.V1 => V1ModManifest.Deserialize(root, logger),
             ManifestVersion.V2 => throw new EndOfLifeException(),
             _ => throw new UnknownManifestVersionException()
         };
+    }
+
+    /// <summary>
+    /// 宽容解析清单中的 Guid。部分作者手写 GUID 时混入非十六进制字符
+    /// （如 i、l、o）或直接漏写，导致整个模组导入失败；
+    /// 只要拿不到合法 Guid 就生成新 Guid 兜底，仅记录警告。
+    /// </summary>
+    public static Guid ParseGuid(JsonElement root, ILogger? logger = null)
+    {
+        if (root.TryGetProperty(nameof(IModManifest.Guid), out var prop)
+            && prop.ValueKind == JsonValueKind.String
+            && Guid.TryParse(prop.GetString(), out var guid))
+            return guid;
+
+        logger?.LogWarning($"Manifest \"{nameof(IModManifest.Guid)}\" is missing or invalid, generating a new GUID.");
+        return Guid.NewGuid();
     }
 
     public static IModManifest InferFromDirectory(DirectoryInfo dir, ILogger? logger = null)

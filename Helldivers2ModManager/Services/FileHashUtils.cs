@@ -120,9 +120,10 @@ internal static class FileHashUtils
 		Guid modGuid,
 		FileHashRepository repo,
 		string storageDirectory,
-		IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress = null)
+		IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress = null,
+		CancellationToken cancellationToken = default)
 	{
-		return await ComputeDirectoryHashesWithCacheInternalAsync(directory, modGuid, repo, storageDirectory, saveToDb: true, progress);
+		return await ComputeDirectoryHashesWithCacheInternalAsync(directory, modGuid, repo, storageDirectory, saveToDb: true, progress, cancellationToken);
 	}
 
 	/// <summary>
@@ -134,15 +135,17 @@ internal static class FileHashUtils
 	/// <param name="repo">文件哈希仓储</param>
 	/// <param name="storageDirectory">存储目录</param>
 	/// <param name="progress">进度报告回调</param>
+	/// <param name="cancellationToken">取消令牌</param>
 	/// <returns>相对路径 → SHA-256哈希值的字典</returns>
 	public static async Task<Dictionary<string, string>> ComputeDirectoryHashesReadCacheAsync(
 		DirectoryInfo directory,
 		Guid modGuid,
 		FileHashRepository repo,
 		string storageDirectory,
-		IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress = null)
+		IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress = null,
+		CancellationToken cancellationToken = default)
 	{
-		return await ComputeDirectoryHashesWithCacheInternalAsync(directory, modGuid, repo, storageDirectory, saveToDb: false, progress);
+		return await ComputeDirectoryHashesWithCacheInternalAsync(directory, modGuid, repo, storageDirectory, saveToDb: false, progress, cancellationToken);
 	}
 
 	private static async Task<Dictionary<string, string>> ComputeDirectoryHashesWithCacheInternalAsync(
@@ -151,7 +154,8 @@ internal static class FileHashUtils
 		FileHashRepository repo,
 		string storageDirectory,
 		bool saveToDb,
-		IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress)
+		IProgress<(int checkedCount, int totalCount, string currentFile, int cacheHits)>? progress,
+		CancellationToken cancellationToken)
     {
         var files = directory.GetFiles("*", SearchOption.AllDirectories)
             .OrderBy(f => f.FullName)
@@ -166,6 +170,8 @@ internal static class FileHashUtils
 
         for (int i = 0; i < files.Length; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var file = files[i];
 
             var relativePath = file.FullName

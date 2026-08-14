@@ -19,7 +19,7 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, IDropTarget
 {
-    public override string Title => _localizationService["DeploymentOrderPage.Title"];
+    public override string Title => _localizationService["DashboardPage.DeploymentOrder"];
 
     /// <summary>
     /// 部署顺序列表中的项（扁平列表，模组+选项+子选项）

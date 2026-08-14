@@ -41,7 +41,7 @@ internal sealed partial class CreateModSubOptionViewModel : ModImageViewModelBas
 		{
 			WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
 			{
-				Message = LocalizationService?["CreateSubOption.SetSourceDirHint"] ?? "请先设置源目录后再选择 Include 路径。"
+				Message = LocalizationService?["CreateModOption.SetSourceDirHint"] ?? "请先设置源目录后再选择 Include 路径。"
 			});
 			return;
 		}

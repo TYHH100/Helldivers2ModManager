@@ -113,7 +113,7 @@
                     <TextBlock Text="{loc:Loc PatchResourceViewerPage.Description}" Margin="0 3 0 0" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextWrapping="Wrap"/>
                 </StackPanel>
                 <Button Grid.Column="2" Command="{Binding RefreshModsCommand}" IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource FluentSecondaryButton}" Padding="12 7">
-                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons" Margin="0 0 7 0"/><TextBlock Text="{loc:Loc PatchResourceViewerPage.Refresh}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons" Margin="0 0 7 0"/><TextBlock Text="{loc:Loc ModelPreviewPage.Refresh}"/></StackPanel>
                 </Button>
             </Grid>
         </Border>
@@ -127,7 +127,7 @@
 
             <Border Grid.Column="0" Style="{StaticResource FluentSettingsCard}" Padding="0">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="{loc:Loc PatchResourceViewerPage.Mods}" FontWeight="SemiBold" Margin="14 12 14 8"/>
+                    <TextBlock DockPanel.Dock="Top" Text="{loc:Loc ModelPreviewPage.Mods}" FontWeight="SemiBold" Margin="14 12 14 8"/>
                     <ListBox ItemsSource="{Binding Mods}" SelectedItem="{Binding SelectedMod}" BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch">
                         <ListBox.ItemTemplate>
                             <DataTemplate>

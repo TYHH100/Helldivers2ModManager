@@ -201,8 +201,8 @@ internal sealed partial class ArmorPollutionPageViewModel : PageViewModelBase
                 ResourceName = string.IsNullOrWhiteSpace(group.DisplayName)
                     ? _localizationService["ArmorPollutionPage.UnknownUnit"]
                     : group.DisplayName,
-                UnitText = $"{_localizationService["ArmorPollutionPage.Unit"]}: 0x{group.UnitId:X16}",
-                ModsText = $"{_localizationService["ArmorPollutionPage.InvolvedMods"]}: {modNames}",
+                UnitText = $"{_localizationService["ConflictDetail.Unit"]}: 0x{group.UnitId:X16}",
+                ModsText = $"{_localizationService["ArmorPollutionPage.AffectedMods"]}: {modNames}",
                 EvidenceText = _localizationService["ArmorPollutionPage.Evidence"]
                     .Replace("{mods}", distinctMods.Length.ToString())
                     .Replace("{patches}", patchCount.ToString()),

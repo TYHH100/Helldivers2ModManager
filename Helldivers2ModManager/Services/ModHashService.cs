@@ -72,9 +72,10 @@ internal sealed class ModHashService
 	private readonly SemaphoreSlim _computationSemaphore = new(MaxConcurrentComputations, MaxConcurrentComputations);
 
 	/// <summary>
-	/// 跟踪正在执行哈希计算的任务，防止同一模组的重复计算
+	/// 跟踪正在执行哈希计算的任务及其取消令牌，防止同一模组的重复计算；
+	/// 删除/更新模组时通过令牌强制终止计算，避免等待完整哈希流程。
 	/// </summary>
-	private readonly ConcurrentDictionary<Guid, Task> _activeComputations = new();
+	private readonly ConcurrentDictionary<Guid, (Task Task, CancellationTokenSource Cancellation)> _activeComputations = new();
 
 	/// <summary>
 	/// 哈希迁移进度变化事件，在后台迁移过程中定期触发，供 UI 层订阅显示进度。
@@ -129,14 +130,15 @@ internal sealed class ModHashService
 			return;
 		}
 
-		// 启动后台任务，不阻塞调用方
+		// 启动后台任务，不阻塞调用方；持有取消令牌以便删除/更新时强制终止
+		var cancellation = new CancellationTokenSource();
 		var task = Task.Run(async () =>
 		{
 			var backgroundTask = _backgroundTaskService.Add(
 				_localizationService["BackgroundTasksPage.TaskTypeHash"],
 				_localizationService["ModHashService.FingerprintSingleProgress"].Replace("{name}", mod.Manifest.Name));
 
-			await _computationSemaphore.WaitAsync();
+			await _computationSemaphore.WaitAsync(cancellation.Token);
 			try
 			{
 				_logger.LogInformation("Computing file hashes for mod \"{Name}\" ({Guid})", mod.Manifest.Name, mod.Manifest.Guid);
@@ -146,12 +148,20 @@ internal sealed class ModHashService
 					mod.Directory,
 					mod.Manifest.Guid,
 					_fileHashRepository,
-					_settingsService.StorageDirectory);
+					_settingsService.StorageDirectory,
+					cancellationToken: cancellation.Token);
 
 				_logger.LogInformation("File hashes computed and stored for mod \"{Name}\"", mod.Manifest.Name);
 				_backgroundTaskService.Complete(
 					backgroundTask,
 					_localizationService["ModHashService.FingerprintSingleReady"].Replace("{name}", mod.Manifest.Name));
+			}
+			catch (OperationCanceledException)
+			{
+				_logger.LogInformation("Hash computation cancelled for mod \"{Name}\"", mod.Manifest.Name);
+				_backgroundTaskService.Cancel(
+					backgroundTask,
+					_localizationService["ModHashService.FingerprintCancelled"].Replace("{name}", mod.Manifest.Name));
 			}
 			catch (Exception ex)
 			{
@@ -165,7 +175,7 @@ internal sealed class ModHashService
 			}
 		});
 
-		_activeComputations[mod.Manifest.Guid] = task;
+		_activeComputations[mod.Manifest.Guid] = (task, cancellation);
 	}
 
 	/// <summary>
@@ -181,17 +191,22 @@ internal sealed class ModHashService
 			return;
 		}
 
-		// 先取消正在进行的旧任务（如果有）
-		if (_activeComputations.TryRemove(mod.Manifest.Guid, out var existingTask))
+		// 先取消正在进行的旧任务（如果有），再执行重算
+		if (_activeComputations.TryRemove(mod.Manifest.Guid, out var existing))
 		{
 			try
 			{
 				_logger.LogDebug("Cancelling existing hash computation for mod \"{Name}\" before recomputation", mod.Manifest.Name);
-				await existingTask;
+				existing.Cancellation.Cancel();
+				await existing.Task;
 			}
 			catch
 			{
 				// 忽略旧任务的异常
+			}
+			finally
+			{
+				existing.Cancellation.Dispose();
 			}
 		}
 
@@ -234,18 +249,23 @@ internal sealed class ModHashService
 			return;
 		}
 
-		// 等待该模组的后台哈希计算任务完成，释放文件句柄
-		// 避免后续删除模组目录时因文件被占用而提示"文件正在使用"
-		if (_activeComputations.TryRemove(mod.Manifest.Guid, out var existingTask))
+		// 强制终止该模组的后台哈希计算，避免删除期间等待完整哈希流程；
+		// 取消后任务会很快结束（逐文件检查令牌），再等待其释放文件句柄
+		if (_activeComputations.TryRemove(mod.Manifest.Guid, out var existing))
 		{
-			_logger.LogDebug("Waiting for ongoing hash computation to complete before deleting records for mod \"{Name}\"", mod.Manifest.Name);
+			_logger.LogDebug("Cancelling ongoing hash computation for mod \"{Name}\" before deletion", mod.Manifest.Name);
 			try
 			{
-				await existingTask;
+				existing.Cancellation.Cancel();
+				await existing.Task;
 			}
 			catch
 			{
 				// 忽略计算任务中的异常（已在 ComputeAndStoreForModAsync 中记录）
+			}
+			finally
+			{
+				existing.Cancellation.Dispose();
 			}
 		}
 
@@ -340,10 +360,10 @@ internal sealed class ModHashService
 				(double)(migratedCount + failedCount) / modList.Count,
 				false);
 
-			// 注册到 _activeComputations，确保 DeleteForModAsync 能等待迁移完成后再删除目录
+			// 注册到 _activeComputations，确保 DeleteForModAsync 能取消迁移任务后再删除目录
 			// 避免迁移读取大文件时因文件被占用而导致删除失败
 			var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-			_activeComputations[mod.Manifest.Guid] = tcs.Task;
+			_activeComputations[mod.Manifest.Guid] = (tcs.Task, new CancellationTokenSource());
 
 			try
 			{
@@ -353,13 +373,19 @@ internal sealed class ModHashService
 					_logger.LogDebug("Migrating hashes for mod \"{Name}\" ({Index}/{Total})",
 						mod.Manifest.Name, migratedCount + failedCount + 1, modList.Count);
 
+					var token = _activeComputations[mod.Manifest.Guid].Cancellation.Token;
 					await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
 						mod.Directory,
 						mod.Manifest.Guid,
 						_fileHashRepository,
-						storageDir);
+						storageDir,
+						cancellationToken: token);
 
 					migratedCount++;
+				}
+				catch (OperationCanceledException)
+				{
+					_logger.LogInformation("Hash migration cancelled for mod \"{Name}\"", mod.Manifest.Name);
 				}
 				catch (Exception ex)
 				{
@@ -376,7 +402,8 @@ internal sealed class ModHashService
 			{
 				// 通知等待者：该模组的哈希计算已全部完成，文件句柄已释放
 				tcs.TrySetResult();
-				_activeComputations.TryRemove(mod.Manifest.Guid, out _);
+				if (_activeComputations.TryRemove(mod.Manifest.Guid, out var entry))
+					entry.Cancellation.Dispose();
 				_backgroundTaskService.Update(backgroundTask, progress: (double)(migratedCount + failedCount) / modList.Count, isIndeterminate: false);
 			}
 		}

@@ -78,7 +78,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// <summary>
     /// 选中数量文本（如 "已选 2 项"）
     /// </summary>
-    public string SelectionCountText => _mods is null ? "" : $"{_localizationService["DashboardPage.AlreadySelectedPrefix"]}{_modGroupService.FilterModViewModels(_mods).Count(static vm => vm.IsSelected)}{_localizationService["DashboardPage.SelectedCountSuffix"]}";
+    public string SelectionCountText => _mods is null ? "" : $"{_localizationService["DashboardPage.SelectedCountPrefix"]}{_modGroupService.FilterModViewModels(_mods).Count(static vm => vm.IsSelected)}{_localizationService["DashboardPage.SelectedCountSuffix"]}";
 
     /// <summary>
     /// 排序功能是否在设置中启用
@@ -598,7 +598,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         ? $"{_localizationService["DashboardPage.MissingIncludePathPrefix"]}{w.ExtraData}{_localizationService["DashboardPage.MissingIncludePathSuffix"]}"
                         : _localizationService["DashboardPage.MissingIncludePath"],
                     ModProblemKind.InvalidImagePath => w.ExtraData is not null
-                        ? $"{_localizationService["DashboardPage.InvalidImagePathPrefix"]}{w.ExtraData}{_localizationService["DashboardPage.InvalidImagePathSuffix"]}"
+                        ? $"{_localizationService["DashboardPage.InvalidImagePathPrefix"]}{w.ExtraData}{_localizationService["DashboardPage.InvalidPathSuffix"]}"
                         : _localizationService["DashboardPage.InvalidImagePathError"],
                     ModProblemKind.EmptyImagePath => _localizationService["DashboardPage.EmptyImagePath"],
                     _ => throw new NotImplementedException()
@@ -1000,6 +1000,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                     {
                         vm.IsSelected = false;
                         await _modService.RemoveAsync(vm.Data);
+                        vm.Dispose();
                     }
 
                     // 批量删除后同步更新数据库：直接删除这些模组对应的记录
@@ -1099,42 +1100,50 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             return;
         }
 
-        var groups = _modGroupService.Groups.Where(static group => !group.IsDefault).Cast<object>().ToArray();
+        var groups = _modGroupService.Groups.Where(static group => !group.IsDefault).ToArray();
         if (groups.Length == 0)
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["ModGroup.NoCustomGroups"] });
             return;
         }
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
-        {
-            Title = _localizationService["ModGroup.AddToGroupTitle"],
-            Message = _localizationService["ModGroup.AddToGroupMessage"].Replace("{count}", selected.Length.ToString()),
-            Options = groups,
-            Confirm = option =>
-            {
-                if (option is not ModGroup group)
-                    return;
+        // 与设置标签一致的多选交互：预勾选所有选中模组都已加入的分组，
+        // 确认后按勾选结果覆盖这些模组的分组集合（可一次加入/移出多个分组）。
+        var selectedGuids = selected.Select(static vm => vm.Guid).ToHashSet();
+        var items = groups
+            .Select(group => new ModGroupSelectionItem(group, group.ModGuids.Count > 0 && group.ModGuids.All(selectedGuids.Contains)))
+            .ToList();
 
-                _ = AddModsToGroupAsync(group, selected);
+        WeakReferenceMessenger.Default.Send(new MessageBoxGroupSelectionMessage
+        {
+            Title = _localizationService["ModGroup.AddToGroup"],
+            Message = _localizationService["ModGroup.AddToGroupsMessage"].Replace("{count}", selected.Length.ToString()),
+            Groups = items,
+            Confirm = selectedGroups =>
+            {
+                var picked = selectedGroups.Where(static item => item.IsSelected).Select(static item => item.Group).ToArray();
+                _ = SetModsToGroupsAsync(picked, selected);
             }
         });
     }
 
-    private async Task AddModsToGroupAsync(ModGroup group, ModViewModel[] selected)
+    private async Task SetModsToGroupsAsync(ModGroup[] groups, ModViewModel[] selected)
     {
         try
         {
-            await _modGroupService.AddModsToGroupAsync(group.Id, selected.Select(static vm => vm.Data));
+            var mods = selected.Select(static vm => vm.Data).ToArray();
+            await _modGroupService.RemoveModsFromAllGroupsAsync(selected.Select(static vm => vm.Guid).ToList());
+            foreach (var group in groups)
+                await _modGroupService.AddModsToGroupAsync(group.Id, mods);
             GroupSidebar.RefreshSelectionProperties();
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
             {
-                Message = _localizationService["ModGroup.AddedToGroup"].Replace("{count}", selected.Length.ToString()).Replace("{name}", group.Name)
+                Message = _localizationService["ModGroup.GroupsUpdated"].Replace("{count}", selected.Length.ToString())
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "加入分组失败");
+            _logger.LogError(ex, "设置分组失败");
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = ex.Message });
         }
     }
@@ -1345,7 +1354,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         });
 
         var backgroundTask = _backgroundTaskService.Add(
-            _localizationService["BackgroundTasksPage.TaskTypeUpdate"],
+            _localizationService["DashboardPage.UpdateMod"],
             vm.Name);
 
         try
@@ -1546,7 +1555,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         try
         {
             await _backgroundTaskService.RunAsync(
-                _localizationService["BackgroundTasksPage.TaskTypeDeploy"],
+                _localizationService["DashboardPage.DeployMods"],
                 _localizationService["SettingsPage.PleaseWait"],
                 async (_, _) =>
                 {
@@ -1780,7 +1789,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         try
         {
             await _backgroundTaskService.RunAsync(
-                _localizationService["BackgroundTasksPage.TaskTypeDelete"],
+                _localizationService["DashboardPage.DeleteModHint"],
                 modVm.Name,
                 async (_, _) =>
                 {
@@ -1794,6 +1803,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         // 同时删除该模组的版本检测记录
                         await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, modVm.Guid);
                     }
+
+                    modVm.Dispose();
                 },
                 _localizationService["BackgroundTasksPage.DeleteComplete"].Replace("{name}", modVm.Name));
 
@@ -1950,7 +1961,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             sb.AppendLine(_localizationService["DashboardPage.ConflictReportItem"]
                 .Replace("{resource}", conflict.FriendlyName)
                 .Replace("{kind}", conflict.IsDefiniteConflict
-                    ? _localizationService["DashboardPage.ConflictDefinite"]
+                    ? _localizationService["ConflictDetail.Definite"]
                     : _localizationService["DashboardPage.ConflictPotential"])
                 .Replace("{mods}", names)
                 .Replace("{winner}", winner.ModName));
@@ -2059,7 +2070,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         {
             CheckFileExists = true,
             CheckPathExists = true,
-            Filter = _localizationService["Common.SelectImageFilter"],
+            Filter = _localizationService["Common.FileFilterImage"],
             Title = _localizationService["DashboardPage.EditImageDialog"]
         };
 
@@ -2241,7 +2252,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         });
 
         var backgroundTask = _backgroundTaskService.Add(
-            _localizationService["BackgroundTasksPage.TaskTypeExport"],
+            _localizationService["DashboardPage.ExportSaveDialog"],
             vm.Name);
         _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
 
@@ -2486,7 +2497,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         WeakReferenceMessenger.Default.Send(new MessageBoxTagSelectionMessage
             {
-                Title = _localizationService["DashboardPage.EditTagsTitle"],
+                Title = _localizationService["DashboardPage.SetTags"],
                 Message = _localizationService["DashboardPage.EditTagsMsg"],
                 Tags = selectableTags,
                 Confirm = (selectedTags) =>

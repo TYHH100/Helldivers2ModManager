@@ -258,8 +258,8 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	{
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
-			Title = _localizationService["ManifestEditPage.BrowseIconDialog"],
-			Filter = _localizationService["Common.SelectImageFilter"],
+			Title = _localizationService["CreatePage.BrowseIconDialog"],
+			Filter = _localizationService["Common.FileFilterImage"],
 			InitialDirectory = EditMod?.Data?.Directory?.FullName,
 		};
 

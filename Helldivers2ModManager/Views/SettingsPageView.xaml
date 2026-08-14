@@ -83,7 +83,7 @@
                     </Button.Style>
                 </Button>
                 <!-- 模组 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabMods}"
+                <Button Content="{loc:Loc ModelPreviewPage.Mods}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="2">
                     <Button.Style>
@@ -115,7 +115,7 @@
                     </Button.Style>
                 </Button>
                 <!-- 工具 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabTools}"
+                <Button Content="{loc:Loc SettingsPage.Tools}"
                         Command="{Binding SetTabCommand}"
                         CommandParameter="4">
                     <Button.Style>
@@ -219,7 +219,7 @@
                                             Margin="8 0 0 0"
                                             Padding="12 8"/>
                                     <Button Grid.Column="2"
-                                            Content="{loc:Loc SettingsPage.Browse}"
+                                            Content="{loc:Loc CreatePage.OptionBrowse}"
                                             Style="{StaticResource FluentPrimaryButton}"
                                             Command="{Binding BrowseGameCommand}"
                                             Margin="8 0 0 0"
@@ -251,7 +251,7 @@
                                              IsReadOnly="True"
                                              VerticalAlignment="Center"/>
                                     <Button Grid.Column="1"
-                                            Content="{loc:Loc SettingsPage.Browse}"
+                                            Content="{loc:Loc CreatePage.OptionBrowse}"
                                             Style="{StaticResource FluentPrimaryButton}"
                                             Command="{Binding BrowseStorageCommand}"
                                             Margin="8 0 0 0"
@@ -285,7 +285,7 @@
                                              IsReadOnly="True"
                                              VerticalAlignment="Center"/>
                                     <Button Grid.Column="1"
-                                            Content="{loc:Loc SettingsPage.Browse}"
+                                            Content="{loc:Loc CreatePage.OptionBrowse}"
                                             Style="{StaticResource FluentPrimaryButton}"
                                             Command="{Binding BrowseTempCommand}"
                                             Margin="8 0 0 0"
@@ -903,7 +903,7 @@
                                              Margin="0 0 8 0"
                                              VerticalAlignment="Center"/>
                                     <Button Grid.Column="2"
-                                            Content="{loc:Loc SettingsPage.Browse}"
+                                            Content="{loc:Loc CreatePage.OptionBrowse}"
                                             Style="{StaticResource FluentSecondaryButton}"
                                             Command="{Binding BrowseBackgroundImageCommand}"
                                             Padding="12 6"

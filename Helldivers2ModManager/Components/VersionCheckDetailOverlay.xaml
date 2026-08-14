@@ -99,7 +99,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" HorizontalAlignment="Center">
                                 <TextBlock Text="{Binding PatchFileCount}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="{loc:Loc VersionCheckDetail.PatchFiles}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                <TextBlock Text="{loc:Loc ArmorPollutionPage.ScannedPatches}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
                             </StackPanel>
                             <Border Grid.Column="1" Background="{StaticResource NeutralStrokeBrush}" Margin="0 2"/>
                             <StackPanel Grid.Column="2" HorizontalAlignment="Center">
@@ -427,10 +427,6 @@
                             <TextBlock Text="{loc:Loc VersionCheckDetail.CopyReport}"/>
                         </StackPanel>
                     </Button>
-                    <!-- <Button Style="{StaticResource FluentPrimaryButton}"
-                            Padding="18 8"
-                            Click="CloseButton_Click"
-                            Content="{loc:Loc Common.Close}"/> -->
                 </StackPanel>
             </Grid>
         </Grid>

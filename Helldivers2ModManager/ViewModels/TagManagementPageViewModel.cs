@@ -87,7 +87,7 @@ internal sealed partial class TagManagementPageViewModel : PageViewModelBase
             {
                 if (string.IsNullOrWhiteSpace(newName))
                 {
-                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.RenameEmptyError"] });
+                    WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["TagManagementPage.CreateEmptyError"] });
                     return;
                 }
 

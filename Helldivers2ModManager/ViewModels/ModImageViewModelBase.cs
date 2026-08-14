@@ -100,7 +100,7 @@ internal abstract partial class ModImageViewModelBase : ObservableObject
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
 			Title = BrowseImageDialogTitle,
-			Filter = LocalizationService?["Common.SelectImageFilter"] ?? "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
+			Filter = LocalizationService?["Common.FileFilterImage"] ?? "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
 			InitialDirectory = !string.IsNullOrWhiteSpace(SourceDirectory) ? SourceDirectory : null,
 		};
 

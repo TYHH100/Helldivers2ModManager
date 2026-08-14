@@ -381,7 +381,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             .Replace("{count}", pendingCount.ToString());
         WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
         {
-            Title = L("VersionCheckBackup.RollbackTitle", "Roll back whole mod"),
+            Title = L("VersionCheckBackup.RollbackButton", "Roll back whole mod"),
             Message = confirmText,
             Confirm = () => _ = ExecuteRollbackAsync(point)
         });
@@ -487,7 +487,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
             ModVersionStatus.Compatible => L("Converters.Compatible", "Compatible"),
             ModVersionStatus.Incompatible => L("Converters.Incompatible", "Incompatible"),
             ModVersionStatus.Checking => L("Converters.Checking", "Checking"),
-            ModVersionStatus.Error => L("Converters.CheckFailed", "Check failed"),
+            ModVersionStatus.Error => L("VersionCheck.CheckFailed", "Check failed"),
             _ => L("Converters.UnableToConfirm", "Unable to confirm")
         };
         var statusIcon = message.Status switch
@@ -1244,7 +1244,7 @@ internal partial class VersionCheckDetailOverlay : UserControl, IRecipient<Versi
 
         WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
         {
-            Title = L("VersionCheckBackup.CleanTitle", "Clean old backups"),
+            Title = L("VersionCheckBackup.CleanOld", "Clean old backups"),
             Message = L(
                 "VersionCheckBackup.CleanConfirm",
                 "Keep the newest three backups for each patch and delete older entries? At least one restorable backup is always retained."),

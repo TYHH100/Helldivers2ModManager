@@ -284,7 +284,7 @@
 									<ToolTip>
 										<StackPanel>
 											<TextBlock FontWeight="SemiBold" Margin="0 0 0 4">
-												<Run Text="{loc:Loc DashboardPage.VersionStatusPrefix}"/>
+												<Run Text="{loc:Loc DashboardPage.VersionCompatibility}"/>
 												<Run Text="{Binding VersionStatus, Converter={StaticResource VersionStatusToTextConverter}}"/>
 											</TextBlock>
 											<TextBlock Text="{Binding LastCheckDisplayText}"

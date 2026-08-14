@@ -450,6 +450,16 @@ internal sealed partial class ModService
 				tmpDir.Delete(true);
 				return problems.ToArray();
 			}
+
+			// 自动清理指向不存在文件的图片路径（无效图标/选项图），
+			// 避免无效图片路径在每次启动时反复报告问题。
+			var sanitized = SanitizeManifestImagePaths(manifest, tmpDir, _logger);
+			if (!ReferenceEquals(sanitized, manifest))
+			{
+				manifest = sanitized;
+				ModManifest.SaveToFile(manifest, tmpDir);
+				_logger.LogInformation("Sanitized invalid image paths in manifest \"{}\"", manifestFile.Name);
+			}
 		}
 		else
 		{
@@ -576,10 +586,63 @@ internal sealed partial class ModService
 			_logger.LogWarning(ex, "Failed to delete file hash cache for mod \"{Name}\"", removedMod.Manifest.Name);
 		}
 
+		// 该模组已部署时，自动清理游戏 data 目录中由它部署的补丁文件
+		await CleanupDeployedFilesForModAsync(removedMod);
+
 		var recycleOption = _settingsService.DeleteToRecycleBin ? RecycleOption.SendToRecycleBin : RecycleOption.DeletePermanently;
 		await Task.Run(() => FileSystem.DeleteDirectory(removedMod.Directory.FullName, UIOption.OnlyErrorDialogs, recycleOption));
 
 		_logger.LogInformation("Mod {} removed", removedMod.Manifest.Name);
+	}
+
+	/// <summary>
+	/// 删除模组时清理游戏 data 目录中由该模组部署的补丁文件（含 gpu_resources/stream 伴生文件）。
+	/// 仅处理启用状态下实际会部署的文件；被其他仍启用模组使用的同名资源跳过。
+	/// </summary>
+	private async Task CleanupDeployedFilesForModAsync(ModData mod)
+	{
+		try
+		{
+			if (!mod.Enabled)
+				return;
+
+			var dataDir = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data"));
+			if (!dataDir.Exists)
+				return;
+
+			var otherMods = _mods.Where(m => !ReferenceEquals(m, mod) && m.Enabled).ToArray();
+			var otherFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var other in otherMods)
+				foreach (var file in GetSelectedPatchFiles(other))
+					otherFileNames.Add(file.Name);
+
+			foreach (var file in GetSelectedPatchFiles(mod))
+			{
+				if (otherFileNames.Contains(file.Name))
+					continue;
+
+				var match = GetPatchIndexRegex().Match(file.Name);
+				if (!match.Success)
+					continue;
+				var index = int.Parse(match.Groups[1].ValueSpan);
+				var baseName = file.Name[0..16];
+				// 与部署逻辑一致：SkipList 中的资源名整体后移一个槽位
+				var deployedIndex = index + (_settingsService.SkipList.Contains(baseName) ? 1 : 0);
+				var deployedBase = Path.Combine(dataDir.FullName, $"{baseName}.patch_{deployedIndex}");
+
+				foreach (var path in new[] { deployedBase, deployedBase + ".gpu_resources", deployedBase + ".stream" })
+				{
+					if (!File.Exists(path))
+						continue;
+					await Task.Run(() => File.Delete(path));
+					_logger.LogInformation("Cleaned up deployed file \"{Path}\" for removed mod \"{Name}\"", Path.GetFileName(path), mod.Manifest.Name);
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to clean up deployed files for mod \"{Name}\"", mod.Manifest.Name);
+		}
 	}
 
 	/// <summary>
@@ -1696,6 +1759,108 @@ internal sealed partial class ModService
 		catch (Exception)
 		{
 			return false;
+		}
+	}
+
+	/// <summary>
+	/// 导入时自动清理清单中指向不存在文件的图片路径（图标/选项图/子选项图），
+	/// 避免无效图片路径在每次启动时反复报告问题。无变化时返回原实例。
+	/// </summary>
+	internal static IModManifest SanitizeManifestImagePaths(IModManifest manifest, DirectoryInfo dir, ILogger? logger = null)
+	{
+		static bool IsInvalidImagePath(string? imagePath, DirectoryInfo root)
+		{
+			if (string.IsNullOrWhiteSpace(imagePath))
+				return true;
+			return !TryResolveManifestRelativePath(root, imagePath, out var fullPath) || !File.Exists(fullPath);
+		}
+
+		switch (manifest)
+		{
+			case LegacyModManifest legacy when IsInvalidImagePath(legacy.IconPath, dir):
+			{
+				logger?.LogInformation("Sanitizing legacy manifest icon path \"{Path}\"", legacy.IconPath);
+				return new LegacyModManifest
+				{
+					Guid = legacy.Guid,
+					Name = legacy.Name,
+					Description = legacy.Description,
+					IconPath = null,
+					Options = legacy.Options,
+				};
+			}
+
+			case V1ModManifest v1:
+			{
+				var iconChanged = IsInvalidImagePath(v1.IconPath, dir);
+				List<ModOption>? newOptions = null;
+				var optionsChanged = false;
+				if (v1.Options is not null)
+				{
+					newOptions = new List<ModOption>(v1.Options.Count);
+					foreach (var opt in v1.Options)
+					{
+						var optImageChanged = IsInvalidImagePath(opt.Image, dir);
+						var newSubs = new List<ModSubOption>();
+						var subsChanged = false;
+						if (opt.SubOptions is not null)
+						{
+							foreach (var sub in opt.SubOptions)
+							{
+								if (IsInvalidImagePath(sub.Image, dir))
+								{
+									subsChanged = true;
+									newSubs.Add(new ModSubOption
+									{
+										Name = sub.Name,
+										Description = sub.Description,
+										Include = sub.Include,
+										Image = null,
+									});
+								}
+								else
+								{
+									newSubs.Add(sub);
+								}
+							}
+						}
+
+						if (optImageChanged || subsChanged)
+						{
+							optionsChanged = true;
+							newOptions.Add(new ModOption
+							{
+								Name = opt.Name,
+								Description = opt.Description,
+								Include = opt.Include,
+								Image = optImageChanged ? null : opt.Image,
+								SubOptions = opt.SubOptions is null ? null : newSubs,
+							});
+						}
+						else
+						{
+							newOptions.Add(opt);
+						}
+					}
+				}
+
+				if (!iconChanged && !optionsChanged)
+					return v1;
+
+				logger?.LogInformation("Sanitizing v1 manifest image paths for \"{Name}\"", v1.Name);
+				return new V1ModManifest
+				{
+					Guid = v1.Guid,
+					Name = v1.Name,
+					Description = v1.Description,
+					IconPath = iconChanged ? null : v1.IconPath,
+					Options = newOptions,
+					NexusData = v1.NexusData,
+				};
+			}
+
+			default:
+				return manifest;
 		}
 	}
 

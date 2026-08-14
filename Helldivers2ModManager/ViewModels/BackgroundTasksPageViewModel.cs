@@ -16,7 +16,7 @@ internal sealed partial class BackgroundTasksPageViewModel : PageViewModelBase
 	private readonly BackgroundTaskService _backgroundTaskService;
 	private readonly LocalizationService _localizationService;
 
-	public override string Title => _localizationService["BackgroundTasksPage.Title"];
+	public override string Title => _localizationService["DashboardPage.BackgroundTasks"];
 
 	public ObservableCollection<BackgroundTaskItem> Tasks => _backgroundTaskService.Tasks;
 

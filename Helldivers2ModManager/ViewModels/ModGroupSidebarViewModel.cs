@@ -170,7 +170,7 @@ internal sealed partial class ModGroupSidebarViewModel : ObservableObject
 		var group = SelectedGroup;
 		WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
 		{
-			Title = _localizationService["ModGroup.DeleteTitle"],
+			Title = _localizationService["ModGroup.DeleteGroup"],
 			Message = _localizationService["ModGroup.DeleteConfirm"].Replace("{name}", group.Name),
 			Confirm = async () =>
 			{

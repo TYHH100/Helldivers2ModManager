@@ -21,7 +21,7 @@ internal sealed partial class ArmorReusePageViewModel : PageViewModelBase
     private readonly BackgroundTaskService _backgroundTaskService;
     private readonly LocalizationService _localizationService;
 
-    public override string Title => _localizationService["ArmorReusePage.Title"];
+    public override string Title => _localizationService["DashboardPage.ArmorReuse"];
     public ObservableCollection<ArmorReuseItem> Items { get; } = [];
 
     [ObservableProperty]

@@ -127,7 +127,7 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 		}
 
 		var startConfirmed = await AskConfirmAsync(
-			_localizationService["Bisect.StartTitle"],
+			_localizationService["Bisect.Start"],
 			_localizationService["Bisect.StartConfirmMessage"]
 				.Replace("{name}", _bisectService.TempGroupName));
 		if (!startConfirmed)
@@ -330,7 +330,7 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 		try
 		{
 			await _backgroundTaskService.RunAsync(
-				_localizationService["BackgroundTasksPage.TaskTypeDeploy"],
+				_localizationService["DashboardPage.DeployMods"],
 				_localizationService["SettingsPage.PleaseWait"],
 				(_, _) => _bisectService.DeployAsync(),
 				_localizationService["DashboardPage.DeploySuccess"]);

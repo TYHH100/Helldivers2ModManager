@@ -373,7 +373,7 @@ internal sealed class VersionStatusToTextConverter : IValueConverter
                 Models.ModVersionStatus.Incompatible => _localizationService?["Converters.Incompatible"] ?? "不兼容",
                 Models.ModVersionStatus.Unknown => _localizationService?["Converters.UnableToConfirm"] ?? "无法确认",
                 Models.ModVersionStatus.Checking => _localizationService?["Converters.Checking"] ?? "检查中",
-                Models.ModVersionStatus.Error => _localizationService?["Converters.CheckFailed"] ?? "检查失败",
+                Models.ModVersionStatus.Error => _localizationService?["VersionCheck.CheckFailed"] ?? "检查失败",
                 _ => _localizationService?["Converters.Unknown"] ?? "未知"
             };
         }

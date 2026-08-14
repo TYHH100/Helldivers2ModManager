@@ -269,7 +269,7 @@ internal sealed partial class CreatePageViewModel : PageViewModelBase
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
 			Title = _localizationService["CreatePage.BrowseIconDialog"],
-			Filter = _localizationService["Common.SelectImageFilter"],
+			Filter = _localizationService["Common.FileFilterImage"],
 			InitialDirectory = !string.IsNullOrWhiteSpace(SourceDirectory) ? SourceDirectory : null,
 		};
 

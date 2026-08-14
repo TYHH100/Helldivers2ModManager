@@ -20,7 +20,7 @@ public sealed class ModelPreviewPageStructureTests
 
         Assert.AreEqual(2, tabs.Length);
         Assert.AreEqual("{loc:Loc ModelPreviewPage.PartsAndVariants}", tabs[0].Attribute("Header")?.Value);
-        Assert.AreEqual("{loc:Loc ModelPreviewPage.DecodedMeshesTab}", tabs[1].Attribute("Header")?.Value);
+        Assert.AreEqual("{loc:Loc ModelPreviewPage.Meshes}", tabs[1].Attribute("Header")?.Value);
         Assert.IsFalse(tabs[0].Descendants().Any(element => element.Name.LocalName == "DataGrid"));
         Assert.AreEqual(1, tabs[1].Descendants().Count(element => element.Name.LocalName == "DataGrid"));
         Assert.IsTrue(tabs[0].Descendants().Any(element =>

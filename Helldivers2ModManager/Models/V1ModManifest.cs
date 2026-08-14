@@ -29,7 +29,7 @@ internal sealed class V1ModManifest : IModManifest
     
     public static IModManifest Deserialize(JsonElement root, ILogger? logger = null)
     {
-        var guid = Guid.Parse(root.GetProperty<string>(nameof(Guid)));
+        var guid = ModManifest.ParseGuid(root, logger);
         var name = root.GetProperty<string>(nameof(Name));
         // 部分作者漏写 Description 字段，直接报错会导致整个模组导入失败；
         // 缺失或类型不对时用空字符串兜底，仅记录警告。

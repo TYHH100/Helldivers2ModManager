@@ -120,7 +120,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             if (!needsFullScan)
             {
                 modTimestamps = await _backgroundTaskService.RunAsync(
-                    _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
+                    _localizationService["SettingsPage.VersionCheck"],
                     VersionCheckSummary,
                     (_, _) => Task.FromResult(BuildModTimestamps(mods)),
                     VersionCheckSummary);
@@ -142,7 +142,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             UpdateSummaryText();
 
             await _backgroundTaskService.RunAsync(
-                _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
+                _localizationService["SettingsPage.VersionCheck"],
                 VersionCheckSummary,
                 async (_, _) =>
                 {
@@ -300,7 +300,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     {
         // 全量扫描（含游戏参考解析）在后台线程执行，结果回 UI 线程应用
         var results = await _backgroundTaskService.RunAsync(
-            _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
+            _localizationService["SettingsPage.VersionCheck"],
             _localizationService["VersionCheck.ScanningMods"],
             async (context, _) =>
             {
@@ -329,7 +329,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         VersionCheckSummary = _localizationService["VersionCheck.CheckingChanged"].Replace("{changedModCount}", changedMods.Count.ToString());
         // 单模组检查（含游戏参考解析）在后台线程执行，结果回 UI 线程应用
         var results = await _backgroundTaskService.RunAsync(
-            _localizationService["BackgroundTasksPage.TaskTypeVersionCheck"],
+            _localizationService["SettingsPage.VersionCheck"],
             VersionCheckSummary,
             async (context, _) =>
             {

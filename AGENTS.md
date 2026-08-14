@@ -184,6 +184,13 @@ catch (Exception ex)
 | 用 `TaskCompletionSource` 桥接弹窗后不处理用户点“取消”按钮 | `MessageBoxSelectionMessage` 的取消按钮默认只隐藏覆盖层、不触发任何回调；`MessageBoxConfirmMessage` 的“否”按钮才触发 `Abort`。凡是用 TCS 等待弹窗结果的调用方必须给 `MessageBoxSelectionMessage` 传 `Abort` 回调（如 `Abort = () => tcs.TrySetResult(取消值)`），否则用户点取消后流程永久挂起。 | 
 | 保存分组状态时覆盖了用户的自定义排序 | `SaveAllAsync`/`SaveStatesAsync` 按快照 `Mods` 顺序写 `SortOrder`；在非 Dashboard 页面保存分组状态时，必须保留原分组顺序：优先用 `ProfileSaveCoordinator.GetCurrentOrder()` 过滤出成员后作为 `preferredOrder` 传入 `Capture`（Dashboard 导航前已保存过用户顺序），取不到时退回 ModService 加载顺序。 |
 | 会话结束/取消后仍读取已清空的会话对象 | 结束类方法（如 `FinishAsync`）内部会清空会话（`Current = null`），总结弹窗、结果展示必须在调用结束方法之前捕获会话引用并传入，不能在之后从服务重新读取。 |
+| 合并/删除翻译键后不做双向引用验证 | 删除键后必须验证：① 代码中无残留旧键引用（`rg` 旧键名）；② 反向提取代码里所有 `{loc:Loc ...}` 与 `_localizationService["..."]` 引用，逐一确认存在于 zh-CN 和 en-US（能暴露历史拼写错误，如 `NexusDownloadPage.PremiumRequiredMsg` 与 JSON 中的 `NexusDownload.PremiumRequiredMsg` 前缀不一致——本地化服务对缺失键可能静默返回空串，界面只显示空白不会报错）。修改代码引用时，键名必须与 JSON 完全一致，不能凭印象写近似键名。 |
+| 以为拖拽期间滚轮消息会正常到达 WPF | OLE 拖拽循环会吞掉 WM_MOUSEWHEEL（WPF 收不到 PreviewMouseWheel）。拖拽中滚轮必须用 WH_MOUSE_LL 低级钩子，钩子直接装在 UI 线程即可（OLE 循环会泵消息，回调在 UI 线程执行）。钩子回调里处理完滚轮要**返回 1 吞掉消息**，不能让滚轮进入 OLE 循环（可能被当作按键状态变化导致拖拽被意外终止）。钩子回调必须 try/catch 且非滚轮消息原样 CallNextHookEx。 |
+| 合成拖拽事件刷新插入指示线时用 PreviewDragOver | gong 在 ItemsControl 上默认 `EventType.Auto` 只监听**冒泡**的 `DragOver`（非 ItemsControl 才监听 Preview*）。合成指示线刷新必须 raise `DragDrop.DragOverEvent`（冒泡），PreviewDragOver 不会进入 gong 管线，指示线不会刷新。`DragEventArgs` 带坐标的构造函数是 internal，只能用反射创建（有测试守护签名）。 |
+| 只依赖 CompositionTarget.Rendering 检测拖拽结束 | 应用空闲无渲染时 Rendering 会停发，Esc 取消/窗口外释放会留下僵尸状态和钩子。需要 DispatcherTimer 看门狗（300ms）轮询 `GetAsyncKeyState(VK_LBUTTON)` 兜底清理，停用最后一个状态时卸载钩子并取消渲染订阅。行为的所有入口（DragOver/Drop/渲染帧/钩子回调）都要 try/catch——滚动增强绝不允许破坏拖拽本身。 |
+| 只向上查找 ScrollViewer | ListBox 的 ScrollViewer 是**视觉后代**（模板内），不是祖先。查找要祖先优先、找不到再递归后代。 |
+| 用 SendInput 合成滚轮验证拖拽中滚轮滚动 | SendInput 的 MOUSEEVENTF_WHEEL 不携带真实按键状态，会清空全局异步按键状态（GetAsyncKeyState 返回抬起），导致 OLE QueryContinueDrag 看到 keys=0 提前结束拖拽——自动化测试的假象，真实鼠标滚轮自带 MK_LBUTTON。此类交互验证要区分真实输入与合成输入。 |
+| 在 MSTest 里直接 ApplyTemplate 测试 WPF 控件 | MSTest 环境不加载 WPF 默认主题样式（控件的 Template/Style 为 null，新建 Application 也不行）。UI 测试需要手工构造显式 ControlTemplate（FrameworkElementFactory）来搭建视觉树，并用 Measure/Arrange 建立视觉父子链。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
 

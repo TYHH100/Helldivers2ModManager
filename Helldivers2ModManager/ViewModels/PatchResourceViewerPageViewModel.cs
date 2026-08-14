@@ -115,7 +115,7 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
     {
         if (!_modService.Initialized)
         {
-            StatusText = _localizationService["PatchResourceViewerPage.NotReady"];
+            StatusText = _localizationService["ModelPreviewPage.NotReady"];
             return;
         }
 
