@@ -533,15 +533,14 @@ internal sealed partial class VersionCheckService
     }
 
     /// <summary>
-    /// 获取列表中出现频率最高的版本号
+    /// 获取列表中出现频率最高的版本号（同频时取更大的版本号）。
+    /// CountBy 单遍统计 + MaxBy 二元组比较，等价于旧的 GroupBy+OrderByDescending 链。
     /// </summary>
     private static uint GetMostCommonVersion(List<uint> versions)
     {
         return versions
-            .GroupBy(v => v)
-            .OrderByDescending(g => g.Count())
-            .ThenByDescending(g => g.Key)
-            .First()
+            .CountBy(v => v)
+            .MaxBy(pair => (pair.Value, pair.Key))
             .Key;
     }
 

@@ -121,9 +121,23 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     public string ConflictStatusIcon => HasConflict ? "!" : "✓";
 
-    public Brush ConflictStatusBrush => HasConflict
-        ? new SolidColorBrush(Color.FromRgb(220, 80, 55))
-        : new SolidColorBrush(Color.FromRgb(40, 160, 95));
+    /// <summary>
+    /// 冲突状态颜色固定，静态缓存避免每次绑定读取都新建 Brush（产生 GC 垃圾）。
+    /// 必须 Freeze：Brush 是 DependencyObject，static 初始化线程不固定，
+    /// 未冻结的 Brush 在跨线程（后台任务触发类型初始化后 UI 绑定使用）时会抛
+    /// "必须在与 DependencyObject 相同的 Thread 上创建 DependencySource"。
+    /// </summary>
+    private static readonly Brush s_conflictBrush = CreateFrozenBrush(220, 80, 55);
+    private static readonly Brush s_noConflictBrush = CreateFrozenBrush(40, 160, 95);
+
+    private static Brush CreateFrozenBrush(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    public Brush ConflictStatusBrush => HasConflict ? s_conflictBrush : s_noConflictBrush;
 
     public ModData Data => _mod;
 
@@ -410,6 +424,12 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     /// </summary>
     private int _iconLoadGeneration;
 
+    /// <summary>
+    /// 图标解码并发上限：启动加载大量模组时避免同时解码上百张图片
+    /// （线程池压力与内存峰值），超出上限的解码请求排队等待。
+    /// </summary>
+    private static readonly SemaphoreSlim s_iconDecodeGate = new(4, 4);
+
     public void LoadIcon()
     {
         var generation = ++_iconLoadGeneration;
@@ -433,8 +453,9 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         // 后台线程解码并冻结：避免启动加载大量模组时在 UI 线程全量解码卡顿；
         // OnLoad 在 EndInit 时把像素读入内存并立即释放文件句柄，
         // 删除模组时目录不再被已显示的图标占用。
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
+            await s_iconDecodeGate.WaitAsync();
             try
             {
                 var bmp = new BitmapImage();
@@ -449,6 +470,10 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
             {
                 _logger.LogWarning(ex, "Failed to load icon for mod \"{Name}\", falling back to default icon", _mod.Manifest.Name);
                 return null;
+            }
+            finally
+            {
+                s_iconDecodeGate.Release();
             }
         }).ContinueWith(t =>
         {

@@ -1,6 +1,7 @@
 using Helldivers2ModManager.Models;
 using K4os.Compression.LZ4;
 using Microsoft.Extensions.Logging;
+using System.Collections.Frozen;
 using System.IO;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
@@ -36,10 +37,37 @@ internal sealed partial class VersionCheckService
         byte Compression,
         byte Flags);
 
-    private sealed record BundleInfo(
-        string Path,
-        DsarChunk[] Chunks,
-        Dictionary<ulong, int> ChunkByOffset);
+    private sealed class BundleInfo : IDisposable
+    {
+        public required string Path { get; init; }
+        public required DsarChunk[] Chunks { get; init; }
+        public required Dictionary<ulong, int> ChunkByOffset { get; init; }
+
+        private FileStream? _stream;
+
+        /// <summary>
+        /// 返回索引生命周期内复用的只读流：批量解析 Unit 引用/动画资源时，
+        /// 避免每个资源都重新打开一次文件（FileShare.ReadWrite 不阻塞游戏自身读取）。
+        /// 所有调用点都在 _gameReferenceSemaphore 保护下，无需额外加锁。
+        /// </summary>
+        public FileStream OpenReadStream()
+        {
+            _stream ??= new FileStream(
+                Path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite,
+                81920,
+                FileOptions.RandomAccess);
+            return _stream;
+        }
+
+        public void Dispose()
+        {
+            _stream?.Dispose();
+            _stream = null;
+        }
+    }
 
     private sealed record PackageItem(
         ulong ArchiveOffset,
@@ -53,15 +81,32 @@ internal sealed partial class VersionCheckService
         uint ResourceSize,
         uint GpuSize);
 
-    private sealed class GameUnitReferenceIndex
+    private sealed class GameUnitReferenceIndex : IDisposable
     {
         public required string CacheKey { get; init; }
         public required BundleInfo[] Bundles { get; init; }
-        public required Dictionary<long, List<GameUnitLocator>> UnitLocators { get; init; }
-        public required Dictionary<(long FileId, long TypeId), List<GameUnitLocator>> AnimationResourceLocators { get; init; }
+        public required IReadOnlyDictionary<long, List<GameUnitLocator>> UnitLocators { get; init; }
+        public required IReadOnlyDictionary<(long FileId, long TypeId), List<GameUnitLocator>> AnimationResourceLocators { get; init; }
         public Dictionary<long, GameUnitReferenceData> ResolvedReferences { get; } = [];
         public Dictionary<long, IReadOnlyList<string>> PackageNames { get; } = [];
         public HashSet<long> AmbiguousUnitIds { get; } = [];
+
+        /// <summary>
+        /// 头像（Helldiver）动画资源引用与动画库缓存：同一索引生命周期内只解析一次，
+        /// 所有骨架共享同一头像库，避免每个骨架重复 LZ4 解码。
+        /// </summary>
+        public ModelPreviewAnimationResourceReference? HelldiverAnimationReference { get; set; }
+        public ModelPreviewAnimationLibrary? HelldiverAnimationLibrary { get; set; }
+
+        /// <summary>
+        /// 释放缓存的 Bundle 只读流。旧索引被新索引替换时调用（仅在
+        /// _gameReferenceSemaphore 持有期间发生，此时没有其他读取者）。
+        /// </summary>
+        public void Dispose()
+        {
+            foreach (var bundle in Bundles)
+                bundle.Dispose();
+        }
     }
 
     private sealed class GameUnitReferenceLookup
@@ -110,9 +155,13 @@ internal sealed partial class VersionCheckService
             if (_gameReferenceIndex is null ||
                 !string.Equals(_gameReferenceIndex.CacheKey, cacheKey, StringComparison.Ordinal))
             {
-                _gameReferenceIndex = await Task.Run(
+                var newIndex = await Task.Run(
                     () => BuildGameUnitReferenceIndex(dataDirectory, cacheKey),
                     cancellationToken);
+                var oldIndex = _gameReferenceIndex;
+                _gameReferenceIndex = newIndex;
+                // 旧索引的 Bundle 流不再被引用（semaphore 保护下无并发读取者），立即释放
+                oldIndex?.Dispose();
             }
 
             // 解析 Unit 引用包含 LZ4 解码（CPU 密集），放到后台线程执行，避免阻塞调用线程（UI）。
@@ -171,18 +220,36 @@ internal sealed partial class VersionCheckService
         if (transformHashes.Count == 0)
             return null;
 
-        var references = ResolveGameUnitAnimationReferences(
-            index,
-            [HelldiverAvatarUnitId],
-            cancellationToken);
-        if (!references.TryGetValue(HelldiverAvatarUnitId, out var reference))
+        // 头像动画库对所有骨架相同：同一索引生命周期内只解析一次
+        // （LZ4 解码头像 Unit + bones + state machine + 最多 256 个动画 clip，
+        // 多个骨架重复调用会重复全部解码）。
+        var reference = index.HelldiverAnimationReference;
+        if (reference is null)
+        {
+            var references = ResolveGameUnitAnimationReferences(
+                index,
+                [HelldiverAvatarUnitId],
+                cancellationToken);
+            if (references.TryGetValue(HelldiverAvatarUnitId, out var resolved))
+            {
+                index.HelldiverAnimationReference = resolved;
+                reference = resolved;
+            }
+        }
+        if (reference is null)
             return null;
 
-        var library = ReadGameAnimationLibrary(
-            index,
-            reference.BonesId,
-            reference.StateMachineId,
-            cancellationToken);
+        var library = index.HelldiverAnimationLibrary;
+        if (library is null)
+        {
+            library = ReadGameAnimationLibrary(
+                index,
+                reference.Value.BonesId,
+                reference.Value.StateMachineId,
+                cancellationToken);
+            if (library is not null)
+                index.HelldiverAnimationLibrary = library;
+        }
         if (library is null)
             return null;
 
@@ -469,12 +536,13 @@ internal sealed partial class VersionCheckService
             "Game Unit reference index ready: packages={PackageCount}, Unit IDs={UnitCount}",
             packageCount,
             locators.Count);
+        // 定位表构建完成后不再变化，冻结为只读表（FrozenDictionary 查找更快）
         return new GameUnitReferenceIndex
         {
             CacheKey = cacheKey,
             Bundles = bundles,
-            UnitLocators = locators,
-            AnimationResourceLocators = animationResourceLocators
+            UnitLocators = locators.ToFrozenDictionary(),
+            AnimationResourceLocators = animationResourceLocators.ToFrozenDictionary()
         };
     }
 
@@ -679,7 +747,12 @@ internal sealed partial class VersionCheckService
             if (!chunkByOffset.TryAdd(chunks[i].UncompressedOffset, i))
                 throw new InvalidDataException($"Bundle {Path.GetFileName(path)} contains duplicate chunk offsets.");
         }
-        return new BundleInfo(path, chunks, chunkByOffset);
+        return new BundleInfo
+        {
+            Path = path,
+            Chunks = chunks,
+            ChunkByOffset = chunkByOffset
+        };
     }
 
     private static DsarChunk[] ReadDsarChunkTable(FileStream stream)
@@ -696,9 +769,11 @@ internal sealed partial class VersionCheckService
 
         var chunks = new DsarChunk[chunkCount];
         var chunkBuffer = new byte[0x20];
+        // 表项是连续存储的：只定位一次，顺序读取（chunk 数可达数十万，
+        // 每次显式 seek 会产生等量的系统调用开销）。
+        stream.Position = 0x20L;
         for (var i = 0; i < chunkCount; i++)
         {
-            stream.Position = 0x20L + (long)i * 0x20;
             stream.ReadExactly(chunkBuffer);
             var chunk = new DsarChunk(
                 BinaryPrimitives.ReadUInt64LittleEndian(chunkBuffer.AsSpan(0, 8)),
@@ -727,7 +802,8 @@ internal sealed partial class VersionCheckService
         if (!bundle.ChunkByOffset.TryGetValue(startOffset, out var chunkIndex))
             throw new InvalidDataException($"No bundle chunk starts at 0x{startOffset:X}.");
 
-        using var stream = new FileStream(bundle.Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        // 复用 BundleInfo 缓存的只读流（不要 using 释放——流属于索引生命周期）
+        var stream = bundle.OpenReadStream();
         using var output = new MemoryStream();
         while (chunkIndex < bundle.Chunks.Length)
         {
@@ -746,7 +822,8 @@ internal sealed partial class VersionCheckService
 
     private static byte[] DecodeDsarChunk(FileStream stream, DsarChunk chunk)
     {
-        var encoded = new byte[chunk.CompressedSize];
+        // 缓冲随后被 ReadExactly/LZ4 完全填充，免初始化清零（GC.AllocateUninitializedArray）
+        var encoded = GC.AllocateUninitializedArray<byte>(chunk.CompressedSize);
         stream.Position = checked((long)chunk.CompressedOffset);
         stream.ReadExactly(encoded);
         if (chunk.Compression == DsarCompressionNone)
@@ -759,7 +836,7 @@ internal sealed partial class VersionCheckService
         if (chunk.Compression != DsarCompressionLz4)
             throw new InvalidDataException($"Unsupported DSAR compression type {chunk.Compression}.");
 
-        var decoded = new byte[chunk.UncompressedSize];
+        var decoded = GC.AllocateUninitializedArray<byte>(chunk.UncompressedSize);
         var decodedLength = LZ4Codec.Decode(encoded, decoded);
         if (decodedLength != decoded.Length)
             throw new InvalidDataException($"LZ4 decoded {decodedLength} of {decoded.Length} bytes.");

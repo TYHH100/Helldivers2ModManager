@@ -174,13 +174,17 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         try
         {
             UpdateStatistics(mods);
-            // 只计算/保存变化的单个模组：避免整体模组规模越大越慢，也避免重复保存全部模组
-            await Task.Run(async () =>
-            {
-                var timestamps = BuildModTimestamps([changedVm]);
-                s_knownModTimestamps[changedVm.Guid] = timestamps[changedVm.Guid];
-                await SaveVersionCheckResultsToDatabaseAsync([changedVm], timestamps);
-            });
+            // 只计算/保存变化的单个模组：避免整体模组规模越大越慢，也避免重复保存全部模组。
+            // 时间戳枚举与数据库保存（IO）在后台线程执行，任务页显示该后台操作。
+            await _backgroundTaskService.RunAsync(
+                _localizationService["SettingsPage.VersionCheck"],
+                changedVm.Name,
+                async (_, _) =>
+                {
+                    var timestamps = BuildModTimestamps([changedVm]);
+                    s_knownModTimestamps[changedVm.Guid] = timestamps[changedVm.Guid];
+                    await SaveVersionCheckResultsToDatabaseAsync([changedVm], timestamps);
+                });
             UpdateSummaryText();
         }
         catch (Exception ex)
@@ -200,7 +204,12 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 return;
 
             _logger.LogInformation("New mod \"{Name}\", checking version compatibility...", mod.Manifest.Name);
-            var result = await _versionCheckService.CheckSingleModAsync(mod);
+            // 检查（含游戏参考解析，CPU 密集）在后台线程执行；任务页显示该后台操作。
+            // 结果在 await 之后回到 UI 线程应用。
+            var result = await _backgroundTaskService.RunAsync(
+                _localizationService["SettingsPage.VersionCheck"],
+                mod.Manifest.Name,
+                (_, _) => _versionCheckService.CheckSingleModAsync(mod));
             if (result is not null)
             {
                 var vm = mods.FirstOrDefault(v => v.Guid == mod.Manifest.Guid);

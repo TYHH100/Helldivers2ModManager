@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows7.0</TargetFramework>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <Reference Include="Helldivers2ModManager">
-      <HintPath>..\Helldivers2ModManager\bin\$(Configuration)\net8.0-windows\win-x64\Helldivers2ModManager.dll</HintPath>
+      <HintPath>..\Helldivers2ModManager\bin\$(Configuration)\net10.0-windows\win-x64\Helldivers2ModManager.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.18" />
@@ -28,9 +28,9 @@
 
   <Target Name="BuildSharedPatchCore" BeforeTargets="ResolveAssemblyReferences">
     <!-- VS Publish passes the tool's TargetFramework as a global property. Pin the shared
-         manager build to its own net8 target so it never tries to restore as net9. -->
+         manager build to its own net10 target so it never tries to restore as another TFM. -->
     <MSBuild Projects="..\Helldivers2ModManager\Helldivers2ModManager.csproj" Targets="Build"
-             Properties="Configuration=$(Configuration);TargetFramework=net8.0-windows;RuntimeIdentifier=win-x64" />
+             Properties="Configuration=$(Configuration);TargetFramework=net10.0-windows;RuntimeIdentifier=win-x64" />
   </Target>
 
   <ItemGroup>

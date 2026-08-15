@@ -62,7 +62,7 @@ internal sealed class GpuSkinningService : IDisposable
         }
         """;
 
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly ILogger<GpuSkinningService> _logger;
     private readonly Dictionary<ModelPreviewMesh, GpuMeshResources> _meshResources = [];
     private ID3D11Device? _device;

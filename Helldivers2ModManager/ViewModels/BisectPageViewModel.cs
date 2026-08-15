@@ -321,19 +321,25 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 			await CloseGameAsync();
 		}
 
-		WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
-		{
-			Title = _localizationService["Bisect.Deploying"],
-			Message = _localizationService["SettingsPage.PleaseWait"]
-		});
-
 		try
 		{
 			await _backgroundTaskService.RunAsync(
 				_localizationService["DashboardPage.DeployMods"],
 				_localizationService["SettingsPage.PleaseWait"],
-				(_, _) => _bisectService.DeployAsync(),
-				_localizationService["DashboardPage.DeploySuccess"]);
+				(ctx, _) => _bisectService.DeployAsync(ctx.ReportStep, ctx.ReportStepDetail, ctx.CompleteStep, ctx.FailStep),
+				_localizationService["DashboardPage.DeploySuccess"],
+				cancellationToken: default,
+				// 与主页部署一致：进度弹窗挂上任务的步骤集合，滚动显示正在部署哪个模组
+				task =>
+				{
+					WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage
+					{
+						Title = _localizationService["Bisect.Deploying"],
+						Message = _localizationService["SettingsPage.PleaseWait"],
+						Steps = task.Steps
+					});
+				},
+				isForeground: true);
 
 			LaunchGame();
 		}

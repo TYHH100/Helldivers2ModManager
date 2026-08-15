@@ -273,7 +273,7 @@ internal sealed class BisectService
 	/// <summary>
 	/// 按当前临时分组状态构建并部署（内部先清理旧文件）。
 	/// </summary>
-	public Task DeployAsync()
+	public Task DeployAsync(Action<string>? reportStep = null, Action<string>? reportStepDetail = null, Action? reportStepCompleted = null, Action? reportStepFailed = null)
 	{
 		var group = _modGroupService.SelectedGroup;
 		var groupMods = _modGroupService.FilterMods(_modService.Mods).ToList();
@@ -284,7 +284,7 @@ internal sealed class BisectService
 			_settingsService.UseDeploymentOrder,
 			_settingsService.DeploymentOrderGuids,
 			_settingsService.DeployBottomToTop);
-		return _modService.DeployAsync(deploymentMods);
+		return _modService.DeployAsync(deploymentMods, reportStep, reportStepDetail, reportStepCompleted, reportStepFailed);
 	}
 
 	/// <summary>

@@ -1,6 +1,7 @@
 using Helldivers2ModManager.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Collections.Frozen;
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -223,9 +224,9 @@ internal sealed class ModelPreviewBackend
         {
             using var stream = File.OpenRead(path);
             var values = JsonSerializer.Deserialize<Dictionary<string, string>>(stream);
-            return values is null
-                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                : new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
+            // 只读表冻结：FrozenDictionary 查找更快，且懒加载后不再变化
+            return (values ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase))
+                .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception ex)
         {
