@@ -47,25 +47,80 @@ internal partial class DashboardPageView : Page
 	}
 
 	/// <summary>
-	/// Ctrl+单击切换选中状态（多选），普通单击不干扰拖拽操作
+	/// Shift+范围选择的锚点（最后一次单击/Ctrl 点击/Shift 范围结束的 Mod）。
+	/// 页面级实例字段：导航离开页面即随 View 释放，不跨页面残留。
+	/// </summary>
+	private ModViewModel? _selectionAnchor;
+
+	/// <summary>
+	/// 卡片点击选择逻辑：
+	/// - 普通单击：不做任何选择（不进入多选模式），也不拦截事件，保持拖拽不受干扰。
+	/// - Ctrl+单击：切换该项选中状态（多选）。
+	/// - Shift+单击：从锚点范围选择（Ctrl+Shift = 追加范围）。
 	/// </summary>
 	private void ModCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 	{
 		if (sender is Border border && border.DataContext is ModViewModel vm)
 		{
-			// 仅排除交互控件（按钮/复选框）和图片预览
-			if (e.OriginalSource is Button or CheckBox)
+			// 排除交互控件（按钮/复选框/下拉框等 Control）和图片预览
+			if (e.OriginalSource is Control or Image)
 				return;
 
-			if (e.OriginalSource is Image)
-				return;
+			var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+			var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
 
-			// 只有按住 Ctrl 才进入多选模式，普通单击不做任何选择（保持拖拽不受干扰）
-			if (Keyboard.Modifiers == ModifierKeys.Control)
+			if (shift)
 			{
-				vm.IsSelected = !vm.IsSelected;
+				// Shift+单击：范围选择（Ctrl+Shift 追加范围）；无锚点时退化为单选
+				if (_selectionAnchor is not null && DataContext is DashboardPageViewModel dashboard)
+					dashboard.SelectRange(_selectionAnchor, vm, additive: ctrl);
+				else if (DataContext is DashboardPageViewModel dashboard0)
+					dashboard0.SelectRange(vm, vm, additive: false);
+				_selectionAnchor = vm;
 				e.Handled = true;
+				return;
 			}
+
+			if (ctrl)
+			{
+				// Ctrl+单击：切换选中状态（多选）
+				vm.IsSelected = !vm.IsSelected;
+				_selectionAnchor = vm;
+				e.Handled = true;
+				return;
+			}
+
+			// 普通单击：不做选择，也不拦截，gong 拖拽照常工作
+		}
+	}
+
+	/// <summary>
+	/// 点击列表空白区域：清空选择并重置范围锚点。
+	/// </summary>
+	private void ModListArea_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		if (e.OriginalSource is ScrollViewer)
+		{
+			(DataContext as DashboardPageViewModel)?.DeselectAllCommand.Execute(null);
+			_selectionAnchor = null;
+		}
+	}
+
+	/// <summary>
+	/// 键盘快捷键：Ctrl+A 全选，Esc 清空选择。
+	/// </summary>
+	private void DashboardPageView_KeyDown(object sender, KeyEventArgs e)
+	{
+		if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && e.Key == Key.A)
+		{
+			(DataContext as DashboardPageViewModel)?.SelectAllCommand.Execute(null);
+			e.Handled = true;
+		}
+		else if (e.Key == Key.Escape)
+		{
+			(DataContext as DashboardPageViewModel)?.DeselectAllCommand.Execute(null);
+			_selectionAnchor = null;
+			e.Handled = true;
 		}
 	}
 

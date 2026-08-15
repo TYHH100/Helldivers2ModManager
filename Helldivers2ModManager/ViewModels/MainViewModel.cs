@@ -155,6 +155,24 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable
 		Process.Start(s_reportBugStartInfo);
 	}
 
+	/// <summary>
+	/// 主窗口拖拽压缩包导入入口：已在 Dashboard 页面时直接导入，否则先导航到 Dashboard 再导入。
+	/// </summary>
+	internal void ImportArchives(string[] archivePaths)
+	{
+		if (archivePaths is null || archivePaths.Length == 0)
+			return;
+
+		if (_navigationStore.CurrentViewModel is DashboardPageViewModel dashboard)
+		{
+			dashboard.AddFilesCommand.Execute(archivePaths);
+		}
+		else
+		{
+			_navigationStore.Navigate<DashboardPageViewModel>(page => page.AddFilesCommand.Execute(archivePaths));
+		}
+	}
+
 	public void Dispose()
 	{
 		Dispose(true);

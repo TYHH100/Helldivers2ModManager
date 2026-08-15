@@ -447,7 +447,13 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         ModProblem[] problems;
         try
         {
-            problems = await Task.Run(() => _modService.Init(_settingsService));
+            // 首次扫描全部模组（CPU/IO 密集）：后台线程执行 + 任务状态统一管理。
+            // 有加载弹窗，属前台任务，任务页不显示。
+            problems = await _backgroundTaskService.RunAsync(
+                _localizationService["DashboardPage.LoadingMods"],
+                _localizationService["SettingsPage.PleaseWait"],
+                (_, _) => Task.FromResult(_modService.Init(_settingsService)),
+                isForeground: true);
         }
         catch (Exception ex)
         {
@@ -807,10 +813,23 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     }
 
     /// <summary>
+    /// 是否为文件拖拽（资源管理器拖入的文件：gong 解析后为 FileDrop 的 string[]，也可能是原始 IDataObject）。
+    /// 文件拖拽由主窗口 Preview 事件统一处理（压缩包导入），不进入排序拖拽管线。
+    /// </summary>
+    private static bool IsFileDrop(object? data)
+    {
+        return data is string[]
+            || (data is IDataObject idata && idata.GetDataPresent(DataFormats.FileDrop));
+    }
+
+    /// <summary>
     /// 拖拽悬停 —— 分隔符不可拖拽，模组使用默认指示器
     /// </summary>
     void IDropTarget.DragOver(IDropInfo dropInfo)
     {
+        if (IsFileDrop(dropInfo?.Data))
+            return;
+
         // 模组和分隔符均可自由拖动
         new DefaultDropHandler().DragOver(dropInfo);
     }
@@ -820,6 +839,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// </summary>
     void IDropTarget.Drop(IDropInfo dropInfo)
     {
+        if (IsFileDrop(dropInfo?.Data))
+            return;
+
         // 处理分隔符拖拽重排
         if (dropInfo?.Data is ModSeparator)
         {
@@ -969,6 +991,57 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     void ToggleModSelection(ModViewModel vm)
     {
         vm.IsSelected = !vm.IsSelected;
+    }
+
+    [RelayCommand]
+    void InvertSelection()
+    {
+        ApplyInvertSelection(_modGroupService.FilterModViewModels(_mods).ToList());
+    }
+
+    /// <summary>
+    /// Shift+单击范围选择：选中过滤视图中 anchor 与 target 之间的所有 Mod。
+    /// additive=true（按住 Ctrl）时保留原有选择，否则先清空。
+    /// 锚点不在当前过滤视图（被搜索/分组过滤）时退化为仅选中 target。
+    /// </summary>
+    internal void SelectRange(ModViewModel anchor, ModViewModel target, bool additive)
+    {
+        ApplyRangeSelection(_modGroupService.FilterModViewModels(_mods).ToList(), anchor, target, additive);
+    }
+
+    /// <summary>
+    /// 范围选择的纯逻辑（可单元测试）：在可见列表上把 anchor..target 之间的项设为选中。
+    /// </summary>
+    internal static void ApplyRangeSelection(IList<ModViewModel> visible, ModViewModel anchor, ModViewModel target, bool additive)
+    {
+        var anchorIndex = visible.IndexOf(anchor);
+        var targetIndex = visible.IndexOf(target);
+
+        if (!additive)
+        {
+            foreach (var item in visible)
+                item.IsSelected = false;
+        }
+
+        if (anchorIndex < 0 || targetIndex < 0)
+        {
+            target.IsSelected = true;
+            return;
+        }
+
+        var low = Math.Min(anchorIndex, targetIndex);
+        var high = Math.Max(anchorIndex, targetIndex);
+        for (int i = low; i <= high; i++)
+            visible[i].IsSelected = true;
+    }
+
+    /// <summary>
+    /// 反选纯逻辑（可单元测试）：翻转可见列表的所有选中状态。
+    /// </summary>
+    internal static void ApplyInvertSelection(IList<ModViewModel> visible)
+    {
+        foreach (var item in visible)
+            item.IsSelected = !item.IsSelected;
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
@@ -1179,6 +1252,26 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             if (selectedFiles.Count == 0)
                 return;
 
+            await AddFilesCoreAsync(selectedFiles);
+        }
+
+        /// <summary>
+        /// 批量导入命令：接收多个压缩包路径（主窗口拖拽入口，支持一次拖入多个文件）。
+        /// </summary>
+        [RelayCommand(AllowConcurrentExecutions = false)]
+        async Task AddFiles(string[]? files)
+        {
+            if (files is null || files.Length == 0)
+                return;
+
+            await AddFilesCoreAsync(files);
+        }
+
+        /// <summary>
+        /// 批量导入核心逻辑：显示进度弹窗并逐个导入压缩包（含嵌套压缩包进度回调）。
+        /// </summary>
+        private async Task AddFilesCoreAsync(IReadOnlyList<string> selectedFiles)
+        {
             // 单文件时使用原有提示文案，多文件时显示进度
             var isBatch = selectedFiles.Count > 1;
             var totalFiles = selectedFiles.Count;
@@ -1190,7 +1283,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
             var backgroundTask = _backgroundTaskService.Add(
                 _localizationService["BackgroundTasksPage.TaskTypeImport"],
-                isBatch ? _localizationService["DashboardPage.BatchAddWaitMsg"].Replace("{total}", totalFiles.ToString()) : Path.GetFileName(selectedFiles[0]));
+                isBatch ? _localizationService["DashboardPage.BatchAddWaitMsg"].Replace("{total}", totalFiles.ToString()) : Path.GetFileName(selectedFiles[0]),
+                isForeground: true);
             _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
 
             try
@@ -1355,7 +1449,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         var backgroundTask = _backgroundTaskService.Add(
             _localizationService["DashboardPage.UpdateMod"],
-            vm.Name);
+            vm.Name,
+            isForeground: true);
 
         try
         {
@@ -1511,7 +1606,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 _localizationService["BackgroundTasksPage.TaskTypePurge"],
                 _localizationService["SettingsPage.PleaseWait"],
                 (_, _) => _modService.PurgeAsync(),
-                _localizationService["BackgroundTasksPage.PurgeComplete"]);
+                _localizationService["BackgroundTasksPage.PurgeComplete"],
+                isForeground: true);
         }
         finally
         {
@@ -1543,38 +1639,52 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             return;
         }
 
-        WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
-        {
-            Title = _localizationService["DashboardPage.DeployProgress"],
-            Message = _localizationService["SettingsPage.PleaseWait"]
-        });
-
         var snapshot = CaptureProfileSnapshot();
         var deploymentMods = GetDeploymentMods(snapshot);
+        BackgroundTaskItem? deployTask = null;
 
         try
         {
             await _backgroundTaskService.RunAsync(
                 _localizationService["DashboardPage.DeployMods"],
                 _localizationService["SettingsPage.PleaseWait"],
-                async (_, _) =>
+                async (ctx, _) =>
                 {
                     await SaveProfileNowAsync(false, snapshot);
-                    await _modService.DeployAsync(deploymentMods);
+                    await _modService.DeployAsync(deploymentMods, ctx.ReportStep, ctx.ReportStepDetail, ctx.CompleteStep, ctx.FailStep);
                 },
-                _localizationService["DashboardPage.DeploySuccess"]);
+                _localizationService["DashboardPage.DeploySuccess"],
+                cancellationToken: default,
+                // 任务创建后立即弹出进度窗，并把任务的步骤集合挂上：
+                // 部署过程中每处理一个模组追加一行（自动滚动列表），显示正在部署哪个模组
+                task =>
+                {
+                    deployTask = task;
+                    WeakReferenceMessenger.Default.Send(new MessageBoxProgressMessage()
+                    {
+                        Title = _localizationService["DashboardPage.DeployProgress"],
+                        Message = _localizationService["SettingsPage.PleaseWait"],
+                        Steps = task.Steps
+                    });
+                },
+                isForeground: true);
 
+            // 部署成功：弹窗保留步骤列表（全部 ✓），可确认每个模组都已部署
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
             {
-                Message = _localizationService["DashboardPage.DeploySuccess"]
+                Message = _localizationService["DashboardPage.DeploySuccess"],
+                Steps = deployTask?.Steps
             });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unknown deployment error");
+            // 部署失败：弹窗显示错误并保留步骤列表（出问题的模组标 ✗），
+            // 便于定位是哪个模组复制失败
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
             {
-                Message = ex.Message
+                Message = ex.Message,
+                Steps = deployTask?.Steps
             });
         }
     }
@@ -1590,7 +1700,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         try
         {
-            var problems = _modService.RescanMods();
+            // 重扫全部模组（CPU/IO 密集）：后台线程执行 + 任务状态统一管理。
+            // 有加载弹窗，属前台任务，任务页不显示。
+            var problems = await _backgroundTaskService.RunAsync(
+                _localizationService["DashboardPage.RescanMods"],
+                _localizationService["SettingsPage.PleaseWait"],
+                (_, _) => Task.FromResult(_modService.RescanMods()),
+                _localizationService["DashboardPage.RescanComplete"],
+                isForeground: true);
 
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
 
@@ -1806,7 +1923,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
                     modVm.Dispose();
                 },
-                _localizationService["BackgroundTasksPage.DeleteComplete"].Replace("{name}", modVm.Name));
+                _localizationService["BackgroundTasksPage.DeleteComplete"].Replace("{name}", modVm.Name),
+                isForeground: true);
 
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
         }
@@ -2113,8 +2231,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private async Task CopyFileAsync(string sourcePath, string destinationPath, bool overwrite)
     {
-        using (var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true))
-        using (var destinationStream = new FileStream(destinationPath, overwrite ? FileMode.Create : FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true))
+        using (var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true))
+        using (var destinationStream = new FileStream(destinationPath, overwrite ? FileMode.Create : FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true))
         {
             await sourceStream.CopyToAsync(destinationStream);
         }
@@ -2253,7 +2371,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         var backgroundTask = _backgroundTaskService.Add(
             _localizationService["DashboardPage.ExportSaveDialog"],
-            vm.Name);
+            vm.Name,
+            isForeground: true);
         _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
 
         // Run export on background thread to keep UI responsive

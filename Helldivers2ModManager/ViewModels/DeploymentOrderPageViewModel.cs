@@ -310,13 +310,28 @@ internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, 
 
     // ========== 拖拽排序（IDropTarget） ==========
 
+    /// <summary>
+    /// 是否为文件拖拽（资源管理器拖入的文件）。文件拖拽由主窗口统一处理（压缩包导入），不进入排序拖拽管线。
+    /// </summary>
+    private static bool IsFileDrop(object? data)
+    {
+        return data is string[]
+            || (data is IDataObject idata && idata.GetDataPresent(DataFormats.FileDrop));
+    }
+
     void IDropTarget.DragOver(IDropInfo dropInfo)
     {
+        if (IsFileDrop(dropInfo?.Data))
+            return;
+
         new DefaultDropHandler().DragOver(dropInfo);
     }
 
     void IDropTarget.Drop(IDropInfo dropInfo)
     {
+        if (IsFileDrop(dropInfo?.Data))
+            return;
+
         if (dropInfo?.Data is not DeploymentOrderItem sourceItem)
         {
             new DefaultDropHandler().Drop(dropInfo);

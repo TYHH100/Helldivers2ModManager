@@ -16,6 +16,7 @@
 	  d:Background="{StaticResource MicaBackgroundBrush}"
 	  d:DesignWidth="1000"
 	  d:DesignHeight="700"
+	  KeyDown="DashboardPageView_KeyDown"
 	  Title="{Binding Title}">
 	<Page.Resources>
 		<local:DashboardItemTemplateSelector x:Key="DashboardItemTemplateSelector">
@@ -673,10 +674,18 @@
 					<Button Style="{StaticResource FluentSecondaryButton}"
 							Content="{loc:Loc DashboardPage.SelectAll}"
 							Command="{Binding SelectAllCommand}"
-							Padding="12 6"/>
+							Padding="12 6">
+						<Button.ToolTip>
+							<ToolTip Content="{loc:Loc DashboardPage.SelectAllHint}"/>
+						</Button.ToolTip>
+					</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
 							Content="{loc:Loc DashboardPage.DeselectAll}"
 							Command="{Binding DeselectAllCommand}"
+							Padding="12 6"/>
+					<Button Style="{StaticResource FluentSecondaryButton}"
+							Content="{loc:Loc DashboardPage.InvertSelection}"
+							Command="{Binding InvertSelectionCommand}"
 							Padding="12 6"/>
 					<Button Style="{StaticResource FluentSecondaryButton}"
 							Content="{loc:Loc DashboardPage.BatchEnable}"
@@ -714,7 +723,8 @@
 					  Background="Transparent"
 					  BorderThickness="0"
 					  HorizontalScrollBarVisibility="Disabled"
-					  VerticalScrollBarVisibility="Auto">
+					  VerticalScrollBarVisibility="Auto"
+					  MouseLeftButtonDown="ModListArea_MouseLeftButtonDown">
 			<ScrollViewer.ContextMenu>
 				<ContextMenu Visibility="{Binding ShowSeparator, Converter={StaticResource BoolToVisibilityConverter}}">
 					<MenuItem Header="{loc:Loc DashboardPage.CreateSeparator}"

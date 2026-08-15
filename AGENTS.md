@@ -4,7 +4,7 @@
 
 ## 1. 工作原则
 
-- 项目运行在 Windows，主程序是 WPF/.NET 8。默认使用 PowerShell。
+- 项目运行在 Windows，主程序是 WPF/.NET 10。默认使用 PowerShell。
 - 先检查真实代码路径、实际运行边界和样例文件，再判断原因或修改方案。
 - 工作树可能已有用户改动。修改前查看 `git status --short`，只触碰当前任务需要的文件，保留无关改动。
 - 文件解析、部署和修复属于高风险操作：先校验路径、范围、哈希或备份信息，再写入；能只读完成的检查不要改动源文件。
@@ -16,10 +16,10 @@
 
 | 项目 | 作用 | 目标框架 |
 |---|---|---|
-| `Helldivers2ModManager` | 主 WPF 应用 | `net8.0-windows` |
-| `Helldivers2ModManager.Tests` | MSTest 测试 | `net8.0-windows` |
-| `Purger` | 独立清理工具 | `net8.0-windows` |
-| `Helldivers2PatchTool` | 独立补丁检测/修复工具 | `net9.0-windows7.0` |
+| `Helldivers2ModManager` | 主 WPF 应用 | `net10.0-windows` |
+| `Helldivers2ModManager.Tests` | MSTest 测试 | `net10.0-windows` |
+| `Purger` | 独立清理工具 | `net10.0-windows` |
+| `Helldivers2PatchTool` | 独立补丁检测/修复工具 | `net10.0-windows7.0` |
 
 解决方案文件是 `Helldivers2ModManager.sln`。主应用的服务、模型、ViewModel、View 和资源分别位于同名目录；补丁解析与模型/纹理预览的关键实现集中在 `Services/`、`Models/` 和对应的 `ViewModels/` 中。
 
@@ -133,6 +133,8 @@ catch (Exception ex)
 
 **耗时操作统一走 `BackgroundTaskService.RunAsync(...)`**：它负责后台线程执行（内部 `Task.Run`）并自动管理任务状态生命周期（`Add` → Running → `Complete`/`Fail`/`Cancel`），调用方不要再手写 `Add` + `Task.Run` + `Complete/Fail` 样板。work 委托在后台线程运行，只做计算；需要更新任务页描述/进度时用 `BackgroundTaskContext.Report(...)`（自动切回 UI 线程）；返回结果后由调用方在 UI 线程应用，不要在 work 内直接操作 WPF 集合或绑定属性。`BackgroundTaskService` 单独用 `Add/Update/Complete` 只管理状态、不提供后台线程；`await` 异步方法也不代表 CPU 密集工作离开了 UI 线程——异步 IO 会让出 UI，但同步 CPU 密集代码（LZ4 解码、SHA-256、压缩/解压、大文件解析循环）仍在调用线程（UI）执行并导致界面卡顿。服务内部的 CPU 密集解析（如 `GameUnitReferenceReader` 的索引构建与 Unit 引用解析、`ModService` 的复制/删除/解压）仍应在服务内部后台化，一处修复惠及所有调用方。新增/修改耗时服务方法后，检查所有 UI 入口（`[RelayCommand]`、点击详情等）是否仍会在 UI 线程触发 CPU 密集工作。
 
+新增耗时操作时按"前台/后台"分类注册任务：有专属进度弹窗/对话框的操作（部署、删除、导入、更新、清理、导出、批量修复、二分部署、Init、Rescan）是前台任务，用 `RunAsync(..., isForeground: true)` 或 `Add(..., isForeground: true)`——任务页不显示，进入终态后由服务自动从 `Tasks` 移除；无弹窗的静默后台操作（哈希计算/迁移/重算、版本检查、冲突/护甲扫描等）用默认 `isForeground: false`，在任务页显示。任务页只展示后台任务（`VisibleTasks` 按 `IsForeground` 过滤）。前台任务即使从集合移除，弹窗持有的 `task.Steps` 集合引用依然有效，步骤列表照常更新；不要为"任务页不显示"而删掉前台任务的注册或弹窗步骤机制，否则部署弹窗的步骤列表会失效。
+
 ### 日志和设置
 
 - 使用 `ILogger<T>`，按实际严重程度选择 `Trace`、`Debug`、`Information`、`Warning`、`Error`、`Critical`。
@@ -173,7 +175,7 @@ catch (Exception ex)
 | 把取消异常当成崩溃 | `TaskCanceledException` 可能只是防抖或新请求取消；先确认实际使用的功能和取消来源，再判断是否是真故障。 |
 | `await` 长任务或手写 `Add`+`Task.Run`+`Complete/Fail` 样板 | 耗时操作统一走 `BackgroundTaskService.RunAsync(...)`（后台线程 + 状态生命周期一把管，见 §6）；`BackgroundTaskService` 单独用 `Add/Update/Complete` 只管理状态、不提供后台线程，`await` 只让出异步 IO，同步 CPU 密集代码（LZ4 解码、SHA-256、压缩/解压、大文件解析）仍在调用线程（UI）执行。服务内部 CPU 密集解析优先在服务内部后台化（参考 `GameUnitReferenceReader`/`ModService`/`ModHashService`/`PatchResourceInspectionService`），改完后检查所有 UI 入口。 |
 | 用过时断言或并行构建验证 | 按当前 MSTest 版本使用 `Assert.AreEqual` 等兼容断言；涉及共享 `obj` 时串行构建/测试，验证生成代码时不要使用 `--no-build`。 |
-| 只验证 CLI 发布，不验证 VS 发布 | 修改 `Helldivers2PatchTool` 时复现对应 Publish Profile；独立工具不能直接引用自包含 EXE，且共享主程序构建必须固定 `net8.0-windows` 和 `win-x64`。 |
+| 只验证 CLI 发布，不验证 VS 发布 | 修改 `Helldivers2PatchTool` 时复现对应 Publish Profile；独立工具不能直接引用自包含 EXE，且共享主程序构建必须固定 `net10.0-windows` 和 `win-x64`。 |
 | 模型预览整体黑色或局部缺失只查材质引用 | 特例模型同时含高分辨率正常材质和 BC7 纯黑占位材质；先按 `(MeshInfoIndex, VO, VC, IC)` 去重材质变体（不含 IO），再以多点 BC7 采样加解码后的全像素纯黑验证过滤占位，不能只看前 64 字节。对稀疏 section，按三角形引用压缩顶点后再做全局容量判断。详见 §5。 |
 | 旧角色材质只替换父模板 ID | 先与同一装备的可用 Mod 对照。已验证 DP-00 的 `0x102/1280B/248B` 角色材质在当前游戏仍保留旧结构，只需将父模板 `0x54AE...` 替为 `0x8F66...`；不要凭另一份样例把变量表、结束偏移或材质版本重建。没有同资源证据的 emissive/未知 schema 仅警告，不自动重写。 |
 | 旧角色材质包只给“引用 0x54AE 材质的 Unit”改用游戏 LOD | 对已验证的旧角色签名，`Unit=1`、游戏引用为 `0x00A4CD36` 且 Unit 实际引用待迁移的 `0x54AE...` 角色材质时，旧 LOD/Section 材质绑定会导致进舰船崩溃；自动修复必须改用当前游戏 LOD，同时保留 Mod 的 GPU 几何与纹理。未知材质或其他 Unit 版本仍按原有自定义模型策略处理。 |
@@ -181,6 +183,8 @@ catch (Exception ex)
 | 自动 Unit 修复只看 Mesh ID 或单个 Unit 的 GPU 大小 | 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；应按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动，不能只用单个 GPU 大小决定修复策略。 |
 | 把所有当前 Unit 都当成 `10800438` | 当前游戏的 DP-00 资源实际使用 `0x00A4CD36`，其他资源可能使用 `0x10800438`；应从同 File ID 的游戏引用读取版本，并让 GPU 结构检查同时识别两个已验证版本。 |
 | 用根容器直接解析页面 VM 或新增页面后返回主菜单内存不释放 | DI 容器会强引用所有解析过的 `IDisposable`（所有 `PageViewModelBase` 子类）到 `ServiceProviderEngineScope._disposables`，直到根容器/scope 释放；导航页面必须由 `NavigationStore` 通过独立 `IServiceScope` 解析（`Navigate<T>` 内部 `CreateScope`，导航离开时丢弃旧 scope），不要用注入的 `IServiceProvider` 直接 `GetRequiredService<页面VM>` 后手动 `Navigate(page)`，否则该页面及其模型/纹理数据会被容器持有到进程退出。 | 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；LOD 还承载 MeshInfo/Section 的材质绑定。发现强自定义信号后，必须按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动。静态装备页可能只显示 Slim，仍需验证实际玩家的 Stocky/动态渲染。 |
+| 批量复制文件用无界 `Task.WhenAll` + 手动 `FileStream.CopyToAsync` | 部署（`ModService.DeployAsync`）、导入（`IOExtensions.CopyTo`）、增量更新（`UpdateAsync`）统一为：收集文件对后用 `Parallel.ForEachAsync`/`Parallel.ForEach` 限制并发（`Math.Clamp(Environment.ProcessorCount / 2, 2, 4)`）+ Windows 内核态 `File.Copy(..., true)`（CopyFile2）。无界并发会让磁盘队列过深反而降吞吐；托管 `CopyToAsync` 比内核态复制慢且每个文件多一份异步状态机/缓冲开销。符号链接部署分支保留 `File.CreateSymbolicLink`。手动流复制的 buffer 统一用 81920，不要用 4096。 |
+| `RunAsync` 终态同步执行，抢在排队的步骤更新（BeginInvoke）前把任务标记终态 | `RunAsync` 的 `Complete`/`Fail`/`Cancel` 必须经 `QueueOnUiThread`（无条件 `Dispatcher.BeginInvoke`）排队执行，不能用 `RunOnUiThread`（UI 线程调用时同步执行）。否则 work 期间入队的 `CompleteStep`/`UpdateStep`（如符号链接部署瞬间完成的步骤）会被终态守卫（`task.Status != Running`）拦截，步骤永远停在"正在部署"（蓝色 Running），成功弹窗也显示冻结状态。复制模式部署慢、队列基本排空所以不暴露；符号链接模式必现。 |
 | 用 `TaskCompletionSource` 桥接弹窗后不处理用户点“取消”按钮 | `MessageBoxSelectionMessage` 的取消按钮默认只隐藏覆盖层、不触发任何回调；`MessageBoxConfirmMessage` 的“否”按钮才触发 `Abort`。凡是用 TCS 等待弹窗结果的调用方必须给 `MessageBoxSelectionMessage` 传 `Abort` 回调（如 `Abort = () => tcs.TrySetResult(取消值)`），否则用户点取消后流程永久挂起。 | 
 | 保存分组状态时覆盖了用户的自定义排序 | `SaveAllAsync`/`SaveStatesAsync` 按快照 `Mods` 顺序写 `SortOrder`；在非 Dashboard 页面保存分组状态时，必须保留原分组顺序：优先用 `ProfileSaveCoordinator.GetCurrentOrder()` 过滤出成员后作为 `preferredOrder` 传入 `Capture`（Dashboard 导航前已保存过用户顺序），取不到时退回 ModService 加载顺序。 |
 | 会话结束/取消后仍读取已清空的会话对象 | 结束类方法（如 `FinishAsync`）内部会清空会话（`Current = null`），总结弹窗、结果展示必须在调用结束方法之前捕获会话引用并传入，不能在之后从服务重新读取。 |
@@ -191,6 +195,9 @@ catch (Exception ex)
 | 只向上查找 ScrollViewer | ListBox 的 ScrollViewer 是**视觉后代**（模板内），不是祖先。查找要祖先优先、找不到再递归后代。 |
 | 用 SendInput 合成滚轮验证拖拽中滚轮滚动 | SendInput 的 MOUSEEVENTF_WHEEL 不携带真实按键状态，会清空全局异步按键状态（GetAsyncKeyState 返回抬起），导致 OLE QueryContinueDrag 看到 keys=0 提前结束拖拽——自动化测试的假象，真实鼠标滚轮自带 MK_LBUTTON。此类交互验证要区分真实输入与合成输入。 |
 | 在 MSTest 里直接 ApplyTemplate 测试 WPF 控件 | MSTest 环境不加载 WPF 默认主题样式（控件的 Template/Style 为 null，新建 Application 也不行）。UI 测试需要手工构造显式 ControlTemplate（FrameworkElementFactory）来搭建视觉树，并用 Measure/Arrange 建立视觉父子链。 |
+| 把需要 code-behind 访问的命名元素放进 Window.Style 的 ControlTemplate | 模板内的 `x:Name` 是模板作用域，Window 类不会生成对应字段（编译报 CS0103 "名称不存在"），用 `OnApplyTemplate` 里 `Template.FindName("name", this)` 获取引用。**不要把 Window.Content 改为 Grid 包裹 ContentControl/ContentPresenter 来容纳覆盖层**：`ContentControl.Content` 和显式设置 Content 的 `ContentPresenter` 都会把页面加为逻辑子（`SetLogicalChild`），而本项目的页面视图是 `Page` 类型，`Page.OnVisualParentChanged` 校验逻辑父必须是 Window/Frame，运行时报 XamlParseException "Page 只能具有 Window 或 Frame 父级"（启动即崩）。模板内裸 `<ContentPresenter>`（未设置 Content，隐式呈现 TemplatedParent.Content）不会触发该校验，这是原结构能正常工作的原因。 |
+| 主窗口接收文件拖拽时直接挂在 Window 的 DragOver/Drop 上或逐页面防 gong | 文件拖拽（FileDrop）必须用 Window 层的 `PreviewDragOver`/`PreviewDrop`（隧道事件最先到达根）并在识别到文件时 `e.Handled = true`，否则 string[] 会被 gong 的 `DefaultDropHandler.CanAcceptData`（`data is IEnumerable && !(data is string)`）当成排序数据，Drop 时插入 ObservableCollection 抛类型异常。内部拖拽（ModViewModel 等）不是 FileDrop，不受影响。防御性上仍应在实现 `IDropTarget` 的 VM（Dashboard/DeploymentOrder）的 DragOver/Drop 开头识别 `string[]` 或含 FileDrop 的 IDataObject 直接 return。提示层显隐用"DragOver 持续刷新时间戳 + DragLeave 后 300ms 复查"避免子元素间移动时闪烁。 |
+| 启动黑闪（LOGO 透明区透出黑底）只查闪屏图片 alpha | WPF 默认 `<SplashScreen>` 项在 `CompositionTarget.Rendering`（**帧渲染前**触发）第一次时就关闭闪屏，此时主窗口首帧还没提交给 DWM，DWM 侧主窗口区域是纯黑的；闪屏 LOGO 透明，黑底就从透明区透出"一闪"。修复：csproj 移除 SplashScreen 项（图片改 `<Resource>`），自实现透明闪屏窗口（`AllowsTransparency` + `Topmost`），在 `MainWindow.ContentRendered`（首帧真正渲染完成后）再 `Close()`。验证：启动进程 + `CopyFromScreen` 连续截屏统计中央区域纯黑帧比例（采样间隔 ≤20ms），修复后应全程为 0。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
 

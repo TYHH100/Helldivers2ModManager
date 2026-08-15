@@ -16,6 +16,10 @@
 		MinWidth="800"
 		MinHeight="600"
 		Content="{Binding CurrentViewModel}"
+		AllowDrop="True"
+		PreviewDragOver="Window_PreviewDragOver"
+		PreviewDrop="Window_PreviewDrop"
+		DragLeave="Window_DragLeave"
 		WindowStyle="None"
 		WindowStartupLocation="CenterScreen"
 		Background="{StaticResource MicaBackgroundBrush}"
@@ -178,6 +182,53 @@
 								<cmp:VersionCheckDetailOverlay Grid.Row="1"/>
 								<cmp:ModConflictDetailOverlay Grid.Row="1"/>
 								<cmp:MessageBox Grid.Row="1"/>
+
+								<!-- 拖拽导入提示覆盖层：拖入压缩包时提示松开导入（模板内元素，code-behind 经 Template.FindName 访问） -->
+								<Border x:Name="dropHintOverlay"
+										Grid.RowSpan="2"
+										Visibility="Collapsed"
+										IsHitTestVisible="False"
+										Background="#D9141414"
+										BorderBrush="{StaticResource SystemAccentBrush}"
+										BorderThickness="2"
+										CornerRadius="12"
+										Margin="32">
+									<Grid>
+										<!-- 有效拖拽：松开导入 -->
+										<StackPanel x:Name="dropHintValidPanel"
+													HorizontalAlignment="Center"
+													VerticalAlignment="Center">
+											<TextBlock Text="&#xE896;"
+													   FontFamily="Segoe Fluent Icons"
+													   FontSize="48"
+													   Foreground="{StaticResource SystemAccentBrush}"
+													   HorizontalAlignment="Center"/>
+											<TextBlock Text="{loc:Loc MainWindow.DropImportHint}"
+													   FontSize="18"
+													   FontWeight="SemiBold"
+													   Foreground="{StaticResource NeutralForegroundBrush}"
+													   HorizontalAlignment="Center"
+													   Margin="0 16 0 0"/>
+										</StackPanel>
+										<!-- 无效拖拽：不支持的格式 -->
+										<StackPanel x:Name="dropHintInvalidPanel"
+													HorizontalAlignment="Center"
+													VerticalAlignment="Center"
+													Visibility="Collapsed">
+											<TextBlock Text="&#xE711;"
+													   FontFamily="Segoe Fluent Icons"
+													   FontSize="48"
+													   Foreground="{StaticResource DangerBrush}"
+													   HorizontalAlignment="Center"/>
+											<TextBlock Text="{loc:Loc MainWindow.DropImportInvalid}"
+													   FontSize="18"
+													   FontWeight="SemiBold"
+													   Foreground="{StaticResource NeutralForegroundBrush}"
+													   HorizontalAlignment="Center"
+													   Margin="0 16 0 0"/>
+										</StackPanel>
+									</Grid>
+								</Border>
 							</Grid>
 						</Border>
 						<ControlTemplate.Triggers>

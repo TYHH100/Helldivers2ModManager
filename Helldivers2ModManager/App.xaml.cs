@@ -59,16 +59,39 @@ internal partial class App : Application
 	{
 		base.OnStartup(e);
 
-		// 初始化 SharpSevenZip：提取嵌入式 7z.dll 并设置库路径
-		InitializeSharpSevenZip();
+		// 闪屏：显示 LOGO，等主窗口首帧内容真正渲染完成（ContentRendered）后再关闭，
+		// 避免 WPF 默认 SplashScreen 过早关闭让主窗口黑底透过 LOGO 透明区域一闪而过。
+		SplashWindow? splash = null;
+		try
+		{
+			splash = new SplashWindow();
+			splash.Show();
+		}
+		catch (Exception ex)
+		{
+			_logger?.LogWarning(ex, "Failed to show splash screen");
+			splash = null;
+		}
 
-		// 先同步初始化 SettingsService 并应用已保存的语言偏好（在创建 MainWindow 之前）
-		// 必须在 MainWindow/MainViewModel 创建之前完成，否则 ViewModel 构造函数访问设置会抛 "Object not initialized"
-		InitializeSettingsAndLanguageSync();
+		try
+		{
+			// 初始化 SharpSevenZip：提取嵌入式 7z.dll 并设置库路径
+			InitializeSharpSevenZip();
 
-		MainWindow = Host.Services.GetRequiredService<MainWindow>();
-		MainWindow.Show();
+			// 先同步初始化 SettingsService 并应用已保存的语言偏好（在创建 MainWindow 之前）
+			// 必须在 MainWindow/MainViewModel 创建之前完成，否则 ViewModel 构造函数访问设置会抛 "Object not initialized"
+			InitializeSettingsAndLanguageSync();
 
+			MainWindow = Host.Services.GetRequiredService<MainWindow>();
+			if (splash is not null)
+				MainWindow.ContentRendered += (_, _) => splash.Close();
+			MainWindow.Show();
+		}
+		catch
+		{
+			splash?.Close();
+			throw;
+		}
 	}
 
 	/// <summary>

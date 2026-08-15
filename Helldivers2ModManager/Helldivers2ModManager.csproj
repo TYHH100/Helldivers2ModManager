@@ -3,7 +3,7 @@
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
-		<TargetFramework>net8.0-windows</TargetFramework>
+		<TargetFramework>net10.0-windows</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
@@ -77,6 +77,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <SplashScreen Include="Resources\Images\logo_splash.png" />
+	  <!-- 闪屏图片：由 SplashWindow 以 pack URI 加载（不再使用 WPF 默认 SplashScreen——
+	       默认机制在首帧提交前就关闭闪屏，会让主窗口黑底透过 LOGO 透明区域一闪而过） -->
+	  <Resource Include="Resources\Images\logo_splash.png" />
 	</ItemGroup>
 </Project>
