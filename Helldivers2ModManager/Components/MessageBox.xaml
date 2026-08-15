@@ -46,6 +46,7 @@
 				<RowDefinition Height="Auto"/>
 				<RowDefinition Height="Auto"/>
 				<RowDefinition Height="Auto"/>
+				<RowDefinition Height="Auto"/>
 			</Grid.RowDefinitions>
 
 				<!-- Message -->
@@ -133,6 +134,57 @@
 								   Foreground="{StaticResource SystemAccentBrush}"
 								   FontWeight="SemiBold"/>
 					</Grid>
+				</StackPanel>
+
+				<!-- 部署步骤自动滚动列表：显示正在部署哪个模组（仅 Steps 非空时可见）。
+					 顶部是最新（当前正在部署，accent 高亮），下面是已完成的（灰色 ✓）。
+					 独立于进度面板：部署中、部署成功（信息弹窗）、部署失败（错误弹窗）都可显示。 -->
+				<StackPanel Grid.Row="5"
+							x:Name="deployStepsPanel"
+							Margin="0 0 0 16"
+							Visibility="Collapsed">
+					<TextBlock Text="{loc:Loc MessageBox.DeploySteps}"
+							   FontSize="12"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							   Margin="0 0 0 6"/>
+					<ScrollViewer x:Name="deployStepsScrollViewer"
+								  MaxHeight="140"
+								  VerticalScrollBarVisibility="Auto"
+								  HorizontalScrollBarVisibility="Disabled"
+								  ScrollChanged="DeployStepsScrollViewer_OnScrollChanged">
+						<ItemsControl x:Name="deployStepsList">
+							<ItemsControl.ItemTemplate>
+								<DataTemplate>
+									<StackPanel Orientation="Horizontal" Margin="0 2">
+										<TextBlock Text="{loc:Loc MessageBox.Deploying}"
+												   Foreground="{StaticResource SystemAccentBrush}"
+												   FontWeight="SemiBold"
+												   VerticalAlignment="Top"
+												   Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
+										<TextBlock Text="✓ "
+												   Foreground="#777777"
+												   VerticalAlignment="Top"
+												   Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVisibilityConverter}}"/>
+										<TextBlock Text="✗ "
+												   Foreground="#f44336"
+												   VerticalAlignment="Top"
+												   FontWeight="SemiBold"
+												   Visibility="{Binding IsFailed, Converter={StaticResource BoolToVisibilityConverter}}"/>
+										<StackPanel>
+											<TextBlock Text="{Binding Text}"
+													   Foreground="#CCCCCC"
+													   TextTrimming="CharacterEllipsis"/>
+											<TextBlock Text="{Binding Detail}"
+													   FontSize="11"
+													   Foreground="#888888"
+													   TextTrimming="CharacterEllipsis"
+													   Visibility="{Binding Detail, Converter={StaticResource StringToVisibilityConverter}}"/>
+										</StackPanel>
+									</StackPanel>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+					</ScrollViewer>
 				</StackPanel>
 
 				<!-- Tag Selection List -->

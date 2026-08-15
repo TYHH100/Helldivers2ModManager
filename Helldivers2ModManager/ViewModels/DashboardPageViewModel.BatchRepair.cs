@@ -61,7 +61,8 @@ internal sealed partial class DashboardPageViewModel
                 _localizationService["BackgroundTasksPage.TaskTypeBatchRepair"],
                 _localizationService["VersionCheckBatch.ScanTitle"],
                 (_, _) => service.CreateBatchRepairPlanAsync(modDatas, progress),
-                _localizationService["VersionCheckBatch.ScanTitle"]);
+                _localizationService["VersionCheckBatch.ScanTitle"],
+                isForeground: true);
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
             if (plan.RepairableCount == 0)
             {
@@ -132,7 +133,8 @@ internal sealed partial class DashboardPageViewModel
                 _localizationService["BackgroundTasksPage.TaskTypeBatchRepair"],
                 _localizationService["VersionCheckBatch.RepairTitle"],
                 (_, _) => service.RepairModsBatchAsync(plan, progress),
-                _localizationService["VersionCheckBatch.RepairTitle"]);
+                _localizationService["VersionCheckBatch.RepairTitle"],
+                isForeground: true);
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
             {

@@ -1,7 +1,9 @@
 // Ignore Spelling: Helldivers
 
 using CommunityToolkit.Mvvm.Messaging;
+using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
+using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -12,6 +14,9 @@ namespace Helldivers2ModManager.Components;
 internal sealed class MessageBoxInfoMessage
 {
 	public required string Message { get; init; }
+
+	/// <summary>附加的步骤列表（如部署结果）；非 null 时弹窗显示。</summary>
+	public ObservableCollection<TaskStepItem>? Steps { get; set; }
 }
 
 internal sealed class MessageBoxWarningMessage
@@ -22,6 +27,9 @@ internal sealed class MessageBoxWarningMessage
 internal sealed class MessageBoxErrorMessage
 {
 	public required string Message { get; init; }
+
+	/// <summary>附加的步骤列表（如部署失败时的步骤）；非 null 时弹窗显示。</summary>
+	public ObservableCollection<TaskStepItem>? Steps { get; set; }
 }
 
 internal sealed class MessageBoxProgressMessage
@@ -31,6 +39,10 @@ internal sealed class MessageBoxProgressMessage
 	public required string Message { get; init; }
 
 	public string? Step { get; init; }
+
+	/// <summary>任务步骤列表（如部署时每个模组一条：顶部最新、正在部署高亮）；
+	/// 非 null 时弹窗显示自动滚动列表。</summary>
+	public ObservableCollection<TaskStepItem>? Steps { get; set; }
 }
 
 /// <summary>
@@ -233,6 +245,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 
 		title.Text = LocalizationService?["MessageBox.Info"] ?? "信息";
 		this.message.Text = message.Message;
+		AttachSteps(message.Steps);
 
 		okButton.Visibility = Visibility.Visible;
 		Visibility = Visibility.Visible;
@@ -257,6 +270,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		title.Text = LocalizationService?["MessageBox.Error"] ?? "错误";
 		brush.Color = Colors.Red;
 		this.message.Text = message.Message;
+		AttachSteps(message.Steps);
 
 		okButton.Visibility = Visibility.Visible;
 		Visibility = Visibility.Visible;
@@ -273,7 +287,33 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 
 		progressPanel.Visibility = Visibility.Visible;
 		progress.Visibility = Visibility.Visible;
+
+		// 部署等带步骤日志的任务：挂上步骤集合并显示自动滚动列表。
+		// 集合在 UI 线程更新（BackgroundTaskService.AddStep 负责切换线程），绑定安全。
+		AttachSteps(message.Steps);
+
 		Visibility = Visibility.Visible;
+	}
+
+	/// <summary>
+	/// 在消息弹窗上附加步骤列表（部署成功/失败结果）。集合在 UI 线程更新，绑定安全。
+	/// </summary>
+	private void AttachSteps(ObservableCollection<TaskStepItem>? steps)
+	{
+		if (steps is null)
+			return;
+
+		deployStepsList.ItemsSource = steps;
+		deployStepsPanel.Visibility = Visibility.Visible;
+	}
+
+	private void DeployStepsScrollViewer_OnScrollChanged(object sender, ScrollChangedEventArgs e)
+	{
+		// 列表顶部是最新（当前正在部署）步骤及其副标题：新行插入/行高变化时
+		// 无条件滚回顶部，保证"正在部署"行始终可见，不受历史滚动位置影响。
+		if (e.ExtentHeightChange <= 0)
+			return;
+		((ScrollViewer)sender).ScrollToHome();
 	}
 
 	public void Receive(MessageBoxExportProgressMessage message)
@@ -582,6 +622,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		progressPanel.Visibility = Visibility.Hidden;
 		progress.Visibility = Visibility.Hidden;
 		progressStep.Text = "";
+		deployStepsPanel.Visibility = Visibility.Collapsed;
+		deployStepsList.ItemsSource = null;
 		exportProgressPanel.Visibility = Visibility.Collapsed;
 		exportCurrentFile.Visibility = Visibility.Visible;
 		exportSpeedText.Visibility = Visibility.Visible;

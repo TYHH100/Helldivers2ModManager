@@ -79,6 +79,55 @@
                             <TextBlock Text="{Binding StartedAt, StringFormat={}{0:HH:mm:ss}}" FontSize="11" Foreground="#666" HorizontalAlignment="Right" Margin="0 4 0 0" />
                         </StackPanel>
                     </Grid>
+
+                    <!-- 步骤列表（与部署进度弹窗一致）：顶部最新、正在部署高亮，副标题显示复制进度 -->
+                    <ScrollViewer MaxHeight="140"
+                                  Margin="0 8 0 0"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  ScrollChanged="StepsScrollViewer_OnScrollChanged">
+                        <ScrollViewer.Style>
+                            <Style TargetType="ScrollViewer">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Steps.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ScrollViewer.Style>
+                        <ItemsControl ItemsSource="{Binding Steps}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:TaskStepItem}">
+                                    <StackPanel Orientation="Horizontal" Margin="0 2">
+                                        <TextBlock Text="{loc:Loc MessageBox.Deploying}"
+                                                   Foreground="{StaticResource SystemAccentBrush}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Top"
+                                                   Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <TextBlock Text="✓ "
+                                                   Foreground="#777777"
+                                                   VerticalAlignment="Top"
+                                                   Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <TextBlock Text="✗ "
+                                                   Foreground="#f44336"
+                                                   VerticalAlignment="Top"
+                                                   FontWeight="SemiBold"
+                                                   Visibility="{Binding IsFailed, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Text}"
+                                                       Foreground="#CCCCCC"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Detail}"
+                                                       FontSize="11"
+                                                       Foreground="#888888"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Visibility="{Binding Detail, Converter={StaticResource StringToVisibilityConverter}}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -108,7 +157,10 @@
                     </StackPanel>
                 </Button>
 
-                <TextBlock Grid.Column="1" Text="{loc:Loc DashboardPage.BackgroundTasks}" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0 8 0 8" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0 6 0 6">
+                    <TextBlock Text="{loc:Loc DashboardPage.BackgroundTasks}" FontSize="20" Foreground="White" />
+                    <TextBlock Text="{loc:Loc BackgroundTasksPage.Subtitle}" FontSize="12" Foreground="#888" Margin="0 2 0 0" />
+                </StackPanel>
 
                 <Button Grid.Column="2"
                         Command="{Binding ClearCompletedCommand}"
@@ -123,11 +175,11 @@
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
-                <ItemsControl ItemsSource="{Binding Tasks}" ItemTemplate="{StaticResource BackgroundTaskTemplate}">
+                <ItemsControl ItemsSource="{Binding VisibleTasks}" ItemTemplate="{StaticResource BackgroundTaskTemplate}">
                     <ItemsControl.Style>
                         <Style TargetType="ItemsControl">
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding Tasks.Count}" Value="0">
+                                <DataTrigger Binding="{Binding VisibleTasks.Count}" Value="0">
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate>
