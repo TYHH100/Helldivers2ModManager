@@ -387,40 +387,6 @@ internal sealed class VersionStatusToTextConverter : IValueConverter
 }
 
 /// <summary>
-/// 将 SortMode 枚举值转换为本地化显示文本
-/// </summary>
-internal sealed class SortModeConverter : IValueConverter
-{
-    private static LocalizationService? _localizationService;
-    static SortModeConverter()
-    {
-        try { if (Application.Current is App app) _localizationService = app.Host.Services.GetService(typeof(LocalizationService)) as LocalizationService; } catch { }
-    }
-
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is SortMode mode)
-        {
-            return mode switch
-            {
-                SortMode.Default => _localizationService?["DashboardPage.SortDefault"] ?? "默认顺序",
-                SortMode.NameAsc => _localizationService?["Converters.SortNameAZ"] ?? "名称 A-Z",
-                SortMode.NameDesc => _localizationService?["Converters.SortNameZA"] ?? "名称 Z-A",
-                SortMode.EnabledFirst => _localizationService?["Converters.SortEnabledFirst"] ?? "已启用优先",
-                SortMode.DisabledFirst => _localizationService?["Converters.SortDisabledFirst"] ?? "已禁用优先",
-                _ => _localizationService?["DashboardPage.SortDefault"] ?? "默认顺序",
-            };
-        }
-        return _localizationService?["DashboardPage.SortDefault"] ?? "默认顺序";
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        throw new NotImplementedException();
-    }
-}
-
-/// <summary>
 /// 将 ListBoxItem 的索引转换为显示序号（从 1 开始）
 /// </summary>
 internal sealed class IndexToNumberConverter : IValueConverter

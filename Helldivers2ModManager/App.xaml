@@ -21,7 +21,6 @@
 			<local:NullToVisibilityConverter x:Key="StringToVisibilityConverter"/>
 			<local:ProgressWidthConverter x:Key="ProgressWidthConverter"/>
 			<local:SpeedToReadableConverter x:Key="SpeedToReadableConverter"/>
-			<local:SortModeConverter x:Key="SortModeConverter"/>
 			<local:VersionStatusToColorConverter x:Key="VersionStatusToColorConverter"/>
 			<local:VersionStatusToTextConverter x:Key="VersionStatusToTextConverter"/>
 			<local:ModLevelToVisibilityConverter x:Key="ModLevelToVisibilityConverter"/>

@@ -261,22 +261,6 @@ internal sealed class SettingsService
 		}
 	}
 
-	public bool EnableSorting
-	{
-		get
-		{
-			GuardInitialized();
-			return _enableSorting;
-		}
-
-		set
-		{
-			GuardInitialized();
-			GuardReadonly();
-			_enableSorting = value;
-		}
-	}
-
 	/// <summary>
 	/// 启动时自动检查模组版本兼容性
 	/// </summary>
@@ -563,8 +547,6 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private bool _autoRemoveMissingMods;
 	[JsonInclude]
-	private bool _enableSorting;
-	[JsonInclude]
 	private bool _deployBottomToTop;
 	[JsonInclude]
 	private bool _autoCheckVersionOnStartup;
@@ -835,7 +817,6 @@ internal sealed class SettingsService
 			UseSymbolicLinks = _useSymbolicLinks,
 			DeleteToRecycleBin = _deleteToRecycleBin,
 			AutoRemoveMissingMods = _autoRemoveMissingMods,
-			EnableSorting = _enableSorting,
 			DeployBottomToTop = _deployBottomToTop,
 			AutoCheckVersionOnStartup = _autoCheckVersionOnStartup,
 			EnableBatchRepair = _enableBatchRepair,
@@ -936,8 +917,6 @@ internal sealed class SettingsService
 			_deleteToRecycleBin = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(AutoRemoveMissingMods), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_autoRemoveMissingMods = prop.GetBoolean();
-		if (root.TryGetProperty(nameof(EnableSorting), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
-			_enableSorting = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(DeployBottomToTop), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_deployBottomToTop = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(UseDeploymentOrder), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -1143,7 +1122,6 @@ internal sealed class SettingsService
 		_useSymbolicLinks = false;
 		_autoRemoveMissingMods = false;
 		_deleteToRecycleBin = true;
-		_enableSorting = false;
 		_autoCheckVersionOnStartup = false;
 		_enableBatchRepair = false;
 		_repairDisclaimerAccepted = false;

@@ -629,36 +629,6 @@
 					</Button>
 				</Grid>
 
-				<!-- Sort Dropdown -->
-				<StackPanel Grid.Row="0" Grid.Column="1"
-							Orientation="Horizontal"
-							Visibility="{Binding IsSortingEnabled, Converter={StaticResource BoolToVisibilityConverter}}">
-					<Border Style="{StaticResource FluentDivider}" Margin="8 0"/>
-					<TextBlock Text="&#xE8CB;"
-							   FontFamily="Segoe Fluent Icons"
-							   FontSize="16"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   VerticalAlignment="Center"
-							   Margin="0 0 8 0"/>
-					<ComboBox Width="120"
-							  ItemsSource="{Binding SortModes}"
-							  SelectedItem="{Binding CurrentSortMode, Mode=TwoWay}">
-						<ComboBox.ItemTemplate>
-							<DataTemplate>
-								<TextBlock Foreground="{StaticResource NeutralForegroundBrush}">
-									<TextBlock.Text>
-										<Binding FallbackValue="默认顺序">
-											<Binding.Converter>
-												<local:SortModeConverter/>
-											</Binding.Converter>
-										</Binding>
-									</TextBlock.Text>
-								</TextBlock>
-							</DataTemplate>
-						</ComboBox.ItemTemplate>
-					</ComboBox>
-				</StackPanel>
-
 				<!-- Batch Action Buttons (第2行，有选中项时显示) -->
 				<StackPanel Grid.Row="1"
 							Grid.Column="0"

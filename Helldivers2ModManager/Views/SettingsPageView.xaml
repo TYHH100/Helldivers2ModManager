@@ -435,50 +435,6 @@
                             </StackPanel>
                                 </Border>
 
-                        <!-- 跳过列表（开发者选项） -->
-                        <Border Style="{StaticResource FluentSettingsCard}">
-                            <StackPanel>
-                                <TextBlock Text="{loc:Loc SettingsPage.SkipList}"
-                                           Style="{StaticResource FluentSubSectionHeader}"
-                                           Margin="0"/>
-                                <TextBlock Text="{loc:Loc SettingsPage.SkipListDesc}"
-                                           Style="{StaticResource FluentBodyText}"
-                                           Margin="0 0 0 12"/>
-                                <ListBox Width="400"
-                                         MinHeight="100"
-                                         MaxHeight="200"
-                                         ItemsSource="{Binding SkipList}"
-                                         HorizontalAlignment="Left"
-                                         SelectedIndex="{Binding SelectedSkip}">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type sys:String}">
-                                            <TextBlock Text="{Binding}"
-                                                       FontFamily="Consolas"
-                                                       FontSize="13"
-                                                       Foreground="{StaticResource NeutralForegroundBrush}"/>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
-                                    <Button Command="{Binding AddSkipCommand}"
-                                            Style="{StaticResource FluentSecondaryButton}"
-                                            Padding="12 6">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-                                            <TextBlock Text="{loc:Loc SettingsPage.Add}" Margin="8 0 0 0" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Command="{Binding RemoveSkipCommand}"
-                                            Style="{StaticResource FluentDangerButton}"
-                                            Padding="12 6">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
-                                            <TextBlock Text="{loc:Loc Common.Delete}" Margin="8 0 0 0" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Button>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
                     </StackPanel>
                 </Grid>
 
@@ -764,34 +720,6 @@
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"
                                                Text="{loc:Loc SettingsPage.EnableSeparators}"
-                                               FontSize="14"
-                                               Foreground="{StaticResource NeutralForegroundBrush}"
-                                               VerticalAlignment="Center"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- 排序 -->
-                        <Border Style="{StaticResource FluentSettingsCard}">
-                            <StackPanel>
-                                <TextBlock Text="{loc:Loc SettingsPage.Sorting}"
-                                           Style="{StaticResource FluentSubSectionHeader}"
-                                           Margin="0"/>
-                                <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
-                                    <Run Text="{loc:Loc SettingsPage.SortingDesc}"/>
-                                </TextBlock>
-                                <Grid Margin="0 8 0 0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <CheckBox Grid.Column="0"
-                                              Width="24"
-                                              Height="24"
-                                              IsChecked="{Binding EnableSorting}"
-                                              Margin="0 0 12 0"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{loc:Loc SettingsPage.EnableSorting}"
                                                FontSize="14"
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>

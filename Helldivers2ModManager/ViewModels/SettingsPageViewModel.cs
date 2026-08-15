@@ -126,8 +126,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
-	public ObservableCollection<string> SkipList => _settingsService.Initialized ? _settingsService.SkipList : [];
-
 	public ObservableCollection<string> OrganizationalFolderNames => _settingsService.Initialized ? _settingsService.OrganizationalFolderNames : [];
 
 	public bool CaseSensitiveSearch
@@ -171,17 +169,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		using var identity = WindowsIdentity.GetCurrent();
 		var principal = new WindowsPrincipal(identity);
 		return principal.IsInRole(WindowsBuiltInRole.Administrator);
-	}
-
-	public bool EnableSorting
-	{
-		get => _settingsService.Initialized ? _settingsService.EnableSorting : false;
-		set
-		{
-			OnPropertyChanging();
-			_settingsService.EnableSorting = value;
-			OnPropertyChanged();
-		}
 	}
 
 	public bool DeployBottomToTop
@@ -354,8 +341,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	private readonly ModService _modService;
 	private readonly LocalizationService _localizationService;
 	[ObservableProperty]
-	private int _selectedSkip = -1;
-	[ObservableProperty]
 	private int _selectedOrgFolder = -1;
 
 	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService, ModHashService modHashService, ModService modService, LocalizationService localizationService)
@@ -368,7 +353,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		_modService = modService;
 		_localizationService = localizationService;
 
-		SkipList.CollectionChanged += SkipList_CollectionChanged;
 		OrganizationalFolderNames.CollectionChanged += OrgFolderNames_CollectionChanged;
 
 		if (MessageBox.IsRegistered)
@@ -384,7 +368,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 	protected override void OnDispose()
 	{
-		SkipList.CollectionChanged -= SkipList_CollectionChanged;
 		OrganizationalFolderNames.CollectionChanged -= OrgFolderNames_CollectionChanged;
 		MessageBox.Registered -= OnMessageBoxRegistered;
 	}
@@ -431,8 +414,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 	protected override void OnPropertyChanged(PropertyChangedEventArgs e)
 	{
-		if (e.PropertyName == nameof(SelectedSkip))
-			RemoveSkipCommand.NotifyCanExecuteChanged();
 		if (e.PropertyName == nameof(SelectedOrgFolder))
 			RemoveOrgFolderCommand.NotifyCanExecuteChanged();
 
@@ -519,11 +500,9 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(StorageDir));
 		OnPropertyChanged(nameof(LogLevel));
 		OnPropertyChanged(nameof(Opacity));
-		OnPropertyChanged(nameof(SkipList));
 		OnPropertyChanged(nameof(OrganizationalFolderNames));
 		OnPropertyChanged(nameof(CaseSensitiveSearch));
 		OnPropertyChanged(nameof(UseSymbolicLinks));
-		OnPropertyChanged(nameof(EnableSorting));
 		OnPropertyChanged(nameof(DeployBottomToTop));
 		OnPropertyChanged(nameof(UseDeploymentOrder));
 		OnPropertyChanged(nameof(IsCustomOrderEnabled));
@@ -537,11 +516,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(NexusApiKey));
 		OnPropertyChanged(nameof(SelectedLanguageCode));
 		OnPropertyChanged(nameof(AvailableLanguages));
-	}
-
-	private void SkipList_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
-	{
-		RemoveSkipCommand.NotifyCanExecuteChanged();
 	}
 
 	private void OrgFolderNames_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -765,38 +739,6 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 
 		_logger.LogInformation("Hard purge complete");
-	}
-
-	[RelayCommand]
-	void AddSkip()
-	{
-		WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
-		{
-			Title = _localizationService["SettingsPage.AddSkipTitle"],
-			Message = _localizationService["SettingsPage.AddSkipMsg"],
-			MaxLength = 16,
-			Confirm = (str) =>
-			{
-				if (str.Length == 16)
-					SkipList.Add(str);
-				else
-					WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
-					{
-						Message = _localizationService["SettingsPage.AddSkipValidation"]
-                    });
-			}
-		});
-	}
-
-	bool CanRemoveSkip()
-	{
-		return SelectedSkip != -1;
-	}
-
-	[RelayCommand(CanExecute = nameof(CanRemoveSkip))]
-	void RemoveSkip()
-	{
-		SkipList.RemoveAt(SelectedSkip);
 	}
 
 	[RelayCommand]

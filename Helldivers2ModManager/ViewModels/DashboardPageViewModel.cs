@@ -53,7 +53,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private ObservableCollection<ModViewModel> _mods;
     private ObservableCollection<object> _orderedItems;
     private readonly SearchFilterService _searchFilterService;
-    private readonly SortService _sortService;
     private readonly VersionCheckViewModel _versionCheckVm;
     private readonly LocalizationService _localizationService;
     private readonly BackgroundTaskService _backgroundTaskService;
@@ -67,9 +66,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     [ObservableProperty]
     private bool _initialized = false;
 
-    [ObservableProperty]
-    private SortMode _currentSortMode = SortMode.Default;
-
     /// <summary>
     /// 是否有选中的 Mod（用于控制批量操作按钮的可见性）
     /// </summary>
@@ -79,11 +75,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// 选中数量文本（如 "已选 2 项"）
     /// </summary>
     public string SelectionCountText => _mods is null ? "" : $"{_localizationService["DashboardPage.SelectedCountPrefix"]}{_modGroupService.FilterModViewModels(_mods).Count(static vm => vm.IsSelected)}{_localizationService["DashboardPage.SelectedCountSuffix"]}";
-
-    /// <summary>
-    /// 排序功能是否在设置中启用
-    /// </summary>
-    public bool IsSortingEnabled => _sortService.IsSortingEnabled;
 
     /// <summary>
     /// 自定义部署顺序功能是否在设置中启用
@@ -131,8 +122,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private string? _appliedConflictCacheKey;
     private readonly Dictionary<string, ModConflictAnalysisResult> _conflictCache = new(StringComparer.Ordinal);
 
-    public IEnumerable<SortMode> SortModes { get; } = [SortMode.Default, SortMode.NameAsc, SortMode.NameDesc, SortMode.EnabledFirst, SortMode.DisabledFirst];
-
     public DashboardPageViewModel(
         ILogger<DashboardPageViewModel> logger,
         IServiceProvider provider,
@@ -145,7 +134,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         VersionCheckRepository versionCheckRepository,
         ModHashService modHashService,
         SearchFilterService searchFilterService,
-        SortService sortService,
         VersionCheckViewModel versionCheckVm,
         LocalizationService localizationService,
         BackgroundTaskService backgroundTaskService,
@@ -166,7 +154,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _versionCheckRepository = versionCheckRepository;
         _modHashService = modHashService;
         _searchFilterService = searchFilterService;
-        _sortService = sortService;
         _versionCheckVm = versionCheckVm;
         _versionCheckVm.PropertyChanged += VersionCheckVm_PropertyChanged;
         _localizationService = localizationService;
@@ -324,13 +311,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         // 搜索过滤
         filteredMods = _searchFilterService.ApplySearchFilter(filteredMods, SearchText);
 
-        // 排序
-        bool hasActiveSort = _sortService.IsActiveSort(CurrentSortMode);
-        if (hasActiveSort)
-            filteredMods = _sortService.ApplySort(filteredMods, CurrentSortMode);
-
-        // 无任何筛选/排序时使用完整的_orderedItems（分隔符可见）
-        if (IsSearchEmpty && !hasActiveSort)
+        // 无搜索时使用完整的_orderedItems（分隔符可见）
+        if (IsSearchEmpty)
         {
             // 重置 Mods 指向 _orderedItems，因为 else 分支可能已将 Mods 设为新的数组，
             // 导致 RebuildOrderedItems 修改 _orderedItems 后 UI 读取的仍是旧数组
@@ -339,19 +321,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
         else
         {
-            // 有筛选/排序时只显示过滤后的模组列表（不显示分隔符）
+            // 有搜索时只显示过滤后的模组列表（不显示分隔符）
             // 此时 Mods 是只读的，拖拽不可用
             Mods = filteredMods.ToArray();
             OnPropertyChanged(nameof(Mods));
         }
-    }
-
-    /// <summary>
-    /// 排序方式变更时刷新列表
-    /// </summary>
-    partial void OnCurrentSortModeChanged(SortMode value)
-    {
-        UpdateView();
     }
 
     private IEnumerable<ModData> GetSelectedModData()
