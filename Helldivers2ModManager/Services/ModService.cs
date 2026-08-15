@@ -18,7 +18,7 @@ namespace Helldivers2ModManager.Services;
 [RegisterService(ServiceLifetime.Singleton)]
 internal sealed partial class ModService
 {
-	private readonly struct PatchFileTriplet
+	internal readonly struct PatchFileTriplet
 	{
 		public FileInfo? Patch { get; init; }
 
@@ -1080,42 +1080,57 @@ internal sealed partial class ModService
 		var filesToUpdate = compareResult.ChangedFiles;
 		_logger.LogInformation("Updating {Count} changed/new files incrementally", filesToUpdate.Count);
 
-		for (int i = 0; i < filesToUpdate.Count; i++)
-		{
-			var relativePath = filesToUpdate[i];
-			var normalizedPath = relativePath.Replace('/', Path.DirectorySeparatorChar);
-			var sourcePath = Path.Combine(tmpDir.FullName, normalizedPath);
-			var destPath = Path.Combine(mod.Directory.FullName, normalizedPath);
-
-			// 确保目标目录存在
-			var destDir = Path.GetDirectoryName(destPath);
-			if (!string.IsNullOrEmpty(destDir) && !Directory.Exists(destDir))
-				Directory.CreateDirectory(destDir);
-
-			try
+		// 有界并行拷贝：文件多时显著缩短更新耗时（串行逐文件 await 会按文件数线性累加 IO 延迟）。
+		// Directory.CreateDirectory 幂等，并行创建目标目录安全；进度按完成数单调上报。
+		var updatedCount = 0;
+		await Parallel.ForEachAsync(
+			filesToUpdate,
+			new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4) },
+			(relativePath, _) =>
 			{
-				await Task.Run(() => File.Copy(sourcePath, destPath, true));
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Failed to copy file \"{Path}\"", relativePath);
-				tmpDir.Delete(true);
-				throw new IOException(_localizationService["ModService.FileUpdateError"].Replace("{path}", relativePath).Replace("{message}", ex.Message), ex);
-			}
+				var normalizedPath = relativePath.Replace('/', Path.DirectorySeparatorChar);
+				var sourcePath = Path.Combine(tmpDir.FullName, normalizedPath);
+				var destPath = Path.Combine(mod.Directory.FullName, normalizedPath);
 
-			// 报告更新进度
-			progress?.Report(new UpdateProgressInfo
-			{
-				Phase = UpdatePhase.Updating,
-				CurrentFile = relativePath,
-				ProcessedCount = i + 1,
-				TotalCount = filesToUpdate.Count,
-				NeedUpdateCount = filesToUpdate.Count,
-				Message = _localizationService["ModService.UpdatingProgress"]
-					.Replace("{current}", (i + 1).ToString())
-					.Replace("{total}", filesToUpdate.Count.ToString())
+				// 确保目标目录存在
+				var destDir = Path.GetDirectoryName(destPath);
+				if (!string.IsNullOrEmpty(destDir) && !Directory.Exists(destDir))
+					Directory.CreateDirectory(destDir);
+
+				try
+				{
+					// body 已在线程池线程执行（Parallel.ForEachAsync），无需再包 Task.Run
+					File.Copy(sourcePath, destPath, true);
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "Failed to copy file \"{Path}\"", relativePath);
+					// 并行 worker 可能同时失败并竞争删除同一目录，忽略二次删除的竞争异常
+					try
+					{
+						tmpDir.Delete(true);
+					}
+					catch
+					{
+					}
+					throw new IOException(_localizationService["ModService.FileUpdateError"].Replace("{path}", relativePath).Replace("{message}", ex.Message), ex);
+				}
+
+				// 报告更新进度
+				var done = Interlocked.Increment(ref updatedCount);
+				progress?.Report(new UpdateProgressInfo
+				{
+					Phase = UpdatePhase.Updating,
+					CurrentFile = relativePath,
+					ProcessedCount = done,
+					TotalCount = filesToUpdate.Count,
+					NeedUpdateCount = filesToUpdate.Count,
+					Message = _localizationService["ModService.UpdatingProgress"]
+						.Replace("{current}", done.ToString())
+						.Replace("{total}", filesToUpdate.Count.ToString())
+				});
+				return ValueTask.CompletedTask;
 			});
-		}
 
 		// 清理临时目录
 		tmpDir.Delete(true);
@@ -1149,7 +1164,16 @@ internal sealed partial class ModService
 		await _modHashService.RecomputeForUpdatedModAsync(mod);
 	}
 
-	public async Task DeployAsync(IReadOnlyList<ModData> requestedMods)
+	/// <param name="reportStep">每个模组开始部署时上报模组名。</param>
+	/// <param name="reportStepDetail">复制期间上报当前文件进度（副标题）。</param>
+	/// <param name="reportStepCompleted">模组全部文件复制完成时上报（步骤 → ✓）。</param>
+	/// <param name="reportStepFailed">复制失败时上报（当前步骤 → ✗），随后重新抛出异常。</param>
+	public async Task DeployAsync(
+		IReadOnlyList<ModData> requestedMods,
+		Action<string>? reportStep = null,
+		Action<string>? reportStepDetail = null,
+		Action? reportStepCompleted = null,
+		Action? reportStepFailed = null)
 	{
 		GuardInitialized();
 
@@ -1170,6 +1194,10 @@ internal sealed partial class ModService
 		stageDir.Create();
 
 		var groups = new Dictionary<string, List<PatchFileTriplet>>();
+		// name → 各模组按部署顺序贡献的 triplet 区间；复制阶段按模组展开，
+		// 让"正在部署: 模组"步骤与实际复制的文件一一对应（占位文件语义不变）。
+		var perNameModRanges = new Dictionary<string, List<(ModData Mod, List<PatchFileTriplet> Triplets)>>(StringComparer.OrdinalIgnoreCase);
+		ModData? currentMod = null;
 
 		void AddFilesFromDir(DirectoryInfo dir)
 		{
@@ -1183,34 +1211,23 @@ internal sealed partial class ModService
 			foreach (var file in files)
 				_logger.LogDebug("Adding file \"{}\"", file.FullName);
 
-			var names = new HashSet<string>();
-			for (int i = 0; i < files.Length; i++)
-				names.Add(files[i].Name[0..16]);
-
-			foreach (var name in names)
+			// 单遍分组（O(N)）：旧实现对每个 name×index 做三次全列表 FirstOrDefault +
+			// 动态正则编译（O(N²)），大目录部署时明显变慢；语义完全一致：
+			// - names / indexes 仍按原 HashSet 构建与迭代（indexes 是所有文件的 index 并集）；
+			// - 某 name 缺少某 index 的文件时仍产生空 triplet，部署时以空文件占位。
+			var grouped = GroupPatchFiles(files);
+			foreach (var (name, list) in grouped)
 			{
-				var indexes = new HashSet<int>();
-				foreach (var file in files)
-				{
-					var match = GetPatchIndexRegex().Match(file.Name);
-					indexes.Add(int.Parse(match.Groups[1].ValueSpan));
-				}
+				if (!groups.ContainsKey(name))
+					groups.Add(name, []);
+				groups[name].AddRange(list);
 
-				foreach (var index in indexes)
+				if (!perNameModRanges.TryGetValue(name, out var ranges))
 				{
-					FileInfo? patchFile = files.FirstOrDefault(f => Regex.IsMatch(f.Name, @$"^{name}\.patch_{index}$"));
-					FileInfo? gpuFile = files.FirstOrDefault(f => Regex.IsMatch(f.Name, @$"^{name}\.patch_{index}.gpu_resources$"));
-					FileInfo? streamFile = files.FirstOrDefault(f => Regex.IsMatch(f.Name, @$"^{name}\.patch_{index}.stream$"));
-
-					if (!groups.ContainsKey(name))
-						groups.Add(name, []);
-					groups[name].Add(new PatchFileTriplet
-					{
-						Patch = patchFile,
-						GpuResources = gpuFile,
-						Stream = streamFile
-					});
+					ranges = [];
+					perNameModRanges.Add(name, ranges);
 				}
+				ranges.Add((currentMod!, list));
 			}
 		}
 
@@ -1218,6 +1235,7 @@ internal sealed partial class ModService
 		foreach (var mod in requestedMods)
 		{
 			_logger.LogInformation("Working on \"{}\"", mod.Manifest.Name);
+			currentMod = mod;
 
 			switch (mod.Manifest.Version)
 			{
@@ -1319,53 +1337,219 @@ internal sealed partial class ModService
 		}
 
 		_logger.LogInformation("Copying files");
-		var copyTasks = new List<Task>();
-		foreach (var (name, list) in groups)
+
+		// 按模组顺序展开并复制（步骤与文件对应）：
+		// - 模组步骤：开始 → 顶部插入"正在部署: 模组名"，复制完成 → ✓；
+		// - 复制期间副标题实时更新：小文件并行 File.Copy 并报计数，
+		//   大文件（≥ 阈值）逐个分块复制并报百分比——大文件是耗时大头，
+		//   牺牲少量吞吐换来可见进度，避免步骤长时间无变化；
+		// - 占位文件（空 triplet）语义与原实现一致。
+		var copyParallelOptions = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4) };
+		var useSymbolicLinks = _settingsService.UseSymbolicLinks;
+
+		try
 		{
-			int offset = 0;
-			if (_settingsService.SkipList.Contains(name))
-				offset = 1;
-
-			for (int i = 0; i < list.Count; i++)
+			foreach (var mod in requestedMods)
 			{
-				var triplet = list[i];
-				var index = i + offset;
+			reportStep?.Invoke(mod.Manifest.Name);
 
-				var newPatchPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}");
-				if (triplet.Patch is not null)
+			var copyItems = new List<(string SourcePath, string DestinationPath, long Size)>();
+			var placeholderPaths = new List<string>();
+			foreach (var (name, ranges) in perNameModRanges)
+			{
+				int offset = _settingsService.SkipList.Contains(name) ? 1 : 0;
+				int position = 0;
+				foreach (var (rangeMod, triplets) in ranges)
 				{
-					copyTasks.Add(CopyFileAsync(triplet.Patch.FullName, newPatchPath));
-				}
-				else
-				{
-					using var fs = new FileStream(newPatchPath, FileMode.Create);
-				}
+					// 同一模组可能贡献多个区间（多个 option 含同名文件），全部展开；
+					// position 随所有模组的区间累积，index 与原 groups 合并展开完全一致
+					if (ReferenceEquals(rangeMod, mod))
+					{
+						for (int i = 0; i < triplets.Count; i++)
+						{
+							var triplet = triplets[i];
+							var index = position + i + offset;
 
-				var newGpuResourcesPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}.gpu_resources");
-				if (triplet.GpuResources is not null)
-				{
-					copyTasks.Add(CopyFileAsync(triplet.GpuResources.FullName, newGpuResourcesPath));
-				}
-				else
-				{
-					using var fs = new FileStream(newGpuResourcesPath, FileMode.Create);
-				}
+							var newPatchPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}");
+							if (triplet.Patch is not null)
+								copyItems.Add((triplet.Patch.FullName, newPatchPath, triplet.Patch.Length));
+							else
+								placeholderPaths.Add(newPatchPath);
 
-				var newStreamPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}.stream");
-				if (triplet.Stream is not null)
-				{
-					copyTasks.Add(CopyFileAsync(triplet.Stream.FullName, newStreamPath));
-				}
-				else
-				{
-					using var fs = new FileStream(newStreamPath, FileMode.Create);
+							var newGpuResourcesPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}.gpu_resources");
+							if (triplet.GpuResources is not null)
+								copyItems.Add((triplet.GpuResources.FullName, newGpuResourcesPath, triplet.GpuResources.Length));
+							else
+								placeholderPaths.Add(newGpuResourcesPath);
+
+							var newStreamPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}.stream");
+							if (triplet.Stream is not null)
+								copyItems.Add((triplet.Stream.FullName, newStreamPath, triplet.Stream.Length));
+							else
+								placeholderPaths.Add(newStreamPath);
+						}
+					}
+					position += triplets.Count;
 				}
 			}
+
+			// 缺失 triplet 的文件以 0 字节占位（原语义）
+			foreach (var path in placeholderPaths)
+			{
+				using var fs = new FileStream(path, FileMode.Create);
+			}
+
+			if (copyItems.Count == 0)
+			{
+				reportStepCompleted?.Invoke();
+				continue;
+			}
+
+			var largeItems = copyItems
+				.Where(static item => item.Size >= LargeFileCopyThreshold)
+				.OrderByDescending(static item => item.Size)
+				.ToArray();
+			var smallItems = copyItems.Where(static item => item.Size < LargeFileCopyThreshold).ToArray();
+			var done = 0;
+			var total = copyItems.Count;
+
+			// 副标题按模式区分：符号链接部署是"创建符号链接"（O(1)），不是复制文件
+			var fileProgressKey = useSymbolicLinks ? "ModService.LinkingFileProgress" : "ModService.CopyingFileProgress";
+
+			// 小文件并行复制（内核态 File.Copy / 符号链接）
+			await Parallel.ForEachAsync(smallItems, copyParallelOptions, (item, _) =>
+			{
+				CopyFile(item.SourcePath, item.DestinationPath, useSymbolicLinks);
+
+				var d = Interlocked.Increment(ref done);
+				reportStepDetail?.Invoke(_localizationService[fileProgressKey]
+					.Replace("{done}", d.ToString())
+					.Replace("{total}", total.ToString())
+					.Replace("{name}", Path.GetFileName(item.SourcePath)));
+				return ValueTask.CompletedTask;
+			});
+
+			// 大文件逐个串行复制（避免并行争抢磁盘带宽），分块上报百分比
+			foreach (var item in largeItems)
+			{
+				if (useSymbolicLinks)
+				{
+					CopyFile(item.SourcePath, item.DestinationPath, true);
+					var d = Interlocked.Increment(ref done);
+					reportStepDetail?.Invoke(_localizationService[fileProgressKey]
+						.Replace("{done}", d.ToString())
+						.Replace("{total}", total.ToString())
+						.Replace("{name}", Path.GetFileName(item.SourcePath)));
+				}
+				else
+				{
+					var name = Path.GetFileName(item.SourcePath);
+					await CopyLargeFileWithProgressAsync(item.SourcePath, item.DestinationPath, percent =>
+						reportStepDetail?.Invoke(_localizationService["ModService.CopyingLargeFile"]
+							.Replace("{name}", name)
+							.Replace("{percent}", percent.ToString("F0"))));
+					Interlocked.Increment(ref done);
+				}
+			}
+
+			reportStepCompleted?.Invoke();
+			}
+		}
+		catch
+		{
+			// 复制失败：把当前（顶部）步骤标记为失败，便于在弹窗中定位出问题的模组；随后重新抛出
+			reportStepFailed?.Invoke();
+			throw;
 		}
 
-		await Task.WhenAll(copyTasks);
-
 		_logger.LogInformation("Deployment success");
+	}
+
+	/// <summary>部署复制时按此大小区分大文件：大文件分块复制并上报百分比，小文件内核态复制。</summary>
+	private const long LargeFileCopyThreshold = 32L * 1024 * 1024;
+
+	/// <summary>
+	/// 大文件分块复制并周期性上报进度（0..1）。8MB 缓冲 + 异步 IO，每 8MB 上报一次；
+	/// 只用于 ≥ 阈值的文件，小文件仍走内核态 <see cref="File.Copy"/>。
+	/// </summary>
+	private static async Task CopyLargeFileWithProgressAsync(string sourcePath, string destinationPath, Action<double> reportProgress)
+	{
+		const int bufferSize = 8 * 1024 * 1024;
+		await using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
+		await using var destination = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+		var buffer = GC.AllocateUninitializedArray<byte>(bufferSize);
+		var fileLength = source.Length;
+		long totalRead = 0;
+		long lastReport = 0;
+		while (true)
+		{
+			var read = await source.ReadAsync(buffer);
+			if (read == 0)
+				break;
+			await destination.WriteAsync(buffer.AsMemory(0, read));
+			totalRead += read;
+			if (totalRead - lastReport >= bufferSize)
+			{
+				lastReport = totalRead;
+				reportProgress((double)totalRead / fileLength);
+			}
+		}
+		reportProgress(1.0);
+	}
+
+	/// <summary>
+	/// 把目录内的补丁文件按 name（16 位十六进制前缀）分组为 index → 三元组列表。
+	/// 纯函数（只读文件名，不访问磁盘），部署暂存与单元测试共用同一分组语义：
+	/// - names / indexes 仍按原 HashSet 构建与迭代（indexes 是所有文件的 index 并集）；
+	/// - 某 name 缺少某 index 的文件时仍产生空 triplet，部署时以空文件占位。
+	/// </summary>
+	internal static Dictionary<string, List<PatchFileTriplet>> GroupPatchFiles(IReadOnlyList<FileInfo> files)
+	{
+		var byName = new Dictionary<string, Dictionary<int, PatchFileTriplet>>(StringComparer.OrdinalIgnoreCase);
+		var names = new HashSet<string>();
+		var indexes = new HashSet<int>();
+		foreach (var file in files)
+		{
+			var match = GetPatchIndexRegex().Match(file.Name);
+			if (!match.Success)
+				continue;
+			var name = file.Name[0..16];
+			var index = int.Parse(match.Groups[1].ValueSpan);
+			names.Add(name);
+			indexes.Add(index);
+
+			if (!byName.TryGetValue(name, out var byIndex))
+			{
+				byIndex = [];
+				byName.Add(name, byIndex);
+			}
+
+			var triplet = byIndex.TryGetValue(index, out var existing)
+				? existing
+				: new PatchFileTriplet();
+			if (file.Name.EndsWith(".gpu_resources", StringComparison.OrdinalIgnoreCase))
+				triplet = triplet with { GpuResources = file };
+			else if (file.Name.EndsWith(".stream", StringComparison.OrdinalIgnoreCase))
+				triplet = triplet with { Stream = file };
+			else
+				triplet = triplet with { Patch = file };
+			byIndex[index] = triplet;
+		}
+
+		var result = new Dictionary<string, List<PatchFileTriplet>>(StringComparer.OrdinalIgnoreCase);
+		foreach (var name in names)
+		{
+			var byIndex = byName[name];
+			var list = new List<PatchFileTriplet>();
+			foreach (var index in indexes)
+			{
+				list.Add(byIndex.TryGetValue(index, out var triplet)
+					? triplet
+					: new PatchFileTriplet());
+			}
+			result[name] = list;
+		}
+		return result;
 	}
 
 	/// <summary>
@@ -1451,24 +1635,25 @@ internal sealed partial class ModService
 	internal static bool IsMainPatchFileName(string fileName) =>
 		GetMainPatchFileRegex().IsMatch(fileName);
 
-	private async Task CopyFileAsync(string sourcePath, string destinationPath)
+	/// <summary>
+	/// 部署用单文件复制（在 Parallel.ForEachAsync 的线程池线程上执行）。
+	/// 符号链接开启时创建符号链接（O(1)），否则用内核态 File.Copy（CopyFile2）。
+	/// </summary>
+	private void CopyFile(string sourcePath, string destinationPath, bool useSymbolicLinks)
 	{
 		GuardInitialized();
 		
-		if (_settingsService.UseSymbolicLinks)
+		if (useSymbolicLinks)
 		{
 			if (File.Exists(destinationPath))
 			{
 				File.Delete(destinationPath);
 			}
 			File.CreateSymbolicLink(destinationPath, sourcePath);
-			await Task.CompletedTask;
 		}
 		else
 		{
-			using var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
-			using var destinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
-			await sourceStream.CopyToAsync(destinationStream);
+			File.Copy(sourcePath, destinationPath, true);
 		}
 	}
 
@@ -1483,19 +1668,17 @@ internal sealed partial class ModService
 		var files = dataDir.GetFiles("*.patch_*");
 		_logger.LogDebug("Found {} patch files", files.Length);
 
-		var tasks = new List<Task>();
-		foreach (var file in files)
-		{
-			var task = Task.Run(() =>
+		// 有界并行删除：原实现按文件数无界 Task.Run，文件较多时线程池被占满
+		await Parallel.ForEachAsync(
+			files,
+			new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4) },
+			(file, _) =>
 			{
 				_logger.LogTrace("Attempting to delete \"{}\"", file.Name);
 				file.Delete();
 				_logger.LogTrace("Deleted \"{}\"", file.Name);
+				return ValueTask.CompletedTask;
 			});
-			tasks.Add(task);
-		}
-
-		await Task.WhenAll(tasks);
 
 		_logger.LogInformation("Purge complete");
 	}

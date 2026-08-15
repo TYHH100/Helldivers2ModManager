@@ -66,7 +66,7 @@ internal sealed class LocExtension : MarkupExtension
 	/// 在运行时从 App.Host 获取本地化服务实例（缓存）。
 	/// </summary>
 	private static LocalizationService? s_service;
-	private static readonly object s_lock = new();
+	private static readonly Lock s_lock = new();
 
 	private static LocalizationService? GetLocalizationService()
 	{

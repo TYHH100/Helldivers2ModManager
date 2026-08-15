@@ -21,7 +21,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
 {
 	private readonly FileStream _fileStream;
 	private readonly StreamWriter _stream;
-	private readonly object _lock = new();
+	private readonly Lock _lock = new();
 
 	public FileLoggerProvider(string name)
 	{
@@ -43,11 +43,11 @@ internal sealed class FileLoggerProvider : ILoggerProvider
 	}
 }
 
-internal sealed class FileLogger(string name, StreamWriter stream, object lockObj) : ILogger
+internal sealed class FileLogger(string name, StreamWriter stream, Lock lockObj) : ILogger
 {
 	private readonly string _name = name;
 	private readonly StreamWriter _stream = stream;
-	private readonly object _lock = lockObj;
+	private readonly Lock _lock = lockObj;
 
 	public IDisposable? BeginScope<TState>(TState state) where TState : notnull
 	{

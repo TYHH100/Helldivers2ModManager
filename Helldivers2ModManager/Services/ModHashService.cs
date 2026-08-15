@@ -336,77 +336,85 @@ internal sealed class ModHashService
 		var migratedCount = 0;
 		var failedCount = 0;
 
-		foreach (var mod in modList)
-		{
-			// 每处理一个模组，通知 UI 更新进度
-			MigrationProgressChanged?.Invoke(new HashMigrationProgress
+		// 按 MaxConcurrentComputations（2）有界并行处理模组：串行 foreach 会让
+		// _computationSemaphore 的并发意图完全落空，每个模组的哈希计算（含大文件
+		// SHA-256）都会独占整条链路。并行后两个模组同时计算，进度在完成时
+		// 汇总上报（单调递增），单个模组失败不影响其他模组继续。
+		await Parallel.ForEachAsync(
+			modList,
+			new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentComputations },
+			async (mod, _) =>
 			{
-				IsMigrating = true,
-				CurrentModName = mod.Manifest.Name,
-				CompletedCount = migratedCount + failedCount,
-				TotalCount = modList.Count,
-				FailedCount = failedCount,
-				Message = _localizationService["ModHashService.FingerprintProgress"]
-					.Replace("{current}", (migratedCount + failedCount + 1).ToString())
-					.Replace("{total}", modList.Count.ToString())
-					.Replace("{name}", mod.Manifest.Name)
-			});
-			_backgroundTaskService.Update(
-				backgroundTask,
-				_localizationService["ModHashService.FingerprintProgress"]
-					.Replace("{current}", (migratedCount + failedCount + 1).ToString())
-					.Replace("{total}", modList.Count.ToString())
-					.Replace("{name}", mod.Manifest.Name),
-				(double)(migratedCount + failedCount) / modList.Count,
-				false);
+				// 注册到 _activeComputations，确保 DeleteForModAsync 能取消迁移任务后再删除目录
+				// 避免迁移读取大文件时因文件被占用而导致删除失败。
+				// 注意：直接捕获 cancellation 引用而不是之后从字典重读——删除流程会先移除
+				// 字典条目再取消，重读可能在条目已移除后执行（KeyNotFoundException）。
+				var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+				var cancellation = new CancellationTokenSource();
+				_activeComputations[mod.Manifest.Guid] = (tcs.Task, cancellation);
 
-			// 注册到 _activeComputations，确保 DeleteForModAsync 能取消迁移任务后再删除目录
-			// 避免迁移读取大文件时因文件被占用而导致删除失败
-			var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-			_activeComputations[mod.Manifest.Guid] = (tcs.Task, new CancellationTokenSource());
-
-			try
-			{
-				await _computationSemaphore.WaitAsync();
 				try
 				{
-					_logger.LogDebug("Migrating hashes for mod \"{Name}\" ({Index}/{Total})",
-						mod.Manifest.Name, migratedCount + failedCount + 1, modList.Count);
+					await _computationSemaphore.WaitAsync();
+					try
+					{
+						_logger.LogDebug("Migrating hashes for mod \"{Name}\"", mod.Manifest.Name);
 
-					var token = _activeComputations[mod.Manifest.Guid].Cancellation.Token;
-					await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
-						mod.Directory,
-						mod.Manifest.Guid,
-						_fileHashRepository,
-						storageDir,
-						cancellationToken: token);
+						await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
+							mod.Directory,
+							mod.Manifest.Guid,
+							_fileHashRepository,
+							storageDir,
+							cancellationToken: cancellation.Token);
 
-					migratedCount++;
-				}
-				catch (OperationCanceledException)
-				{
-					_logger.LogInformation("Hash migration cancelled for mod \"{Name}\"", mod.Manifest.Name);
-				}
-				catch (Exception ex)
-				{
-					failedCount++;
-					_logger.LogError(ex, "Failed to migrate hashes for mod \"{Name}\" ({Guid}), continuing with remaining mods",
-						mod.Manifest.Name, mod.Manifest.Guid);
+						Interlocked.Increment(ref migratedCount);
+					}
+					catch (OperationCanceledException)
+					{
+						_logger.LogInformation("Hash migration cancelled for mod \"{Name}\"", mod.Manifest.Name);
+					}
+					catch (Exception ex)
+					{
+						Interlocked.Increment(ref failedCount);
+						_logger.LogError(ex, "Failed to migrate hashes for mod \"{Name}\" ({Guid}), continuing with remaining mods",
+							mod.Manifest.Name, mod.Manifest.Guid);
+					}
+					finally
+					{
+						_computationSemaphore.Release();
+					}
 				}
 				finally
 				{
-					_computationSemaphore.Release();
+					// 通知等待者：该模组的哈希计算已全部完成，文件句柄已释放
+					tcs.TrySetResult();
+					if (_activeComputations.TryRemove(mod.Manifest.Guid, out var entry))
+						entry.Cancellation.Dispose();
 				}
-			}
-			finally
-			{
-				// 通知等待者：该模组的哈希计算已全部完成，文件句柄已释放
-				tcs.TrySetResult();
-				if (_activeComputations.TryRemove(mod.Manifest.Guid, out var entry))
-					entry.Cancellation.Dispose();
-				_backgroundTaskService.Update(backgroundTask, progress: (double)(migratedCount + failedCount) / modList.Count, isIndeterminate: false);
-			}
-		}
+
+				// 汇总进度（int 读原子，仅用于 UI 展示，允许轻微滞后）
+				var doneCount = Volatile.Read(ref migratedCount) + Volatile.Read(ref failedCount);
+				MigrationProgressChanged?.Invoke(new HashMigrationProgress
+				{
+					IsMigrating = true,
+					CurrentModName = mod.Manifest.Name,
+					CompletedCount = doneCount,
+					TotalCount = modList.Count,
+					FailedCount = Volatile.Read(ref failedCount),
+					Message = _localizationService["ModHashService.FingerprintProgress"]
+						.Replace("{current}", doneCount.ToString())
+						.Replace("{total}", modList.Count.ToString())
+						.Replace("{name}", mod.Manifest.Name)
+				});
+				_backgroundTaskService.Update(
+					backgroundTask,
+					_localizationService["ModHashService.FingerprintProgress"]
+						.Replace("{current}", doneCount.ToString())
+						.Replace("{total}", modList.Count.ToString())
+						.Replace("{name}", mod.Manifest.Name),
+					(double)doneCount / modList.Count,
+					false);
+			});
 
 		// 迁移完成后更新版本号
 		SetMigrationVersion(storageDir, HashMigrationVersion);

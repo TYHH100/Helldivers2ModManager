@@ -82,7 +82,7 @@ internal sealed class ModGroupService
 		if (SelectedGroup.IsDefault)
 			return mods;
 
-		var members = SelectedGroup.ModGuids.ToHashSet();
+		var members = GetSelectedMemberSet();
 		return mods.Where(mod => members.Contains(mod.Manifest.Guid));
 	}
 
@@ -93,9 +93,30 @@ internal sealed class ModGroupService
 		if (SelectedGroup.IsDefault)
 			return mods;
 
-		var members = SelectedGroup.ModGuids.ToHashSet();
+		var members = GetSelectedMemberSet();
 		return mods.Where(mod => members.Contains(mod.Guid));
 	}
+
+	/// <summary>
+	/// 当前选中分组成员集合缓存。Dashboard 的选择统计/过滤每次操作都会多次调用
+	/// FilterMods/FilterModViewModels，每次重建 HashSet 是重复开销；
+	/// 分组切换（groupId 变化）自动重建，ModGuids 修改点显式失效。
+	/// </summary>
+	private HashSet<Guid>? _selectedMemberCache;
+	private Guid _selectedMemberCacheGroupId;
+
+	private HashSet<Guid> GetSelectedMemberSet()
+	{
+		var groupId = SelectedGroup.Id;
+		if (_selectedMemberCache is null || _selectedMemberCacheGroupId != groupId)
+		{
+			_selectedMemberCache = SelectedGroup.ModGuids.ToHashSet();
+			_selectedMemberCacheGroupId = groupId;
+		}
+		return _selectedMemberCache;
+	}
+
+	private void InvalidateSelectedMemberCache() => _selectedMemberCache = null;
 
 	public async Task SelectGroupAsync(Guid groupId, IEnumerable<ModData> currentMods)
 	{
@@ -173,6 +194,7 @@ internal sealed class ModGroupService
 		if (!added)
 			return;
 
+		InvalidateSelectedMemberCache();
 		await SaveGroupsAsync();
 		await SaveGroupStateAsync(group.Id);
 		SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
@@ -204,6 +226,7 @@ internal sealed class ModGroupService
 		if (!added)
 			return;
 
+		InvalidateSelectedMemberCache();
 		await SaveGroupsAsync();
 		await SaveGroupStateAsync(group.Id);
 		SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
@@ -231,6 +254,7 @@ internal sealed class ModGroupService
 		if (!removed)
 			return;
 
+		InvalidateSelectedMemberCache();
 		await SaveGroupsAsync();
 		await SaveGroupStateAsync(group.Id);
 		SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
@@ -263,7 +287,10 @@ internal sealed class ModGroupService
 		}
 
 		if (groupsChanged)
+		{
+			InvalidateSelectedMemberCache();
 			await SaveGroupsAsync();
+		}
 		await _repository.DeleteStatesByGuidsAsync(_storageDirectory, guidSet);
 		SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
 	}
@@ -432,6 +459,8 @@ internal sealed class ModGroupService
 				group.ModGuids.RemoveAt(i);
 			}
 		}
+		if (missingGuids.Count > 0)
+			InvalidateSelectedMemberCache();
 	}
 
 	private bool KeepExistingState(GroupedEnabledData state, HashSet<Guid> existingGuids, HashSet<Guid> missingGuids)

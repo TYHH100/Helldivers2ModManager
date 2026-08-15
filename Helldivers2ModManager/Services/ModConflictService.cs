@@ -1,6 +1,7 @@
 using Helldivers2ModManager.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -17,6 +18,12 @@ internal sealed class ModConflictService
     private readonly ILogger<ModConflictService> _logger;
     private readonly ModService _modService;
     private readonly VersionCheckService _versionCheckService;
+
+    /// <summary>
+    /// 首次冲突扫描（缓存未命中）按模组并行的最大并发数；
+    /// 补丁解析以磁盘 IO 为主，2-4 个并发即可显著缩短全量扫描耗时。
+    /// </summary>
+    private static readonly int MaxConflictScanParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4);
 
     public ModConflictService(
         ILogger<ModConflictService> logger,
@@ -60,57 +67,84 @@ internal sealed class ModConflictService
         IReadOnlyList<ModData> deploymentMods,
         CancellationToken cancellationToken = default)
     {
-        var resources = new Dictionary<long, List<ModConflictParticipant>>();
-        var scannedPatchCount = 0;
-        var scannedUnitCount = 0;
-        var scannedMods = 0;
-
+        // 先收集启用模组（部署顺序），再按模组有界并行解析补丁：
+        // 串行实现下缓存未命中时整个扫描被单模组 IO 拖慢，并行后结果仍按
+        // 部署顺序合并，participant 顺序与串行实现完全一致（确定性输出）。
+        var enabledMods = new List<(int DeploymentOrder, ModData Mod)>();
         for (var deploymentOrder = 0; deploymentOrder < deploymentMods.Count; deploymentOrder++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var mod = deploymentMods[deploymentOrder];
-            if (!mod.Enabled)
-                continue;
+            if (mod.Enabled)
+                enabledMods.Add((deploymentOrder, mod));
+        }
 
-            scannedMods++;
-            IReadOnlyList<FileInfo> patchFiles;
-            try
-            {
-                patchFiles = _modService.GetSelectedPatchFiles(mod);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Unable to enumerate selected patch files for mod {ModName}", mod.Manifest.Name);
-                continue;
-            }
+        var scannedMods = enabledMods.Count;
+        var scannedPatchCount = 0;
+        var scannedUnitCount = 0;
+        var perModParticipants = new ConcurrentDictionary<int, List<ModConflictParticipant>>();
 
-            foreach (var patchFile in patchFiles)
+        await Parallel.ForEachAsync(
+            enabledMods,
+            new ParallelOptions
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                scannedPatchCount++;
-
-                var units = await _versionCheckService.ExtractUnitVersionsFromPatchFileAsync(patchFile);
-                foreach (var unit in units)
+                MaxDegreeOfParallelism = MaxConflictScanParallelism,
+                CancellationToken = cancellationToken
+            },
+            async (entry, token) =>
+            {
+                var (deploymentOrder, mod) = entry;
+                IReadOnlyList<FileInfo> patchFiles;
+                try
                 {
-                    scannedUnitCount++;
-                    if (!resources.TryGetValue(unit.FileId, out var participants))
-                    {
-                        participants = [];
-                        resources.Add(unit.FileId, participants);
-                    }
-
-                    participants.Add(new ModConflictParticipant
-                    {
-                        ModGuid = mod.Manifest.Guid,
-                        ModName = mod.Manifest.Name,
-                        PatchFileName = unit.FileName,
-                        UnitId = unit.FileId,
-                        Version = unit.Version,
-                        DataSize = unit.DataSize,
-                        GpuSize = unit.GpuSize,
-                        DeploymentOrder = deploymentOrder,
-                    });
+                    patchFiles = _modService.GetSelectedPatchFiles(mod);
                 }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Unable to enumerate selected patch files for mod {ModName}", mod.Manifest.Name);
+                    return;
+                }
+
+                var participants = new List<ModConflictParticipant>();
+                foreach (var patchFile in patchFiles)
+                {
+                    token.ThrowIfCancellationRequested();
+                    Interlocked.Increment(ref scannedPatchCount);
+
+                    var units = await _versionCheckService.ExtractUnitVersionsFromPatchFileAsync(patchFile);
+                    foreach (var unit in units)
+                    {
+                        Interlocked.Increment(ref scannedUnitCount);
+                        participants.Add(new ModConflictParticipant
+                        {
+                            ModGuid = mod.Manifest.Guid,
+                            ModName = mod.Manifest.Name,
+                            PatchFileName = unit.FileName,
+                            UnitId = unit.FileId,
+                            Version = unit.Version,
+                            DataSize = unit.DataSize,
+                            GpuSize = unit.GpuSize,
+                            DeploymentOrder = deploymentOrder,
+                        });
+                    }
+                }
+                perModParticipants[deploymentOrder] = participants;
+            });
+
+        // 按部署顺序合并（保持原串行实现的 participant 顺序）
+        var resources = new Dictionary<long, List<ModConflictParticipant>>();
+        foreach (var entry in enabledMods)
+        {
+            if (!perModParticipants.TryGetValue(entry.DeploymentOrder, out var participants))
+                continue;
+            foreach (var participant in participants)
+            {
+                if (!resources.TryGetValue(participant.UnitId, out var list))
+                {
+                    list = [];
+                    resources.Add(participant.UnitId, list);
+                }
+                list.Add(participant);
             }
         }
 

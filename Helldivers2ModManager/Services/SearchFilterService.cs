@@ -41,8 +41,10 @@ internal sealed class SearchFilterService
         if (string.IsNullOrEmpty(tagName))
             return mods;
 
+        // OrdinalIgnoreCase：模组名/标签通常为 ASCII 或中文（无大小写规则），
+        // 序数比较远快于 InvariantCulture 的文化规则比较（搜索是防抖后的热路径）。
         return mods.Where(vm =>
-            vm.Tags.Any(t => t.Name.Contains(tagName, StringComparison.InvariantCultureIgnoreCase)));
+            vm.Tags.Any(t => t.Name.Contains(tagName, StringComparison.OrdinalIgnoreCase)));
     }
 
     private IEnumerable<ModViewModel> ApplyNameSearch(IEnumerable<ModViewModel> mods, string searchText)
@@ -50,8 +52,8 @@ internal sealed class SearchFilterService
         return mods.Where(vm =>
         {
             if (_settingsService.CaseSensitiveSearch)
-                return vm.Name.Contains(searchText, StringComparison.InvariantCulture);
-            return vm.Name.Contains(searchText, StringComparison.InvariantCultureIgnoreCase);
+                return vm.Name.Contains(searchText, StringComparison.Ordinal);
+            return vm.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase);
         });
     }
 }

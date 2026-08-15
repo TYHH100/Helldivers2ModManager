@@ -139,7 +139,7 @@ internal sealed class DatabaseService : IDisposable
 	private readonly ILogger<DatabaseService> _logger;
 	private string? _connectionString;
 	private bool _initialized;
-	private readonly object _initLock = new();
+	private readonly Lock _initLock = new();
 
 	public DatabaseService(ILogger<DatabaseService> logger)
 	{

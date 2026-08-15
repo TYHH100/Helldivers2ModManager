@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -51,14 +52,21 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 
 	/// <summary>
 	/// 本地化字符串字典（扁平化键值对）。
+	/// 语言切换时整体重建为冻结字典：FrozenDictionary 对固定只读表查找更快
+	/// （每次 UI 字符串解析都走这里，属于热路径）。
 	/// </summary>
-	private readonly Dictionary<string, string> _strings = new(StringComparer.OrdinalIgnoreCase);
+	private IReadOnlyDictionary<string, string> _strings = FrozenDictionary<string, string>.Empty;
 
 	/// <summary>
 	/// 每个 locale 对应的完整数据（用于切换时重新加载）。
 	/// key: locale code ("zh-CN"), value: 解析后的 locale 数据
 	/// </summary>
 	private readonly Dictionary<string, LocaleData> _localeCache = [];
+
+	/// <summary>
+	/// 保护 <see cref="_localeCache"/> 的锁（net9+ Lock 类型，比 Monitor 更快）。
+	/// </summary>
+	private readonly Lock _localeCacheGate = new();
 
 	/// <summary>
 	/// 语言文件元数据列表（仅扫描结果，strings 未解析）。
@@ -241,7 +249,7 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 	/// </summary>
 	private LocaleData? GetOrLoadLocale(string locale)
 	{
-		lock (_localeCache)
+		lock (_localeCacheGate)
 		{
 			if (_localeCache.TryGetValue(locale, out var cached))
 				return cached;
@@ -317,12 +325,15 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 			}
 		}
 
-		// 更新字符串字典
-		_strings.Clear();
-		foreach (var kvp in data.Strings)
-		{
-			_strings[kvp.Key] = kvp.Value;
-		}
+		// 更新字符串字典：整体重建为冻结字典（一次性成本，换取后续每次查找更快）。
+		// GroupBy 防御忽略大小写重复键（ToFrozenDictionary 遇重复键会抛异常，
+		// 原 Dictionary 赋值是静默覆盖）——组内取最后写入的值，语义与原实现一致。
+		_strings = data.Strings
+			.GroupBy(static kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+			.ToFrozenDictionary(
+				static group => group.Key,
+				static group => group.Last().Value,
+				StringComparer.OrdinalIgnoreCase);
 
 		_currentLanguage = targetLocale;
 		_currentLanguageName = data.LanguageName;

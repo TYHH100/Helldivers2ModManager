@@ -16,7 +16,7 @@ internal sealed class ProfileSaveCoordinator
 	private readonly ProfileService _profileService;
 	private readonly ModGroupService _modGroupService;
 	private readonly SettingsService _settingsService;
-	private readonly object _sync = new();
+	private readonly Lock _sync = new();
 
 	private long _nextSequence;
 	private long _lastQueuedSequence;

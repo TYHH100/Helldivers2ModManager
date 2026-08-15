@@ -49,8 +49,14 @@ internal static class FileHashUtils
         using var sha256 = SHA256.Create();
         using var stream = file.OpenRead();
         var hashBytes = await sha256.ComputeHashAsync(stream);
-        return Convert.ToHexString(hashBytes).ToLowerInvariant();
+        return Convert.ToHexStringLower(hashBytes);
     }
+
+    /// <summary>
+    /// 目录内并行计算 SHA-256 的最大并发数。哈希是 CPU + 磁盘 IO 混合负载，
+    /// 过高的并发会打满磁盘带宽而收益递减；与预览读取的并发策略保持一致（2-4）。
+    /// </summary>
+    private static readonly int MaxHashParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4);
 
     /// <summary>
     /// 计算目录中所有文件的 SHA-256 哈希值
@@ -62,7 +68,8 @@ internal static class FileHashUtils
     /// <exception cref="IOException">文件读取或哈希计算失败时抛出，包含失败文件路径信息</exception>
     public static async Task<Dictionary<string, string>> ComputeDirectoryHashesAsync(
         DirectoryInfo directory,
-        IProgress<(int checkedCount, int totalCount, string currentFile)>? progress = null)
+        IProgress<(int checkedCount, int totalCount, string currentFile)>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         // 获取所有文件（包括子目录），按路径排序确保一致性
         var files = directory.GetFiles("*", SearchOption.AllDirectories)
@@ -71,8 +78,13 @@ internal static class FileHashUtils
 
         var result = new Dictionary<string, string>(files.Length, StringComparer.OrdinalIgnoreCase);
 
+        // 第一遍（纯元数据）：超大 GPU 资源文件跳过完整 SHA-256（1GB+ 的
+        // .gpu_resources 文件逐字节哈希极慢且几乎不变动）；其余收集后并行计算。
+        var pending = new List<(int Index, FileInfo File, string RelativePath)>();
         for (int i = 0; i < files.Length; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var file = files[i];
 
             // 计算相对于目录根部的相对路径，统一使用 '/' 作为目录分隔符
@@ -81,23 +93,48 @@ internal static class FileHashUtils
                 .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 .Replace('\\', '/');
 
-            // 报告进度
-            progress?.Report((i + 1, files.Length, relativePath));
-
-            // 超大 GPU 资源文件跳过完整 SHA-256（1GB+ 的 .gpu_resources 文件逐字节哈希极慢且几乎不变动）
             if (IsLargeGpuResourceFile(file, out var fastHash))
             {
                 result[relativePath] = fastHash;
                 continue;
             }
 
-            try
+            pending.Add((i, file, relativePath));
+        }
+
+        if (pending.Count > 0)
+        {
+            // 有界并发计算 SHA-256；结果按原索引顺序写回，保证确定性。
+            var hashed = new (string RelativePath, string Hash)?[files.Length];
+            var processed = files.Length - pending.Count;
+            await Parallel.ForEachAsync(
+                pending,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = MaxHashParallelism,
+                    CancellationToken = cancellationToken
+                },
+                async (item, token) =>
+                {
+                    string hash;
+                    try
+                    {
+                        hash = await ComputeFileHashAsync(item.File).WaitAsync(token);
+                    }
+                    catch (Exception ex) when (ex is not IOException)
+                    {
+                        throw new IOException(_localizationService?["FileHashUtils.HashError"].Replace("{path}", item.RelativePath).Replace("{message}", ex.Message) ?? $"无法计算文件「{item.RelativePath}」的哈希值: {ex.Message}", ex);
+                    }
+
+                    hashed[item.Index] = (item.RelativePath, hash);
+                    var completed = Interlocked.Increment(ref processed);
+                    progress?.Report((completed, files.Length, item.RelativePath));
+                });
+
+            foreach (var entry in hashed)
             {
-                result[relativePath] = await ComputeFileHashAsync(file);
-            }
-            catch (Exception ex) when (ex is not IOException)
-            {
-                throw new IOException(_localizationService?["FileHashUtils.HashError"].Replace("{path}", relativePath).Replace("{message}", ex.Message) ?? $"无法计算文件「{relativePath}」的哈希值: {ex.Message}", ex);
+                if (entry is { } value)
+                    result[value.RelativePath] = value.Hash;
             }
         }
 
@@ -168,6 +205,10 @@ internal static class FileHashUtils
         var newHashes = new Dictionary<string, (string fileHash, long fileSize, DateTime lastModified)>(StringComparer.OrdinalIgnoreCase);
         int cacheHits = 0;
 
+        // 第一遍（纯元数据，无 IO 哈希）：处理缓存命中与超大 GPU 伪哈希快路径；
+        // 需要真正计算 SHA-256 的文件先收集起来，随后用有界并发计算，
+        // 完成后按原索引顺序写回，保证结果字典与串行实现完全一致。
+        var pending = new List<(int Index, FileInfo File, string RelativePath, long Size, DateTime LastModified)>();
         for (int i = 0; i < files.Length; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -178,9 +219,6 @@ internal static class FileHashUtils
                 .Substring(directory.FullName.Length)
                 .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 .Replace('\\', '/');
-
-            // 报告进度
-            progress?.Report((i + 1, files.Length, relativePath, cacheHits));
 
             var fileSize = file.Length;
             var lastModified = file.LastWriteTimeUtc;
@@ -205,17 +243,46 @@ internal static class FileHashUtils
                 continue;
             }
 
-            try
-            {
-                var hash = await ComputeFileHashAsync(file);
-                result[relativePath] = hash;
+            pending.Add((i, file, relativePath, fileSize, lastModified));
+        }
 
-                // 记录需要保存到数据库的新哈希值
-                newHashes[relativePath] = (hash, fileSize, lastModified);
-            }
-            catch (Exception ex) when (ex is not IOException)
+        if (pending.Count > 0)
+        {
+            // 有界并发计算 SHA-256。结果先写入按索引对齐的数组，避免并发写字典；
+            // 每个文件完成后立即上报进度（checkedCount 从已处理的快路径数单调增长）。
+            var hashed = new (string Hash, string RelativePath, long Size, DateTime LastModified)?[files.Length];
+            var processed = files.Length - pending.Count;
+            await Parallel.ForEachAsync(
+                pending,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = MaxHashParallelism,
+                    CancellationToken = cancellationToken
+                },
+                async (item, token) =>
+                {
+                    string hash;
+                    try
+                    {
+                        hash = await ComputeFileHashAsync(item.File).WaitAsync(token);
+                    }
+                    catch (Exception ex) when (ex is not IOException)
+                    {
+                        throw new IOException(_localizationService?["FileHashUtils.HashError"].Replace("{path}", item.RelativePath).Replace("{message}", ex.Message) ?? $"无法计算文件「{item.RelativePath}」的哈希值: {ex.Message}", ex);
+                    }
+
+                    hashed[item.Index] = (hash, item.RelativePath, item.Size, item.LastModified);
+                    var completed = Interlocked.Increment(ref processed);
+                    progress?.Report((completed, files.Length, item.RelativePath, cacheHits));
+                });
+
+            // 按原索引顺序合并，保证结果与进度确定性
+            foreach (var entry in hashed)
             {
-                throw new IOException(_localizationService?["FileHashUtils.HashError"].Replace("{path}", relativePath).Replace("{message}", ex.Message) ?? $"无法计算文件「{relativePath}」的哈希值: {ex.Message}", ex);
+                if (entry is not { } value)
+                    continue;
+                result[value.RelativePath] = value.Hash;
+                newHashes[value.RelativePath] = (value.Hash, value.Size, value.LastModified);
             }
         }
 
