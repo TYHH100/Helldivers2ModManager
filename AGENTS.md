@@ -157,7 +157,6 @@ catch (Exception ex)
 
 | 容易犯的错误 | 必须遵守的做法 |
 |---|---|
-| 在错误的临时目录或旧工作区修改 | 先确认 `Get-Location`、仓库根目录和 `git status --short`；本项目的正式工作区是 `D:\TYHH10-git\Helldivers2ModManager`。 |
 | 看到检测异常就直接修复 | 已知能正常进游戏的 Mod 先只读分析真实 Patch、备份和哈希；先排除检测器误报，再决定是否修复。 |
 | 用字典数量比较 Patch 类型表 | Legacy Patch 可以保留声明数量为 0 的空类型槽；按类型值双向比较，不能比较字典项数量。 |
 | 只显示 `patchFile.Name` | 多选项目录经常包含同名 `.patch_0`；诊断和工具输出必须使用相对路径，不能把同名显示成重复扫描。 |
@@ -207,10 +206,10 @@ catch (Exception ex)
 
 ```powershell
 # 构建解决方案
-dotnet build Helldivers2ModManager.sln --configuration Release
+dotnet build Helldivers2ModManager.sln --configuration Debug
 
 # 运行主测试项目
-dotnet test Helldivers2ModManager.Tests/Helldivers2ModManager.Tests.csproj --configuration Release
+dotnet test Helldivers2ModManager.Tests/Helldivers2ModManager.Tests.csproj --configuration Debug
 
 # 主程序发布
 dotnet publish Helldivers2ModManager/Helldivers2ModManager.csproj `
