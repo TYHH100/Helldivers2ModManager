@@ -486,6 +486,14 @@
 					</StackPanel>
 				</Button>
 					<Button Style="{StaticResource FluentNavigationButton}"
+						Command="{Binding ArmorSwapCommand}"
+						IsEnabled="{Binding Initialized}">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE7B8;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
+						<TextBlock Text="{loc:Loc DashboardPage.ArmorSwap}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+					</StackPanel>
+				</Button>
+					<Button Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding PatchResourceViewerCommand}"
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">

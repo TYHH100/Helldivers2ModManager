@@ -1532,6 +1532,14 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _navStore.Value.Navigate<ArmorReusePageViewModel>();
     }
 
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    async Task ArmorSwap()
+    {
+        await SaveProfileNowAsync();
+
+        _navStore.Value.Navigate<ArmorSwapPageViewModel>();
+    }
+
     [RelayCommand]
     void PatchResourceViewer()
     {

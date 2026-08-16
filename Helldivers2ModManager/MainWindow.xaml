@@ -55,6 +55,9 @@
 		<DataTemplate DataType="{x:Type vms:ArmorReusePageViewModel}">
 			<views:ArmorReusePageView/>
 		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:ArmorSwapPageViewModel}">
+			<views:ArmorSwapPageView/>
+		</DataTemplate>
 		<DataTemplate DataType="{x:Type vms:PatchResourceViewerPageViewModel}">
 			<views:PatchResourceViewerPageView/>
 		</DataTemplate>

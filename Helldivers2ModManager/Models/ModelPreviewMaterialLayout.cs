@@ -36,7 +36,8 @@ internal enum ModelPreviewCustomizationSlot
     LeftLeg,
     RightLeg,
     LeftShoulder,
-    RightShoulder
+    RightShoulder,
+    Helmet
 }
 
 internal static class ModelPreviewBodyShapeParser
@@ -80,6 +81,7 @@ internal static class ModelPreviewBodyShapeParser
             "RightLeg" => ModelPreviewCustomizationSlot.RightLeg,
             "LeftShoulder" => ModelPreviewCustomizationSlot.LeftShoulder,
             "RightShoulder" => ModelPreviewCustomizationSlot.RightShoulder,
+            "Helmet" => ModelPreviewCustomizationSlot.Helmet,
             _ => ModelPreviewCustomizationSlot.Unknown
         };
     }

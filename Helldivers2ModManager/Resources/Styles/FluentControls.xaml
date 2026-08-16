@@ -20,6 +20,7 @@
     <local:BytesToSizeConverter x:Key="BytesToSizeConverter"/>
     <local:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
     <local:ProgressWidthConverter x:Key="ProgressWidthConverter"/>
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
     <!-- ============================================ -->
     <!-- Base Button Style (Fluent)                  -->

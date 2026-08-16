@@ -87,6 +87,7 @@ internal sealed partial class VersionCheckService
         public required BundleInfo[] Bundles { get; init; }
         public required IReadOnlyDictionary<long, List<GameUnitLocator>> UnitLocators { get; init; }
         public required IReadOnlyDictionary<(long FileId, long TypeId), List<GameUnitLocator>> AnimationResourceLocators { get; init; }
+        public required IReadOnlyDictionary<string, IReadOnlyList<long>> PackageUnitIds { get; init; }
         public Dictionary<long, GameUnitReferenceData> ResolvedReferences { get; } = [];
         public Dictionary<long, IReadOnlyList<string>> PackageNames { get; } = [];
         public HashSet<long> AmbiguousUnitIds { get; } = [];
@@ -459,6 +460,9 @@ internal sealed partial class VersionCheckService
 
         var locators = new Dictionary<long, List<GameUnitLocator>>();
         var animationResourceLocators = new Dictionary<(long FileId, long TypeId), List<GameUnitLocator>>();
+        // 规范化后是 16 位十六进制（护甲/网格 archive）的 package → 其 Unit FileId 列表。
+        // 换甲需要按护甲 package 反查它包含的 body/helmet Unit。
+        var packageUnitIds = new Dictionary<string, HashSet<long>>(StringComparer.OrdinalIgnoreCase);
         for (var packageIndex = 0; packageIndex < packageCount; packageIndex++)
         {
             var recordOffset = checked(0x18 + packageIndex * 0x18);
@@ -521,7 +525,8 @@ internal sealed partial class VersionCheckService
                 items,
                 tocData,
                 locators,
-                animationResourceLocators);
+                animationResourceLocators,
+                packageUnitIds);
             if (packageIndex > 0 && packageIndex % 1000 == 0)
             {
                 _logger.LogInformation(
@@ -542,7 +547,10 @@ internal sealed partial class VersionCheckService
             CacheKey = cacheKey,
             Bundles = bundles,
             UnitLocators = locators.ToFrozenDictionary(),
-            AnimationResourceLocators = animationResourceLocators.ToFrozenDictionary()
+            AnimationResourceLocators = animationResourceLocators.ToFrozenDictionary(),
+            PackageUnitIds = packageUnitIds.ToFrozenDictionary(
+                static pair => pair.Key,
+                static pair => (IReadOnlyList<long>)pair.Value.OrderBy(static id => id).ToArray())
         };
     }
 
@@ -551,7 +559,8 @@ internal sealed partial class VersionCheckService
         PackageItem[] items,
         byte[] tocData,
         Dictionary<long, List<GameUnitLocator>> locators,
-        Dictionary<(long FileId, long TypeId), List<GameUnitLocator>> animationResourceLocators)
+        Dictionary<(long FileId, long TypeId), List<GameUnitLocator>> animationResourceLocators,
+        Dictionary<string, HashSet<long>> packageUnitIds)
     {
         if (tocData.Length < HeaderSize ||
             BinaryPrimitives.ReadInt32LittleEndian(tocData.AsSpan(0, 4)) != PatchHeaderMagic)
@@ -590,6 +599,18 @@ internal sealed partial class VersionCheckService
                     locators[fileId] = entries;
                 }
                 entries.Add(locator);
+                // 只记录规范化后为护甲/网格 archive ID 的 package，避免为海量任务
+                // package 保留无用的 Unit 反查表。
+                var packageId = NormalizeArchivePackageId(packageName);
+                if (packageId is not null)
+                {
+                    if (!packageUnitIds.TryGetValue(packageId, out var unitIds))
+                    {
+                        unitIds = [];
+                        packageUnitIds.Add(packageId, unitIds);
+                    }
+                    unitIds.Add(fileId);
+                }
             }
             else if (typeId is BonesTypeId or StateMachineTypeId or AnimationTypeId)
             {
@@ -851,5 +872,17 @@ internal sealed partial class VersionCheckService
         return end < 0
             ? string.Empty
             : Encoding.UTF8.GetString(data, checked((int)offset), end - checked((int)offset));
+    }
+
+    /// <summary>
+    /// 把 package 名规范化为 16 位小写十六进制 archive ID；不是护甲/网格 archive
+    /// 的 package（带路径、扩展名或非十六进制名）返回 null。
+    /// </summary>
+    private static string? NormalizeArchivePackageId(string packageName)
+    {
+        var name = Path.GetFileNameWithoutExtension(packageName).Trim();
+        if (name.Length != 16 || !name.All(static c => Uri.IsHexDigit(c)))
+            return null;
+        return name.ToLowerInvariant();
     }
 }

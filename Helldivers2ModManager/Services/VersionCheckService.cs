@@ -467,6 +467,74 @@ internal sealed partial class VersionCheckService
         return result;
     }
 
+    /// <summary>
+    /// 返回每个护甲/网格 archive package 包含的 Unit FileId 列表（反向索引）。
+    /// 一键换甲用它在游戏里定位目标护甲 B 的 body/helmet 骨架 Unit。
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, IReadOnlyList<long>>> ResolveGameArmorUnitsAsync(
+        IReadOnlyCollection<string> armorPackageIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (armorPackageIds.Count == 0)
+            return new Dictionary<string, IReadOnlyList<long>>();
+
+        _ = await GetGameUnitReferencesAsync([], cancellationToken);
+        await _gameReferenceSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var index = _gameReferenceIndex;
+            if (index is null)
+                return new Dictionary<string, IReadOnlyList<long>>();
+
+            var result = new Dictionary<string, IReadOnlyList<long>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var packageId in armorPackageIds)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var key = NormalizeArchivePackageId(packageId) ?? packageId.Trim().ToLowerInvariant();
+                if (index.PackageUnitIds.TryGetValue(key, out var units))
+                    result[key] = units;
+            }
+
+            return result;
+        }
+        finally
+        {
+            _gameReferenceSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// 从游戏 bundles 读取指定 Unit 的完整主数据（换甲的目标骨架读取）。
+    /// 返回 null 表示游戏目录不可用、Unit 不在索引或数据不可读。
+    /// </summary>
+    public async Task<byte[]?> ReadGameUnitMainDataAsync(
+        long unitId,
+        CancellationToken cancellationToken = default)
+    {
+        _ = await GetGameUnitReferencesAsync([], cancellationToken);
+        await _gameReferenceSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var index = _gameReferenceIndex;
+            if (index is null || !index.UnitLocators.TryGetValue(unitId, out var locators))
+                return null;
+
+            foreach (var locator in locators)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var data = TryReadGameResource(index.Bundles, locator);
+                if (data is not null)
+                    return data;
+            }
+
+            return null;
+        }
+        finally
+        {
+            _gameReferenceSemaphore.Release();
+        }
+    }
+
     private async Task<List<PatchUnitInfo>> ExtractUnitVersionsFromPatchFileStreamAsync(FileInfo patchFile)
     {
         var result = new List<PatchUnitInfo>();

@@ -2203,6 +2203,362 @@ internal sealed class PatchResourceInspectionService
         normals[offset + 2] += z;
     }
 
+    /// <summary>
+    /// 轻量枚举 patch 的 TOC 条目（FileId/TypeId/偏移/大小），供换甲来源分析合并视图使用。
+    /// </summary>
+    public async Task<IReadOnlyList<PatchTocInspectionItem>> ReadPatchEntriesAsync(
+        FileInfo patchFile,
+        CancellationToken cancellationToken = default)
+        => await Task.Run(
+            () => ReadPatchEntriesCore(patchFile, cancellationToken),
+            cancellationToken);
+
+    private static IReadOnlyList<PatchTocInspectionItem> ReadPatchEntriesCore(
+        FileInfo patchFile,
+        CancellationToken cancellationToken)
+    {
+        var result = new List<PatchTocInspectionItem>();
+        if (!patchFile.Exists || patchFile.Length < HeaderSize)
+            return result;
+
+        using var stream = OpenRead(patchFile);
+        var header = new byte[HeaderSize];
+        if (!ReadAt(stream, 0, header) || MemoryMarshal.Read<int>(header) != PatchHeaderMagic)
+            return result;
+
+        var numTypes = MemoryMarshal.Read<int>(header.AsSpan(4, 4));
+        var numFiles = MemoryMarshal.Read<int>(header.AsSpan(8, 4));
+        if (numTypes < 0 || numFiles < 0 || numTypes > 1000 || numFiles > 100000)
+            return result;
+
+        var fileEntriesOffset = HeaderSize + (long)numTypes * TypeEntrySize;
+        if (fileEntriesOffset + (long)numFiles * FileEntrySize > stream.Length)
+            return result;
+
+        var entryBuffer = new byte[FileEntrySize];
+        for (var index = 0; index < numFiles; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!ReadAt(stream, fileEntriesOffset + (long)index * FileEntrySize, entryBuffer))
+                break;
+
+            var typeId = MemoryMarshal.Read<ulong>(entryBuffer.AsSpan(8, 8));
+            result.Add(new PatchTocInspectionItem
+            {
+                PatchFile = patchFile.Name,
+                PatchPath = patchFile.FullName,
+                PatchOrder = 0,
+                EntryIndex = index + 1,
+                FileId = MemoryMarshal.Read<ulong>(entryBuffer.AsSpan(0, 8)),
+                TypeId = typeId,
+                MainOffset = MemoryMarshal.Read<ulong>(entryBuffer.AsSpan(16, 8)),
+                MainSize = MemoryMarshal.Read<uint>(entryBuffer.AsSpan(56, 4)),
+                StreamOffset = MemoryMarshal.Read<ulong>(entryBuffer.AsSpan(24, 8)),
+                StreamSize = MemoryMarshal.Read<uint>(entryBuffer.AsSpan(60, 4)),
+                GpuOffset = MemoryMarshal.Read<ulong>(entryBuffer.AsSpan(32, 8)),
+                GpuSize = MemoryMarshal.Read<uint>(entryBuffer.AsSpan(64, 4))
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 读取 patch 内指定 FileId 条目的 main 数据（有界）。
+    /// </summary>
+    public async Task<byte[]?> ReadEntryMainAsync(
+        FileInfo patchFile,
+        ulong fileId,
+        CancellationToken cancellationToken = default)
+        => await ReadEntryPayloadAsync(patchFile, fileId, readMain: true, readGpu: false, readStream: false, cancellationToken);
+
+    /// <summary>
+    /// 读取 patch 内指定 FileId 条目的 GPU 窗口数据（有界，上限 128 MiB）。
+    /// </summary>
+    public async Task<byte[]?> ReadEntryGpuAsync(
+        FileInfo patchFile,
+        ulong fileId,
+        CancellationToken cancellationToken = default)
+        => await ReadEntryPayloadAsync(patchFile, fileId, readMain: false, readGpu: true, readStream: false, cancellationToken);
+
+    /// <summary>
+    /// 读取 patch 内指定 FileId 条目的 stream 窗口数据（有界，上限 128 MiB）。
+    /// </summary>
+    public async Task<byte[]?> ReadEntryStreamAsync(
+        FileInfo patchFile,
+        ulong fileId,
+        CancellationToken cancellationToken = default)
+        => await ReadEntryPayloadAsync(patchFile, fileId, readMain: false, readGpu: false, readStream: true, cancellationToken);
+
+    private const long MaxEntryPayloadBytes = 128L * 1024 * 1024;
+
+    private static async Task<byte[]?> ReadEntryPayloadAsync(
+        FileInfo patchFile,
+        ulong fileId,
+        bool readMain,
+        bool readGpu,
+        bool readStream,
+        CancellationToken cancellationToken)
+    {
+        if (!patchFile.Exists || patchFile.Length < HeaderSize)
+            return null;
+
+        await using var patchStream = OpenRead(patchFile);
+        var header = new byte[HeaderSize];
+        if (!await ReadAtAsync(patchStream, 0, header, cancellationToken) || MemoryMarshal.Read<int>(header) != PatchHeaderMagic)
+            return null;
+
+        var numTypes = MemoryMarshal.Read<int>(header.AsSpan(4, 4));
+        var numFiles = MemoryMarshal.Read<int>(header.AsSpan(8, 4));
+        if (numTypes < 0 || numFiles < 0 || numTypes > 1000 || numFiles > 100000)
+            return null;
+
+        var fileEntriesOffset = HeaderSize + (long)numTypes * TypeEntrySize;
+        if (fileEntriesOffset + (long)numFiles * FileEntrySize > patchStream.Length)
+            return null;
+
+        var entryBuffer = new byte[FileEntrySize];
+        for (var index = 0; index < numFiles; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!await ReadAtAsync(patchStream, fileEntriesOffset + (long)index * FileEntrySize, entryBuffer, cancellationToken))
+                return null;
+            if (MemoryMarshal.Read<ulong>(entryBuffer.AsSpan(0, 8)) != fileId)
+                continue;
+
+            if (readMain)
+            {
+                var mainOffset = MemoryMarshal.Read<ulong>(entryBuffer.AsSpan(16, 8));
+                var mainSize = MemoryMarshal.Read<uint>(entryBuffer.AsSpan(56, 4));
+                if (mainSize == 0 || mainSize > MaxEntryPayloadBytes ||
+                    !IsRangeInBounds(mainOffset, mainSize, patchStream.Length))
+                    return null;
+                var data = new byte[mainSize];
+                return await ReadAtAsync(patchStream, (long)mainOffset, data, cancellationToken) ? data : null;
+            }
+
+            var companionPath = readGpu ? patchFile.FullName + ".gpu_resources" : patchFile.FullName + ".stream";
+            var companionOffset = readGpu
+                ? MemoryMarshal.Read<ulong>(entryBuffer.AsSpan(32, 8))
+                : MemoryMarshal.Read<ulong>(entryBuffer.AsSpan(24, 8));
+            var companionSize = readGpu
+                ? MemoryMarshal.Read<uint>(entryBuffer.AsSpan(64, 4))
+                : MemoryMarshal.Read<uint>(entryBuffer.AsSpan(60, 4));
+            if (companionSize == 0 || companionSize > MaxEntryPayloadBytes || !File.Exists(companionPath))
+                return null;
+            await using var companionStream = OpenRead(new FileInfo(companionPath));
+            if (!IsRangeInBounds(companionOffset, companionSize, companionStream.Length))
+                return null;
+            var payload = new byte[companionSize];
+            return await ReadAtAsync(companionStream, (long)companionOffset, payload, cancellationToken) ? payload : null;
+        }
+
+        return null;
+    }
+
+    private static bool ReadAt(Stream stream, long offset, byte[] buffer)
+    {
+        if (offset < 0 || offset + buffer.Length > stream.Length)
+            return false;
+        stream.Seek(offset, SeekOrigin.Begin);
+        var read = 0;
+        while (read < buffer.Length)
+        {
+            var count = stream.Read(buffer, read, buffer.Length - read);
+            if (count == 0)
+                return false;
+            read += count;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 解析 Unit 主数据为换甲移植所需的原始结构（不依赖材质-纹理解析链）。
+    /// 保留原始偏移、计数与组件布局，供来源（模组）/目标（游戏）兼容性比较
+    /// 与"B 的 Unit 主数据 + A 的网格数据"字节级移植。返回 null 表示结构
+    /// 无法完整读取（不满足换甲所需的边界要求）。
+    /// sourcePatchPath/gpuOffset/gpuSize 用于来源侧记录 GPU 窗口位置（目标侧可省略）。
+    /// </summary>
+    internal static ArmorSwapUnitStructure? ParseArmorSwapUnitStructure(
+        byte[] data,
+        long fileId,
+        string? sourcePatchPath = null,
+        ulong gpuOffset = 0,
+        uint gpuSize = 0,
+        bool isFromHelmetPackage = false,
+        string? packageId = null)
+    {
+        const int streamInfoSize = 0x1B0;
+        const int meshInfoSize = 128;
+        const int meshSectionSize = 24;
+        if (data.Length < 0x68)
+            return null;
+
+        var version = ReadUInt32(data, 0x2C);
+        var bonesId = ReadUInt64(data, 0x08);
+        var stateMachineId = ReadUInt64(data, 0x20);
+        var hasCustomizationInfo = ReadInt32(data, 0x4C) != 0;
+        var customization = TryReadUnitCustomizationInfo(data);
+
+        // ---- StreamInfo 表（0x5C 列表 + 0x1B0 记录）----
+        var listOffset = ReadInt32(data, 0x5C);
+        if (!IsRangeInBounds(listOffset, sizeof(uint), data.Length))
+            return null;
+        var streamCount = ReadInt32(data, listOffset);
+        if (streamCount < 0 || streamCount > 100 ||
+            !IsRangeInBounds(listOffset + sizeof(uint), (long)streamCount * sizeof(uint), data.Length))
+            return null;
+
+        var usesLegacyVertexFormats = version != CurrentVerifiedUnitVersion;
+        var streams = new List<ArmorSwapStreamStructure>(streamCount);
+        for (var streamIndex = 0; streamIndex < streamCount; streamIndex++)
+        {
+            var relativeOffset = ReadInt32(data, listOffset + sizeof(uint) + streamIndex * sizeof(uint));
+            var streamStart = (long)listOffset + relativeOffset;
+            if (relativeOffset < 0 || !IsRangeInBounds(streamStart, streamInfoSize, data.Length))
+                return null;
+
+            var componentCount = ReadUInt64(data, checked((int)streamStart + 0x148));
+            if (componentCount > 16 ||
+                !IsRangeInBounds(streamStart + 0x08, (long)componentCount * 20, data.Length))
+                return null;
+
+            var components = new List<ArmorSwapStreamComponent>((int)componentCount);
+            var componentOffset = 0;
+            var layoutValid = true;
+            for (var componentIndex = 0; componentIndex < (int)componentCount; componentIndex++)
+            {
+                var baseOffset = checked((int)streamStart + 0x08 + componentIndex * 20);
+                var type = ReadUInt32(data, baseOffset);
+                var format = ReadUInt32(data, baseOffset + sizeof(uint));
+                var componentSize = 0;
+                if (format != 0)
+                {
+                    if (!TryGetFormatSize(format, usesLegacyVertexFormats, out componentSize))
+                    {
+                        layoutValid = false;
+                        break;
+                    }
+                }
+                components.Add(new ArmorSwapStreamComponent(type, format, componentOffset));
+                componentOffset += componentSize;
+            }
+            if (!layoutValid)
+                return null;
+
+            streams.Add(new ArmorSwapStreamStructure(
+                streamIndex,
+                components,
+                ReadUInt32(data, checked((int)streamStart + 0x160)),
+                ReadUInt32(data, checked((int)streamStart + 0x164)),
+                ReadUInt32(data, checked((int)streamStart + 0x188)),
+                ReadUInt32(data, checked((int)streamStart + 0x18C)),
+                ReadUInt32(data, checked((int)streamStart + 0x1A0)),
+                ReadUInt32(data, checked((int)streamStart + 0x1A4)),
+                ReadUInt32(data, checked((int)streamStart + 0x1A8)),
+                ReadUInt32(data, checked((int)streamStart + 0x1AC))));
+        }
+
+        // ---- MeshInfo 表（0x64）----
+        var meshInfoOffset = ReadInt32(data, 0x64);
+        if (!IsRangeInBounds(meshInfoOffset, sizeof(uint), data.Length))
+            return null;
+        var meshCount = ReadInt32(data, meshInfoOffset);
+        if (meshCount < 0 || meshCount > 4096 ||
+            !IsRangeInBounds(meshInfoOffset + sizeof(uint), (long)meshCount * sizeof(uint) * 2, data.Length))
+            return null;
+
+        var meshInfos = new List<ArmorSwapMeshInfoStructure>(meshCount);
+        for (var meshIndex = 0; meshIndex < meshCount; meshIndex++)
+        {
+            var relativeOffset = ReadInt32(data, meshInfoOffset + sizeof(uint) + meshIndex * sizeof(uint));
+            var meshOffset = (long)meshInfoOffset + relativeOffset;
+            if (relativeOffset < 0 || !IsRangeInBounds(meshOffset, meshInfoSize, data.Length))
+                return null;
+
+            var streamIndex = ReadInt32(data, checked((int)meshOffset + 60));
+            var lodIndex = ReadInt32(data, checked((int)meshOffset + 56));
+            var transformIndex = ReadInt32(data, checked((int)meshOffset + 48));
+            var meshMaterialCount = ReadInt32(data, checked((int)meshOffset + 104));
+            var meshMaterialRelativeOffset = ReadInt32(data, checked((int)meshOffset + 108));
+            var sectionCount = ReadInt32(data, checked((int)meshOffset + 120));
+            var sectionsRelativeOffset = ReadInt32(data, checked((int)meshOffset + 124));
+            if (streamIndex < 0 || meshMaterialCount < 0 || meshMaterialCount > 4096 ||
+                sectionCount < 0 || sectionCount > 4096 ||
+                meshMaterialRelativeOffset < 0 || sectionsRelativeOffset < 0)
+                return null;
+
+            var meshMaterialOffset = meshOffset + meshMaterialRelativeOffset;
+            var sectionsOffset = meshOffset + sectionsRelativeOffset;
+            if (!IsRangeInBounds(meshMaterialOffset, (long)meshMaterialCount * sizeof(uint), data.Length) ||
+                !IsRangeInBounds(sectionsOffset, (long)sectionCount * meshSectionSize, data.Length))
+                return null;
+
+            var materialIndices = new uint[meshMaterialCount];
+            for (var materialIndex = 0; materialIndex < meshMaterialCount; materialIndex++)
+                materialIndices[materialIndex] = ReadUInt32(data, checked((int)meshMaterialOffset + materialIndex * sizeof(uint)));
+
+            var sections = new List<ArmorSwapSectionStructure>(sectionCount);
+            for (var sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++)
+            {
+                var sectionOffset = checked((int)(sectionsOffset + sectionIndex * meshSectionSize));
+                sections.Add(new ArmorSwapSectionStructure(
+                    sectionIndex,
+                    ReadInt32(data, sectionOffset),
+                    ReadUInt32(data, sectionOffset + 4),
+                    ReadUInt32(data, sectionOffset + 8),
+                    ReadUInt32(data, sectionOffset + 12),
+                    ReadUInt32(data, sectionOffset + 16)));
+            }
+
+            meshInfos.Add(new ArmorSwapMeshInfoStructure(
+                meshIndex,
+                streamIndex,
+                lodIndex,
+                transformIndex,
+                materialIndices,
+                sections));
+        }
+
+        // ---- 材质表（0x70：count + slot 数组 + 材质 FileId 数组）----
+        var materialsOffset = ReadInt32(data, 0x70);
+        if (!IsRangeInBounds(materialsOffset, sizeof(uint), data.Length))
+            return null;
+        var materialCount = ReadInt32(data, materialsOffset);
+        if (materialCount < 0 || materialCount > 4096 ||
+            !IsRangeInBounds(materialsOffset + sizeof(uint), (long)materialCount * (sizeof(uint) + sizeof(ulong)), data.Length))
+            return null;
+
+        var materialSlots = new uint[materialCount];
+        var materialIds = new ulong[materialCount];
+        for (var materialIndex = 0; materialIndex < materialCount; materialIndex++)
+        {
+            materialSlots[materialIndex] = ReadUInt32(data, materialsOffset + sizeof(uint) + materialIndex * sizeof(uint));
+            materialIds[materialIndex] = ReadUInt64(data, materialsOffset + sizeof(uint) + materialCount * sizeof(uint) + materialIndex * sizeof(ulong));
+        }
+
+        return new ArmorSwapUnitStructure
+        {
+            FileId = fileId,
+            MainData = data,
+            SourcePatchPath = sourcePatchPath,
+            GpuOffset = gpuOffset,
+            GpuSize = gpuSize,
+            IsFromHelmetPackage = isFromHelmetPackage,
+            PackageId = packageId ?? string.Empty,
+            Version = version,
+            BonesId = bonesId,
+            StateMachineId = stateMachineId,
+            HasCustomizationInfo = hasCustomizationInfo,
+            BodyShape = customization.BodyShape,
+            Slot = customization.Slot,
+            Streams = streams,
+            MeshInfos = meshInfos,
+            MaterialSlots = materialSlots,
+            MaterialIds = materialIds
+        };
+    }
+
     private static async Task<string> ReadVertexSampleAsync(
         Stream? gpuStream, ulong gpuBaseOffset, uint gpuSize, uint vertexOffset, uint vertexCount, uint vertexStride,
         IReadOnlyList<(uint Type, uint Format, int Offset)> components, bool canSample,
@@ -2238,11 +2594,24 @@ internal sealed class PatchResourceInspectionService
         30 => "oct-normal", 31 => "half4 (legacy)", 33 => "half2", 35 => "half4", _ => $"Format 0x{format:X}"
     };
 
+    /// <summary>
+    /// 顶点组件格式的字节大小。格式大小是格式本身的物理属性，不随 Unit 版本变化：
+    /// 旧/新格式值（24/26/29/31 vs 28/30/33/35）语义相同的格式大小一致，且部分
+    /// 0x00A4CD36 的 Unit 会混用两类值，因此使用合并表而不是按版本二选一。
+    /// </summary>
     private static bool TryGetFormatSize(uint format, bool usesLegacyVertexFormats, out int size)
     {
-        size = usesLegacyVertexFormats
-            ? format switch { 0 => 4, 1 => 8, 2 => 12, 4 or 24 or 25 or 26 or 29 => 4, 20 => 16, 31 => 8, _ => 0 }
-            : format switch { 0 => 4, 1 => 8, 2 => 12, 4 or 28 or 30 or 33 => 4, 35 => 8, _ => 0 };
+        _ = usesLegacyVertexFormats;
+        size = format switch
+        {
+            0 => 4,
+            1 => 8,
+            2 => 12,
+            4 or 24 or 25 or 26 or 28 or 29 or 30 or 33 => 4,
+            20 => 16,
+            31 or 35 => 8,
+            _ => 0
+        };
         return size != 0;
     }
 
