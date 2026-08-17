@@ -486,16 +486,14 @@ internal sealed class ArmorSwapService
             // 映射到不同的目标 FileId——护甲同一槽位常有多层叠加（内衬层/外套层），
             // 若各选项目录独立配对会把多层映射到同一目标 FileId，部署后互相覆盖，
             // 表现为"胸口露身体、上层衣服消失"。
-            // 空气/占位网格（GPU 极小）不参与配对：老 SDK 模组的占位 Unit 会把
-            // 目标的真实变体替换成空网格（表现为"原版护甲还在/部件缺失"）。
-            // Helmet 例外：合体模组的头盔槽位空气是作者刻意为之（隐藏头盔）。
-            const uint minPortableGpuBytes = 8000;
+            // 空气层（GPU 极小的隐藏用网格）必须参与配对：作者用它们隐藏原护甲的
+            // 多余层/附件（白银之城：头盔 1832B、第二层躯干 2520B、Any 变体 25280B），
+            // 配对按 GPU 降序分配，空气自然落到目标的多余层上；只排除无网格的
+            // 占位 Unit（GpuSize=0，无法作为移植内容）。
             var allSourceUnits = analysis.DirectoryViews
                 .SelectMany(static view => view.Units)
                 .Where(unit => groupUnitIds is null || groupUnitIds.Contains(unit.FileId))
-                .Where(static unit =>
-                    unit.GpuSize >= minPortableGpuBytes ||
-                    unit.Slot == ModelPreviewCustomizationSlot.Helmet)
+                .Where(static unit => unit.GpuSize > 0)
                 .ToArray();
             var globalPairings = BuildGlobalPairings(allSourceUnits, target);
             if (globalPairings.Count == 0)
@@ -589,13 +587,20 @@ internal sealed class ArmorSwapService
                     .OrderByDescending(static unit => unit.GpuSize)
                     .ThenBy(static unit => (ulong)unit.FileId)
                     .ToArray());
-        var sourceHelmets = slotSources
-            .Where(static unit => unit.Slot == ModelPreviewCustomizationSlot.Helmet)
+        // 来源头盔：槽位标记（新结构）或头盔包归属（老 SDK 模组无元数据，
+        // 分析时按游戏索引反查标记，如白银之城的空气头盔）
+        var sourceHelmets = allSourceUnits
+            .Where(static unit => unit.Slot == ModelPreviewCustomizationSlot.Helmet || unit.IsFromHelmetPackage)
+            .GroupBy(static unit => unit.FileId)
+            .Select(static group => group
+                .OrderByDescending(static unit => unit.HasCustomizationInfo)
+                .ThenByDescending(static unit => unit.GpuSize)
+                .First())
             .OrderByDescending(static unit => unit.GpuSize)
             .ThenBy(static unit => (ulong)unit.FileId)
             .ToArray();
         var sourceUnclassified = allSourceUnits
-            .Where(static unit => !unit.HasCustomizationInfo)
+            .Where(static unit => !unit.HasCustomizationInfo && !unit.IsFromHelmetPackage)
             .GroupBy(static unit => unit.FileId)
             .Select(static group => group.OrderByDescending(static unit => unit.GpuSize).First())
             .OrderBy(static unit => (ulong)unit.FileId)
@@ -634,10 +639,11 @@ internal sealed class ArmorSwapService
                     ExcludeUsedSources(sources, groupUnits, targetSources), targets);
             }
 
-            // 2. 头盔包中无槽位元数据的 Unit（旧结构头盔，只能靠 SDK 头盔表识别）
+            // 2. 头盔目标：头盔包 Unit 或 Helmet 槽位 Unit 仍未分配的（老 SDK 模组
+            //    的头盔无元数据，只能靠游戏索引识别头盔包归属，如白银之城的空气头盔）。
             var helmetTargets = packageUnits
-                .Where(static unit => unit.IsFromHelmetPackage &&
-                    unit.Slot == ModelPreviewCustomizationSlot.Unknown)
+                .Where(static unit => unit.IsFromHelmetPackage ||
+                    unit.Slot == ModelPreviewCustomizationSlot.Helmet)
                 .Where(unit => !assignedTargets.Contains(unit.FileId))
                 .OrderBy(static unit => (ulong)unit.FileId)
                 .ToArray();
@@ -652,6 +658,41 @@ internal sealed class ArmorSwapService
                 .ToArray();
             if (unclassifiedTargets.Length > 0 && sourceUnclassified.Length > 0)
                 AssignGroup(result, assignedTargets, targetSources, sourceUnclassified, unclassifiedTargets);
+        }
+
+        // 4. 空气填充：来源模组没有的槽位/部件（如瑟瑞斯无 RightShoulder；CW-9 的
+        //    无元数据肩甲/胸甲/臂甲附件）若留着不覆盖会显示原版护甲——按作者换甲流程
+        //    "把 B 网格删掉只剩一面缩小"，用来源的空气网格（GPU 极小、通常 ≤32KB）覆盖。
+        //    头盔例外：来源没有头盔内容时保留目标原版头盔（来源外观本就含原版头盔）。
+        //    注意：为每个目标优先挑选同槽位的空气来源；没有时才回退到全局最小空气。
+        //    空气填充若跨槽位，必须在 BuildUnitMainData 中剥离 CustomizationInfo，
+        //    否则把 Torso 空气挂到 RightShoulder 等骨骼上会导致选择护甲时崩溃。
+        const uint maxAirGpuBytes = 32768;
+        var airCandidates = allSourceUnits
+            .Where(static unit => unit.Slot != ModelPreviewCustomizationSlot.Helmet && !unit.IsFromHelmetPackage)
+            .Where(static unit => unit.GpuSize is > 0 and <= maxAirGpuBytes)
+            .ToArray();
+        var remaining = target.Units
+            .Where(unit => !assignedTargets.Contains(unit.FileId))
+            .Where(static unit => unit.Slot != ModelPreviewCustomizationSlot.Helmet && !unit.IsFromHelmetPackage)
+            .OrderBy(static unit => (ulong)unit.FileId)
+            .ToArray();
+        foreach (var targetUnit in remaining)
+        {
+            var airSource = airCandidates
+                .Where(unit => unit.Slot == targetUnit.Slot)
+                .OrderBy(static unit => unit.GpuSize)
+                .ThenBy(static unit => (ulong)unit.FileId)
+                .FirstOrDefault()
+                ?? airCandidates
+                    .OrderBy(static unit => unit.GpuSize)
+                    .ThenBy(static unit => (ulong)unit.FileId)
+                    .FirstOrDefault();
+            if (airSource is null)
+                continue;
+            AddPairing(result, airSource.FileId, targetUnit);
+            TrackTargetSource(targetSources, targetUnit, airSource);
+            assignedTargets.Add(targetUnit.FileId);
         }
 
         return result.ToDictionary(
@@ -1018,6 +1059,10 @@ internal sealed class ArmorSwapService
     /// 仅把头部属性区覆盖为目标 B 的：BonesId（0x08）除外——骨骼引用必须随网格
     /// （A 的顶点权重/调色板基于 A 的骨骼），覆盖成 B 的骨骼会导致蒙皮错位。
     /// 覆盖范围：0x00-0x07 未知、0x10-0x2F（StateMachineId/版本/未知字段）。
+    /// 以下两种情况必须清除 CustomizationInfo 指针（0x4C），否则游戏会按错误元
+    /// 数据挂骨骼/槽位，导致选择护甲时崩溃：
+    /// 1. 目标 B 本身没有 CustomizationInfo（未分类附件/旧结构部件）。
+    /// 2. 来源与目标槽位不一致（空气填充跨槽位，如 Torso 空气挂到 RightShoulder）。
     /// </summary>
     private static byte[] BuildUnitMainData(ArmorSwapUnitStructure source, ArmorSwapUnitStructure target)
     {
@@ -1031,6 +1076,16 @@ internal sealed class ArmorSwapService
         else if (copyLength > 0)
         {
             Array.Copy(target.MainData, 0, result, 0, copyLength);
+        }
+        // 清除 CustomizationInfo 指针（0x4C）的情况：目标无元数据，或来源/目标槽位不一致
+        const int customizationInfoPointerOffset = 0x4C;
+        var stripCustomizationInfo =
+            (!target.HasCustomizationInfo && source.HasCustomizationInfo) ||
+            (source.Slot != target.Slot);
+        if (stripCustomizationInfo && result.Length >= customizationInfoPointerOffset + sizeof(int))
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(
+                result.AsSpan(customizationInfoPointerOffset, sizeof(int)), 0);
         }
         return result;
     }

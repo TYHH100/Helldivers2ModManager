@@ -171,6 +171,7 @@ catch (Exception ex)
 | Manifest 每改一个字段就立即保存 | `Done()` 中组装最终清单并一次保存；保留 `NexusData`，Legacy 修改跨入 V1 后立即重建运行时选项和主页状态。 |
 | 批量修复只在按钮或最后一步过滤 | 在 `VersionCheckBatchRepairService` 生成计划前就限制为明确支持的 Unit 类型；音频和其他未支持类型只能跳过并说明原因。 |
 | 用 `armornames.txt`、外部映射或冲突缓存替代事实 | Armor 关系/污染检查直接读取已启用 Mod 的 Patch；它是独立扫描，不要自动变成通用冲突或修复流程。 |
+| 换甲产物与其他覆盖同一件护甲的模组共同部署 | 一键换甲生成的是“完整替换”产物（包含目标护甲所有 Unit + 自洽的材质/纹理）。若与同样覆盖该护甲的已启用模组（包括原目标护甲模组、污染模组等）共同部署，两者会争夺同一批 FileId/材质引用，极易导致游戏选择护甲时崩溃。UI 需明确提示用户：生成后禁用这些模组。 |
 | XAML 重写后只看页面、不查 code-behind | 删除或重命名控件后立即 `rg` 查找旧 `x:Name`；同时检查共享样式、DataTemplate、深色主题默认箭头和所有导航入口。 |
 | 把取消异常当成崩溃 | `TaskCanceledException` 可能只是防抖或新请求取消；先确认实际使用的功能和取消来源，再判断是否是真故障。 |
 | `await` 长任务或手写 `Add`+`Task.Run`+`Complete/Fail` 样板 | 耗时操作统一走 `BackgroundTaskService.RunAsync(...)`（后台线程 + 状态生命周期一把管，见 §6）；`BackgroundTaskService` 单独用 `Add/Update/Complete` 只管理状态、不提供后台线程，`await` 只让出异步 IO，同步 CPU 密集代码（LZ4 解码、SHA-256、压缩/解压、大文件解析）仍在调用线程（UI）执行。服务内部 CPU 密集解析优先在服务内部后台化（参考 `GameUnitReferenceReader`/`ModService`/`ModHashService`/`PatchResourceInspectionService`），改完后检查所有 UI 入口。 |

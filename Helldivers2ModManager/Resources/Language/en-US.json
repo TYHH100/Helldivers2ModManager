@@ -233,7 +233,7 @@
     "ArmorSwapPage.TargetArmorLabel": "Target armor (the armor that will show the new look in game)",
     "ArmorSwapPage.GroupParts": "({count} parts)",
     "ArmorSwapPage.UnidentifiedGroup": "Unidentified parts ({count}, may belong to several armors)",
-    "ArmorSwapPage.PollutedBy": "Already covered by {count} enabled mod(s): {mods}",
+    "ArmorSwapPage.PollutedBy": "{count} enabled mod(s) also modify this armor: {mods}. Disable them after generating the swap mod, or co-deployment will crash the game due to resource conflicts",
     "ArmorSwapPage.IssuesSection": "Compatibility Check",
     "ArmorSwapPage.NoErrorsNote": "No blocking issues found, you may generate.",
     "ArmorSwapPage.Generate": "Generate Armor Swap Mod",

@@ -211,7 +211,20 @@ public sealed class ArmorSwapDiagPollutionTests
             Console.WriteLine($"=== uncovered target units ({uncovered.Length}):");
             foreach (var u in uncovered.OrderBy(static u => u.Slot).ThenBy(static u => (ulong)u.FileId))
                 Console.WriteLine($"  0x{u.FileId:X16} pkg={u.PackageId} slot={u.Slot} shape={u.BodyShape} helmetPkg={u.IsFromHelmetPackage}");
-            // 目标骨架未覆盖到的游戏 Unit 不存在于此检查——另需确认骨架本身完整性
+            Assert.AreEqual(0, uncovered.Length, $"{label} 存在未覆盖的目标 Unit（原版残留）");
+
+            // 空气填充验证：瑟瑞斯->CW-9 的未分类肩甲/胸甲/臂甲附件应被空气网格覆盖
+            if (label.Contains("CW-9", StringComparison.OrdinalIgnoreCase))
+            {
+                var gpuSizes = entries.ToDictionary(
+                    static e => unchecked((long)e.FileId), static e => e.GpuSize);
+                var uncBySlot = target.Units
+                    .GroupBy(static u => u.Slot)
+                    .ToDictionary(static g => g.Key, static g => g.Count());
+                Console.WriteLine("=== CW-9 target slots:");
+                foreach (var (slot, count) in uncBySlot.OrderBy(static p => p.Key))
+                    Console.WriteLine($"  {slot}: {count}");
+            }
         }
         finally
         {

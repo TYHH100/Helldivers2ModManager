@@ -234,7 +234,7 @@
     "ArmorSwapPage.TargetArmorLabel": "目标护甲（游戏中要显示新外观的护甲）",
     "ArmorSwapPage.GroupParts": "（{count} 个部件）",
     "ArmorSwapPage.UnidentifiedGroup": "未识别部件（{count} 个，可能属于多套护甲）",
-    "ArmorSwapPage.PollutedBy": "已被 {count} 个已启用模组覆盖：{mods}",
+    "ArmorSwapPage.PollutedBy": "以下 {count} 个已启用模组也修改了这件护甲：{mods}；生成换甲模组后请禁用它们，否则共同部署会因资源冲突导致游戏崩溃",
     "ArmorSwapPage.IssuesSection": "兼容性检查",
     "ArmorSwapPage.NoErrorsNote": "未发现阻断问题，可以生成。",
     "ArmorSwapPage.Generate": "生成换甲模组",
