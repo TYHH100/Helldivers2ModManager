@@ -49,11 +49,22 @@ internal sealed class SearchFilterService
 
     private IEnumerable<ModViewModel> ApplyNameSearch(IEnumerable<ModViewModel> mods, string searchText)
     {
+        // 关闭模糊搜索时保持原有精确子串行为
+        if (!_settingsService.EnableFuzzySearch)
+        {
+            return mods.Where(vm =>
+            {
+                if (_settingsService.CaseSensitiveSearch)
+                    return vm.Name.Contains(searchText, StringComparison.Ordinal);
+                return vm.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+
+        var caseSensitive = _settingsService.CaseSensitiveSearch;
         return mods.Where(vm =>
         {
-            if (_settingsService.CaseSensitiveSearch)
-                return vm.Name.Contains(searchText, StringComparison.Ordinal);
-            return vm.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+            var cache = vm.PinyinCache;
+            return FuzzySearchMatcher.IsMatch(vm.Name, searchText, caseSensitive, cache[0], cache[1]);
         });
     }
 }

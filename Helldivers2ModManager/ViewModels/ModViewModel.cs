@@ -31,6 +31,23 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     public string Name => _mod.Manifest.Name;
 
+    /// <summary>
+    /// 模糊搜索用的惰性拼音缓存：[0] 全拼小写（如 "diyuqianbing 4k caizhibao"），
+    /// [1] 首字母小写（如 "dyqb 4k czb"）。名称在 Mod 生命周期内不变，
+    /// 缓存随 VM 实例释放，避免搜索防抖热路径重复做拼音转换。
+    /// </summary>
+    private string[]? _pinyinCache;
+
+    internal string[] PinyinCache => _pinyinCache ??= BuildPinyinCache(_mod.Manifest.Name);
+
+    private static string[] BuildPinyinCache(string name)
+    {
+        // false：无音调输出；英文/数字原样保留（如 "Helldivers2" → "Helldivers2"）。
+        string full = ToolGood.Words.Pinyin.WordsHelper.GetPinyin(name, false).ToLowerInvariant();
+        string first = ToolGood.Words.Pinyin.WordsHelper.GetFirstPinyin(name).ToLowerInvariant();
+        return [full, first];
+    }
+
     public string Description => _mod.Manifest.Description;
 
     public Visibility OptionsVisible

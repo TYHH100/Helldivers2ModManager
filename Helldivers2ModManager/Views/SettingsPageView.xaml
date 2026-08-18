@@ -741,6 +741,22 @@
                                     <CheckBox Grid.Column="0"
                                               Width="24"
                                               Height="24"
+                                              IsChecked="{Binding EnableFuzzySearch}"
+                                              Margin="0 0 12 0"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{loc:Loc SettingsPage.EnableFuzzySearch}"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                                <Grid Margin="0 8 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
                                               IsChecked="{Binding CaseSensitiveSearch}"
                                               Margin="0 0 12 0"/>
                                     <TextBlock Grid.Column="1"

@@ -41,6 +41,7 @@
 		<PackageReference Include="gong-wpf-dragdrop" Version="4.0.0" />
 		<PackageReference Include="MdXaml" Version="1.27.0" />
 		<PackageReference Include="BCnEncoder.Net" Version="2.2.1" />
+		<PackageReference Include="ToolGood.Words.Pinyin" Version="3.1.0.4" />
 		<PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
 		<PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
 		<PackageReference Include="Vortice.DXGI" Version="3.8.3" />

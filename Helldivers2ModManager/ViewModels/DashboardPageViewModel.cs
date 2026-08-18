@@ -481,6 +481,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
         _mods = new(modViewModels);
         _mods.CollectionChanged += Mods_CollectionChanged;
+        // 预热模糊搜索的拼音缓存：首次调用会加载拼音字典（实测约 180ms，批量转换 1000 个
+        // 名称仅需数毫秒）。放到后台线程执行，避免用户第一次输入搜索时在 UI 线程上卡顿；
+        // 先取快照，避免与后续 ModAdded/ModRemoved 修改 _mods 集合产生并发枚举。
+        PrewarmPinyinSearchCache(_mods.ToArray());
         await _modGroupService.InitAsync(_settingsService, _mods.Select(static vm => vm.Data).ToArray());
         _modGroupService.ApplyGroupState(_modGroupService.SelectedGroup.Id, _mods.Select(static vm => vm.Data));
         foreach (var vm in _mods)
@@ -519,6 +523,27 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 #if DEBUG && FALSE
 		ShowProblems(Enum.GetValues<ModProblemKind>().Select(static k => new ModProblem { Directory = new DirectoryInfo(@"C:\ModStorage\Test"), Kind = k }), "Problem test:", true);
 #endif
+    }
+
+    /// <summary>
+    /// 后台预热模糊搜索的拼音缓存（触发拼音字典加载 + 批量转换），
+    /// 确保用户第一次输入搜索时无需在 UI 线程上做首次字典加载。失败不影响功能：
+    /// 搜索路径仍会按需惰性构建缓存。
+    /// </summary>
+    private static void PrewarmPinyinSearchCache(ModViewModel[] mods)
+    {
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                foreach (var vm in mods)
+                    _ = vm.PinyinCache;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Pinyin cache prewarm failed: {ex}");
+            }
+        });
     }
 
     private void ShowProblems(IEnumerable<ModProblem> problems, string prefix, bool error, bool isInit = false)

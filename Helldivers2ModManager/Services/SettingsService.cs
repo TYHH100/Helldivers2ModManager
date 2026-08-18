@@ -213,6 +213,25 @@ internal sealed class SettingsService
 		}
 	}
 
+	/// <summary>
+	/// 是否启用搜索框模糊搜索（支持拼音全拼/首字母与字符子序列匹配）。
+	/// </summary>
+	public bool EnableFuzzySearch
+	{
+		get
+		{
+			GuardInitialized();
+			return _enableFuzzySearch;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_enableFuzzySearch = value;
+		}
+	}
+
 	public bool UseSymbolicLinks
 	{
 		get
@@ -541,6 +560,8 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private bool _caseSensitiveSearch;
 	[JsonInclude]
+	private bool _enableFuzzySearch = true;
+	[JsonInclude]
 	private bool _useSymbolicLinks;
 	[JsonInclude]
 	private bool _deleteToRecycleBin = true;
@@ -814,6 +835,7 @@ internal sealed class SettingsService
 			SkipList = _skipList,
 			OrganizationalFolderNames = _organizationalFolderNames,
 			CaseSensitiveSearch = _caseSensitiveSearch,
+			EnableFuzzySearch = _enableFuzzySearch,
 			UseSymbolicLinks = _useSymbolicLinks,
 			DeleteToRecycleBin = _deleteToRecycleBin,
 			AutoRemoveMissingMods = _autoRemoveMissingMods,
@@ -911,6 +933,8 @@ internal sealed class SettingsService
 		}
 		if (root.TryGetProperty(nameof(CaseSensitiveSearch), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_caseSensitiveSearch = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(EnableFuzzySearch), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_enableFuzzySearch = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(UseSymbolicLinks), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_useSymbolicLinks = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(DeleteToRecycleBin), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -1119,6 +1143,7 @@ internal sealed class SettingsService
 		_cardOpacity = 0.7f;
 		_skipList = [];
 		_caseSensitiveSearch = false;
+		_enableFuzzySearch = true;
 		_useSymbolicLinks = false;
 		_autoRemoveMissingMods = false;
 		_deleteToRecycleBin = true;

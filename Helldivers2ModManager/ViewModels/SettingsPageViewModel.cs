@@ -139,6 +139,20 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	/// <summary>
+	/// 搜索框模糊搜索（拼音/首字母/子序列匹配）
+	/// </summary>
+	public bool EnableFuzzySearch
+	{
+		get => _settingsService.Initialized ? _settingsService.EnableFuzzySearch : true;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.EnableFuzzySearch = value;
+			OnPropertyChanged();
+		}
+	}
+
 	public bool UseSymbolicLinks
 	{
 		get => _settingsService.Initialized ? _settingsService.UseSymbolicLinks : false;
