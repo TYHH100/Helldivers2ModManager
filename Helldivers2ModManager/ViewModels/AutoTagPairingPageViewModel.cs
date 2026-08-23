@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
+using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
@@ -24,15 +25,18 @@ internal sealed partial class AutoTagPairingPageViewModel : PageViewModelBase
     private readonly ILogger<AutoTagPairingPageViewModel> _logger;
     private readonly SettingsService _settingsService;
     private readonly LocalizationService _localizationService;
+    private readonly NavigationStore _navigationStore;
 
     public AutoTagPairingPageViewModel(
         ILogger<AutoTagPairingPageViewModel> logger,
         SettingsService settingsService,
-        LocalizationService localizationService)
+        LocalizationService localizationService,
+        NavigationStore navigationStore)
     {
         _logger = logger;
         _settingsService = settingsService;
         _localizationService = localizationService;
+        _navigationStore = navigationStore;
 
         _localizationService.PropertyChanged += (_, _) =>
         {
@@ -117,6 +121,12 @@ internal sealed partial class AutoTagPairingPageViewModel : PageViewModelBase
         {
             Message = _localizationService["AutoTagPairingPage.SaveSuccess"],
         });
+    }
+
+    [RelayCommand]
+    void Back()
+    {
+        _navigationStore.Navigate<SettingsPageViewModel>();
     }
 }
 

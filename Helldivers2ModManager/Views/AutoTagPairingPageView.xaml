@@ -69,6 +69,15 @@
 				CornerRadius="8"
 				Padding="12 8">
 			<StackPanel Orientation="Horizontal">
+				<Button Command="{Binding BackCommand}"
+						Style="{StaticResource FluentSecondaryButton}"
+						Padding="16 8"
+						Margin="0 0 8 0">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="&#xE72B;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
+						<TextBlock Text="{loc:Loc Common.Back}" Margin="8 0 0 0" VerticalAlignment="Center"/>
+					</StackPanel>
+				</Button>
 				<Button Command="{Binding SaveCommand}"
 						Style="{StaticResource FluentPrimaryButton}"
 						Padding="16 8">
