@@ -645,6 +645,18 @@
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 4 0 12"/>
 
+                                <!-- 重放新手引导 -->
+                                <Button Content="{loc:Loc SettingsPage.ReplayTutorial}"
+                                        Style="{StaticResource FluentSecondaryButton}"
+                                        Command="{Binding ReplayTutorialCommand}"
+                                        HorizontalAlignment="Left"
+                                        Padding="16 10"
+                                        Margin="0 0 0 4"/>
+                                <TextBlock Text="{loc:Loc SettingsPage.ReplayTutorialDesc}"
+                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                           FontSize="12"
+                                           Margin="0 0 0 16"/>
+
                                 <!-- 重新计算文件指纹 -->
                                 <Button Content="{loc:Loc SettingsPage.RecomputeHashes}"
                                         Style="{StaticResource FluentSecondaryButton}"
@@ -724,6 +736,57 @@
                                                Foreground="{StaticResource NeutralForegroundBrush}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 自动识别打标签 -->
+                        <Border Style="{StaticResource FluentSettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="{loc:Loc SettingsPage.AutoTagging}"
+                                           Style="{StaticResource FluentSubSectionHeader}"
+                                           Margin="0"/>
+                                <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
+                                    <Run Text="{loc:Loc SettingsPage.AutoTaggingDesc}"/>
+                                </TextBlock>
+                                <Grid Margin="0 8 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
+                                              IsChecked="{Binding EnableAutoTagging}"
+                                              Margin="0 0 12 0"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{loc:Loc SettingsPage.EnableAutoTagging}"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                                <Grid Margin="0 8 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
+                                              IsChecked="{Binding AutoTagCreateMissingTags}"
+                                              Margin="0 0 12 0"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{loc:Loc SettingsPage.AutoTagCreateMissing}"
+                                               FontSize="14"
+                                               Foreground="{StaticResource NeutralForegroundBrush}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                                <Button Content="{loc:Loc SettingsPage.EditAutoTagPairing}"
+                                              Command="{Binding OpenAutoTagPairingCommand}"
+                                              Visibility="{Binding AutoTagPairingButtonVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                              Style="{StaticResource FluentSecondaryButton}"
+                                              Padding="12 6"
+                                              Margin="0 8 0 0"
+                                              HorizontalAlignment="Left"/>
                             </StackPanel>
                         </Border>
 

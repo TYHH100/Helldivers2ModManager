@@ -46,6 +46,9 @@
 		<DataTemplate DataType="{x:Type vms:TagManagementPageViewModel}">
 			<views:TagManagementPageView/>
 		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:AutoTagPairingPageViewModel}">
+			<views:AutoTagPairingPageView/>
+		</DataTemplate>
 		<DataTemplate DataType="{x:Type vms:NexusDownloadPageViewModel}">
 			<views:NexusDownloadPageView/>
 		</DataTemplate>
@@ -182,6 +185,7 @@
 								<cmp:VersionCheckDetailOverlay Grid.Row="1"/>
 								<cmp:ModConflictDetailOverlay Grid.Row="1"/>
 								<cmp:MessageBox Grid.Row="1"/>
+								<cmp:FirstRunTutorialOverlay Grid.Row="1"/>
 
 								<!-- 拖拽导入提示覆盖层：拖入压缩包时提示松开导入（模板内元素，code-behind 经 Template.FindName 访问） -->
 								<Border x:Name="dropHintOverlay"

@@ -445,7 +445,8 @@
 
 				<!-- Navigation Buttons -->
 				<StackPanel DockPanel.Dock="Top">
-					<Button Style="{StaticResource FluentNavigationButton}"
+					<StackPanel x:Name="AddCreatePanel">
+					<Button x:Name="AddModButton" Style="{StaticResource FluentNavigationButton}"
 							Command="{Binding AddCommand}"
 							IsEnabled="{Binding Initialized}">
 						<StackPanel Orientation="Horizontal">
@@ -461,6 +462,7 @@
 							<TextBlock Text="{loc:Loc DashboardPage.CreateMod}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 						</StackPanel>
 					</Button>
+					</StackPanel>
 					<!-- <Button Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding DownloadFromNexusCommand}"
 						IsEnabled="{Binding Initialized}">
@@ -469,7 +471,7 @@
                         <TextBlock Text="从 Nexus 下载" ToolTip="试验性, 未经测试(我没有n网会员所以这个就鸽了)" Margin="12 0 0 0" VerticalAlignment="Center"/>
 					</StackPanel>
 				</Button> -->
-					<Button Style="{StaticResource FluentNavigationButton}"
+					<Button x:Name="BackgroundTasksButton" Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding ShowBackgroundTasksCommand}"
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
@@ -477,7 +479,7 @@
 						<TextBlock Text="{loc:Loc DashboardPage.BackgroundTasks}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
-					<Button Style="{StaticResource FluentNavigationButton}"
+					<Button x:Name="ArmorReuseButton" Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding ArmorReuseCommand}"
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
@@ -485,7 +487,7 @@
 						<TextBlock Text="{loc:Loc DashboardPage.ArmorReuse}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
-					<Button Style="{StaticResource FluentNavigationButton}"
+					<Button x:Name="PatchResourceViewerButton" Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding PatchResourceViewerCommand}"
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
@@ -493,7 +495,7 @@
 						<TextBlock Text="{loc:Loc DashboardPage.PatchResourceViewer}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
-					<Button Style="{StaticResource FluentNavigationButton}"
+					<Button x:Name="BisectButton" Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding BisectCommand}"
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
@@ -501,7 +503,7 @@
 						<TextBlock Text="{loc:Loc DashboardPage.Bisect}" Margin="12 0 0 0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 					</StackPanel>
 				</Button>
-					<Button Style="{StaticResource FluentNavigationButton}"
+					<Button x:Name="TagManagementButton" Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding TagManagementCommand}"
 						IsEnabled="{Binding Initialized}">
 					<StackPanel Orientation="Horizontal">
@@ -510,7 +512,7 @@
 					</StackPanel>
 				</Button>
 
-					<Button Style="{StaticResource FluentNavigationButton}"
+					<Button x:Name="SettingsButton" Style="{StaticResource FluentNavigationButton}"
 						Command="{Binding SettingsCommand}">
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="16" VerticalAlignment="Center"/>
@@ -568,8 +570,8 @@
 				</StackPanel>
 
 				<!-- Version Check Button - Dock to Bottom -->
-				<StackPanel DockPanel.Dock="Bottom">
-					<Button Style="{StaticResource FluentNavigationButton}"
+				<StackPanel x:Name="VersionCheckPanel" DockPanel.Dock="Bottom">
+					<Button x:Name="CheckVersionButton" Style="{StaticResource FluentNavigationButton}"
 							Command="{Binding CheckVersionCompatibilityCommand}"
 							IsEnabled="{Binding Initialized}">
 						<StackPanel Orientation="Horizontal">
@@ -607,7 +609,7 @@
 				</Grid.ColumnDefinitions>
 
 				<!-- Search Box -->
-				<Grid Grid.Row="0" Grid.Column="0">
+				<Grid x:Name="SearchArea" Grid.Row="0" Grid.Column="0">
 					<Grid.ColumnDefinitions>
 						<ColumnDefinition Width="*"/>
 						<ColumnDefinition Width="Auto"/>
@@ -836,7 +838,7 @@
 				</Grid>
 
 				<!-- Action Buttons (右侧) -->
-				<StackPanel Grid.Column="1"
+				<StackPanel x:Name="BottomActionButtons" Grid.Column="1"
 							Orientation="Horizontal">
                     <Button Style="{StaticResource FluentSecondaryButton}"
                             Command="{Binding BatchRepairCommand}"
@@ -867,7 +869,7 @@
 							<ToolTip Content="{loc:Loc DashboardPage.CleanModsHint}"/>
 						</Button.ToolTip>
 					</Button>
-					<Button Style="{StaticResource FluentConfirmButton}"
+					<Button x:Name="DeployModsButton" Style="{StaticResource FluentConfirmButton}"
 							Content="{loc:Loc DashboardPage.DeployMods}"
 							Command="{Binding DeployCommand}"
 							IsEnabled="{Binding Initialized}"

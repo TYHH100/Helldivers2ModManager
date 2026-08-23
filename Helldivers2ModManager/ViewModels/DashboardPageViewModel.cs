@@ -59,6 +59,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly ModGroupService _modGroupService;
     private readonly ModConflictService _modConflictService;
     private readonly ModConflictRepository _modConflictRepository;
+    private readonly ModTypeDetectionService _modTypeDetectionService;
     private readonly DispatcherTimer _searchDebounceTimer;
 
     [ObservableProperty]
@@ -140,6 +141,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         ModGroupService modGroupService,
         ModConflictService modConflictService,
         ModConflictRepository modConflictRepository,
+        ModTypeDetectionService modTypeDetectionService,
         ModGroupSidebarViewModel groupSidebar)
     {
         _logger = logger;
@@ -161,6 +163,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _modGroupService = modGroupService;
         _modConflictService = modConflictService;
         _modConflictRepository = modConflictRepository;
+        _modTypeDetectionService = modTypeDetectionService;
         GroupSidebar = groupSidebar;
         GroupSidebar.Configure(GetSelectedModData, () => _mods?.Select(static vm => vm.Data) ?? [], SelectGroupAsync, UpdateGroupedView);
 
@@ -254,6 +257,54 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             if (showProgress)
                 WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
         }
+    }
+
+    /// <summary>
+    /// 自动识别模组类型并打标签（音效/UI/贴图/护甲/战略配备/支援武器/主武器/敌人/模型/脚本）。
+    /// 默认关闭，需在设置中开启；开启后优先复用用户已有同名标签，默认不创建新标签。
+    /// 识别是后台任务；标签合并与保存回 UI 线程执行，保留用户标签。
+    /// </summary>
+    private async Task ApplyAutoTypeTagsAsync(IReadOnlyCollection<ModViewModel> mods)
+    {
+        // 默认关闭：需在设置中显式开启自动打标签
+        if (mods.Count == 0 || _settingsService.IsReadonly || !_settingsService.EnableAutoTagging)
+            return;
+
+        var targets = mods.Select(static vm => vm.Data).ToArray();
+        Dictionary<string, ModTypeDetectionService.ModTypeDetectionResult> detections;
+        try
+        {
+            detections = await _backgroundTaskService.RunAsync(
+                _localizationService["DashboardPage.AutoTagTitle"],
+                _localizationService["SettingsPage.PleaseWait"],
+                (_, token) => Task.FromResult(_modTypeDetectionService.DetectAll(targets, token)),
+                isForeground: false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "自动识别模组类型失败，跳过自动打标签");
+            return;
+        }
+
+        var changed = _modTypeDetectionService.ApplyAutoTags(
+            _settingsService,
+            _localizationService,
+            targets,
+            detections,
+            createMissingTags: _settingsService.AutoTagCreateMissingTags);
+        if (changed == 0)
+            return;
+
+        _logger.LogInformation("自动识别并打标签：{Count} 个模组", changed);
+        RequestProfileSave();
+        WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+        {
+            Message = _localizationService["DashboardPage.AutoTagSummary"].Replace("{count}", changed.ToString()),
+        });
     }
 
     private void RebuildOrderedItems()
@@ -494,6 +545,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         RebuildOrderedItems();
         _ = CaptureProfileSnapshot();
         UpdateView();
+
+        // 自动识别模组类型并打内置类型标签（识别在后台线程，打标签与保存回 UI 线程）
+        await ApplyAutoTypeTagsAsync(_mods.ToArray());
 
         if (problems.Length > 0)
             ShowProblems(problems, _localizationService["DashboardPage.LoadProblemsPrefix"], false, true);

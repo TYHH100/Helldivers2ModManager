@@ -293,6 +293,42 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		}
 	}
 
+	public bool EnableAutoTagging
+	{
+		get => _settingsService.Initialized ? _settingsService.EnableAutoTagging : false;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.EnableAutoTagging = value;
+			OnPropertyChanged();
+			OnPropertyChanged(nameof(AutoTagPairingButtonVisible));
+		}
+	}
+
+	public bool AutoTagCreateMissingTags
+	{
+		get => _settingsService.Initialized ? _settingsService.AutoTagCreateMissingTags : false;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.AutoTagCreateMissingTags = value;
+			OnPropertyChanged();
+			OnPropertyChanged(nameof(AutoTagPairingButtonVisible));
+		}
+	}
+
+	/// <summary>
+	/// 仅当「启用自动打标签」开启且「自动创建缺失标签」关闭时，显示手动配对入口。
+	/// </summary>
+	public bool AutoTagPairingButtonVisible =>
+		_settingsService.Initialized && _settingsService.EnableAutoTagging && !_settingsService.AutoTagCreateMissingTags;
+
+	[RelayCommand]
+	void OpenAutoTagPairing()
+	{
+		_navStore.Navigate<AutoTagPairingPageViewModel>();
+	}
+
 	public string? NexusApiKey
 	{
 		get => _settingsService.Initialized ? _settingsService.NexusApiKey : null;
@@ -526,6 +562,9 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(EnableBatchRepair));
 		OnPropertyChanged(nameof(AutoCleanLogs));
 		OnPropertyChanged(nameof(ShowSeparator));
+		OnPropertyChanged(nameof(EnableAutoTagging));
+		OnPropertyChanged(nameof(AutoTagCreateMissingTags));
+		OnPropertyChanged(nameof(AutoTagPairingButtonVisible));
 		OnPropertyChanged(nameof(MaxLogFiles));
 		OnPropertyChanged(nameof(NexusApiKey));
 		OnPropertyChanged(nameof(SelectedLanguageCode));
@@ -709,6 +748,13 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 
 		if (dialog.ShowDialog() ?? false)
 			TempDir = dialog.FolderName;
+	}
+
+	[RelayCommand]
+	void ReplayTutorial()
+	{
+		_navStore.Navigate<DashboardPageViewModel>();
+		WeakReferenceMessenger.Default.Send(new ReplayFirstRunTutorialMessage());
 	}
 
 	[RelayCommand]

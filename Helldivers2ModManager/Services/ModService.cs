@@ -1761,6 +1761,12 @@ internal sealed partial class ModService
 
 				foreach (var opt in opts)
 				{
+					if (string.IsNullOrWhiteSpace(opt))
+					{
+						// 旧格式的空选项目录视为“不包含文件”的占位开关，不报错。
+						_logger.LogDebug("Manifest \"{}\" contains empty option directory; skipping", manifestFile.FullName);
+						continue;
+					}
 					if (!TryResolveManifestRelativePath(dir, opt, out var optionPath))
 					{
 						_logger.LogWarning("Manifest \"{}\" contains unsafe option directory \"{}\"", manifestFile.FullName, opt);
@@ -1911,6 +1917,12 @@ internal sealed partial class ModService
 
 		void ValidateIncludePath(string include)
 		{
+			if (string.IsNullOrWhiteSpace(include))
+			{
+				// 空 include 表示“不包含文件”的空选项，属于合法占位，不作为问题。
+				_logger.LogDebug("Manifest \"{}\" contains empty include path; skipping", manifestFile.FullName);
+				return;
+			}
 			if (!TryResolveManifestRelativePath(dir, include, out var includePath))
 			{
 				_logger.LogWarning("Manifest \"{}\" contains unsafe include path \"{}\"", manifestFile.FullName, include);

@@ -338,6 +338,25 @@ internal sealed class SettingsService
 	}
 
 	/// <summary>
+	/// 是否已完成首次使用引导。
+	/// </summary>
+	public bool FirstRunTutorialCompleted
+	{
+		get
+		{
+			GuardInitialized();
+			return _firstRunTutorialCompleted;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_firstRunTutorialCompleted = value;
+		}
+	}
+
+	/// <summary>
 	/// 是否启用日志数量自动清理
 	/// </summary>
 	public bool AutoCleanLogs
@@ -372,6 +391,66 @@ internal sealed class SettingsService
 			GuardInitialized();
 			GuardReadonly();
 			_showSeparator = value;
+		}
+	}
+
+	/// <summary>
+	/// 是否启用启动时自动识别模组类型并打标签（默认关闭）。
+	/// 开启后只会给模组打上已存在的同名标签；是否自动创建缺失标签由 AutoTagCreateMissingTags 控制。
+	/// </summary>
+	public bool EnableAutoTagging
+	{
+		get
+		{
+			GuardInitialized();
+			return _enableAutoTagging;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_enableAutoTagging = value;
+		}
+	}
+
+	/// <summary>
+	/// 是否在自动打标签时创建缺失的类型标签（默认关闭）。
+	/// 关闭时仅复用用户已有的同名标签（兼容老版本手动创建的标签）。
+	/// </summary>
+	public bool AutoTagCreateMissingTags
+	{
+		get
+		{
+			GuardInitialized();
+			return _autoTagCreateMissingTags;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_autoTagCreateMissingTags = value;
+		}
+	}
+
+	/// <summary>
+	/// 手动指定的「自动识别类型 → 标签」配对（默认空）。
+	/// 自动打标签时优先使用该配对。
+	/// </summary>
+	public List<AutoTagMapping> AutoTagMappings
+	{
+		get
+		{
+			GuardInitialized();
+			return _autoTagMappings;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_autoTagMappings = value;
 		}
 	}
 
@@ -576,9 +655,17 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private bool _repairDisclaimerAccepted;
 	[JsonInclude]
+	private bool _firstRunTutorialCompleted;
+	[JsonInclude]
 	private bool _autoCleanLogs = true;
 	[JsonInclude]
 	private bool _showSeparator = false;
+	[JsonInclude]
+	private bool _enableAutoTagging = false;
+	[JsonInclude]
+	private bool _autoTagCreateMissingTags = false;
+	[JsonInclude]
+	private List<AutoTagMapping> _autoTagMappings = [];
 	[JsonInclude]
 	private ObservableCollection<ModSeparator> _separators = null!;
 	[JsonInclude]
@@ -843,8 +930,16 @@ internal sealed class SettingsService
 			AutoCheckVersionOnStartup = _autoCheckVersionOnStartup,
 			EnableBatchRepair = _enableBatchRepair,
 			RepairDisclaimerAccepted = _repairDisclaimerAccepted,
+			FirstRunTutorialCompleted = _firstRunTutorialCompleted,
 			AutoCleanLogs = _autoCleanLogs,
 			ShowSeparator = _showSeparator,
+			EnableAutoTagging = _enableAutoTagging,
+			AutoTagCreateMissingTags = _autoTagCreateMissingTags,
+			AutoTagMappings = _autoTagMappings.Select(static m => new
+			{
+				type = m.Type,
+				tagId = m.TagId,
+			}).ToList(),
 			Separators = _separators.Select(static separator => new
 			{
 				id = separator.Id,
@@ -891,6 +986,7 @@ internal sealed class SettingsService
 			CommentHandling = JsonCommentHandling.Skip
 		});
 		var root = document.RootElement;
+		var firstRunTutorialCompletedFound = false;
 		if (root.TryGetProperty(nameof(GameDirectory), JsonValueKind.String, out var prop))
 			_gameDirectory = prop.GetString()!;
 		if (root.TryGetProperty(nameof(StorageDirectory), JsonValueKind.String, out prop))
@@ -999,10 +1095,34 @@ internal sealed class SettingsService
 			_enableBatchRepair = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(RepairDisclaimerAccepted), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_repairDisclaimerAccepted = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(FirstRunTutorialCompleted), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		{
+			_firstRunTutorialCompleted = prop.GetBoolean();
+			firstRunTutorialCompletedFound = true;
+		}
 		if (root.TryGetProperty(nameof(AutoCleanLogs), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_autoCleanLogs = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(ShowSeparator), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_showSeparator = prop.GetBoolean();
+	if (root.TryGetProperty(nameof(EnableAutoTagging), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		_enableAutoTagging = prop.GetBoolean();
+	if (root.TryGetProperty(nameof(AutoTagCreateMissingTags), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		_autoTagCreateMissingTags = prop.GetBoolean();
+	if (root.TryGetProperty(nameof(AutoTagMappings), JsonValueKind.Array, out var mappingArr))
+	{
+		var mappingList = new List<AutoTagMapping>();
+		foreach (var mappingElm in mappingArr.EnumerateArray())
+		{
+			if (!mappingElm.TryGetProperty(nameof(AutoTagMapping.Type), out var typeProp) || typeProp.ValueKind != JsonValueKind.Number)
+				continue;
+			if (!mappingElm.TryGetProperty(nameof(AutoTagMapping.TagId), out var tagIdProp) || tagIdProp.ValueKind != JsonValueKind.String)
+				continue;
+			if (!Guid.TryParse(tagIdProp.GetString(), out var mappingTagId))
+				continue;
+			mappingList.Add(new AutoTagMapping { Type = (ModType)typeProp.GetInt32(), TagId = mappingTagId });
+		}
+		_autoTagMappings = mappingList;
+	}
 		if (root.TryGetProperty(nameof(Separators), JsonValueKind.Array, out var sepArr))
 		{
 			var sepList = new List<ModSeparator>();
@@ -1080,6 +1200,9 @@ internal sealed class SettingsService
 		if (root.TryGetProperty(nameof(NexusApiKey), JsonValueKind.String, out prop))
 			_encryptedNexusApiKey = prop.GetString();
 
+		if (!firstRunTutorialCompletedFound)
+			_firstRunTutorialCompleted = true;
+
 		document.Dispose();
 		await stream.DisposeAsync();
 	}
@@ -1150,9 +1273,13 @@ internal sealed class SettingsService
 		_autoCheckVersionOnStartup = false;
 		_enableBatchRepair = false;
 		_repairDisclaimerAccepted = false;
+		_firstRunTutorialCompleted = false;
 		_autoCleanLogs = true;
 		_maxLogFiles = 20;
 		_showSeparator = false;
+		_enableAutoTagging = false;
+		_autoTagCreateMissingTags = false;
+		_autoTagMappings = [];
 		_separators = [];
 		_tags = [];
 		_organizationalFolderNames = ["Models", "Model"];

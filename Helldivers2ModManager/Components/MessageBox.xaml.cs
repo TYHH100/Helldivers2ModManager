@@ -107,6 +107,9 @@ internal sealed class MessageBoxInputMessage
 
 	public required Action<string> Confirm { get; init; }
 
+	/// <summary>用户点取消按钮时调用；可选（如输入弹窗用于创建标签，取消时需回滚选择）。</summary>
+	public Action? Abort { get; init; }
+
 	public int MaxLength { get; init; } = -1;
 
 	public string InitialText { get; init; } = string.Empty;
@@ -195,6 +198,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	internal static LocalizationService? LocalizationService { get; private set; }
 	
 	private Action<string>? _inputAction;
+	private Action? _inputAbortAction;
 	private Action? _abortAction;
 	private Action? _confirmAction;
 	private Action<object>? _selectionAction;
@@ -435,6 +439,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		Reset();
 
 		_inputAction = message.Confirm;
+		_inputAbortAction = message.Abort;
 
 		title.Text = message.Title;
 		brush.Color = Colors.White;
@@ -588,6 +593,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	private void Reset()
 	{
 		_inputAction = null;
+		_inputAbortAction = null;
 		_abortAction = null;
 		_confirmAction = null;
 		_selectionAction = null;
@@ -691,6 +697,7 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	{
 		Receive(new MessageBoxHideMessage());
 		_selectionAbortAction?.Invoke();
+		_inputAbortAction?.Invoke();
 	}
 
 	private void ColorBorder_Click(object sender, MouseButtonEventArgs e)
