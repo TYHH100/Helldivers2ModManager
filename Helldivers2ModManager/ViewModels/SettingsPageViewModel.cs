@@ -17,7 +17,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class SettingsPageViewModel : PageViewModelBase
 {
 	public override string Title => "Settings";

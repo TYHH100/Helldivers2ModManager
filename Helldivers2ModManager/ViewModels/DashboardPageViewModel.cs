@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using GongSolutions.Wpf.DragDrop;
+using Helldivers2ModManager.Adapters;
 using Helldivers2ModManager.Components;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
@@ -25,7 +26,6 @@ using MessageBox = Helldivers2ModManager.Components.MessageBox;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropTarget
 {
     public override string Title => _localizationService["DashboardPage.Title"];
@@ -44,6 +44,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly Lazy<NavigationStore> _navStore;
     private readonly EditModStore _editModStore;
     private readonly ModService _modService;
+    private readonly IModViewModelFactory _modViewModelFactory;
     private readonly SettingsService _settingsService;
     private readonly ProfileService _profileService;
     private readonly ProfileSaveCoordinator _profileSaveCoordinator;
@@ -59,7 +60,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private readonly ModGroupService _modGroupService;
     private readonly ModConflictService _modConflictService;
     private readonly ModConflictRepository _modConflictRepository;
-    private readonly ModTypeDetectionService _modTypeDetectionService;
+    private readonly Core.Mods.ModTypeDetectionService _coreModTypeDetectionService;
+    private readonly Core.Mods.AutoTaggingService _coreAutoTaggingService;
+    private readonly Core.Mods.ModArchiveService _coreModArchiveService;
     private readonly DispatcherTimer _searchDebounceTimer;
 
     [ObservableProperty]
@@ -141,7 +144,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         ModGroupService modGroupService,
         ModConflictService modConflictService,
         ModConflictRepository modConflictRepository,
-        ModTypeDetectionService modTypeDetectionService,
+        Core.Mods.ModTypeDetectionService coreModTypeDetectionService,
+        Core.Mods.AutoTaggingService coreAutoTaggingService,
+        Core.Mods.ModArchiveService coreModArchiveService,
+        IModViewModelFactory modViewModelFactory,
         ModGroupSidebarViewModel groupSidebar)
     {
         _logger = logger;
@@ -163,7 +169,10 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _modGroupService = modGroupService;
         _modConflictService = modConflictService;
         _modConflictRepository = modConflictRepository;
-        _modTypeDetectionService = modTypeDetectionService;
+        _coreModTypeDetectionService = coreModTypeDetectionService;
+        _coreAutoTaggingService = coreAutoTaggingService;
+        _coreModArchiveService = coreModArchiveService;
+        _modViewModelFactory = modViewModelFactory;
         GroupSidebar = groupSidebar;
         GroupSidebar.Configure(GetSelectedModData, () => _mods?.Select(static vm => vm.Data) ?? [], SelectGroupAsync, UpdateGroupedView);
 
@@ -271,14 +280,42 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             return;
 
         var targets = mods.Select(static vm => vm.Data).ToArray();
-        Dictionary<string, ModTypeDetectionService.ModTypeDetectionResult> detections;
+        Core.Mods.AutoTagApplicationResult autoTagResult;
         try
         {
-            detections = await _backgroundTaskService.RunAsync(
+            var coreDetections = await _backgroundTaskService.RunAsync(
                 _localizationService["DashboardPage.AutoTagTitle"],
                 _localizationService["SettingsPage.PleaseWait"],
-                (_, token) => Task.FromResult(_modTypeDetectionService.DetectAll(targets, token)),
+                (_, token) => _coreModTypeDetectionService.DetectAllAsync(
+                    targets.Select(static mod => mod.Directory), token),
                 isForeground: false);
+
+            var requests = targets.Select(mod => new Core.Mods.AutoTagRequest(
+                mod.Directory.FullName,
+                mod.TagIds,
+                coreDetections[mod.Directory.FullName].Types)).ToArray();
+            autoTagResult = _coreAutoTaggingService.Apply(
+                requests,
+                _settingsService.Tags.Select(static tag => new Core.Persistence.TagSetting(tag.Id, tag.Name, tag.Color)).ToArray(),
+                _settingsService.AutoTagMappings.Select(static mapping => new Core.Persistence.AutoTagMappingSetting((int)mapping.Type, mapping.TagId)).ToArray(),
+                type => _localizationService[Core.Mods.ModTypeDetectionService.BuiltInTags.First(definition => definition.Type == type).NameKey],
+                createMissingTags: _settingsService.AutoTagCreateMissingTags);
+
+            foreach (var tag in autoTagResult.Tags)
+            {
+                if (_settingsService.Tags.All(existing => existing.Id != tag.Id))
+                {
+                    _settingsService.Tags.Add(new ModTag(tag.Id, tag.Name, tag.Color));
+                }
+            }
+
+            foreach (var mod in targets)
+            {
+                if (autoTagResult.TagIdsByPath.TryGetValue(mod.Directory.FullName, out var tagIds))
+                {
+                    mod.TagIds = [.. tagIds];
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -290,12 +327,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             return;
         }
 
-        var changed = _modTypeDetectionService.ApplyAutoTags(
-            _settingsService,
-            _localizationService,
-            targets,
-            detections,
-            createMissingTags: _settingsService.AutoTagCreateMissingTags);
+        var changed = autoTagResult.ChangedCount;
         if (changed == 0)
             return;
 
@@ -523,7 +555,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         _logger.LogInformation("Profile loaded successfully");
 
         _logger.LogInformation("Applying profile");
-        var modViewModels = result.Select(data => _modService.GetOrCreateModViewModel(data, _logger, _settingsService, _nexusModsService)).ToList();
+        var modViewModels = result.Select(data => _modViewModelFactory.GetOrCreate(data)).ToList();
         foreach (var vm in modViewModels)
         {
             vm.OptionsChanged += ModViewModel_OptionsChanged;
@@ -553,9 +585,9 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             ShowProblems(problems, _localizationService["DashboardPage.LoadProblemsPrefix"], false, true);
 
         // 从数据库加载已缓存的版本检测结果，避免每次启动都需要全量扫描
-        _versionCheckVm.LoadCachedResults(_mods);
+        await _versionCheckVm.LoadCachedResultsAsync(_mods);
 
-        var hasCachedConflictResult = RestoreCachedConflictStatuses();
+        var hasCachedConflictResult = await RestoreCachedConflictStatuses();
 
         Initialized = true;
         _logger.LogInformation("Initialization successful");
@@ -564,7 +596,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             RequestAutomaticConflictScan();
 
         // 检测新增或变动的模组，自动触发版本兼容性检查
-        var autoCheckReason = _versionCheckVm.GetAutoCheckReason(_mods);
+        var autoCheckReason = await _versionCheckVm.GetAutoCheckReasonAsync(_mods);
         if (autoCheckReason != VersionAutoCheckReason.None)
         {
             var message = autoCheckReason == VersionAutoCheckReason.GameExeUpdated
@@ -684,7 +716,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         // 操作 ObservableCollection 必须在 UI 线程
         Application.Current.Dispatcher.Invoke(() =>
         {
-            var vm = _modService.GetOrCreateModViewModel(mod, _logger, _settingsService, _nexusModsService);
+            var vm = _modViewModelFactory.GetOrCreate(mod);
             vm.OptionsChanged += ModViewModel_OptionsChanged;
             vm.PropertyChanged += ModViewModel_PropertyChanged;
             vm.VersionCheckRefreshed += ModViewModel_VersionCheckRefreshed;
@@ -749,11 +781,12 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             vm.ClearConflictStatus();
     }
 
-    private bool RestoreCachedConflictStatuses()
+    private async Task<bool> RestoreCachedConflictStatuses()
     {
         var deploymentMods = GetDeploymentMods(CaptureProfileSnapshot());
         var cacheKey = _modConflictService.BuildCacheKey(deploymentMods);
-        if (TryGetCachedConflictResult(cacheKey, out var cachedResult))
+        if (_conflictCache.TryGetValue(cacheKey, out var cachedResult) ||
+            (cachedResult = await _modConflictRepository.LoadAsync(cacheKey)) is not null)
         {
             ApplyConflictAnalysisResult(cacheKey, cachedResult, showReport: false);
             return true;
@@ -769,18 +802,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         if (_conflictCache.TryGetValue(cacheKey, out result))
             return true;
 
-        if (string.IsNullOrEmpty(_settingsService.StorageDirectory))
-        {
-            result = null;
-            return false;
-        }
-
-        result = _modConflictRepository.Load(_settingsService.StorageDirectory, cacheKey);
-        if (result is null)
-            return false;
-
-        _conflictCache[cacheKey] = result;
-        return true;
+		result = null;
+		return false;
     }
 
     private void ApplyConflictAnalysisResult(string cacheKey, ModConflictAnalysisResult result, bool showReport)
@@ -1137,7 +1160,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         await _modGroupService.RemoveModsFromAllGroupsAsync(guids);
                         // 同时删除这些模组的版本检测记录
                         foreach (var guid in guids)
-                            await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, guid);
+                            await _versionCheckRepository.DeleteByGuidAsync(guid);
                     }
 
                     WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
@@ -1971,7 +1994,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         await _profileService.DeleteEnabledDataAsync(_settingsService.StorageDirectory, modVm.Guid);
                         await _modGroupService.RemoveModsFromAllGroupsAsync([modVm.Guid]);
                         // 同时删除该模组的版本检测记录
-                        await _versionCheckRepository.DeleteByGuidAsync(_settingsService.StorageDirectory, modVm.Guid);
+                        await _versionCheckRepository.DeleteByGuidAsync(modVm.Guid);
                     }
 
                     modVm.Dispose();
@@ -2074,7 +2097,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
             _conflictCache[cacheKey] = result;
             if (!_settingsService.IsReadonly)
-                await _modConflictRepository.SaveAsync(_settingsService.StorageDirectory, cacheKey, result);
+                await _modConflictRepository.SaveAsync(cacheKey, result);
 
             if (showReport || string.Equals(GetCurrentConflictCacheKey(), cacheKey, StringComparison.Ordinal))
                 ApplyConflictAnalysisResult(cacheKey, result, showReport);
@@ -2435,7 +2458,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// <summary>
     /// Background export with real-time progress reporting.
     /// </summary>
-    private void DoExportAsync(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
+    private async Task DoExportAsync(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
         SharpSevenZip.CompressionLevel level, string dictSize, string levelName, Func<FileInfo, bool> isExcludedFile, BackgroundTaskItem backgroundTask)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -2443,11 +2466,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         double lastUpdateSec = 0;
         double lastUiUpdate = 0;  // 用于节流 UI 更新
 
-        // Calculate total input size for progress tracking
-        long totalInputSize = 0;
-        foreach (var f in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
-            if (!isExcludedFile(f))
-                totalInputSize += f.Length;
+        long totalInputSize = Core.Mods.ModArchiveService.CalculateExportSize(modDir);
 
         // Helper to send progress updates to UI thread (throttled)
         void ReportProgress(double progress, string? currentFile, long bytesProcessed)
@@ -2505,83 +2524,22 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
         try
         {
-            if (is7z)
-            {
-                // --- 7z export with SharpSevenZipCompressor ---
-                var compressor = new SharpSevenZipCompressor
-                {
-                    ArchiveFormat = OutArchiveFormat.SevenZip,
-                    CompressionMethod = CompressionMethod.Lzma2,
-                    CompressionLevel = level,
-                    DirectoryStructure = true,
-                    PreserveDirectoryRoot = false,
-                };
+            var format = CoreArchiveFormatMapper.Map(is7z, dictSize);
+            var progress = new Progress<Core.Mods.ArchiveProgress>(item =>
+                ReportProgress(item.Progress, item.CurrentFile, item.BytesProcessed));
 
-                // 根据选择的挡位设置字典大小，控制内存占用
-                //   Fast  → 8MB 字典，内存占用低
-                //   Normal → 32MB 字典，平衡
-                //   High  → 64MB 字典，较高压缩率
-                //   Ultra → 128MB 字典，最高压缩率但内存占用高
-                compressor.CustomParameters.Add("d", dictSize);
+            await _coreModArchiveService.ExportAsync(
+                modDir,
+                outputPath,
+                format,
+                progress).ConfigureAwait(true);
 
-                var files = modDir.EnumerateFiles("*", SearchOption.AllDirectories)
-                    .Where(f => !isExcludedFile(f))
-                    .Select(f => f.FullName)
-                    .ToArray();
-
-                var commonRootLength = modDir.FullName.Length;
-                if (!modDir.FullName.EndsWith(Path.DirectorySeparatorChar))
-                    commonRootLength++;
-
-                // Track current file from event
-                string currentFile = "";
-                compressor.FileCompressionStarted += (_, args) =>
-                {
-                    currentFile = Path.GetFileName(args.FileName);
-                };
-                compressor.Compressing += (_, args) =>
-                {
-                    // args.PercentDone is int 0-100 from 7z native
-                    var pct = Math.Max(0.0, Math.Min(100, (int)args.PercentDone)) / 100.0;
-                    var estimatedBytes = (long)(totalInputSize * pct);
-                    ReportProgress(pct, currentFile, estimatedBytes);
-                };
-
-                // 直接写文件路径而非 Stream，避免内存缓冲整个归档数据
-                compressor.CompressFiles(outputPath, commonRootLength, files);
-                ReportProgress(1.0, "", totalInputSize);
-
-                _logger.LogInformation("Exported mod \"{Name}\" to {Path} (7z LZMA2 {Level}, dict {Dict})",
-                    vm.Name, outputPath, levelName, dictSize);
-            }
-            else
-            {
-                // --- ZIP export with manual byte tracking ---
-                long totalWritten = 0;
-                string currentFile = "";
-
-                using var fileStream = new FileStream(outputPath, FileMode.Create);
-                using var archive = new ZipArchive(fileStream, ZipArchiveMode.Create);
-
-                foreach (var file in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
-                {
-                    if (isExcludedFile(file))
-                        continue;
-
-                    currentFile = file.Name;
-                    var relativePath = Path.GetRelativePath(modDir.FullName, file.FullName);
-                    var entry = archive.CreateEntryFromFile(file.FullName, relativePath, System.IO.Compression.CompressionLevel.Optimal);
-                    
-                    // Approximate progress by file count / total input size
-                    totalWritten += file.Length;
-                    var progress = totalInputSize > 0 ? Math.Min((double)totalWritten / totalInputSize, 1.0) : 0;
-                    ReportProgress(progress, currentFile, totalWritten);
-                }
-
-                ReportProgress(1.0, "", totalInputSize);
-
-                _logger.LogInformation("Exported mod \"{Name}\" to {Path} (ZIP standard)", vm.Name, outputPath);
-            }
+            ReportProgress(1.0, string.Empty, totalInputSize);
+            _logger.LogInformation(
+                "Exported mod \"{Name}\" to {Path} using {Format}",
+                vm.Name,
+                outputPath,
+                format);
 
             // Signal completion - keep final stats visible with OK button
             Application.Current.Dispatcher.Invoke(() =>

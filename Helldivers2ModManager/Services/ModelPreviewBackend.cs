@@ -1,3 +1,5 @@
+using Helldivers2ModManager.Core.GameData;
+using Helldivers2ModManager.Core.Preview;
 using Helldivers2ModManager.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -5,6 +7,11 @@ using System.Collections.Frozen;
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+
+using ModelPreviewAnimationLibrary = Helldivers2ModManager.Core.Preview.ModelPreviewAnimationLibrary;
+using ModelPreviewArmorOption = Helldivers2ModManager.Core.Preview.ModelPreviewArmorOption;
+using ModelPreviewMesh = Helldivers2ModManager.Core.Preview.ModelPreviewMesh;
+using ModelPreviewResult = Helldivers2ModManager.Core.Preview.ModelPreviewResult;
 
 namespace Helldivers2ModManager.Services;
 
@@ -18,22 +25,24 @@ namespace Helldivers2ModManager.Services;
 /// Keeping this boundary explicit means a model can be assembled from many Unit parts,
 /// while a shared Unit remains visible for every armor that reuses it.
 /// </summary>
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class ModelPreviewBackend
 {
     private static readonly Regex ArchiveIdRegex = new("(?<![0-9a-f])[0-9a-f]{16}(?![0-9a-f])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private readonly PatchResourceInspectionService _inspectionService;
-    private readonly VersionCheckService _versionCheckService;
+    private readonly PatchResourceInspector _inspectionService;
+    private readonly GameArchiveService _gameArchiveService;
+    private readonly SettingsService _settingsService;
     private readonly ILogger<ModelPreviewBackend> _logger;
     private readonly Lazy<IReadOnlyDictionary<string, string>> _armorNames;
 
     public ModelPreviewBackend(
-        PatchResourceInspectionService inspectionService,
-        VersionCheckService versionCheckService,
+        PatchResourceInspector inspectionService,
+        GameArchiveService gameArchiveService,
+        SettingsService settingsService,
         ILogger<ModelPreviewBackend> logger)
     {
         _inspectionService = inspectionService;
-        _versionCheckService = versionCheckService;
+        _gameArchiveService = gameArchiveService;
+        _settingsService = settingsService;
         _logger = logger;
         _armorNames = new Lazy<IReadOnlyDictionary<string, string>>(LoadArmorNames);
     }
@@ -70,7 +79,7 @@ internal sealed class ModelPreviewBackend
                 // animations are intentionally sourced only from the canonical Helldiver
                 // avatar Unit; incompatible skeletons get no animation instead of an
                 // approximate cross-species mapping.
-                var playerLibrary = await _versionCheckService.FindCompatibleGameAnimationLibraryAsync(
+                var playerLibrary = await GetCompatibleAnimationLibraryAsync(
                     skeleton.Bones.Select(static bone => bone.NameHash).ToArray(),
                     cancellationToken);
                 if (playerLibrary is not null &&
@@ -92,6 +101,30 @@ internal sealed class ModelPreviewBackend
         }
     }
 
+    private async Task<ModelPreviewAnimationLibrary?> GetCompatibleAnimationLibraryAsync(
+        IReadOnlyCollection<uint> transformNameHashes,
+        CancellationToken cancellationToken)
+    {
+        var dataDirectory = GetDataDirectory();
+        return dataDirectory is null
+            ? null
+            : await _gameArchiveService.ResolveCompatibleAnimationLibraryAsync(
+                dataDirectory,
+                transformNameHashes,
+                cancellationToken);
+    }
+
+    private DirectoryInfo? GetDataDirectory()
+    {
+        if (!_settingsService.Initialized || string.IsNullOrWhiteSpace(_settingsService.GameDirectory))
+            return null;
+
+        var directory = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data"));
+        return directory.Exists && File.Exists(Path.Combine(directory.FullName, "bundles.nxa"))
+            ? directory
+            : null;
+    }
+
     private async Task AttachArmorMembershipAsync(
         ModelPreviewResult result,
         CancellationToken cancellationToken)
@@ -108,7 +141,10 @@ internal sealed class ModelPreviewBackend
         IReadOnlyDictionary<long, IReadOnlyList<string>> packageNames;
         try
         {
-            packageNames = await _versionCheckService.ResolveGameUnitPackageNamesAsync(unitIds, cancellationToken);
+            var dataDirectory = GetDataDirectory();
+            packageNames = dataDirectory is null
+                ? new Dictionary<long, IReadOnlyList<string>>()
+                : (await _gameArchiveService.ResolveUnitsAsync(dataDirectory, unitIds, cancellationToken)).PackageNames;
         }
         catch (OperationCanceledException)
         {
@@ -137,9 +173,9 @@ internal sealed class ModelPreviewBackend
 
         foreach (var mesh in result.Meshes)
         {
-            mesh.ArmorIds = membershipsByUnit.TryGetValue(unchecked((long)mesh.UnitId), out var ids)
+            mesh.SetArmorIds(membershipsByUnit.TryGetValue(unchecked((long)mesh.UnitId), out var ids)
                 ? ids
-                : [];
+                : []);
         }
 
         BuildArmorOptions(result, _armorNames.Value);
@@ -176,13 +212,13 @@ internal sealed class ModelPreviewBackend
 
         foreach (var mesh in result.Meshes)
         {
-            mesh.ArmorIds = packageNames.TryGetValue(unchecked((long)mesh.UnitId), out var names)
+            mesh.SetArmorIds(packageNames.TryGetValue(unchecked((long)mesh.UnitId), out var names)
                 ? names.Select(NormalizeArmorId)
                     .Where(static id => id is not null)
                     .Select(static id => id!)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray()
-                : [];
+                : []);
         }
 
         BuildArmorOptions(result, armorNames);

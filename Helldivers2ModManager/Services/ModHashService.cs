@@ -1,7 +1,9 @@
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Globalization;
 
 namespace Helldivers2ModManager.Services;
 
@@ -44,7 +46,6 @@ public sealed class HashMigrationProgress
 /// 使用后台线程执行计算任务，避免阻塞 UI 线程；通过 SemaphoreSlim 限制并发数，
 /// 防止大量模组同时计算哈希导致系统性能下降。
 /// </summary>
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class ModHashService
 {
 	/// <summary>
@@ -60,8 +61,8 @@ internal sealed class ModHashService
 	private const int MaxConcurrentComputations = 2;
 
 	private readonly ILogger<ModHashService> _logger;
-	private readonly FileHashRepository _fileHashRepository;
-	private readonly DatabaseService _databaseService;
+	private readonly IFileHashRepository _fileHashRepository;
+	private readonly JsonCacheRepository _cacheRepository;
 	private readonly LocalizationService _localizationService;
 	private readonly BackgroundTaskService _backgroundTaskService;
 	private SettingsService? _settingsService;
@@ -85,14 +86,14 @@ internal sealed class ModHashService
 
 	public ModHashService(
 		ILogger<ModHashService> logger,
-		FileHashRepository fileHashRepository,
-		DatabaseService databaseService,
+		IFileHashRepository fileHashRepository,
+		JsonCacheRepository cacheRepository,
 		LocalizationService localizationService,
 		BackgroundTaskService backgroundTaskService)
 	{
 		_logger = logger;
 		_fileHashRepository = fileHashRepository;
-		_databaseService = databaseService;
+		_cacheRepository = cacheRepository;
 		_localizationService = localizationService;
 		_backgroundTaskService = backgroundTaskService;
 	}
@@ -148,7 +149,6 @@ internal sealed class ModHashService
 					mod.Directory,
 					mod.Manifest.Guid,
 					_fileHashRepository,
-					_settingsService.StorageDirectory,
 					cancellationToken: cancellation.Token);
 
 				_logger.LogInformation("File hashes computed and stored for mod \"{Name}\"", mod.Manifest.Name);
@@ -216,14 +216,14 @@ internal sealed class ModHashService
 			_logger.LogInformation("Deleting old hash records and recomputing for updated mod \"{Name}\"", mod.Manifest.Name);
 
 			// 删除旧哈希记录
-			await _fileHashRepository.DeleteForModAsync(_settingsService.StorageDirectory, mod.Manifest.Guid);
+			await _fileHashRepository.DeleteForModAsync(mod.Manifest.Guid);
 
 			// 重新计算并存储新哈希值（不使用缓存，因为文件已全部更新）
 			await FileHashUtils.ComputeDirectoryHashesWithCacheAsync(
 				mod.Directory,
 				mod.Manifest.Guid,
 				_fileHashRepository,
-				_settingsService.StorageDirectory);
+				cancellationToken: CancellationToken.None);
 
 			_logger.LogInformation("File hashes recomputed and stored for updated mod \"{Name}\"", mod.Manifest.Name);
 		}
@@ -271,7 +271,7 @@ internal sealed class ModHashService
 
 		try
 		{
-			await _fileHashRepository.DeleteForModAsync(_settingsService.StorageDirectory, mod.Manifest.Guid);
+			await _fileHashRepository.DeleteForModAsync(mod.Manifest.Guid);
 			_logger.LogDebug("Hash records deleted for mod \"{Name}\"", mod.Manifest.Name);
 		}
 		catch (Exception ex)
@@ -299,8 +299,7 @@ internal sealed class ModHashService
 			return;
 		}
 
-		var storageDir = _settingsService.StorageDirectory;
-		var currentVersion = GetMigrationVersion(storageDir);
+		var currentVersion = await GetMigrationVersionAsync();
 
 		if (currentVersion >= HashMigrationVersion)
 		{
@@ -313,7 +312,7 @@ internal sealed class ModHashService
 		if (modList.Count == 0)
 		{
 			_logger.LogInformation("No mods to migrate, setting migration version to {Version}", HashMigrationVersion);
-			SetMigrationVersion(storageDir, HashMigrationVersion);
+			await SetMigrationVersionAsync(HashMigrationVersion);
 			return;
 		}
 
@@ -364,7 +363,6 @@ internal sealed class ModHashService
 							mod.Directory,
 							mod.Manifest.Guid,
 							_fileHashRepository,
-							storageDir,
 							cancellationToken: cancellation.Token);
 
 						Interlocked.Increment(ref migratedCount);
@@ -417,7 +415,7 @@ internal sealed class ModHashService
 			});
 
 		// 迁移完成后更新版本号
-		SetMigrationVersion(storageDir, HashMigrationVersion);
+		await SetMigrationVersionAsync(HashMigrationVersion);
 
 		// 通知 UI：迁移完成
 		MigrationProgressChanged?.Invoke(new HashMigrationProgress
@@ -450,15 +448,12 @@ internal sealed class ModHashService
 	/// <summary>
 	/// 获取数据库迁移版本号
 	/// </summary>
-	private int GetMigrationVersion(string storageDirectory)
+	private async Task<int> GetMigrationVersionAsync()
 	{
 		try
 		{
-			using var connection = _databaseService.OpenConnection(storageDirectory);
-			using var cmd = connection.CreateCommand();
-			cmd.CommandText = "PRAGMA user_version;";
-			var result = cmd.ExecuteScalar();
-			return Convert.ToInt32(result);
+			var value = await _cacheRepository.GetAsync("hash-migration", "version");
+			return string.IsNullOrEmpty(value) ? 0 : int.Parse(value, CultureInfo.InvariantCulture);
 		}
 		catch (Exception ex)
 		{
@@ -470,14 +465,11 @@ internal sealed class ModHashService
 	/// <summary>
 	/// 设置数据库迁移版本号
 	/// </summary>
-	private void SetMigrationVersion(string storageDirectory, int version)
+	private async Task SetMigrationVersionAsync(int version)
 	{
 		try
 		{
-			using var connection = _databaseService.OpenConnection(storageDirectory);
-			using var cmd = connection.CreateCommand();
-			cmd.CommandText = $"PRAGMA user_version = {version};";
-			cmd.ExecuteNonQuery();
+			await _cacheRepository.SetAsync("hash-migration", "version", version.ToString(CultureInfo.InvariantCulture));
 			_logger.LogDebug("Migration version set to {Version}", version);
 		}
 		catch (Exception ex)
@@ -500,11 +492,10 @@ internal sealed class ModHashService
 			return;
 		}
 
-		var storageDir = _settingsService.StorageDirectory;
 		_logger.LogInformation("Force recomputing all file hashes (resetting migration version)");
 
 		// 先将迁移版本号重置为 0，使 MigrateExistingModsAsync 重新执行完整的哈希计算流程
-		SetMigrationVersion(storageDir, 0);
+		await SetMigrationVersionAsync(0);
 
 		await MigrateExistingModsAsync(mods);
 	}

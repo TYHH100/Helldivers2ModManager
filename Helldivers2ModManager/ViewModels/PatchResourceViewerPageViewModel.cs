@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Helldivers2ModManager.Models;
+using CorePreview = Helldivers2ModManager.Core.Preview;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,22 +20,21 @@ internal enum TexturePreviewChannel
     Alpha
 }
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBase
 {
     private readonly ILogger<PatchResourceViewerPageViewModel> _logger;
     private readonly Lazy<NavigationStore> _navigationStore;
     private readonly ModService _modService;
-    private readonly PatchResourceInspectionService _inspectionService;
+    private readonly CorePreview.PatchResourceInspector _inspectionService;
     private readonly LocalizationService _localizationService;
-    private TexturePreviewData? _loadedTexturePreview;
+    private CorePreview.TexturePreviewData? _loadedTexturePreview;
 
     public override string Title => _localizationService["PatchResourceViewerPage.Title"];
 
     public ObservableCollection<ModData> Mods { get; } = [];
-    public ObservableCollection<PatchTocInspectionItem> TocEntries { get; } = [];
-    public ObservableCollection<GpuStreamInspectionItem> GpuStreams { get; } = [];
-    public ObservableCollection<TextureInspectionItem> Textures { get; } = [];
+    public ObservableCollection<CorePreview.PatchTocInspectionItem> TocEntries { get; } = [];
+    public ObservableCollection<CorePreview.GpuStreamInspectionItem> GpuStreams { get; } = [];
+    public ObservableCollection<CorePreview.TextureInspectionItem> Textures { get; } = [];
 
     [ObservableProperty]
     private ModData? _selectedMod;
@@ -46,7 +46,7 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
     private string _statusText = string.Empty;
 
     [ObservableProperty]
-    private TextureInspectionItem? _selectedTexture;
+    private CorePreview.TextureInspectionItem? _selectedTexture;
 
     [ObservableProperty]
     private ImageSource? _texturePreview;
@@ -65,7 +65,7 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
         ILogger<PatchResourceViewerPageViewModel> logger,
         IServiceProvider provider,
         ModService modService,
-        PatchResourceInspectionService inspectionService,
+        CorePreview.PatchResourceInspector inspectionService,
         LocalizationService localizationService)
     {
         _logger = logger;
@@ -97,7 +97,7 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
             _ = LoadSelectedModAsync(value);
     }
 
-    partial void OnSelectedTextureChanged(TextureInspectionItem? value)
+    partial void OnSelectedTextureChanged(CorePreview.TextureInspectionItem? value)
     {
         if (value is not null && SelectedMod is not null)
             _ = LoadTexturePreviewAsync(SelectedMod, value);
@@ -177,7 +177,7 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
         }
     }
 
-    private async Task LoadTexturePreviewAsync(ModData mod, TextureInspectionItem texture)
+    private async Task LoadTexturePreviewAsync(ModData mod, CorePreview.TextureInspectionItem texture)
     {
         _loadedTexturePreview = null;
         TexturePreview = null;

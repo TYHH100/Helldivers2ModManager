@@ -1,39 +1,27 @@
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Core.Profiles;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Helldivers2ModManager.Services;
 
 /// <summary>
 /// Profile 保存的唯一调度入口，负责快照编号、防抖、最新状态合并与串行写入。
 /// </summary>
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class ProfileSaveCoordinator
 {
-	private static readonly TimeSpan s_debounceDelay = TimeSpan.FromMilliseconds(300);
-
-	private readonly ILogger<ProfileSaveCoordinator> _logger;
-	private readonly ProfileService _profileService;
-	private readonly ModGroupService _modGroupService;
+	private readonly global::Helldivers2ModManager.Core.Profiles.ProfileSaveCoordinator _coreCoordinator;
 	private readonly SettingsService _settingsService;
 	private readonly Lock _sync = new();
 
 	private long _nextSequence;
-	private long _lastQueuedSequence;
 	private ProfileSnapshot? _currentSnapshot;
 	private ProfileSnapshot? _pendingSnapshot;
-	private CancellationTokenSource? _debounceCancellation;
-	private Task _saveQueueTail = Task.CompletedTask;
 
 	public ProfileSaveCoordinator(
-		ILogger<ProfileSaveCoordinator> logger,
-		ProfileService profileService,
-		ModGroupService modGroupService,
+		global::Helldivers2ModManager.Core.Profiles.ProfileSaveCoordinator coreCoordinator,
 		SettingsService settingsService)
 	{
-		_logger = logger;
-		_profileService = profileService;
-		_modGroupService = modGroupService;
+		_coreCoordinator = coreCoordinator;
 		_settingsService = settingsService;
 	}
 
@@ -56,6 +44,7 @@ internal sealed class ProfileSaveCoordinator
 				_currentSnapshot = snapshot;
 		}
 
+		_coreCoordinator.Capture(CreateRequest(snapshot));
 		return snapshot;
 	}
 
@@ -70,16 +59,8 @@ internal sealed class ProfileSaveCoordinator
 		if (_settingsService.IsReadonly)
 			return;
 
-		CancellationTokenSource cancellation;
-		lock (_sync)
-		{
-			UpdateCurrentAndPendingLocked(snapshot);
-			_debounceCancellation?.Cancel();
-			cancellation = new CancellationTokenSource();
-			_debounceCancellation = cancellation;
-		}
-
-		_ = RunDebouncedSaveAsync(cancellation);
+		UpdateCurrentAndPendingLocked(snapshot);
+		_coreCoordinator.RequestSave(CreateRequest(snapshot));
 	}
 
 	public Task SaveNowAsync(ProfileSnapshot snapshot)
@@ -87,15 +68,8 @@ internal sealed class ProfileSaveCoordinator
 		if (_settingsService.IsReadonly)
 			return Task.CompletedTask;
 
-		lock (_sync)
-		{
-			UpdateCurrentAndPendingLocked(snapshot);
-			_debounceCancellation?.Cancel();
-			_debounceCancellation = null;
-			var snapshotToSave = _pendingSnapshot;
-			_pendingSnapshot = null;
-			return snapshotToSave is null ? _saveQueueTail : QueueSaveLocked(snapshotToSave);
-		}
+		UpdateCurrentAndPendingLocked(snapshot);
+		return _coreCoordinator.SaveNowAsync(CreateRequest(snapshot));
 	}
 
 	public Task SaveCurrentAsync(IEnumerable<ModData> mods)
@@ -122,81 +96,40 @@ internal sealed class ProfileSaveCoordinator
 			return Task.CompletedTask;
 
 		lock (_sync)
-		{
-			_debounceCancellation?.Cancel();
-			_debounceCancellation = null;
-			if (_pendingSnapshot is not null)
 			{
-				QueueSaveLocked(_pendingSnapshot);
-				_pendingSnapshot = null;
+				return _coreCoordinator.FlushAsync();
 			}
-			return _saveQueueTail;
-		}
 	}
 
 	private void UpdateCurrentAndPendingLocked(ProfileSnapshot snapshot)
 	{
-		if (_currentSnapshot is null || snapshot.Sequence >= _currentSnapshot.Sequence)
-			_currentSnapshot = snapshot;
+		lock (_sync)
+		{
+			var currentSnapshot = _currentSnapshot;
+			if (currentSnapshot is null || snapshot.Sequence >= currentSnapshot.Sequence)
+				currentSnapshot = snapshot;
 
-		var latestSnapshot = _currentSnapshot!;
-		if (_pendingSnapshot is null || latestSnapshot.Sequence >= _pendingSnapshot.Sequence)
-			_pendingSnapshot = latestSnapshot;
+			_currentSnapshot = currentSnapshot;
+			if (_pendingSnapshot is null || currentSnapshot.Sequence >= _pendingSnapshot.Sequence)
+				_pendingSnapshot = currentSnapshot;
+		}
 	}
 
-	private async Task RunDebouncedSaveAsync(CancellationTokenSource cancellation)
+	private static ProfileCaptureRequest CreateRequest(ProfileSnapshot snapshot)
 	{
-		try
-		{
-			await Task.Delay(s_debounceDelay, cancellation.Token).ConfigureAwait(false);
-			Task saveTask;
-			lock (_sync)
+		return new(
+			snapshot.GroupId,
+			snapshot.IsDefaultGroup,
+			[.. snapshot.Mods.Select(static mod =>
 			{
-				if (!ReferenceEquals(_debounceCancellation, cancellation))
-					return;
-				_debounceCancellation = null;
-				var snapshot = _pendingSnapshot;
-				_pendingSnapshot = null;
-				saveTask = snapshot is null ? _saveQueueTail : QueueSaveLocked(snapshot);
-			}
-			await saveTask.ConfigureAwait(false);
-		}
-		catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-		{
-		}
-		catch (Exception ex)
-		{
-			_logger.LogError(ex, "Automatic profile save failed");
-		}
-		finally
-		{
-			cancellation.Dispose();
-		}
-	}
-
-	private Task QueueSaveLocked(ProfileSnapshot snapshot)
-	{
-		if (snapshot.Sequence <= _lastQueuedSequence)
-			return _saveQueueTail;
-
-		_lastQueuedSequence = snapshot.Sequence;
-		_saveQueueTail = PersistAfterPreviousAsync(_saveQueueTail, snapshot);
-		return _saveQueueTail;
-	}
-
-	private async Task PersistAfterPreviousAsync(Task previousSave, ProfileSnapshot snapshot)
-	{
-		try
-		{
-			await previousSave.ConfigureAwait(false);
-		}
-		catch
-		{
-		}
-
-		// 默认组以 enabled_mods 为权威来源；成功后再同步默认组状态缓存。
-		if (snapshot.IsDefaultGroup)
-			await _profileService.SaveSnapshotAsync(_settingsService, snapshot).ConfigureAwait(false);
-		await _modGroupService.SaveGroupSnapshotAsync(snapshot).ConfigureAwait(false);
+				var data = mod.ToEnabledData();
+				return new ProfileModCapture(
+					data.Guid,
+					data.Enabled,
+					new ModRuntimeState(
+						[.. data.Toggled],
+						[.. data.Selected],
+						data.TagIds is { Count: > 0 } tagIds ? [.. tagIds] : null));
+			})]);
 	}
 }

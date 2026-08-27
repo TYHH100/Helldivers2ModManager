@@ -1,0 +1,3383 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms</value>
+  </resheader>
+  <data name="Frontend.AppTitle">
+    <value>Helldivers 2 Mod Manager — Next</value>
+  </data>
+  <data name="Frontend.Search"><value>Search</value></data>
+  <data name="Frontend.Import"><value>Import</value></data>
+  <data name="Frontend.Deploy"><value>Deploy</value></data>
+  <data name="Frontend.Tasks"><value>Tasks</value></data>
+  <data name="Library.Loading"><value>Loading mod library…</value></data>
+  <data name="Library.LoadedFormat"><value>Loaded {0} mods.</value></data>
+  <data name="Library.LoadedWithProblemsFormat"><value>Loaded {0} mods; found {1} problems.</value></data>
+  <data name="Library.ImportTitle"><value>Select mod archives</value></data>
+  <data name="Library.ImportingFormat"><value>Importing {0} archives…</value></data>
+  <data name="Library.ImportedFormat"><value>Imported {0} mods.</value></data>
+  <data name="Library.SavedFormat"><value>Saved state for {0}.</value></data>
+  <data name="Library.SelectionEnabled"><value>Selected mods enabled. State changes are saved automatically.</value></data>
+  <data name="Library.SelectionDisabled"><value>Selected mods disabled. State changes are saved automatically.</value></data>
+  <data name="Library.DeleteTitle"><value>Delete mods</value></data>
+  <data name="Library.DeleteConfirmFormat"><value>Delete {0} mods?</value></data>
+  <data name="Library.Deleting"><value>Deleting mods…</value></data>
+  <data name="Library.ExportTitle"><value>Export mod</value></data>
+  <data name="Library.ExportingFormat"><value>Exporting {0}…</value></data>
+  <data name="Library.ExportedFormat"><value>Exported to {0}.</value></data>
+  <data name="Library.Refresh"><value>Refresh</value></data>
+  <data name="Library.EnableSelected"><value>Enable selected</value></data>
+  <data name="Library.DisableSelected"><value>Disable selected</value></data>
+  <data name="Library.DeleteSelected"><value>Delete selected</value></data>
+  <data name="Library.Export"><value>Export</value></data>
+  <data name="Library.DeployedFormat"><value>Saved and deployed: {0}.</value></data>
+  <data name="Bisect.SessionStarted"><value>Bisect started; the first round is deployed.</value></data>
+  <data name="Bisect.ReadySingleVerification"><value>Candidates converged to one; single verification is ready.</value></data>
+  <data name="Bisect.NoCandidates"><value>No candidates remain.</value></data>
+  <data name="Bisect.SingleVerificationDeploying"><value>Deploying single-mod verification…</value></data>
+  <data name="Bisect.CancelConfirm"><value>Cancel bisecting and restore the original enabled state?</value></data>
+  <data name="Bisect.Restoring"><value>Restoring original enabled state…</value></data>
+  <data name="Bisect.Restored"><value>Original enabled state restored.</value></data>
+  <data name="Bisect.FinishedWithSuspects"><value>Bisect completed; suspect mods are disabled in the original state.</value></data>
+  <data name="Bisect.FinishedNoSuspects"><value>Bisect completed; no suspect was confirmed.</value></data>
+  <data name="Bisect.RoundDeployed"><value>This round is deployed. Verify it in game, then report the result.</value></data>
+  <data name="Bisect.GameDirectoryMissing"><value>The game directory is invalid: configure Helldivers 2 in Settings first.</value></data>
+  <data name="Bisect.SuspectConfirmed"><value>Suspect confirmed.</value></data>
+  <data name="Bisect.SuspectCleared"><value>The mod did not crash and was cleared.</value></data>
+  <data name="Deployment.Loading"><value>Loading enabled mods…</value></data>
+  <data name="Deployment.LoadedFormat"><value>Loaded {0} enabled mods.</value></data>
+  <data name="Deployment.OrderChanged"><value>Deployment order updated.</value></data>
+  <data name="Deployment.NoEnabledMods"><value>There are no enabled mods to deploy.</value></data>
+  <data name="Deployment.ProgressFormat"><value>Deploying {0}/{1}: {2}</value></data>
+  <data name="Deployment.Succeeded"><value>Deployment completed.</value></data>
+  <data name="Deployment.Canceled"><value>Deployment canceled.</value></data>
+  <data name="Deployment.Failed"><value>Deployment failed.</value></data>
+  <data name="Deployment.Purge"><value>Purge</value></data>
+  <data name="Deployment.PurgeTitle"><value>Purge mods</value></data>
+  <data name="Deployment.PurgeConfirm"><value>Purge mod files from the game data directory?</value></data>
+  <data name="Deployment.Purging"><value>Purging mods…</value></data>
+  <data name="Deployment.PurgeSucceeded"><value>Mod purge completed.</value></data>
+  <data name="Deployment.Deploying"><value>Deploying mods…</value></data>
+  <data name="Settings.Saving"><value>Saving settings…</value></data>
+  <data name="Settings.Saved"><value>Settings saved.</value></data>
+  <data name="Nav.Group.Library"><value>Library</value></data>
+  <data name="Nav.Group.Deployment"><value>Deployment</value></data>
+  <data name="Nav.Group.Tools"><value>Tools</value></data>
+  <data name="Nav.Group.Analysis"><value>Analysis</value></data>
+  <data name="Nav.Group.System"><value>System</value></data>
+  <data name="Nav.Library"><value>Mod Library</value></data>
+  <data name="Nav.DeploymentOrder"><value>Deployment Order</value></data>
+  <data name="Nav.BackgroundTasks"><value>Background Tasks</value></data>
+  <data name="Nav.Create"><value>Create</value></data>
+  <data name="Nav.Edit"><value>Edit</value></data>
+  <data name="Nav.ManifestEdit"><value>Manifest Editor</value></data>
+  <data name="Nav.TagManagement"><value>Tags</value></data>
+  <data name="Nav.AutoTagPairing"><value>Auto Tag Pairing</value></data>
+  <data name="Nav.NexusDownload"><value>Nexus Download</value></data>
+  <data name="Nav.ResourceViewer"><value>Resource Viewer</value></data>
+  <data name="Nav.ModelPreview"><value>Model Preview</value></data>
+  <data name="Nav.ArmorReuse"><value>Armor Reuse</value></data>
+  <data name="Nav.Bisect"><value>Bisect</value></data>
+  <data name="Nav.BackendTestCenter"><value>Backend Test Center</value></data>
+  <data name="Nav.Settings"><value>Settings</value></data>
+  <data name="Nav.Help"><value>Help</value></data>
+  <data name="Page.Library.Description"><value>Manage, filter, and enable local mods.</value></data>
+  <data name="Page.DeploymentOrder.Description"><value>Adjust deployment order and override priority.</value></data>
+  <data name="Page.BackgroundTasks.Description"><value>Track scan, deployment, and analysis work.</value></data>
+  <data name="Page.Create.Description"><value>Create a new mod from a template or directory.</value></data>
+  <data name="Create.Creating"><value>Creating mod…</value></data>
+  <data name="Create.CreatedFormat"><value>Created {0}.</value></data>
+  <data name="Edit.NoSelection"><value>No mod is selected for editing.</value></data>
+  <data name="Edit.Loaded"><value>Mod options loaded.</value></data>
+  <data name="Edit.Saved"><value>Mod options saved.</value></data>
+  <data name="Manifest.Saved"><value>manifest.json saved.</value></data>
+  <data name="Manifest.SavedUpgraded"><value>manifest.json saved and upgraded to V1.</value></data>
+  <data name="Tags.Loaded"><value>Tags loaded.</value></data>
+  <data name="Tags.Created"><value>Tag created.</value></data>
+  <data name="Tags.Saved"><value>Tags saved.</value></data>
+  <data name="Tags.Deleted"><value>Tag deleted.</value></data>
+  <data name="Tags.DeleteTitle"><value>Delete tag</value></data>
+  <data name="Tags.DeleteConfirmFormat"><value>Delete tag {0}? It will also be removed from mods.</value></data>
+  <data name="Nexus.Fetching"><value>Fetching Nexus mod…</value></data>
+  <data name="Nexus.Downloading"><value>Downloading mod…</value></data>
+  <data name="Nexus.Importing"><value>Importing mod…</value></data>
+  <data name="Nexus.NoFiles"><value>No downloadable files were found.</value></data>
+  <data name="Nexus.FoundFormat"><value>Found {0} versions.</value></data>
+  <data name="Nexus.ImportedFormat"><value>Downloaded and imported {0}.</value></data>
+  <data name="Nav.VersionCheck"><value>Version Check</value></data>
+  <data name="Page.VersionCheck.Description"><value>Check patch structure and game-version compatibility.</value></data>
+  <data name="Version.Checking"><value>Checking version compatibility…</value></data>
+  <data name="Version.CompletedFormat"><value>Version check completed for {0} mods.</value></data>
+  <data name="Nav.ConflictScan"><value>Conflict Scan</value></data>
+  <data name="Page.ConflictScan.Description"><value>Scan Unit overrides between enabled mods.</value></data>
+  <data name="Conflict.Scanning"><value>Scanning mod conflicts…</value></data>
+  <data name="Conflict.CompletedFormat"><value>Scan completed: {0} mods, {1} units, {2} conflicts, {3} definite.</value></data>
+  <data name="Page.Edit.Description"><value>Edit imported mod options and metadata.</value></data>
+  <data name="Page.ManifestEdit.Description"><value>Inspect and edit manifest.json.</value></data>
+  <data name="Page.TagManagement.Description"><value>Maintain tags and display colors.</value></data>
+  <data name="Page.AutoTagPairing.Description"><value>Configure type-to-tag automatic mappings.</value></data>
+  <data name="Page.NexusDownload.Description"><value>Browse and download NexusMods content.</value></data>
+  <data name="Page.ResourceViewer.Description"><value>Inspect patch, GPU, and stream structures with bounded reads.</value></data>
+  <data name="Resource.LoadingFormat"><value>Loading patch resources for {0}…</value></data>
+  <data name="Resource.LoadedFormat"><value>Loaded {0} patches, {1} TOC entries, and {2} GPU streams.</value></data>
+  <data name="Resource.SelectTexture"><value>Select a texture for a bounded preview.</value></data>
+  <data name="Resource.TextureLoadingFormat"><value>Loading texture {0}…</value></data>
+  <data name="Resource.TextureUnavailable"><value>Texture preview is unavailable.</value></data>
+  <data name="Resource.TextureLoadedFormat"><value>Loaded {0} × {1}, {2}.</value></data>
+  <data name="Preview.LoadingFormat"><value>Decoding model for {0}…</value></data>
+  <data name="Preview.LoadedFormat"><value>Loaded {0} visible meshes and {1} triangles; skipped {2} streams; {3} patches, {4} textures.</value></data>
+  <data name="Preview.Canceled"><value>Model preview canceled.</value></data>
+  <data name="Page.ModelPreview.Description"><value>Preview model geometry, materials, and textures.</value></data>
+  <data name="Page.ArmorReuse.Description"><value>Analyze armor part reuse across mods.</value></data>
+  <data name="Page.Bisect.Description"><value>Locate a problematic mod with bisected deployments.</value></data>
+  <data name="Page.BackendTestCenter.Description"><value>Run diagnostics for Core backend capabilities.</value></data>
+  <data name="Page.Settings.Description"><value>Configure game paths, storage, language, and behavior.</value></data>
+  <data name="Page.Help.Description"><value>Read usage guidance and troubleshooting help.</value></data>
+  <data name="MainWindow.ReportBug">
+    <value>Report Bug</value>
+  </data>
+  <data name="MainWindow.Help">
+    <value>Help</value>
+  </data>
+  <data name="MainWindow.Minimize">
+    <value>Minimize</value>
+  </data>
+  <data name="MainWindow.Maximize">
+    <value>Maximize</value>
+  </data>
+  <data name="MainWindow.Close">
+    <value>Close</value>
+  </data>
+  <data name="MainWindow.DropImportHint">
+    <value>Release to import mod archive</value>
+  </data>
+  <data name="MainWindow.DropImportInvalid">
+    <value>Only zip / 7z / rar / tar archives are supported</value>
+  </data>
+  <data name="FirstRunTutorial.WelcomeTitle">
+    <value>Welcome to Helldivers 2 Mod Manager</value>
+  </data>
+  <data name="FirstRunTutorial.WelcomeDescription">
+    <value>This is a first-run guide that walks you through the core features of the main screen. You can skip it anytime.</value>
+  </data>
+  <data name="FirstRunTutorial.AddModTitle">
+    <value>Import and Create Mods</value>
+  </data>
+  <data name="FirstRunTutorial.AddModDescription">
+    <value>Click "Add Mod" on the left to import zip / 7z / rar / tar archives, or drag archives directly into this window.
+Click "Create Mod" to build your own mod.</value>
+  </data>
+  <data name="FirstRunTutorial.ManageTitle">
+    <value>Search and Batch Manage</value>
+  </data>
+  <data name="FirstRunTutorial.ManageDescription">
+    <value>The top search box filters by name, pinyin, or @tag.
+Hold Ctrl and click mod cards to multi-select.
+Batch actions such as select all, enable/disable, tagging, grouping, and delete will then appear at the top.</value>
+  </data>
+  <data name="FirstRunTutorial.CheckTitle">
+    <value>Version Check and Conflict Troubleshooting</value>
+  </data>
+  <data name="FirstRunTutorial.CheckDescription">
+    <value>"Check Unit Version Compatibility" on the left scans whether mods match the current game build.
+"Refresh conflict check" detects mods that override the same armor resource.</value>
+  </data>
+  <data name="FirstRunTutorial.DeployTitle">
+    <value>Deploy, Clean, and Launch</value>
+  </data>
+  <data name="FirstRunTutorial.DeployDescription">
+    <value>"Deploy Mods" numbers the enabled mods in the list and adds them to the game's data directory; the deployment order setting defaults to top-to-bottom.
+In other words, the last mod has the highest priority and overrides the previous ones.
+"Clean Mods" removes the mod files from the game's data directory when clicked.
+"Refresh Mods" rescans the manager's data folder for newly added mods (mainly used to restore mods from the recycle bin).
+"Launch HD2" starts the game through Steam.</value>
+  </data>
+  <data name="FirstRunTutorial.BackgroundTasksTitle">
+    <value>Background Tasks</value>
+  </data>
+  <data name="FirstRunTutorial.BackgroundTasksDescription">
+    <value>Background tasks such as file hash calculation and compatibility checks show their progress here.</value>
+  </data>
+  <data name="FirstRunTutorial.ArmorReuseTitle">
+    <value>Armor Part Reuse</value>
+  </data>
+  <data name="FirstRunTutorial.ArmorReuseDescription">
+    <value>Inspect and troubleshoot armor parts reused across multiple mods to help solve armor display or override issues.</value>
+  </data>
+  <data name="FirstRunTutorial.PatchResourceViewerTitle">
+    <value>Patch / GPU Viewer</value>
+  </data>
+  <data name="FirstRunTutorial.PatchResourceViewerDescription">
+    <value>Not a very useful feature—you can directly view the texture files inside models.</value>
+  </data>
+  <data name="FirstRunTutorial.BisectTitle">
+    <value>Bisect Troubleshoot</value>
+  </data>
+  <data name="FirstRunTutorial.BisectDescription">
+    <value>When unsure which mod causes an in-game issue, use bisect to quickly narrow down and locate the problematic mod (its reliability is questionable).</value>
+  </data>
+  <data name="FirstRunTutorial.TagManagementTitle">
+    <value>Tag Management</value>
+  </data>
+  <data name="FirstRunTutorial.TagManagementDescription">
+    <value>Create and manage tags, then filter mods quickly with @tag in the dashboard search box.</value>
+  </data>
+  <data name="FirstRunTutorial.SettingsTitle">
+    <value>Settings &amp; Personalization</value>
+  </data>
+  <data name="FirstRunTutorial.SettingsDescription">
+    <value>Configure global options such as the game path, storage/temp directories, language, appearance, and logs.</value>
+  </data>
+  <data name="FirstRunTutorial.FinishTitle">
+    <value>You're Ready</value>
+  </data>
+  <data name="FirstRunTutorial.FinishDescription">
+    <value>You now understand the main features. Import a mod and start deploying! If you want to watch the tutorial again later, open "Settings", go to the "Tools" tab, and you'll find the "Replay Tutorial" option.</value>
+  </data>
+  <data name="FirstRunTutorial.Previous">
+    <value>Previous</value>
+  </data>
+  <data name="FirstRunTutorial.Next">
+    <value>Next</value>
+  </data>
+  <data name="FirstRunTutorial.Finish">
+    <value>Get Started</value>
+  </data>
+  <data name="FirstRunTutorial.Skip">
+    <value>Skip</value>
+  </data>
+  <data name="DashboardPage.Title">
+    <value>Dashboard</value>
+  </data>
+  <data name="DashboardPage.AddMod">
+    <value>Add Mod</value>
+  </data>
+  <data name="DashboardPage.CreateMod">
+    <value>Create Mod</value>
+  </data>
+  <data name="DashboardPage.BackgroundTasks">
+    <value>Background Tasks</value>
+  </data>
+  <data name="DashboardPage.ArmorPollution">
+    <value>Armor Pollution</value>
+  </data>
+  <data name="DashboardPage.ArmorReuse">
+    <value>Armor Part Reuse</value>
+  </data>
+  <data name="DashboardPage.PatchResourceViewer">
+    <value>Patch / GPU Viewer</value>
+  </data>
+  <data name="DashboardPage.Bisect">
+    <value>Bisect Troubleshoot</value>
+  </data>
+  <data name="DashboardPage.PreviewModel">
+    <value>Preview Model</value>
+  </data>
+  <data name="DashboardPage.TagManagement">
+    <value>Tag Management</value>
+  </data>
+  <data name="DashboardPage.Settings">
+    <value>Settings</value>
+  </data>
+  <data name="DashboardPage.DeploymentOrder">
+    <value>Deployment Order</value>
+  </data>
+  <data name="DashboardPage.RelatedLinks">
+    <value>Related Links</value>
+  </data>
+  <data name="DashboardPage.GitHub">
+    <value>GitHub</value>
+  </data>
+  <data name="DashboardPage.Discord">
+    <value>Need Help? Join the Community!</value>
+  </data>
+  <data name="DashboardPage.CheckVersion">
+    <value>Check Unit Version
+Compatibility</value>
+  </data>
+  <data name="DashboardPage.VersionCheckHint">
+    <value>For Reference Only</value>
+  </data>
+  <data name="DashboardPage.SearchWatermark">
+    <value>Search mods by name (pinyin/fuzzy supported), use @tagname to search tags</value>
+  </data>
+  <data name="DashboardPage.ClearSearch">
+    <value>Clear Search</value>
+  </data>
+  <data name="DashboardPage.SelectAll">
+    <value>Select All</value>
+  </data>
+  <data name="DashboardPage.SelectAllHint">
+    <value>Select All (Ctrl+A)</value>
+  </data>
+  <data name="DashboardPage.DeselectAll">
+    <value>Deselect</value>
+  </data>
+  <data name="DashboardPage.InvertSelection">
+    <value>Invert Selection</value>
+  </data>
+  <data name="DashboardPage.BatchEnable">
+    <value>Enable</value>
+  </data>
+  <data name="DashboardPage.BatchDisable">
+    <value>Disable</value>
+  </data>
+  <data name="DashboardPage.BatchTag">
+    <value>Tag</value>
+  </data>
+  <data name="DashboardPage.BatchTagHint">
+    <value>Set tags for all selected mods</value>
+  </data>
+  <data name="DashboardPage.CleanMods">
+    <value>Clean Mods</value>
+  </data>
+  <data name="DashboardPage.CleanModsHint">
+    <value>Delete all mods from the data folder</value>
+  </data>
+  <data name="DashboardPage.DeployMods">
+    <value>Deploy Mods</value>
+  </data>
+  <data name="DashboardPage.DeployModsHint">
+    <value>Auto-number and add all checked mods to the data folder</value>
+  </data>
+  <data name="DashboardPage.LaunchGame">
+    <value>Launch HD2</value>
+  </data>
+  <data name="DashboardPage.LaunchGameHint">
+    <value>Launch the game on Steam</value>
+  </data>
+  <data name="DashboardPage.DeleteModHint">
+    <value>Delete Mod</value>
+  </data>
+  <data name="DashboardPage.VersionCompatibility">
+    <value>Unit Version Compatibility: </value>
+  </data>
+  <data name="DashboardPage.LastCheck">
+    <value>Last Check: </value>
+  </data>
+  <data name="DashboardPage.ScanConflicts">
+    <value>Refresh conflict check</value>
+  </data>
+  <data name="DashboardPage.ConflictScanning">
+    <value>Scanning armor resource conflicts in the current deployment...</value>
+  </data>
+  <data name="DashboardPage.ConflictFound">
+    <value>Found {count} resource conflict(s)</value>
+  </data>
+  <data name="DashboardPage.ConflictNone">
+    <value>No enabled mods were found to override the same armor resource.</value>
+  </data>
+  <data name="DashboardPage.ConflictScanFailed">
+    <value>Armor resource conflict scan failed</value>
+  </data>
+  <data name="DashboardPage.ConflictReportTitle">
+    <value>Armor resource conflict scan</value>
+  </data>
+  <data name="DashboardPage.ConflictReportScanned">
+    <value>Scanned {mods} mod(s), {patches} patch file(s), and {units} resource(s).</value>
+  </data>
+  <data name="DashboardPage.ConflictReportCount">
+    <value>Found {count} conflicting resource(s); {definite} have different content metadata.</value>
+  </data>
+  <data name="DashboardPage.ConflictReportItem">
+    <value>{resource} ({kind})
+  Mods: {mods}
+  Winner in current deployment order: {winner}</value>
+  </data>
+  <data name="DashboardPage.ConflictPotential">
+    <value>potential override</value>
+  </data>
+  <data name="DashboardPage.ConflictReportTruncated">
+    <value>{count} additional conflict(s) were not expanded.</value>
+  </data>
+  <data name="DashboardPage.ConflictStatusNoConflict">
+    <value>Conflict check: no duplicate override with another enabled mod.</value>
+  </data>
+  <data name="DashboardPage.ConflictStatusConflict">
+    <value>Conflict check: this mod overrides the same armor as:</value>
+  </data>
+  <data name="DashboardPage.ConflictStatusItem">
+    <value>{resource}
+  Conflicting mods: {mods}
+  Current winner: {winner}</value>
+  </data>
+  <data name="DashboardPage.ConflictStatusMore">
+    <value>{count} additional conflicting resource(s) were not expanded.</value>
+  </data>
+  <data name="DashboardPage.ConflictStatusHint">
+    <value>Click to view conflict details</value>
+  </data>
+  <data name="ConflictDetail.Title">
+    <value>Mod Conflict Relations</value>
+  </data>
+  <data name="ConflictDetail.Conflicts">
+    <value>Conflicting resources</value>
+  </data>
+  <data name="ConflictDetail.Definite">
+    <value>Definite conflicts</value>
+  </data>
+  <data name="ConflictDetail.ResourceList">
+    <value>Conflicting armor</value>
+  </data>
+  <data name="ConflictDetail.NoConflicts">
+    <value>No resource conflicts found</value>
+  </data>
+  <data name="ConflictDetail.NoConflictsDescription">
+    <value>No other enabled mod currently provides the same armor resources.</value>
+  </data>
+  <data name="ConflictDetail.ConflictFound">
+    <value>Resource conflicts detected</value>
+  </data>
+  <data name="ConflictDetail.ConflictSummary">
+    <value>These mods override the same Unit. The later patch affects every armor that reuses it; mixing Unit and GPU data from different models can cause invisible or missing parts. Ordering can only switch the shared resource as a whole, not split it by armor.</value>
+  </data>
+  <data name="ConflictDetail.UnknownResource">
+    <value>Unknown armor</value>
+  </data>
+  <data name="ConflictDetail.ConflictingMods">
+    <value>Conflicting mods</value>
+  </data>
+  <data name="ConflictDetail.CurrentWinner">
+    <value>Current winner</value>
+  </data>
+  <data name="ConflictDetail.Unit">
+    <value>Unit</value>
+  </data>
+  <data name="ArmorPollutionPage.Title">
+    <value>Enabled Mod Armor Pollution</value>
+  </data>
+  <data name="ArmorPollutionPage.Description">
+    <value>Checks only currently enabled mods by reading Unit data directly from patch files and comparing UnitIds.</value>
+  </data>
+  <data name="ArmorPollutionPage.Refresh">
+    <value>Rescan</value>
+  </data>
+  <data name="ArmorPollutionPage.Scanning">
+    <value>Scanning enabled mods for armor pollution...</value>
+  </data>
+  <data name="ArmorPollutionPage.ScanFailed">
+    <value>Armor pollution scan failed</value>
+  </data>
+  <data name="ArmorPollutionPage.ScannedMods">
+    <value>Mods scanned</value>
+  </data>
+  <data name="ArmorPollutionPage.ScannedPatches">
+    <value>Patch files</value>
+  </data>
+  <data name="ArmorPollutionPage.ScannedUnits">
+    <value>Units</value>
+  </data>
+  <data name="ArmorPollutionPage.PollutedUnits">
+    <value>Polluted Units</value>
+  </data>
+  <data name="ArmorPollutionPage.AffectedMods">
+    <value>Affected mods</value>
+  </data>
+  <data name="ArmorPollutionPage.Evidence">
+    <value>{mods} mod(s) provide this Unit from {patches} patch file(s).</value>
+  </data>
+  <data name="ArmorPollutionPage.UnknownUnit">
+    <value>Unnamed Unit</value>
+  </data>
+  <data name="ArmorPollutionPage.Found">
+    <value>Found {count} Unit(s) provided by multiple enabled mods</value>
+  </data>
+  <data name="ArmorPollutionPage.None">
+    <value>No enabled mods provide the same Unit.</value>
+  </data>
+  <data name="ArmorPollutionPage.EmptyTitle">
+    <value>No armor pollution found</value>
+  </data>
+  <data name="ArmorPollutionPage.EmptyDescription">
+    <value>No duplicate Unit data was found across currently enabled mods.</value>
+  </data>
+  <data name="PatchResourceViewerPage.Title">
+    <value>Patch Resource Viewer</value>
+  </data>
+  <data name="PatchResourceViewerPage.Description">
+    <value>Select a mod to inspect its Patch TOC, Unit GPU Streams, and small vertex samples in read-only mode.</value>
+  </data>
+  <data name="PatchResourceViewerPage.Toc">
+    <value>Patch TOC Entries</value>
+  </data>
+  <data name="PatchResourceViewerPage.GpuStreams">
+    <value>Unit GPU Streams</value>
+  </data>
+  <data name="PatchResourceViewerPage.Textures">
+    <value>Texture Preview</value>
+  </data>
+  <data name="PatchResourceViewerPage.SelectTexture">
+    <value>Select a texture on the left to preview its DDS payload.</value>
+  </data>
+  <data name="PatchResourceViewerPage.LoadingTexture">
+    <value>Decoding texture {id}...</value>
+  </data>
+  <data name="PatchResourceViewerPage.TextureLoaded">
+    <value>{width} × {height}, {format}</value>
+  </data>
+  <data name="PatchResourceViewerPage.TextureUnavailable">
+    <value>This texture cannot be previewed: it may have no local payload, use an unsupported format, or exceed the preview limit.</value>
+  </data>
+  <data name="PatchResourceViewerPage.ResetZoom">
+    <value>Reset zoom</value>
+  </data>
+  <data name="PatchResourceViewerPage.ClosePreview">
+    <value>Close preview</value>
+  </data>
+  <data name="PatchResourceViewerPage.EmptyMods">
+    <value>There are no mods to inspect.</value>
+  </data>
+  <data name="PatchResourceViewerPage.Loading">
+    <value>Reading Patch resources for {name}...</value>
+  </data>
+  <data name="PatchResourceViewerPage.Loaded">
+    <value>Read {patches} Patch file(s), {toc} TOC entries, and {streams} GPU Streams.</value>
+  </data>
+  <data name="PatchResourceViewerPage.LoadedWithWarning">
+    <value>Read completed, but some Patch files could not be parsed: {message}</value>
+  </data>
+  <data name="PatchResourceViewerPage.LoadFailed">
+    <value>Read failed: {message}</value>
+  </data>
+  <data name="Bisect.Title">
+    <value>Bisect Broken Mods</value>
+  </data>
+  <data name="Bisect.Description">
+    <value>Rounds of half-enable + deploy to quickly find the mod causing the game crash. Uses a temporary group; the current group is never modified.</value>
+  </data>
+  <data name="Bisect.CrashHint">
+    <value>Note: crashes are usually caused by model/armor mods. Audio and UI mods rarely crash the game (at worst they cause display or sound issues). Suspect model mods first.</value>
+  </data>
+  <data name="Bisect.Start">
+    <value>Start Bisect</value>
+  </data>
+  <data name="Bisect.Resume">
+    <value>Resume</value>
+  </data>
+  <data name="Bisect.Abort">
+    <value>Abort &amp; Restore</value>
+  </data>
+  <data name="Bisect.NoGameDir">
+    <value>Configure the game directory in Settings first.</value>
+  </data>
+  <data name="Bisect.NeedTwoEnabled">
+    <value>The current group needs at least 2 enabled mods to run a bisect.</value>
+  </data>
+  <data name="Bisect.StartConfirmMessage">
+    <value>Note: crashes are usually caused by model/armor mods; audio and UI mods rarely crash the game (at worst they cause display or sound issues). Suspect model mods first.
+
+A temporary group "{name}" will be created, the current enabled state (including option toggles) will be copied, and the app will switch to it. The original group stays untouched. Start now?</value>
+  </data>
+  <data name="Bisect.StaleTitle">
+    <value>Stale temporary groups found</value>
+  </data>
+  <data name="Bisect.StaleMessage">
+    <value>Temporary group(s) left from a previous bisect were detected (likely not cleaned up after an early exit):
+{names}
+
+Delete them?</value>
+  </data>
+  <data name="Bisect.TempGroupName">
+    <value>Bisect-Temp</value>
+  </data>
+  <data name="Bisect.TempGroupPrefix">
+    <value>Bisect</value>
+  </data>
+  <data name="Bisect.ReportTitle">
+    <value>Round Result</value>
+  </data>
+  <data name="Bisect.SingleVerifyMessage">
+    <value>Converged to the last candidate "{name}"; deploying it alone for verification:
+
+The game was launched automatically, verify whether it crashes, then choose a result.
+If it crashes alone, it is confirmed as the problem mod; if it does not crash, the mod itself is fine (the crash may be caused by a combination of mods).</value>
+  </data>
+  <data name="Bisect.ReportMessage">
+    <value>Cleaned and deployed. This round tests {count} mod(s):
+{names}
+
+The game was launched automatically, verify whether it crashes, then choose a result.</value>
+  </data>
+  <data name="Bisect.Crashed">
+    <value>Crashed</value>
+  </data>
+  <data name="Bisect.NotCrashed">
+    <value>Did not crash</value>
+  </data>
+  <data name="Bisect.Cancel">
+    <value>Cancel bisect</value>
+  </data>
+  <data name="Bisect.CanceledMessage">
+    <value>Bisect canceled: temporary group removed, original group untouched.</value>
+  </data>
+  <data name="Bisect.ContinueTitle">
+    <value>Continue</value>
+  </data>
+  <data name="Bisect.ContinueQuestion">
+    <value>Located suspect mod "{name}" and disabled it in the temporary group.
+
+Continue bisecting the remaining {count} mod(s)?</value>
+  </data>
+  <data name="Bisect.VerifyRemainingMessage">
+    <value>Cleaned and deployed the remaining {count} mod(s) for verification:
+{names}
+
+If it still crashes, the rest will be bisected further; if it does not crash, the rest are fine. The game was launched automatically, verify and choose a result.</value>
+  </data>
+  <data name="Bisect.SummaryTitle">
+    <value>Bisect Complete</value>
+  </data>
+  <data name="Bisect.SummaryMessage">
+    <value>Ran {rounds} round(s) and located {count} suspect mod(s):
+{names}
+
+They have been disabled in the original group automatically.
+Note: if a suspect is an audio/UI mod, it may not be the real cause; check model mods first.</value>
+  </data>
+  <data name="Bisect.SummaryNone">
+    <value>No clear suspect found. If the game still crashes, check model/armor mods first or run the bisect again.</value>
+  </data>
+  <data name="Bisect.Deploying">
+    <value>Deploying test set</value>
+  </data>
+  <data name="Bisect.GameRunningTitle">
+    <value>Close the game</value>
+  </data>
+  <data name="Bisect.GameRunningMessage">
+    <value>The game is running; deployed mod patches will not take effect while it is open.
+The game will be closed automatically before deploying. Close it and continue? Choosing "No" cancels the bisect.</value>
+  </data>
+  <data name="Bisect.GroupInfo">
+    <value>Current group: {name} ({count} enabled mods)</value>
+  </data>
+  <data name="Bisect.OriginalGroupInfo">
+    <value>Original group: {name} (restored when done)</value>
+  </data>
+  <data name="Bisect.SessionInactive">
+    <value>Not started yet</value>
+  </data>
+  <data name="Bisect.CandidateCount">
+    <value>Candidate mods: {count}</value>
+  </data>
+  <data name="Bisect.SuspectsLabel">
+    <value>Located suspects:</value>
+  </data>
+  <data name="Bisect.RoundColumn">
+    <value>Round</value>
+  </data>
+  <data name="Bisect.ModsColumn">
+    <value>Tested mods</value>
+  </data>
+  <data name="Bisect.ResultColumn">
+    <value>Result</value>
+  </data>
+  <data name="Bisect.RoundCrashed">
+    <value>Crashed</value>
+  </data>
+  <data name="Bisect.RoundOk">
+    <value>OK</value>
+  </data>
+  <data name="Bisect.AbortTitle">
+    <value>Abort Bisect</value>
+  </data>
+  <data name="Bisect.AbortConfirm">
+    <value>Aborting switches back to the original group and deletes the temporary group (the original group is not affected). Abort now?</value>
+  </data>
+  <data name="ModelPreviewPage.Title">
+    <value>Model Preview</value>
+  </data>
+  <data name="ModelPreviewPage.Description">
+    <value>Preview a mod while temporarily switching body types, materials, attachments, armor, or stratagems. Preview choices do not change deployment settings.</value>
+  </data>
+  <data name="ModelPreviewPage.Disclaimer">
+    <value>This preview is generated only from the mod resources that could be decoded. Missing resources, materials, skeletons, animations, in-game lighting, and rendering logic can make the pose, appearance, materials, or part combination differ significantly from the actual game. Always treat the in-game result as authoritative.</value>
+  </data>
+  <data name="ModelPreviewPage.Refresh">
+    <value>Refresh Mods</value>
+  </data>
+  <data name="ModelPreviewPage.Mods">
+    <value>Mods</value>
+  </data>
+  <data name="ModelPreviewPage.Meshes">
+    <value>Decoded Meshes</value>
+  </data>
+  <data name="ModelPreviewPage.AutomaticMaterials">
+    <value>Automatically combine part color textures</value>
+  </data>
+  <data name="ModelPreviewPage.Texture">
+    <value>Texture</value>
+  </data>
+  <data name="ModelPreviewPage.PartsAndVariants">
+    <value>Parts and variants</value>
+  </data>
+  <data name="ModelPreviewPage.LegacyVariants">
+    <value>Legacy variants</value>
+  </data>
+  <data name="ModelPreviewPage.PartsHint">
+    <value>Switch mod parts and variants below. Advanced mesh and material diagnostics are under Decoded meshes.</value>
+  </data>
+  <data name="ModelPreviewPage.ViewControls">
+    <value>View</value>
+  </data>
+  <data name="ModelPreviewPage.BodyShape">
+    <value>Body shape</value>
+  </data>
+  <data name="ModelPreviewPage.SlimBody">
+    <value>Slim</value>
+  </data>
+  <data name="ModelPreviewPage.StockyBody">
+    <value>Stocky</value>
+  </data>
+  <data name="ModelPreviewPage.Armor">
+    <value>Armor</value>
+  </data>
+  <data name="ModelPreviewPage.Animation">
+    <value>Animation</value>
+  </data>
+  <data name="ModelPreviewPage.PlayAnimation">
+    <value>Play animation</value>
+  </data>
+  <data name="ModelPreviewPage.PauseAnimation">
+    <value>Pause animation</value>
+  </data>
+  <data name="ModelPreviewPage.ResetAnimation">
+    <value>Restore bind pose</value>
+  </data>
+  <data name="ModelPreviewPage.AllArmors">
+    <value>All model parts</value>
+  </data>
+  <data name="ModelPreviewPage.NoManifestOptions">
+    <value>This mod has no switchable manifest options and will use its current configuration.</value>
+  </data>
+  <data name="ModelPreviewPage.ShowFilteredMeshes">
+    <value>Show auto-hidden meshes</value>
+  </data>
+  <data name="ModelPreviewPage.IsolateMesh">
+    <value>Show selected mesh only</value>
+  </data>
+  <data name="ModelPreviewPage.FrontView">
+    <value>Front</value>
+  </data>
+  <data name="ModelPreviewPage.SideView">
+    <value>Side</value>
+  </data>
+  <data name="ModelPreviewPage.TopView">
+    <value>Top</value>
+  </data>
+  <data name="ModelPreviewPage.ResetView">
+    <value>Reset view</value>
+  </data>
+  <data name="ModelPreviewPage.OrientationHint">
+    <value>Y is up · left drag rotates · right drag pans · wheel zooms</value>
+  </data>
+  <data name="ModelPreviewPage.CameraOrientation">
+    <value>{direction} view</value>
+  </data>
+  <data name="ModelPreviewPage.OrientationFront">
+    <value>Front</value>
+  </data>
+  <data name="ModelPreviewPage.OrientationRight">
+    <value>Right</value>
+  </data>
+  <data name="ModelPreviewPage.OrientationBack">
+    <value>Back</value>
+  </data>
+  <data name="ModelPreviewPage.OrientationLeft">
+    <value>Left</value>
+  </data>
+  <data name="ModelPreviewPage.OrientationTop">
+    <value>Top</value>
+  </data>
+  <data name="ModelPreviewPage.OrientationBottom">
+    <value>Bottom</value>
+  </data>
+  <data name="ModelPreviewPage.GizmoAxisTip">
+    <value>Click an X, Y, or Z dot for its axis view; click it again for the opposite view.</value>
+  </data>
+  <data name="ModelPreviewPage.OriginalTextureResolution">
+    <value>Original texture resolution</value>
+  </data>
+  <data name="ModelPreviewPage.OriginalTextureResolutionTip">
+    <value>Reads the selected texture's source top mip; uses more memory.</value>
+  </data>
+  <data name="ModelPreviewPage.Status">
+    <value>Preview status</value>
+  </data>
+  <data name="ModelPreviewPage.AutomaticallyHiddenSummary">
+    <value>{count} auto-hidden</value>
+  </data>
+  <data name="ModelPreviewPage.PreviewVisible">
+    <value>Shown by default</value>
+  </data>
+  <data name="ModelPreviewPage.HiddenCullingBody">
+    <value>Hidden: collision/culling proxy</value>
+  </data>
+  <data name="ModelPreviewPage.HiddenLargeOutlier">
+    <value>Hidden: size outlier</value>
+  </data>
+  <data name="ModelPreviewPage.HiddenProxyGeometry">
+    <value>Hidden: low-complexity proxy</value>
+  </data>
+  <data name="ModelPreviewPage.HiddenCollisionSphere">
+    <value>Hidden: regular collision sphere</value>
+  </data>
+  <data name="ModelPreviewPage.ColorCandidate">
+    <value>Color candidate</value>
+  </data>
+  <data name="ModelPreviewPage.LikelyNormalMap">
+    <value>Likely normal map</value>
+  </data>
+  <data name="ModelPreviewPage.UnclassifiedTexture">
+    <value>Unclassified</value>
+  </data>
+  <data name="ModelPreviewPage.HasUv">
+    <value>Yes</value>
+  </data>
+  <data name="ModelPreviewPage.NoUv">
+    <value>No</value>
+  </data>
+  <data name="ModelPreviewPage.Patch">
+    <value>Patch</value>
+  </data>
+  <data name="ModelPreviewPage.MeshInfo">
+    <value>Mesh</value>
+  </data>
+  <data name="ModelPreviewPage.Stream">
+    <value>Stream</value>
+  </data>
+  <data name="ModelPreviewPage.Uv">
+    <value>UV</value>
+  </data>
+  <data name="ModelPreviewPage.Size">
+    <value>Size</value>
+  </data>
+  <data name="ModelPreviewPage.Vertices">
+    <value>Vertices</value>
+  </data>
+  <data name="ModelPreviewPage.Triangles">
+    <value>Triangles</value>
+  </data>
+  <data name="ModelPreviewPage.NotReady">
+    <value>The mod list is still loading.</value>
+  </data>
+  <data name="ModelPreviewPage.EmptyMods">
+    <value>There are no mods to preview.</value>
+  </data>
+  <data name="ModelPreviewPage.Loading">
+    <value>Decoding model geometry for {name}...</value>
+  </data>
+  <data name="ModelPreviewPage.Loaded">
+    <value>Decoded {meshes} mesh(es) and {triangles} triangle(s) from {patches} Patch file(s) in the current selection; loaded {textures} texture(s), skipped {skipped} unsupported or over-limit stream(s).</value>
+  </data>
+  <data name="ModelPreviewPage.HiddenOutliers">
+    <value>Automatically hid {count} proxy, collision, or anomalous mesh(es). Enable Show auto-hidden meshes to inspect them.</value>
+  </data>
+  <data name="ModelPreviewPage.NoGeometry">
+    <value>No previewable model geometry was found. This mod may contain textures or other resources only.</value>
+  </data>
+  <data name="ModelPreviewPage.LoadFailed">
+    <value>Model decoding failed: {message}</value>
+  </data>
+  <data name="ArmorReusePage.Description">
+    <value>Reads only the selected patches of enabled mods and identifies other armor whose Units are covered by the same patch. The primary replacement is inferred from the Unit count and is excluded.</value>
+  </data>
+  <data name="ArmorReusePage.Attribution">
+    <value>Data and format references: HD2SDK-CommunityEdition (armor-name fallback table) and hd2-repatcher (patch/Unit structure research).</value>
+  </data>
+  <data name="ArmorReusePage.Scanning">
+    <value>Indexing armor part reuse in the game data...</value>
+  </data>
+  <data name="ArmorReusePage.ScanFailed">
+    <value>Armor part reuse scan failed</value>
+  </data>
+  <data name="ArmorReusePage.ReusedArmors">
+    <value>Reused armor</value>
+  </data>
+  <data name="ArmorReusePage.SharedUnits">
+    <value>The same patch also covers {count} Unit(s)</value>
+  </data>
+  <data name="ArmorReusePage.SourceArmor">
+    <value>Primary replacement (inferred from Unit count): </value>
+  </data>
+  <data name="ArmorReusePage.UnknownArmor">
+    <value>Unnamed armor resource (ID: {id})</value>
+  </data>
+  <data name="ArmorReusePage.Found">
+    <value>Found {records} mod-to-armor collateral override relation(s) involving {armors} other armor item(s).</value>
+  </data>
+  <data name="ArmorReusePage.None">
+    <value>No enabled mod was found to override another known armor as a side effect.</value>
+  </data>
+  <data name="ArmorReusePage.EmptyTitle">
+    <value>No collateral armor override found</value>
+  </data>
+  <data name="ArmorReusePage.EmptyDescription">
+    <value>There may be no enabled mods, the enabled mods may contain no known armor Units, or the patches affect only one armor.</value>
+  </data>
+  <data name="DashboardPage.ClickForDetails">
+    <value>Click for details</value>
+  </data>
+  <data name="DashboardPage.CheckingVersion">
+    <value>Checking version compatibility...</value>
+  </data>
+  <data name="DashboardPage.MoreTags">
+    <value>More Tags:</value>
+  </data>
+  <data name="DashboardPage.EditManifest">
+    <value>Edit Manifest</value>
+  </data>
+  <data name="DashboardPage.PackageExport">
+    <value>Package &amp; Export</value>
+  </data>
+  <data name="DashboardPage.UpdateMod">
+    <value>Update Mod</value>
+  </data>
+  <data name="DashboardPage.OpenFileLocation">
+    <value>Open File Location</value>
+  </data>
+  <data name="DashboardPage.SetTags">
+    <value>Set Tags</value>
+  </data>
+  <data name="DashboardPage.MoveToTop">
+    <value>Move to Top</value>
+  </data>
+  <data name="DashboardPage.MoveToBottom">
+    <value>Move to Bottom</value>
+  </data>
+  <data name="DashboardPage.MoveToPosition">
+    <value>Move to Position...</value>
+  </data>
+  <data name="DashboardPage.MoveToPositionTitle">
+    <value>Move Position</value>
+  </data>
+  <data name="DashboardPage.MoveToPositionMsg">
+    <value>Enter target position (1 to {count}):</value>
+  </data>
+  <data name="DashboardPage.MoveToPositionInvalid">
+    <value>Invalid position. Enter an integer between 1 and {count}.</value>
+  </data>
+  <data name="DashboardPage.PositionNumberHint">
+    <value>Mod position in the list. The "Move to Position..." context menu uses this number.</value>
+  </data>
+  <data name="DashboardPage.CreateSeparator">
+    <value>Create Separator</value>
+  </data>
+  <data name="DashboardPage.Rename">
+    <value>Rename</value>
+  </data>
+  <data name="DashboardPage.ChangeColor">
+    <value>Change Color</value>
+  </data>
+  <data name="DashboardPage.DeleteSeparatorHint">
+    <value>Delete Separator</value>
+  </data>
+  <data name="DashboardPage.OriginalRepo">
+    <value>Original Repo (teutinsa)</value>
+  </data>
+  <data name="DashboardPage.ForkedRepo">
+    <value>Forked Repo (TYHH100)</value>
+  </data>
+  <data name="DashboardPage.SavingModConfig">
+    <value>Saving mod configuration</value>
+  </data>
+  <data name="DashboardPage.GoToSettings">
+    <value>Go to settings now?</value>
+  </data>
+  <data name="DashboardPage.SettingsInvalid">
+    <value>Settings are invalid!</value>
+  </data>
+  <data name="DashboardPage.LoadingMods">
+    <value>Loading mods</value>
+  </data>
+  <data name="DashboardPage.LoadModsFailed">
+    <value>Failed to load mods!</value>
+  </data>
+  <data name="DashboardPage.LoadingConfig">
+    <value>Loading configuration file</value>
+  </data>
+  <data name="DashboardPage.LoadConfigFailed">
+    <value>Failed to load configuration file!</value>
+  </data>
+  <data name="DashboardPage.LoadProblemsPrefix">
+    <value>Encountered issues while loading mods:</value>
+  </data>
+  <data name="DashboardPage.CantParseManifest">
+    <value>Cannot parse manifest file!</value>
+  </data>
+  <data name="DashboardPage.UnknownManifestVersion">
+    <value>Unknown manifest version!</value>
+  </data>
+  <data name="DashboardPage.OutOfSupportManifest">
+    <value>Unsupported manifest version! Please update.
+		Manager version </value>
+  </data>
+  <data name="DashboardPage.VersionNotSupported">
+    <value> does not support this manifest file version.</value>
+  </data>
+  <data name="DashboardPage.DuplicateGuid">
+    <value>A mod with the same GUID has already been added!</value>
+  </data>
+  <data name="DashboardPage.InvalidPathPrefix">
+    <value>Include path "</value>
+  </data>
+  <data name="DashboardPage.InvalidPathSuffix">
+    <value>" is invalid!</value>
+  </data>
+  <data name="DashboardPage.CantReadArchivePrefix">
+    <value>Cannot read archive file! Error: </value>
+  </data>
+  <data name="DashboardPage.CantReadArchive">
+    <value>Cannot read archive file!</value>
+  </data>
+  <data name="DashboardPage.NoManifestFoundDelete">
+    <value>No manifest file found in directory!
+			Action: Deleting</value>
+  </data>
+  <data name="DashboardPage.NoManifestFoundInfer">
+    <value>No manifest file found in directory!
+			Action: Inferring from directory</value>
+  </data>
+  <data name="DashboardPage.EmptyOptions">
+    <value>Manifest contains empty options! This mod may not have any effect.</value>
+  </data>
+  <data name="DashboardPage.EmptySubOptions">
+    <value>Manifest contains empty sub-options! This mod may not work as expected.</value>
+  </data>
+  <data name="DashboardPage.EmptyIncludes">
+    <value>Manifest contains empty include lists! This mod may not have any effect.</value>
+  </data>
+  <data name="DashboardPage.MissingIncludePathPrefix">
+    <value>Include path "</value>
+  </data>
+  <data name="DashboardPage.MissingIncludePathSuffix">
+    <value>" does not exist and will be skipped as an empty switch.</value>
+  </data>
+  <data name="DashboardPage.MissingIncludePath">
+    <value>An include path does not exist and will be skipped as an empty switch.</value>
+  </data>
+  <data name="DashboardPage.InvalidImagePathPrefix">
+    <value>Manifest image path "</value>
+  </data>
+  <data name="DashboardPage.EmptyImagePath">
+    <value>Manifest contains an empty image path!</value>
+  </data>
+  <data name="DashboardPage.RecycleBinConfirm">
+    <value>Mod files will be moved to the Recycle Bin.</value>
+  </data>
+  <data name="DashboardPage.PermanentDeleteConfirm">
+    <value>Mod files will be permanently deleted. This action cannot be undone!</value>
+  </data>
+  <data name="DashboardPage.BatchDeleteTitle">
+    <value>Batch Delete</value>
+  </data>
+  <data name="DashboardPage.BatchDeletePrefix">
+    <value>Are you sure you want to delete the selected </value>
+  </data>
+  <data name="DashboardPage.BatchDeleteSuffix">
+    <value> mod(s)?
+</value>
+  </data>
+  <data name="DashboardPage.BatchDeleteProgress">
+    <value>Batch deleting</value>
+  </data>
+  <data name="DashboardPage.BatchDeleteFailed">
+    <value>Batch delete failed: </value>
+  </data>
+  <data name="DashboardPage.BatchTagTitle">
+    <value>Batch Set Tags</value>
+  </data>
+  <data name="DashboardPage.BatchTagPrefix">
+    <value>Set tags for the selected </value>
+  </data>
+  <data name="DashboardPage.BatchTagSuffix">
+    <value> mod(s):</value>
+  </data>
+  <data name="DashboardPage.BatchTagReadonly">
+    <value>Cannot set tags, settings are in read-only mode</value>
+  </data>
+  <data name="DashboardPage.BatchTagUpdatedPrefix">
+    <value>Tags have been updated for </value>
+  </data>
+  <data name="DashboardPage.BatchTagUpdatedSuffix">
+    <value> mod(s)</value>
+  </data>
+  <data name="DashboardPage.AddModDialogTitle">
+    <value>Select mod archive files to add (multiple selection allowed)...</value>
+  </data>
+  <data name="DashboardPage.BatchAddWaitMsg">
+    <value>{total} archive(s) in total, please wait, Helldiver...</value>
+  </data>
+  <data name="DashboardPage.BatchAddNestedProgress">
+    <value>Processing nested archive ({current}/{total})</value>
+  </data>
+  <data name="DashboardPage.BatchAddSuccess">
+    <value>Successfully added {count} mod(s)!</value>
+  </data>
+  <data name="DashboardPage.BatchAddDonePrefix">
+    <value>Batch add complete: {successCount} succeeded, {failCount} failed. Issues:</value>
+  </data>
+  <data name="DashboardPage.BatchAddDoneWarning">
+    <value>All {successCount} mod(s) added, but some issues were found:</value>
+  </data>
+  <data name="DashboardPage.AddSingleError">
+    <value>Failed to add mod due to a problem:</value>
+  </data>
+  <data name="DashboardPage.AddSingleWarning">
+    <value>Mod added, but some issues were found:</value>
+  </data>
+  <data name="DashboardPage.AddSingleProgress">
+    <value>Adding mod</value>
+  </data>
+  <data name="DashboardPage.UpdateModDialogPrefix">
+    <value>Select the archive to update mod "</value>
+  </data>
+  <data name="DashboardPage.UpdateModDialogSuffix">
+    <value>"...</value>
+  </data>
+  <data name="DashboardPage.UpdateModProgress">
+    <value>Updating mod</value>
+  </data>
+  <data name="DashboardPage.UpdateModDone">
+    <value>Mod update complete</value>
+  </data>
+  <data name="DashboardPage.UpdateModFailed">
+    <value>Mod update failed: </value>
+  </data>
+  <data name="DashboardPage.PurgeNoGameDir">
+    <value>Cannot clean mods! Game directory is not set.</value>
+  </data>
+  <data name="DashboardPage.PurgeProgress">
+    <value>Cleaning mods</value>
+  </data>
+  <data name="DashboardPage.DeployProgress">
+    <value>Deploying mods</value>
+  </data>
+  <data name="DashboardPage.DeploySuccess">
+    <value>Deployment successful.</value>
+  </data>
+  <data name="DashboardPage.DeleteConfirmTitle">
+    <value>Confirm Delete</value>
+  </data>
+  <data name="DashboardPage.DeleteConfirmPrefix">
+    <value>Are you sure you want to delete mod '</value>
+  </data>
+  <data name="DashboardPage.DeleteConfirmSuffix">
+    <value>'?
+</value>
+  </data>
+  <data name="DashboardPage.DeleteModProgress">
+    <value>Deleting mod</value>
+  </data>
+  <data name="DashboardPage.OpenFileLocationFailed">
+    <value>Cannot open file location: </value>
+  </data>
+  <data name="DashboardPage.EditNameTitle">
+    <value>Edit Name</value>
+  </data>
+  <data name="DashboardPage.EditNameMsg">
+    <value>Enter the new mod name:</value>
+  </data>
+  <data name="DashboardPage.EditNameEmptyError">
+    <value>Mod name cannot be empty</value>
+  </data>
+  <data name="DashboardPage.EditNameUpdated">
+    <value>Mod name has been updated</value>
+  </data>
+  <data name="DashboardPage.EditNameFailed">
+    <value>Cannot edit mod name: </value>
+  </data>
+  <data name="DashboardPage.EditDescTitle">
+    <value>Edit Description</value>
+  </data>
+  <data name="DashboardPage.EditDescMsg">
+    <value>Enter the new mod description:</value>
+  </data>
+  <data name="DashboardPage.EditDescUpdated">
+    <value>Mod description has been updated</value>
+  </data>
+  <data name="DashboardPage.EditDescFailed">
+    <value>Cannot edit mod description: </value>
+  </data>
+  <data name="DashboardPage.EditImageDialog">
+    <value>Select the mod image to set...</value>
+  </data>
+  <data name="DashboardPage.EditImageProgress">
+    <value>Updating image</value>
+  </data>
+  <data name="DashboardPage.EditImageSuccess">
+    <value>Image updated successfully.</value>
+  </data>
+  <data name="DashboardPage.EditImageFailed">
+    <value>Image update failed: </value>
+  </data>
+  <data name="DashboardPage.ExportTitle">
+    <value>Export Settings</value>
+  </data>
+  <data name="DashboardPage.ExportMsg">
+    <value>Select export format and compression method:</value>
+  </data>
+  <data name="DashboardPage.ExportZip">
+    <value>ZIP (Standard - Best compatibility, low memory)</value>
+  </data>
+  <data name="DashboardPage.Export7zFast">
+    <value>7z (Fast LZMA2 - Fast speed, low memory)</value>
+  </data>
+  <data name="DashboardPage.Export7zStandard">
+    <value>7z (Standard LZMA2 - Balanced, medium memory)</value>
+  </data>
+  <data name="DashboardPage.Export7zHigh">
+    <value>7z (High Compression LZMA2 - Small size, medium memory)</value>
+  </data>
+  <data name="DashboardPage.Export7zUltra">
+    <value>7z (Ultra LZMA2 - Smallest size, high memory ⚠)</value>
+  </data>
+  <data name="DashboardPage.ExportSaveDialog">
+    <value>Export Mod</value>
+  </data>
+  <data name="DashboardPage.ExportMemoryWarning">
+    <value>Memory Usage Warning</value>
+  </data>
+  <data name="DashboardPage.ExportMemoryMsgPrefix">
+    <value>Total mod file size </value>
+  </data>
+  <data name="DashboardPage.ExportMemoryMsgMid">
+    <value>, selected "</value>
+  </data>
+  <data name="DashboardPage.ExportMemoryMsgCompression">
+    <value>" level.
+
+This level uses a </value>
+  </data>
+  <data name="DashboardPage.ExportMemoryMsgSuffix">
+    <value> dictionary for LZMA2 compression.
+Memory usage will be high during compression...Continue exporting?</value>
+  </data>
+  <data name="DashboardPage.ExportProgressTitle">
+    <value>Exporting Mod - </value>
+  </data>
+  <data name="DashboardPage.ExportSpeed">
+    <value>Speed: </value>
+  </data>
+  <data name="DashboardPage.ExportMBS">
+    <value> MB/s</value>
+  </data>
+  <data name="DashboardPage.ExportKBS">
+    <value> KB/s</value>
+  </data>
+  <data name="DashboardPage.ExportBS">
+    <value> B/s</value>
+  </data>
+  <data name="DashboardPage.ExportRatio">
+    <value>Ratio: </value>
+  </data>
+  <data name="DashboardPage.ExportPercent">
+    <value>%</value>
+  </data>
+  <data name="DashboardPage.ExportError">
+    <value>Error while exporting mod:</value>
+  </data>
+  <data name="DashboardPage.NexusDownloadInfo">
+    <value>Downloading mods from Nexus Mods requires... but I don't have a Nexus Premium membership...</value>
+  </data>
+  <data name="DashboardPage.EditTagsMsg">
+    <value>Select tags for the mod:</value>
+  </data>
+  <data name="DashboardPage.EditTagsUpdated">
+    <value>Mod tags have been updated</value>
+  </data>
+  <data name="DashboardPage.AutoTagTitle">
+    <value>Detecting mod types and applying tags</value>
+  </data>
+  <data name="DashboardPage.AutoTagSummary">
+    <value>Auto-detected and tagged {count} mods by type</value>
+  </data>
+  <data name="ModType.Tag.Audio">
+    <value>Audio</value>
+  </data>
+  <data name="ModType.Tag.Ui">
+    <value>UI</value>
+  </data>
+  <data name="ModType.Tag.Texture">
+    <value>Texture</value>
+  </data>
+  <data name="ModType.Tag.Armor">
+    <value>Armor</value>
+  </data>
+  <data name="ModType.Tag.Stratagem">
+    <value>Stratagem</value>
+  </data>
+  <data name="ModType.Tag.SupportWeapon">
+    <value>Support Weapon</value>
+  </data>
+  <data name="ModType.Tag.Enemy">
+    <value>Enemy</value>
+  </data>
+  <data name="ModType.Tag.Model">
+    <value>Model</value>
+  </data>
+  <data name="ModType.Tag.PrimaryWeapon">
+    <value>Primary Weapon</value>
+  </data>
+  <data name="ModType.Tag.Script">
+    <value>Script</value>
+  </data>
+  <data name="AutoTagPairingPage.Title">
+    <value>Auto-tag Pairing</value>
+  </data>
+  <data name="AutoTagPairingPage.Desc">
+    <value>Choose which tag to use for each auto-detected type. Select "New tag..." to create one on the fly; select "Unset" to skip that type. Pairings take priority during auto-tagging.</value>
+  </data>
+  <data name="AutoTagPairingPage.UnsetOption">
+    <value>Unset</value>
+  </data>
+  <data name="AutoTagPairingPage.CreateNewOption">
+    <value>New tag...</value>
+  </data>
+  <data name="AutoTagPairingPage.Save">
+    <value>Save Pairings</value>
+  </data>
+  <data name="AutoTagPairingPage.SaveSuccess">
+    <value>Pairings saved; they apply on the next auto-tag run</value>
+  </data>
+  <data name="AutoTagPairingPage.ReadonlyError">
+    <value>Cannot save pairings in read-only mode</value>
+  </data>
+  <data name="DashboardPage.DefaultSeparatorName">
+    <value>New Separator</value>
+  </data>
+  <data name="DashboardPage.RenameSeparatorTitle">
+    <value>Rename Separator</value>
+  </data>
+  <data name="DashboardPage.RenameSeparatorMsg">
+    <value>Enter the new separator name:</value>
+  </data>
+  <data name="DashboardPage.RenameSeparatorEmptyError">
+    <value>Name cannot be empty</value>
+  </data>
+  <data name="DashboardPage.ChangeSeparatorColorTitle">
+    <value>Select Separator Color</value>
+  </data>
+  <data name="DashboardPage.ChangeSeparatorColorPrefix">
+    <value>Select a color for "</value>
+  </data>
+  <data name="DashboardPage.ChangeSeparatorColorSuffix">
+    <value>":</value>
+  </data>
+  <data name="DashboardPage.DeleteSeparatorPrefix">
+    <value>Are you sure you want to delete separator "</value>
+  </data>
+  <data name="DashboardPage.DeleteSeparatorSuffix">
+    <value>"?</value>
+  </data>
+  <data name="DashboardPage.RescanMods">
+    <value>Rescan Mods</value>
+  </data>
+  <data name="DashboardPage.RescanModsHint">
+    <value>Rescan mod directory to detect recovered mods from recycle bin</value>
+  </data>
+  <data name="DashboardPage.RescanProblemsPrefix">
+    <value>Rescan completed, but some problems were detected:</value>
+  </data>
+  <data name="DashboardPage.RescanComplete">
+    <value>Rescan completed.</value>
+  </data>
+  <data name="DashboardPage.SelectedCountPrefix">
+    <value>Selected </value>
+  </data>
+  <data name="DashboardPage.SelectedCountSuffix">
+    <value> item(s)</value>
+  </data>
+  <data name="SettingsPage.TabPaths">
+    <value>Paths</value>
+  </data>
+  <data name="SettingsPage.TabDeploy">
+    <value>Deploy</value>
+  </data>
+  <data name="SettingsPage.TabLogs">
+    <value>Logs</value>
+  </data>
+  <data name="SettingsPage.TabHome">
+    <value>Home</value>
+  </data>
+  <data name="SettingsPage.TabAppearance">
+    <value>Appearance</value>
+  </data>
+  <data name="SettingsPage.Background">
+    <value>Window background</value>
+  </data>
+  <data name="SettingsPage.BackgroundDesc">
+    <value>A custom background image fills the window content area with adjustable opacity so the UI stays readable.</value>
+  </data>
+  <data name="SettingsPage.UseCustomBackground">
+    <value>Use a custom background image</value>
+  </data>
+  <data name="SettingsPage.BackgroundImage">
+    <value>Background image</value>
+  </data>
+  <data name="SettingsPage.Clear">
+    <value>Clear</value>
+  </data>
+  <data name="SettingsPage.BackgroundOpacity">
+    <value>Background opacity</value>
+  </data>
+  <data name="SettingsPage.CardOpacity">
+    <value>Card opacity</value>
+  </data>
+  <data name="SettingsPage.BrowseBackgroundImageDialog">
+    <value>Select background image</value>
+  </data>
+  <data name="SettingsPage.GameDir">
+    <value>Game Directory</value>
+  </data>
+  <data name="SettingsPage.GameDirDesc">
+    <value>The game directory where you want to install mods</value>
+  </data>
+  <data name="SettingsPage.AutoDetect">
+    <value>Auto Detect</value>
+  </data>
+  <data name="SettingsPage.StorageDir">
+    <value>Storage Directory</value>
+  </data>
+  <data name="SettingsPage.StorageDirDesc">
+    <value>Directory for storing all mods added to the mod manager</value>
+  </data>
+  <data name="SettingsPage.StorageDirWarning">
+    <value>Please empty this directory before modifying it, as installed file records are stored here!</value>
+  </data>
+  <data name="SettingsPage.TempDir">
+    <value>Temp Directory</value>
+  </data>
+  <data name="SettingsPage.TempDirDesc1">
+    <value>Directory for temporary files, such as:</value>
+  </data>
+  <data name="SettingsPage.TempDirDesc2">
+    <value>- Downloaded files</value>
+  </data>
+  <data name="SettingsPage.TempDirDesc3">
+    <value>- Files during mod deployment</value>
+  </data>
+  <data name="SettingsPage.TempDirDesc4">
+    <value>- Extracted files</value>
+  </data>
+  <data name="SettingsPage.OrgFolders">
+    <value>Organize Folders</value>
+  </data>
+  <data name="SettingsPage.OrgFoldersDesc">
+    <value>Subdirectories of these folders will be promoted to options when creating mods. Default includes Models.</value>
+  </data>
+  <data name="SettingsPage.Add">
+    <value>Add</value>
+  </data>
+  <data name="SettingsPage.DeployMethod">
+    <value>Mod Deployment Method</value>
+  </data>
+  <data name="SettingsPage.SymLinkDesc1">
+    <value>Use symbolic links instead of file copying to reduce disk writes during mod deployment</value>
+  </data>
+  <data name="SettingsPage.SymLinkDesc2">
+    <value>Requires running the application as administrator</value>
+  </data>
+  <data name="SettingsPage.UseSymLinks">
+    <value>Use Symbolic Links</value>
+  </data>
+  <data name="SettingsPage.DeployOrder">
+    <value>Mod Deployment Order</value>
+  </data>
+  <data name="SettingsPage.DeployOrderDesc">
+    <value>Select the file arrangement order when deploying mods</value>
+  </data>
+  <data name="SettingsPage.DeployTopToBottom">
+    <value>Top to Bottom</value>
+  </data>
+  <data name="SettingsPage.DeployBottomToTop">
+    <value>Bottom to Top</value>
+  </data>
+  <data name="SettingsPage.CustomDeployOrder">
+    <value>Use Custom Deployment Order</value>
+  </data>
+  <data name="SettingsPage.CustomDeployOrderDesc">
+    <value>When enabled, mods are deployed in the order of the list below instead of the dashboard order. 
+This does not affect the dashboard mod list display.</value>
+  </data>
+  <data name="SettingsPage.CustomDeployOrderHint">
+    <value>Go to the left sidebar "Deployment Order" page to edit the mod deployment order list.</value>
+  </data>
+  <data name="SettingsPage.DeleteMethod">
+    <value>Delete Mod Method</value>
+  </data>
+  <data name="SettingsPage.MoveToRecycleBin">
+    <value>Move to Recycle Bin</value>
+  </data>
+  <data name="SettingsPage.MissingMods">
+    <value>Missing Mod Handling</value>
+  </data>
+  <data name="SettingsPage.MissingModsDesc">
+    <value>By default, missing mod entries are automatically skipped</value>
+  </data>
+  <data name="SettingsPage.AutoRemoveMissing">
+    <value>Automatically remove missing mod entries</value>
+  </data>
+  <data name="SettingsPage.VersionCheck">
+    <value>Version Compatibility Check</value>
+  </data>
+  <data name="SettingsPage.VersionCheckDesc">
+    <value>Automatically check mod version compatibility on startup...</value>
+  </data>
+  <data name="SettingsPage.AutoCheckOnStartup">
+    <value>Auto-check on Startup</value>
+  </data>
+  <data name="SettingsPage.EnableBatchRepair">
+    <value>Enable batch repair</value>
+  </data>
+  <data name="SettingsPage.EnableBatchRepairDesc">
+    <value>Show batch repair on the dashboard; individual mod checks and repairs remain available when disabled.</value>
+  </data>
+  <data name="SettingsPage.LogLevel">
+    <value>Log Level</value>
+  </data>
+  <data name="SettingsPage.LogLevelDesc1">
+    <value>Sets the message level for logging to the log file</value>
+  </data>
+  <data name="SettingsPage.LogLevelDesc2">
+    <value>Messages at and below the selected level will be captured and logged</value>
+  </data>
+  <data name="SettingsPage.LogLevelDesc3">
+    <value>Default only logs Warning and above</value>
+  </data>
+  <data name="SettingsPage.LogAutoClean">
+    <value>Log Auto Cleanup</value>
+  </data>
+  <data name="SettingsPage.LogAutoCleanDesc">
+    <value>When the logs directory exceeds the specified number of files, automatically delete the oldest files</value>
+  </data>
+  <data name="SettingsPage.LogAutoCleanFiles">
+    <value>log files (delete oldest when exceeded)</value>
+  </data>
+  <data name="SettingsPage.Tools">
+    <value>Tools</value>
+  </data>
+  <data name="SettingsPage.ToolsDesc">
+    <value>Use the following tools to fix issues in case of anomalies</value>
+  </data>
+  <data name="SettingsPage.ReplayTutorial">
+    <value>Replay Tutorial</value>
+  </data>
+  <data name="SettingsPage.ReplayTutorialDesc">
+    <value>Return to the dashboard and restart the first-run guide to review the features</value>
+  </data>
+  <data name="SettingsPage.RecomputeHashes">
+    <value>Recompute File Hashes</value>
+  </data>
+  <data name="SettingsPage.RecomputeHashesDesc">
+    <value>Recompute SHA-256 file hashes for all mods and update the database cache</value>
+  </data>
+  <data name="SettingsPage.ForceCleanPatches">
+    <value>Force Clean Patch Files</value>
+  </data>
+  <data name="SettingsPage.ForceCleanPatchesDesc">
+    <value>Delete all .patch_* files and installed.txt records from the game data directory</value>
+  </data>
+  <data name="SettingsPage.ResetSettings">
+    <value>Reset All Settings</value>
+  </data>
+  <data name="SettingsPage.ResetSettingsWarning">
+    <value>This will reset all settings to their default values!</value>
+  </data>
+  <data name="SettingsPage.Separators">
+    <value>Separators</value>
+  </data>
+  <data name="SettingsPage.SeparatorsDesc">
+    <value>Enable to create color-coded separators in the mod list to categorize mods</value>
+  </data>
+  <data name="SettingsPage.EnableSeparators">
+    <value>Enable Separators</value>
+  </data>
+  <data name="SettingsPage.AutoTagging">
+    <value>Auto-detect and tag mods</value>
+  </data>
+  <data name="SettingsPage.AutoTaggingDesc">
+    <value>Scans mod patches on startup and tags mods by type (Audio/UI/Texture/Armor/Stratagem/Support Weapon/Primary Weapon/Enemy/Model/Script). Existing tags with the same name are reused instead of duplicated.</value>
+  </data>
+  <data name="SettingsPage.EnableAutoTagging">
+    <value>Enable auto-tagging</value>
+  </data>
+  <data name="SettingsPage.AutoTagCreateMissing">
+    <value>Create missing type tags (when off, only reuse existing tags by name)</value>
+  </data>
+  <data name="SettingsPage.EditAutoTagPairing">
+    <value>Edit Auto-tag Pairings</value>
+  </data>
+  <data name="SettingsPage.Search">
+    <value>Search</value>
+  </data>
+  <data name="SettingsPage.EnableFuzzySearch">
+    <value>Enable fuzzy search (pinyin / initials / loose character matching)</value>
+  </data>
+  <data name="SettingsPage.CaseSensitive">
+    <value>Case Sensitive</value>
+  </data>
+  <data name="SettingsPage.Language">
+    <value>Interface Language</value>
+  </data>
+  <data name="SettingsPage.LanguageDesc">
+    <value>Select the interface display language. Select "Auto Detect" to use system language.</value>
+  </data>
+  <data name="SettingsPage.ValidateGameDirNotExist">
+    <value>The selected Helldivers 2 folder does not exist!</value>
+  </data>
+  <data name="SettingsPage.ValidateGameDirInvalid">
+    <value>The selected Helldivers 2 folder is not in a valid directory!</value>
+  </data>
+  <data name="SettingsPage.ValidateGameDirNoData">
+    <value>The selected Helldivers 2 root directory does not contain a "data" folder!</value>
+  </data>
+  <data name="SettingsPage.ValidateGameDirNoTools">
+    <value>The selected Helldivers 2 root directory does not contain a "tools" folder!</value>
+  </data>
+  <data name="SettingsPage.ValidateGameDirNoBin">
+    <value>The selected Helldivers 2 root directory does not contain a "bin" folder!</value>
+  </data>
+  <data name="SettingsPage.ValidateGameDirNoExe">
+    <value>The selected Helldivers 2 path does not contain "helldivers2.exe" in the "bin" folder!</value>
+  </data>
+  <data name="SettingsPage.ValidateGameDirEmpty">
+    <value>Game directory cannot be empty!</value>
+  </data>
+  <data name="SettingsPage.ValidateStorageDirEmpty">
+    <value>Storage directory cannot be empty!</value>
+  </data>
+  <data name="SettingsPage.ValidateTempDirEmpty">
+    <value>Temp directory cannot be empty!</value>
+  </data>
+  <data name="SettingsPage.LoadingSettings">
+    <value>Loading settings</value>
+  </data>
+  <data name="SettingsPage.PleaseWait">
+    <value>Please wait, Helldiver.</value>
+  </data>
+  <data name="SettingsPage.LoadSettingsFailed">
+    <value>Failed to load settings!</value>
+  </data>
+  <data name="SettingsPage.ResetConfirm">
+    <value>Reset settings?</value>
+  </data>
+  <data name="SettingsPage.SettingsValid">
+    <value>Settings are valid!</value>
+  </data>
+  <data name="SettingsPage.SavingSettings">
+    <value>Saving settings</value>
+  </data>
+  <data name="SettingsPage.SaveFailed">
+    <value>Failed to save settings!
+
+</value>
+  </data>
+  <data name="SettingsPage.ResetTitle">
+    <value>Reset?</value>
+  </data>
+  <data name="SettingsPage.ResetConfirmMsg">
+    <value>Are you sure you want to reset settings?</value>
+  </data>
+  <data name="SettingsPage.BrowseGameDialog">
+    <value>Select your Helldivers 2 folder...</value>
+  </data>
+  <data name="SettingsPage.BrowseStorageDialog">
+    <value>Select the folder where you want the mod manager|to store mods...</value>
+  </data>
+  <data name="SettingsPage.BrowseTempDialog">
+    <value>Select the folder where you want the mod manager|to store temporary files...</value>
+  </data>
+  <data name="SettingsPage.AddOrgFolderTitle">
+    <value>Organize Folder Name?</value>
+  </data>
+  <data name="SettingsPage.AddOrgFolderMsg">
+    <value>Enter the name of the organize folder (e.g. Models). Its subdirectories will be promoted to options.</value>
+  </data>
+  <data name="SettingsPage.AddOrgFolderExistsPrefix">
+    <value>Organize folder "</value>
+  </data>
+  <data name="SettingsPage.AddOrgFolderExistsSuffix">
+    <value>" already exists.</value>
+  </data>
+  <data name="SettingsPage.ApiKeyEmpty">
+    <value>API Key cannot be empty</value>
+  </data>
+  <data name="SettingsPage.ValidatingApiKey">
+    <value>Validating API Key</value>
+  </data>
+  <data name="SettingsPage.ValidatingApiKeyMsg">
+    <value>Validating Nexus Mods API Key...</value>
+  </data>
+  <data name="SettingsPage.ApiKeyValid">
+    <value>API Key validated successfully!</value>
+  </data>
+  <data name="SettingsPage.ApiKeyFailed">
+    <value>Validation failed: </value>
+  </data>
+  <data name="SettingsPage.NoModsForHash">
+    <value>There are no mods added, no need to compute file hashes.</value>
+  </data>
+  <data name="SettingsPage.RecomputeHashConfirmMsg">
+    <value>Recompute hashes for all {modCount} mods... Continue?</value>
+  </data>
+  <data name="SettingsPage.RecomputeHashStarted">
+    <value>Started recomputing file hashes. Check the mod list for progress.</value>
+  </data>
+  <data name="SettingsPage.DetectingGame">
+    <value>Detecting Game</value>
+  </data>
+  <data name="SettingsPage.DetectGameFailed">
+    <value>Could not auto-detect Helldivers 2, please set it manually.</value>
+  </data>
+  <data name="SettingsPage.SymbolicLinkAdminMsg">
+    <value>Symbolic links require running this application as administrator.
+Right-click the program icon → Properties → Compatibility → Check "Run this program as an administrator" → Apply and confirm, then reopen the program as administrator.
+
+Close the program now?</value>
+  </data>
+  <data name="CreatePage.Title">
+    <value>Create Mod</value>
+  </data>
+  <data name="CreatePage.VisualEdit">
+    <value>Visual Edit</value>
+  </data>
+  <data name="CreatePage.JsonEdit">
+    <value>Edit JSON Directly</value>
+  </data>
+  <data name="CreatePage.GuideTitle">
+    <value>Creation Process Guide</value>
+  </data>
+  <data name="CreatePage.GuideDesc1">
+    <value>After filling in the info and clicking "Create", the system will automatically:</value>
+  </data>
+  <data name="CreatePage.GuideStep1">
+    <value>1. Copy mod files from the source directory to the manager's storage directory</value>
+  </data>
+  <data name="CreatePage.GuideStep2">
+    <value>2. Generate the manifest.json file based on your configured options</value>
+  </data>
+  <data name="CreatePage.GuideStep3">
+    <value>3. Auto-import the mod into the manager, ready to use on the dashboard</value>
+  </data>
+  <data name="CreatePage.GuideHint">
+    <value>Tip: If you need to edit the manifest later... you can do so directly in the manager's storage directory.</value>
+  </data>
+  <data name="CreatePage.CloseHint">
+    <value>Dismiss</value>
+  </data>
+  <data name="CreatePage.Name">
+    <value>Name</value>
+  </data>
+  <data name="CreatePage.NameDesc">
+    <value>Display name of the mod.</value>
+  </data>
+  <data name="CreatePage.Description">
+    <value>Description</value>
+  </data>
+  <data name="CreatePage.DescriptionDesc">
+    <value>Short description of the mod.</value>
+  </data>
+  <data name="CreatePage.Icon">
+    <value>Icon</value>
+  </data>
+  <data name="CreatePage.IconDesc">
+    <value>Display icon for the mod (optional).</value>
+  </data>
+  <data name="CreatePage.BrowseIcon">
+    <value>Browse...</value>
+  </data>
+  <data name="CreatePage.SourceDir">
+    <value>Source Directory</value>
+  </data>
+  <data name="CreatePage.SourceDirDesc1">
+    <value>Select the directory containing mod files.</value>
+  </data>
+  <data name="CreatePage.SourceDirDesc2">
+    <value>(Click "Browse..." to select a directory)</value>
+  </data>
+  <data name="CreatePage.ManifestFormat">
+    <value>Manifest Format</value>
+  </data>
+  <data name="CreatePage.ManifestFormatDesc">
+    <value>Choose the manifest format to create (V1 by default).</value>
+  </data>
+  <data name="CreatePage.ManifestFormatV1">
+    <value>V1 (new, recommended)</value>
+  </data>
+  <data name="CreatePage.ManifestFormatLegacy">
+    <value>Legacy (old)</value>
+  </data>
+  <data name="CreatePage.LegacyHint">
+    <value>The legacy format only supports a simple list of option names: option descriptions, icons, Include paths and sub-options are not supported. Each option name is used as the deployed directory name.</value>
+  </data>
+  <data name="CreatePage.SetSourceDirFirst">
+    <value>Please set the source directory before adding options.</value>
+  </data>
+  <data name="CreatePage.AddOptionHint">
+    <value>Add an option (in legacy format, pick folders from the source directory to create options)</value>
+  </data>
+  <data name="CreatePage.OptionsDesc">
+    <value>Add mod options (e.g. color toggles). Each option can contain sub-options.</value>
+  </data>
+  <data name="CreatePage.DragHint">
+    <value>Tip: Options and sub-options can be rearranged by dragging</value>
+  </data>
+  <data name="CreatePage.OptionTitle">
+    <value>Option</value>
+  </data>
+  <data name="CreatePage.DeleteOption">
+    <value>Delete this option</value>
+  </data>
+  <data name="CreatePage.OptionInclude">
+    <value>Include paths (relative to source directory, semicolon-separated)</value>
+  </data>
+  <data name="CreatePage.OptionBrowse">
+    <value>Browse</value>
+  </data>
+  <data name="CreatePage.SelectIcon">
+    <value>Select Icon</value>
+  </data>
+  <data name="CreatePage.SubOptionTitle">
+    <value>Sub-option</value>
+  </data>
+  <data name="CreatePage.DeleteSubOption">
+    <value>Delete this sub-option</value>
+  </data>
+  <data name="CreatePage.AddSubOption">
+    <value>Add Sub-option</value>
+  </data>
+  <data name="CreatePage.AddOption">
+    <value>Add Option</value>
+  </data>
+  <data name="CreatePage.Create">
+    <value>Create</value>
+  </data>
+  <data name="CreatePage.BrowseSourceDialog">
+    <value>Select the directory containing mod files</value>
+  </data>
+  <data name="CreatePage.BrowseIconDialog">
+    <value>Select mod icon</value>
+  </data>
+  <data name="ManifestEditPage.BasicInfo">
+    <value>Basic Info</value>
+  </data>
+  <data name="ManifestEditPage.LegacyUpgradeHint">
+    <value>This mod is in legacy format: option names are the mod folder names, use folder picking to add options. Configuring descriptions, Include paths, icons or sub-options will automatically upgrade it to V1 format on save.</value>
+  </data>
+  <data name="ManifestEditPage.SetSourceDirFirst">
+    <value>Cannot read the mod directory. Make sure the mod folder exists before adding options.</value>
+  </data>
+  <data name="EditPage.Title">
+    <value>Mod Options</value>
+  </data>
+  <data name="EditPage.PreviewHint">
+    <value>Hover over option images for a larger preview; dropdown lists need to be opened first to preview</value>
+  </data>
+  <data name="EditPage.Done">
+    <value>Done</value>
+  </data>
+  <data name="EditPage.SaveFailed">
+    <value>Failed to save mod configuration: </value>
+  </data>
+  <data name="NexusDownloadPage.Title">
+    <value>Download Mods from Nexus Mods</value>
+  </data>
+  <data name="NexusDownloadPage.UrlLabel">
+    <value>Nexus Mods Link</value>
+  </data>
+  <data name="NexusDownloadPage.UrlDesc">
+    <value>Paste the Nexus Mods mod page link</value>
+  </data>
+  <data name="NexusDownloadPage.FetchInfo">
+    <value>Get Mod Info</value>
+  </data>
+  <data name="NexusDownloadPage.ModInfo">
+    <value>Mod Info</value>
+  </data>
+  <data name="NexusDownloadPage.DownloadFiles">
+    <value>Download Files</value>
+  </data>
+  <data name="NexusDownloadPage.OpenInBrowser">
+    <value>Open in Browser</value>
+  </data>
+  <data name="NexusDownloadPage.DownloadImport">
+    <value>Download &amp; Import</value>
+  </data>
+  <data name="NexusDownloadPage.EmptyHint">
+    <value>Please fetch mod info first</value>
+  </data>
+  <data name="NexusDownloadPage.EnterUrl">
+    <value>Please enter a Nexus Mods link</value>
+  </data>
+  <data name="NexusDownloadPage.ParseFailed">
+    <value>Cannot parse the link. Please make sure the link format is correct.
+Example: https://www.nexusmods.com/helldivers2/mods/123</value>
+  </data>
+  <data name="NexusDownloadPage.NoApiKey">
+    <value>Please configure a Nexus API Key in Settings first</value>
+  </data>
+  <data name="NexusDownloadPage.Fetching">
+    <value>Fetching mod info...</value>
+  </data>
+  <data name="NexusDownloadPage.NoFiles">
+    <value>No downloadable files found</value>
+  </data>
+  <data name="NexusDownloadPage.FoundPrefix">
+    <value>Found </value>
+  </data>
+  <data name="NexusDownloadPage.FetchFailedPrefix">
+    <value>Fetch failed: </value>
+  </data>
+  <data name="NexusDownloadPage.FetchError">
+    <value>Failed to fetch mod info: </value>
+  </data>
+  <data name="NexusDownloadPage.SelectFile">
+    <value>Please select a file first</value>
+  </data>
+  <data name="NexusDownloadPage.ServiceNotReady">
+    <value>Mod service is not initialized</value>
+  </data>
+  <data name="NexusDownloadPage.Downloading">
+    <value>Downloading mod...</value>
+  </data>
+  <data name="NexusDownloadPage.Importing">
+    <value>Importing mod...</value>
+  </data>
+  <data name="NexusDownloadPage.ImportProblems">
+    <value>Issues encountered during import:</value>
+  </data>
+  <data name="NexusDownloadPage.ImportWarnings">
+    <value>Mod imported, but there are some notes:</value>
+  </data>
+  <data name="NexusDownloadPage.ImportSuccess">
+    <value>Import successful!</value>
+  </data>
+  <data name="NexusDownloadPage.ImportSuccessPrefix">
+    <value>Mod '</value>
+  </data>
+  <data name="NexusDownloadPage.ImportSuccessSuffix">
+    <value>' has been successfully imported</value>
+  </data>
+  <data name="NexusDownloadPage.PremiumRequired">
+    <value>Download requires Premium</value>
+  </data>
+  <data name="NexusDownloadPage.DownloadFailedPrefix">
+    <value>Download/Import failed: </value>
+  </data>
+  <data name="NexusDownloadPage.OperationFailed">
+    <value>Operation failed: </value>
+  </data>
+  <data name="NexusDownloadPage.EnterLinkFirst">
+    <value>Please enter a Nexus Mods link first</value>
+  </data>
+  <data name="NexusDownloadPage.OpenBrowserFailed">
+    <value>Cannot open browser: </value>
+  </data>
+  <data name="NexusDownloadPage.PremiumMsg">
+    <value>Download requires Nexus Mods Premium membership.
+
+You can:
+1. Upgrade to Nexus Mods Premium
+2. Click the "Open in Browser" button to manually download the mod
+3. Use the "Import Local Mod" function to add it to the manager after downloading</value>
+  </data>
+  <data name="BackgroundTasksPage.ClearCompleted">
+    <value>Clear Completed Tasks</value>
+  </data>
+  <data name="BackgroundTasksPage.RemoveTask">
+    <value>Remove Task</value>
+  </data>
+  <data name="BackgroundTasksPage.EmptyHint">
+    <value>No background tasks</value>
+  </data>
+  <data name="BackgroundTasksPage.EmptyDesc">
+    <value>Operations that run automatically in the background (fingerprint computation, version checks, scans, etc.) appear here; foreground operations such as deploy and import have their own progress windows</value>
+  </data>
+  <data name="BackgroundTasksPage.Subtitle">
+    <value>Background operations only</value>
+  </data>
+  <data name="BackgroundTasksPage.TaskTypeHash">
+    <value>File Fingerprint Computation</value>
+  </data>
+  <data name="BackgroundTasksPage.TaskTypeDownload">
+    <value>Download and Import Mod</value>
+  </data>
+  <data name="BackgroundTasksPage.TaskTypeImport">
+    <value>Import Mod</value>
+  </data>
+  <data name="BackgroundTasksPage.TaskTypePurge">
+    <value>Clean Deployed Files</value>
+  </data>
+  <data name="BackgroundTasksPage.TaskTypeBatchRepair">
+    <value>Batch Repair Mods</value>
+  </data>
+  <data name="BackgroundTasksPage.TaskTypeArmorPollutionScan">
+    <value>Armor Pollution Scan</value>
+  </data>
+  <data name="BackgroundTasksPage.TaskTypeArmorReuseScan">
+    <value>Armor Part Reuse Scan</value>
+  </data>
+  <data name="BackgroundTasksPage.TaskTypeConflictScan">
+    <value>Armor Resource Conflict Scan</value>
+  </data>
+  <data name="BackgroundTasksPage.ImportComplete">
+    <value>Import complete: {success} succeeded, {fail} failed</value>
+  </data>
+  <data name="BackgroundTasksPage.ExportComplete">
+    <value>Export complete: {name}</value>
+  </data>
+  <data name="BackgroundTasksPage.PurgeComplete">
+    <value>Cleanup complete</value>
+  </data>
+  <data name="BackgroundTasksPage.DeleteComplete">
+    <value>Delete complete: {name}</value>
+  </data>
+  <data name="TagManagementPage.DeleteTag">
+    <value>Delete Tag</value>
+  </data>
+  <data name="TagManagementPage.CreateTitle">
+    <value>Create Tag</value>
+  </data>
+  <data name="TagManagementPage.CreateMsg">
+    <value>Enter the name for the new tag:</value>
+  </data>
+  <data name="TagManagementPage.CreateEmptyError">
+    <value>Tag name cannot be empty</value>
+  </data>
+  <data name="TagManagementPage.CreateSuccess">
+    <value>Tag created successfully</value>
+  </data>
+  <data name="TagManagementPage.CreateReadonly">
+    <value>Cannot create tag, settings are in read-only mode</value>
+  </data>
+  <data name="TagManagementPage.RenameTitle">
+    <value>Rename Tag</value>
+  </data>
+  <data name="TagManagementPage.RenameMsg">
+    <value>Enter the new tag name:</value>
+  </data>
+  <data name="TagManagementPage.RenameSuccess">
+    <value>Tag renamed successfully</value>
+  </data>
+  <data name="TagManagementPage.RenameReadonly">
+    <value>Cannot rename tag, settings are in read-only mode</value>
+  </data>
+  <data name="TagManagementPage.ColorTitle">
+    <value>Select Color</value>
+  </data>
+  <data name="TagManagementPage.ColorPrefix">
+    <value>Select a color for tag "</value>
+  </data>
+  <data name="TagManagementPage.ColorSuffix">
+    <value>":</value>
+  </data>
+  <data name="TagManagementPage.ColorUpdated">
+    <value>Tag color has been updated</value>
+  </data>
+  <data name="TagManagementPage.ColorReadonly">
+    <value>Cannot change color, settings are in read-only mode</value>
+  </data>
+  <data name="TagManagementPage.DeletePrefix">
+    <value>Are you sure you want to delete tag "</value>
+  </data>
+  <data name="TagManagementPage.DeleteSuffix">
+    <value>"?</value>
+  </data>
+  <data name="TagManagementPage.DeleteSuccess">
+    <value>Tag deleted successfully</value>
+  </data>
+  <data name="TagManagementPage.DeleteReadonly">
+    <value>Cannot delete tag, settings are in read-only mode</value>
+  </data>
+  <data name="DeploymentOrderPage.MoveUp">
+    <value>Move Up</value>
+  </data>
+  <data name="DeploymentOrderPage.MoveDown">
+    <value>Move Down</value>
+  </data>
+  <data name="DeploymentOrderPage.SyncFromHome">
+    <value>Sync from Dashboard</value>
+  </data>
+  <data name="DeploymentOrderPage.ClearList">
+    <value>Clear List</value>
+  </data>
+  <data name="DeploymentOrderPage.DeselectAll">
+    <value>Deselect All</value>
+  </data>
+  <data name="DeploymentOrderPage.InvertSelect">
+    <value>Invert Selection</value>
+  </data>
+  <data name="DeploymentOrderPage.ExpandCollapse">
+    <value>Expand/Collapse Options</value>
+  </data>
+  <data name="DeploymentOrderPage.HintText">
+    <value>Tip: Check the left checkbox to multi-select...</value>
+  </data>
+  <data name="DeploymentOrderPage.OrderDescBottomUp">
+    <value>Current deployment direction: Bottom to Top (mods at the bottom of the list are deployed first)</value>
+  </data>
+  <data name="DeploymentOrderPage.OrderDescTopDown">
+    <value>Current deployment direction: Top to Bottom (mods at the top of the list are deployed first)</value>
+  </data>
+  <data name="DeploymentOrderPage.DeletedModPlaceholder">
+    <value>[Deleted Mod]</value>
+  </data>
+  <data name="DeploymentOrderPage.OptionPrefix">
+    <value>  ▸ </value>
+  </data>
+  <data name="DeploymentOrderPage.SubOptionPrefix">
+    <value>    ▪ </value>
+  </data>
+  <data name="CreateWizard.ChooseTitle">
+    <value>Does your mod have options (e.g. color toggles)?</value>
+  </data>
+  <data name="CreateWizard.ChooseDesc">
+    <value>Let's start with a simple question:</value>
+  </data>
+  <data name="CreateWizard.Yes">
+    <value>Yes</value>
+  </data>
+  <data name="CreateWizard.No">
+    <value>No</value>
+  </data>
+  <data name="CreateWizard.IntroWelcome">
+    <value>Welcome to the Mod Creation Wizard</value>
+  </data>
+  <data name="CreateWizard.IntroDesc">
+    <value>This tool will guide you through creating a mod</value>
+  </data>
+  <data name="CreateWizard.IntroNext">
+    <value>Click "Next" to continue</value>
+  </data>
+  <data name="CreateWizard.IncludePickerTitle">
+    <value>Select Include Directories</value>
+  </data>
+  <data name="CreateWizard.IncludePickerDesc">
+    <value>Check the directories to include (paths relative to source directory will be auto-generated):</value>
+  </data>
+  <data name="MessageBox.Yes">
+    <value>Yes</value>
+  </data>
+  <data name="MessageBox.No">
+    <value>No</value>
+  </data>
+  <data name="MessageBox.CurrentColor">
+    <value>Current Color</value>
+  </data>
+  <data name="MessageBox.CustomColor">
+    <value>Custom Color:</value>
+  </data>
+  <data name="MessageBox.ColorFormat">
+    <value>Format: #FFAABBCC</value>
+  </data>
+  <data name="MessageBox.Info">
+    <value>Info</value>
+  </data>
+  <data name="MessageBox.Warning">
+    <value>Warning</value>
+  </data>
+  <data name="MessageBox.Error">
+    <value>Error</value>
+  </data>
+  <data name="MessageBox.Compressing">
+    <value>Compressing...</value>
+  </data>
+  <data name="MessageBox.ExportDone">
+    <value>Export Complete</value>
+  </data>
+  <data name="MessageBox.UpdatingModPrefix">
+    <value>Updating mod "</value>
+  </data>
+  <data name="MessageBox.UpdatingModSuffix">
+    <value>"...</value>
+  </data>
+  <data name="MessageBox.ComputingHashes">
+    <value>Computing file hashes...</value>
+  </data>
+  <data name="MessageBox.ProcessedPrefix">
+    <value>Processed: </value>
+  </data>
+  <data name="MessageBox.ProcessedSep">
+    <value> / </value>
+  </data>
+  <data name="MessageBox.CacheHitPrefix">
+    <value> (cache hit </value>
+  </data>
+  <data name="MessageBox.CacheHitSuffix">
+    <value>)</value>
+  </data>
+  <data name="MessageBox.NeedUpdatePrefix">
+    <value>Need update: </value>
+  </data>
+  <data name="MessageBox.NeedUpdateSuffix">
+    <value> file(s)</value>
+  </data>
+  <data name="MessageBox.DeploySteps">
+    <value>Deploy progress</value>
+  </data>
+  <data name="MessageBox.Deploying">
+    <value>Deploying: </value>
+  </data>
+  <data name="VersionCheck.ScanningMods">
+    <value>Scanning mod patch files...</value>
+  </data>
+  <data name="VersionCheck.CheckFailed">
+    <value>Check failed</value>
+  </data>
+  <data name="VersionCheck.IncompatibleFound">
+    <value>Found incompatible newly added mods: </value>
+  </data>
+  <data name="VersionCheck.NewModPrefix">
+    <value>New mod "</value>
+  </data>
+  <data name="VersionCheck.NewModSuffix">
+    <value>" version check complete</value>
+  </data>
+  <data name="VersionCheck.IncompatibleCached">
+    <value>Found {IncompatibleModCount} potentially incompatible mod(s) (from cache)</value>
+  </data>
+  <data name="VersionCheck.AllCompatibleCached">
+    <value>{CompatibleModCount} mod(s) are all compatible (from cache)</value>
+  </data>
+  <data name="VersionCheck.CheckingChanged">
+    <value>Checking {changedModCount} changed mod(s)...</value>
+  </data>
+  <data name="VersionCheck.IncompatibleFoundMsg">
+    <value>Found {IncompatibleModCount} potentially incompatible mod(s)</value>
+  </data>
+  <data name="VersionCheck.AllCompatible">
+    <value>{CompatibleModCount} mod(s) are all compatible</value>
+  </data>
+  <data name="VersionCheck.NoneCheckable">
+    <value>No checkable mods found</value>
+  </data>
+  <data name="VersionCheck.FileTooSmallOrMissing">
+    <value>File too small or missing</value>
+  </data>
+  <data name="VersionCheck.FileTooSmallToContainHeader">
+    <value>File too small to contain header</value>
+  </data>
+  <data name="VersionCheck.InvalidMagicNumber">
+    <value>Invalid magic number: {actual} (expected {expected})</value>
+  </data>
+  <data name="VersionCheck.SuspiciousHeaderValues">
+    <value>Suspicious header values: numTypes={numTypes}, numFiles={numFiles}</value>
+  </data>
+  <data name="VersionCheck.ResourceCountMismatch">
+    <value>Resource count mismatch: total_resources({totalResources}) != numFiles({numFiles})</value>
+  </data>
+  <data name="VersionCheck.InvalidTypeTable">
+    <value>Resource type table is invalid, duplicated, or contains an overflowing count</value>
+  </data>
+  <data name="VersionCheck.TypeDistributionMismatch">
+    <value>Declared type counts do not match the actual TOC entries</value>
+  </data>
+  <data name="VersionCheck.EntryIndexMismatch">
+    <value>Detected {count} non-sequential TOC entry_index value(s)</value>
+  </data>
+  <data name="VersionCheck.UnitDataOutOfBounds">
+    <value>Unit data exceeds the patch file bounds</value>
+  </data>
+  <data name="VersionCheck.UnitDataSizeTruncated">
+    <value>TOC size {declared} is smaller than internal Unit size {expected}; {difference} byte(s) are truncated</value>
+  </data>
+  <data name="VersionCheck.UnitDataSizeMismatch">
+    <value>TOC size {declared} does not match internal Unit size {expected} (difference: {difference} byte(s))</value>
+  </data>
+  <data name="VersionCheck.LodDataOutOfBounds">
+    <value>LOD Group or Joint List exceeds the declared Unit bounds</value>
+  </data>
+  <data name="VersionCheck.LayoutDataOutOfBounds">
+    <value>Legacy Unit Layout data exceeds the declared Unit bounds</value>
+  </data>
+  <data name="VersionCheck.NoUnitResourcesInFile">
+    <value>No Unit resources in this file</value>
+  </data>
+  <data name="VersionCheck.FileEntriesExceedBounds">
+    <value>File entries exceed data bounds</value>
+  </data>
+  <data name="VersionCheck.UnitDataOffsetExceedsFileSize">
+    <value>Unit 0x{fileId} data offset 0x{dataOffset} exceeds file size</value>
+  </data>
+  <data name="VersionCheck.AnalysisException">
+    <value>Analysis exception: {message}</value>
+  </data>
+  <data name="VersionCheck.LayoutFormatIssues">
+    <value>Layout format issues detected in {count} items (format &gt; 16)</value>
+  </data>
+  <data name="VersionCheck.GpuStreamDataOutOfBounds">
+    <value>GPU StreamInfo data is outside the Unit range</value>
+  </data>
+  <data name="VersionCheck.GpuStreamLayoutIssues">
+    <value>GPU vertex layout does not match the declared VertexStride</value>
+  </data>
+  <data name="VersionCheck.GpuStreamBufferIssues">
+    <value>GPU vertex or index buffer size or range is invalid</value>
+  </data>
+  <data name="VersionCheck.GpuSampleDataUnavailable">
+    <value>Unable to read GPU buffer sample data</value>
+  </data>
+  <data name="VersionCheck.GpuVertexSampleInvalid">
+    <value>GPU vertex sample has invalid coordinates or skinning weights</value>
+  </data>
+  <data name="VersionCheck.GpuIndexSampleInvalid">
+    <value>GPU index sample is outside the Stream vertex range</value>
+  </data>
+  <data name="VersionCheck.UnknownGpuComponentFormats">
+    <value>Found {count} unknown GPU vertex component(s); they are not treated as corruption to avoid false positives</value>
+  </data>
+  <data name="ModGroup.DefaultName">
+    <value>Uncategorized</value>
+  </data>
+  <data name="ModGroup.SidebarTitle">
+    <value>Groups</value>
+  </data>
+  <data name="ModGroup.CurrentGroup">
+    <value>Current group</value>
+  </data>
+  <data name="ModGroup.NewGroupWatermark">
+    <value>New group name</value>
+  </data>
+  <data name="ModGroup.CreateGroup">
+    <value>Create group</value>
+  </data>
+  <data name="ModGroup.AddSelected">
+    <value>Add selected</value>
+  </data>
+  <data name="ModGroup.RemoveSelected">
+    <value>Remove selected</value>
+  </data>
+  <data name="ModGroup.DeleteGroup">
+    <value>Delete group</value>
+  </data>
+  <data name="ModGroup.ToggleSidebar">
+    <value>Toggle group sidebar</value>
+  </data>
+  <data name="ModGroup.NameEmpty">
+    <value>Group name cannot be empty</value>
+  </data>
+  <data name="ModGroup.NameTooLong">
+    <value>Group name cannot exceed 40 characters</value>
+  </data>
+  <data name="ModGroup.NameDuplicate">
+    <value>A group with this name already exists</value>
+  </data>
+  <data name="ModGroup.DefaultCannotAdd">
+    <value>The default group already contains all mods</value>
+  </data>
+  <data name="ModGroup.NoSelectedMods">
+    <value>Select at least one mod first</value>
+  </data>
+  <data name="ModGroup.NoCustomGroups">
+    <value>Create a custom group first</value>
+  </data>
+  <data name="ModGroup.AddToGroup">
+    <value>Add to group</value>
+  </data>
+  <data name="ModGroup.AddToGroupsMessage">
+    <value>Set groups for the selected {count} mods (multi-select; unchecking removes from that group):</value>
+  </data>
+  <data name="ModGroup.GroupsUpdated">
+    <value>Updated groups for {count} mods</value>
+  </data>
+  <data name="ModGroup.DeleteConfirm">
+    <value>Delete group "{name}"? This will not delete mod files.</value>
+  </data>
+  <data name="Common.AppName">
+    <value>Helldivers 2 Mod Manager</value>
+  </data>
+  <data name="Common.Version">
+    <value>Version</value>
+  </data>
+  <data name="Common.ErrorPrefix">
+    <value>Error:</value>
+  </data>
+  <data name="Common.WarningPrefix">
+    <value>Warning:</value>
+  </data>
+  <data name="Common.Confirm">
+    <value>Confirm</value>
+  </data>
+  <data name="Common.Cancel">
+    <value>Cancel</value>
+  </data>
+  <data name="Common.OK">
+    <value>OK</value>
+  </data>
+  <data name="Common.Save">
+    <value>Save</value>
+  </data>
+  <data name="Common.Delete">
+    <value>Delete</value>
+  </data>
+  <data name="Common.Edit">
+    <value>Edit</value>
+  </data>
+  <data name="Common.Back">
+    <value>Back</value>
+  </data>
+  <data name="Converters.TaskStatusPending">
+    <value>Waiting</value>
+  </data>
+  <data name="Converters.TaskStatusRunning">
+    <value>Running</value>
+  </data>
+  <data name="Converters.TaskStatusCompleted">
+    <value>Completed</value>
+  </data>
+  <data name="Converters.TaskStatusFailed">
+    <value>Failed</value>
+  </data>
+  <data name="Converters.TaskStatusCancelled">
+    <value>Cancelled</value>
+  </data>
+  <data name="Converters.Unknown">
+    <value>Unknown</value>
+  </data>
+  <data name="Converters.Compatible">
+    <value>Compatible</value>
+  </data>
+  <data name="Converters.Incompatible">
+    <value>Incompatible</value>
+  </data>
+  <data name="Converters.UnableToConfirm">
+    <value>Unable to Confirm</value>
+  </data>
+  <data name="Converters.Checking">
+    <value>Checking</value>
+  </data>
+  <data name="DashboardPage.BatchDeleteConfirm">
+    <value>Are you sure you want to delete the selected {count} mod(s)?
+</value>
+  </data>
+  <data name="DashboardPage.BatchDeleteFailed2">
+    <value>Batch delete mods failed</value>
+  </data>
+  <data name="ModViewModel.CheckingUpdate">
+    <value>Checking for updates...</value>
+  </data>
+  <data name="ModViewModel.NoNexusApiKey">
+    <value>Nexus API Key not configured</value>
+  </data>
+  <data name="ModViewModel.UpdateAvailable">
+    <value>Update available: {version}</value>
+  </data>
+  <data name="ModViewModel.UpToDate">
+    <value>Already up to date</value>
+  </data>
+  <data name="ModViewModel.CheckFailed">
+    <value>Update check failed: {message}</value>
+  </data>
+  <data name="ModViewModel.NoNexusData">
+    <value>This mod does not have Nexus data configured</value>
+  </data>
+  <data name="Common.FileFilterArchive">
+    <value>Mod Archive|*.rar;*.7z;*.zip;*.tar|All Files|*.*</value>
+  </data>
+  <data name="Common.FileFilterImage">
+    <value>Image Files|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All Files|*.*</value>
+  </data>
+  <data name="Common.FileFilter7z">
+    <value>7z Archive|*.7z|All Files|*.*</value>
+  </data>
+  <data name="Common.FileFilterZip">
+    <value>ZIP Archive|*.zip|All Files|*.*</value>
+  </data>
+  <data name="SettingsPage.AddOrgFolderExists">
+    <value>Organizational folder "{name}" already exists.</value>
+  </data>
+  <data name="SettingsPage.RecomputeHashMsg">
+    <value>Will recompute SHA-256 fingerprints for all {count} mods.
+This runs in the background.
+Continue?</value>
+  </data>
+  <data name="DashboardPage.InvalidPathError">
+    <value>Invalid include path!</value>
+  </data>
+  <data name="DashboardPage.InvalidImagePathError">
+    <value>Invalid image path in manifest!</value>
+  </data>
+  <data name="DashboardPage.BatchAddProgressTitle">
+    <value>Adding mods ({current}/{total})</value>
+  </data>
+  <data name="DashboardPage.BatchAddProcessing">
+    <value>Processing: {file}, {remaining} remaining</value>
+  </data>
+  <data name="DashboardPage.BatchAddNestedTitle">
+    <value>Adding mods ({current}/{total}) ─ nested ({nested}/{nestedTotal})</value>
+  </data>
+  <data name="DashboardPage.BatchAddDoneErrors">
+    <value>Batch add complete: {success} succeeded, {fail} failed. Issues:</value>
+  </data>
+  <data name="DashboardPage.BatchAddDoneWarnings">
+    <value>All {count} mods added, but with some warnings:</value>
+  </data>
+  <data name="DashboardPage.DeployNoGameDir">
+    <value>Cannot deploy mods! Game directory not set.</value>
+  </data>
+  <data name="DashboardPage.LastCheckFormat">
+    <value>Last check: {0:yyyy-MM-dd HH:mm}</value>
+  </data>
+  <data name="DashboardPage.VersionCheckAutoMsg">
+    <value>Detected new or changed mods or game exe updated, auto-checking version compatibility...</value>
+  </data>
+  <data name="DashboardPage.VersionCheckAutoModMsg">
+    <value>Detected new or changed mods, auto-checking version compatibility...</value>
+  </data>
+  <data name="DashboardPage.VersionCheckAutoGameExeMsg">
+    <value>Detected game exe update, auto-checking version compatibility...</value>
+  </data>
+  <data name="DashboardPage.ExitSaveFailed">
+    <value>Failed to save config when exiting page</value>
+  </data>
+  <data name="ModViewModel.NoVersionCheckHint">
+    <value>Version compatibility not checked yet. Click the 'Check Version' button in the bottom toolbar.</value>
+  </data>
+  <data name="ModViewModel.VersionInfoHeader">
+    <value>Mod: {name}</value>
+  </data>
+  <data name="ModViewModel.VersionStatusLabel">
+    <value>Status: {status}</value>
+  </data>
+  <data name="ModViewModel.VersionUnitLabel">
+    <value>Reference Unit version: {unit}</value>
+  </data>
+  <data name="ModViewModel.VersionTimeLabel">
+    <value>Last check time: {time}</value>
+  </data>
+  <data name="ModViewModel.OpenNexusFailed">
+    <value>Cannot open Nexus page: {message}</value>
+  </data>
+  <data name="ModViewModel.PatchUnitVersions">
+    <value>Patch Unit Versions:</value>
+  </data>
+  <data name="ModViewModel.MatchOk">
+    <value>(OK)</value>
+  </data>
+  <data name="ModViewModel.MatchMismatch">
+    <value>(MISMATCH)</value>
+  </data>
+  <data name="ModViewModel.DetailsHeader">
+    <value>Details (FileId - Version):</value>
+  </data>
+  <data name="ModViewModel.NoUnitResources">
+    <value>No detectable unit resources in this mod.</value>
+  </data>
+  <data name="ModViewModel.DeepAnalysisTitle">
+    <value>Deep Analysis</value>
+  </data>
+  <data name="ModViewModel.PatchFilesSummary">
+    <value>Patch Files: {0} total, {1} with Unit resources</value>
+  </data>
+  <data name="ModViewModel.FileHealthSummary">
+    <value>File Health: {0} healthy, {1} warnings, {2} corrupted</value>
+  </data>
+  <data name="ModViewModel.WarningStructuralIssues">
+    <value>WARNING: Structural issues detected in some files</value>
+  </data>
+  <data name="ModViewModel.WarningCompanionFilesMissing">
+    <value>WARNING: Some companion files (.gpu_resources / .stream) are missing</value>
+  </data>
+  <data name="ModViewModel.WarningUnitStructuralIssues">
+    <value>WARNING: Unit internal structure issues detected</value>
+  </data>
+  <data name="ModViewModel.WarningGpuResourceIssues">
+    <value>WARNING: GPU resource bounds or alignment issues detected</value>
+  </data>
+  <data name="ModViewModel.WarningStreamResourceIssues">
+    <value>WARNING: stream resource bounds or alignment issues detected</value>
+  </data>
+  <data name="ModViewModel.FileInfoSummary">
+    <value>Size: {0} bytes | Health: {1}</value>
+  </data>
+  <data name="ModViewModel.FileHeaderInfo">
+    <value>Header: {0} | Entries in bounds: {1}</value>
+  </data>
+  <data name="ModViewModel.FileTypeDistributionInfo">
+    <value>Type distribution: {0} | Issues: {1}</value>
+  </data>
+  <data name="ModViewModel.FileTypeCounts">
+    <value>Types: {0} | Files: {1} | Total Resources: {2}</value>
+  </data>
+  <data name="ModViewModel.FileMainBoundsInfo">
+    <value>Main data bounds: {0} | Issues: {1}</value>
+  </data>
+  <data name="ModViewModel.FileEntryIndexInfo">
+    <value>Entry indices: {0} | Issues: {1}</value>
+  </data>
+  <data name="ModViewModel.FileCompanionInfo">
+    <value>GPU resources: {0} ({1}) | stream: {2} ({3})</value>
+  </data>
+  <data name="ModViewModel.FileGpuBoundsInfo">
+    <value>GPU bounds: {0} | Out of bounds: {1} | Misaligned: {2}</value>
+  </data>
+  <data name="ModViewModel.UnitGpuStructureInfo">
+    <value>GPU streams: {0} | Structure valid: {1} | Issues: {2} | Unknown components: {3}</value>
+  </data>
+  <data name="ModViewModel.FileStreamBoundsInfo">
+    <value>stream bounds: {0} | Out of bounds: {1} | Misaligned: {2}</value>
+  </data>
+  <data name="ModViewModel.UnitInternalStructure">
+    <value>Unit Internal Structure:</value>
+  </data>
+  <data name="ModViewModel.UnitSizeInfo">
+    <value>  TOC size={0} | Internal size={1} | Match={2}</value>
+  </data>
+  <data name="ModViewModel.UnitLodInfo">
+    <value>  LOD: offset={0} size={1} in_bounds={2}</value>
+  </data>
+  <data name="ModViewModel.UnitLayoutInfo">
+    <value>  Layout: checked={0} valid={1} issues={2}</value>
+  </data>
+  <data name="ModViewModel.UnitWarning">
+    <value>  Warning: {0}</value>
+  </data>
+  <data name="ModViewModel.FileNote">
+    <value>Note: {0}</value>
+  </data>
+  <data name="ModViewModel.Valid">
+    <value>Valid</value>
+  </data>
+  <data name="ModViewModel.Invalid">
+    <value>INVALID</value>
+  </data>
+  <data name="ModViewModel.Present">
+    <value>Present</value>
+  </data>
+  <data name="ModViewModel.Missing">
+    <value>Missing</value>
+  </data>
+  <data name="ModViewModel.Required">
+    <value>Required</value>
+  </data>
+  <data name="ModViewModel.Optional">
+    <value>Optional</value>
+  </data>
+  <data name="VersionCheckDetail.Title">
+    <value>Compatibility diagnostics</value>
+  </data>
+  <data name="VersionCheckDetail.AttributionTitle">
+    <value>Technical references</value>
+  </data>
+  <data name="VersionCheckDetail.Attribution">
+    <value>This feature's patch/Unit structure, legacy Layout handling, and repair-validation approach were informed by hd2-repatcher; format constants, archive research, and some naming data were informed by HD2SDK-CommunityEdition.</value>
+  </data>
+  <data name="VersionCheckDetail.Resources">
+    <value>Resources</value>
+  </data>
+  <data name="VersionCheckDetail.Units">
+    <value>Units</value>
+  </data>
+  <data name="VersionCheckDetail.Issues">
+    <value>Issues</value>
+  </data>
+  <data name="VersionCheckDetail.DetectedIssues">
+    <value>Detected issues</value>
+  </data>
+  <data name="VersionCheckDetail.NoIssues">
+    <value>No blocking issues detected</value>
+  </data>
+  <data name="VersionCheckDetail.NoIssuesDescription">
+    <value>The patch structure and Unit versions passed the current checks.</value>
+  </data>
+  <data name="VersionCheckDetail.TechnicalDetails">
+    <value>Full technical details</value>
+  </data>
+  <data name="VersionCheckDetail.CopyReport">
+    <value>Copy full report</value>
+  </data>
+  <data name="VersionCheckDetail.Copied">
+    <value>Diagnostic report copied</value>
+  </data>
+  <data name="VersionCheckDetail.SummaryTruncated">
+    <value>{count} Unit resource(s) have an undersized TOC entry and will be truncated when loaded.</value>
+  </data>
+  <data name="VersionCheckDetail.SummaryCorrupted">
+    <value>{count} patch file(s) contain structural damage and may fail to load.</value>
+  </data>
+  <data name="VersionCheckDetail.SummaryVersionMismatch">
+    <value>One or more Unit versions differ from the current reference version.</value>
+  </data>
+  <data name="VersionCheckDetail.SummaryHealthy">
+    <value>No compatibility issue that would block this mod was detected.</value>
+  </data>
+  <data name="VersionCheckDetail.SummaryUnknown">
+    <value>There is not enough Unit version information to confirm compatibility.</value>
+  </data>
+  <data name="VersionCheckDetail.HealthyUnits">
+    <value>The other {count} Unit(s) passed structural checks</value>
+  </data>
+  <data name="VersionCheckDetail.HiddenIssues">
+    <value>{count} more issue(s) are available in the full technical details.</value>
+  </data>
+  <data name="VersionCheckDetail.VersionMismatchTitle">
+    <value>Unit version mismatch</value>
+  </data>
+  <data name="VersionCheckDetail.VersionMismatchDescription">
+    <value>{count} Unit(s) use {versions}; the current reference version is {reference}.</value>
+  </data>
+  <data name="VersionCheckDetail.UnitTruncatedTitle">
+    <value>Unit #{index} data is truncated</value>
+  </data>
+  <data name="VersionCheckDetail.UnitTruncatedDescription">
+    <value>The TOC declares {declared} bytes, but the internal size is {expected}; {difference} bytes are missing. ID {fileId}</value>
+  </data>
+  <data name="VersionCheckDetail.UnitSizeMismatchTitle">
+    <value>Unit #{index} size mismatch</value>
+  </data>
+  <data name="VersionCheckDetail.UnitSizeMismatchDescription">
+    <value>The TOC declares {declared} bytes, but the internal size is {expected}. ID {fileId}</value>
+  </data>
+  <data name="VersionCheckDetail.UnitBoundsTitle">
+    <value>Unit data exceeds patch bounds</value>
+  </data>
+  <data name="VersionCheckDetail.LodBoundsTitle">
+    <value>Unit LOD data exceeds its declared bounds</value>
+  </data>
+  <data name="VersionCheckDetail.LayoutTitle">
+    <value>Legacy Unit Layout requires repair</value>
+  </data>
+  <data name="VersionCheckDetail.GenericFileIssueTitle">
+    <value>Patch file warning</value>
+  </data>
+  <data name="VersionCheckDetail.TypeTableTitle">
+    <value>Resource type table does not match file entries</value>
+  </data>
+  <data name="VersionCheckDetail.TypeTableDescription">
+    <value>The type table does not match the {count} actual file entries, so Unit detection may be incomplete.</value>
+  </data>
+  <data name="VersionCheckDetail.HeaderIssueTitle">
+    <value>Invalid patch header or TOC</value>
+  </data>
+  <data name="VersionCheckDetail.MainBoundsTitle">
+    <value>Invalid main resource data range</value>
+  </data>
+  <data name="VersionCheckDetail.MainBoundsDescription">
+    <value>Detected {count} out-of-bounds or overlapping range(s).</value>
+  </data>
+  <data name="VersionCheckDetail.EntryIndexTitle">
+    <value>TOC entry indices are not sequential</value>
+  </data>
+  <data name="VersionCheckDetail.EntryIndexDescription">
+    <value>Detected {count} invalid index value(s).</value>
+  </data>
+  <data name="VersionCheckDetail.MissingGpuTitle">
+    <value>Required GPU resource file is missing</value>
+  </data>
+  <data name="VersionCheckDetail.MissingGpuDescription">
+    <value>The patch contains non-zero GPU resource references.</value>
+  </data>
+  <data name="VersionCheckDetail.MissingStreamTitle">
+    <value>Required stream file is missing</value>
+  </data>
+  <data name="VersionCheckDetail.MissingStreamDescription">
+    <value>The patch contains non-zero stream resource references.</value>
+  </data>
+  <data name="VersionCheckDetail.GpuIssueTitle">
+    <value>GPU resource range problem</value>
+  </data>
+  <data name="VersionCheckDetail.StreamIssueTitle">
+    <value>stream resource range problem</value>
+  </data>
+  <data name="VersionCheckDetail.ResourceRangeDescription">
+    <value>Out of bounds: {bounds}; not 64-byte aligned: {alignment}.</value>
+  </data>
+  <data name="VersionCheckDetail.CheckingRepair">
+    <value>Checking available repair options...</value>
+  </data>
+  <data name="VersionCheckDetail.RepairPlanFailed">
+    <value>Failed to load repair options: {message}</value>
+  </data>
+  <data name="VersionCheckDetail.IndexingGameUnits">
+    <value>Indexing current game Unit references...</value>
+  </data>
+  <data name="VersionCheckDetail.AutomaticRepairButton">
+    <value>Automatically repair {count} Unit(s)</value>
+  </data>
+  <data name="VersionCheckDetail.AdvancedRepairButton">
+    <value>Advanced strategies</value>
+  </data>
+  <data name="VersionCheckDetail.AutomaticRepairTitle">
+    <value>Automatically repair mod</value>
+  </data>
+  <data name="VersionCheckDetail.AutomaticRepairConfirm">
+    <value>HD2MM analyzed the Unit mesh and GPU structure. It will preserve mod LOD for {preserve} Unit(s), use current game LOD for {game} Unit(s), back up the patch files, and validate the rebuilt result before replacement.</value>
+  </data>
+  <data name="VersionCheckDetail.LoadingAdvancedRepair">
+    <value>Loading advanced LOD strategies...</value>
+  </data>
+  <data name="VersionCheckDetail.AdvancedRepairFailed">
+    <value>Failed to load advanced repair strategies: {message}</value>
+  </data>
+  <data name="VersionCheckDetail.AutomaticRepairing">
+    <value>Automatically classifying each Unit, rebuilding the patch, and validating...</value>
+  </data>
+  <data name="VersionCheckDetail.AutomaticRepairSuccess">
+    <value>Automatically updated {count} Unit(s): preserved mod LOD for {preserve}, used game LOD for {game}. Original files were kept as backups.</value>
+  </data>
+  <data name="VersionCheckDetail.AssistedRepairButton">
+    <value>Choose LOD strategy and update {count} Unit(s)</value>
+  </data>
+  <data name="VersionCheckDetail.LodStrategyTitle">
+    <value>Choose Unit LOD repair strategy</value>
+  </data>
+  <data name="VersionCheckDetail.LodStrategyMessage">
+    <value>These are advanced manual strategies. Different Units in the same patch may require different LOD data; game LOD may hide custom models, while an obsolete mod LOD may crash the equipment screen. Use automatic repair for normal operation.</value>
+  </data>
+  <data name="VersionCheckDetail.LodStrategyPerUnit">
+    <value>Choose per Unit manually ({count} selectable)</value>
+  </data>
+  <data name="VersionCheckDetail.LodStrategyGameReference">
+    <value>Use current game LOD for all ({count} Unit(s))</value>
+  </data>
+  <data name="VersionCheckDetail.LodStrategyPreserveMod">
+    <value>Preserve mod LOD for all ({count} Unit(s))</value>
+  </data>
+  <data name="VersionCheckDetail.UnitSelectionTitle">
+    <value>Choose Units that preserve mod LOD</value>
+  </data>
+  <data name="VersionCheckDetail.UnitSelectionMessage">
+    <value>Checked Units preserve the mod LOD; unchecked Units use current game LOD. Equal LOD sizes can still contain incompatible data. If the mod was already fully converted to game LOD, restore its HD2MM backup first.</value>
+  </data>
+  <data name="VersionCheckDetail.UnitSelectionUnnamed">
+    <value>Unit {id}</value>
+  </data>
+  <data name="VersionCheckDetail.UnitSelectionDescription">
+    <value>{occurrences} patch entry(s) | LOD {lodSizes} | ID {id}</value>
+  </data>
+  <data name="VersionCheckDetail.AssistedRepairingGameLod">
+    <value>Writing current game LOD data, then validating...</value>
+  </data>
+  <data name="VersionCheckDetail.AssistedRepairingPreserveLod">
+    <value>Preserving mod LOD data, upgrading Units, then validating...</value>
+  </data>
+  <data name="VersionCheckDetail.AssistedRepairingMixedLod">
+    <value>Applying per-Unit LOD choices, then validating...</value>
+  </data>
+  <data name="VersionCheckDetail.AssistedRepairSuccessGameLod">
+    <value>Updated {count} Unit(s) with current game LOD data. Original files were kept as backups.</value>
+  </data>
+  <data name="VersionCheckDetail.AssistedRepairSuccessPreserveLod">
+    <value>Updated {count} Unit(s) while preserving mod LOD data. Original files were kept as backups.</value>
+  </data>
+  <data name="VersionCheckDetail.AssistedRepairSuccessMixedLod">
+    <value>Updated {count} Unit(s) with per-Unit LOD choices. Original files were kept as backups.</value>
+  </data>
+  <data name="VersionCheckRepair.GameDataUnavailable">
+    <value>The current game data directory or bundles.nxa is unavailable.</value>
+  </data>
+  <data name="VersionCheckRepair.RunSafeRepairFirst">
+    <value>Complete the provable metadata repair before using game-assisted repair.</value>
+  </data>
+  <data name="VersionCheckRepair.AmbiguousReference">
+    <value>Current game data contains conflicting references for Unit {id}.</value>
+  </data>
+  <data name="VersionCheckRepair.ReferenceChanged">
+    <value>The game reference data changed before repair. Run the check again.</value>
+  </data>
+  <data name="VersionCheckDetail.RepairButton">
+    <value>Repair {count} issue(s)</value>
+  </data>
+  <data name="VersionCheckDetail.RepairConfirmTitle">
+    <value>Repair mod</value>
+  </data>
+  <data name="VersionCheckDetail.RepairConfirmMessage">
+    <value>HD2MM will back up {files} patch file(s), then apply {count} verified metadata repair(s). The originals are replaced only after validation passes.</value>
+  </data>
+  <data name="VersionCheckDetail.Repairing">
+    <value>Backing up, repairing, and validating...</value>
+  </data>
+  <data name="VersionCheckDetail.RepairSuccess">
+    <value>Repaired {count} issue(s). Original files were kept as backups.</value>
+  </data>
+  <data name="VersionCheckDetail.RepairFailed">
+    <value>Repair failed: {message}</value>
+  </data>
+  <data name="VersionCheckRepair.NothingToRepair">
+    <value>There are no issues that can be repaired safely.</value>
+  </data>
+  <data name="VersionCheckRepair.ValidationFailed">
+    <value>The repaired file did not pass validation: {file}</value>
+  </data>
+  <data name="VersionCheckBackup.HistoryTitle">
+    <value>Backup and restore history</value>
+  </data>
+  <data name="VersionCheckBackup.Loading">
+    <value>Reading and validating backup history...</value>
+  </data>
+  <data name="VersionCheckBackup.None">
+    <value>No HD2MM repair backups were found for this mod.</value>
+  </data>
+  <data name="VersionCheckBackup.Summary">
+    <value>{count} backup(s), {restorable} restorable, {invalid} invalid.</value>
+  </data>
+  <data name="VersionCheckBackup.LoadFailed">
+    <value>Failed to load backup history: {message}</value>
+  </data>
+  <data name="VersionCheckBackup.Invalid">
+    <value>Cannot restore: {message}</value>
+  </data>
+  <data name="VersionCheckBackup.MatchesCurrent">
+    <value>Current patch already matches this backup.</value>
+  </data>
+  <data name="VersionCheckBackup.CurrentMissing">
+    <value>Current patch is missing; restore will recreate it.</value>
+  </data>
+  <data name="VersionCheckBackup.Ready">
+    <value>Ready to restore. HD2MM will back up the current patch first.</value>
+  </data>
+  <data name="VersionCheckBackup.ItemDetail">
+    <value>{time} | {kind} | {actions} action(s) | {size} | SHA-256 {hash}</value>
+  </data>
+  <data name="VersionCheckBackup.KindMetadata">
+    <value>Safe metadata repair</value>
+  </data>
+  <data name="VersionCheckBackup.KindAutomatic">
+    <value>Automatic LOD repair</value>
+  </data>
+  <data name="VersionCheckBackup.KindPreserve">
+    <value>Preserve mod LOD</value>
+  </data>
+  <data name="VersionCheckBackup.KindGame">
+    <value>Use game LOD</value>
+  </data>
+  <data name="VersionCheckBackup.KindMixed">
+    <value>Mixed per-Unit LOD</value>
+  </data>
+  <data name="VersionCheckBackup.KindPreRestore">
+    <value>Snapshot before restore</value>
+  </data>
+  <data name="VersionCheckBackup.KindLegacy">
+    <value>Legacy backup</value>
+  </data>
+  <data name="VersionCheckBackup.Restore">
+    <value>Restore this backup</value>
+  </data>
+  <data name="VersionCheckBackup.Delete">
+    <value>Delete this backup</value>
+  </data>
+  <data name="VersionCheckBackup.CleanOld">
+    <value>Clean old backups</value>
+  </data>
+  <data name="VersionCheckBackup.RestoreTitle">
+    <value>Restore patch backup</value>
+  </data>
+  <data name="VersionCheckBackup.RestoreConfirm">
+    <value>Restore {file} from {time}? HD2MM will snapshot the current patch first, replace it atomically, and verify the SHA-256.</value>
+  </data>
+  <data name="VersionCheckBackup.Restoring">
+    <value>Restoring and validating backup...</value>
+  </data>
+  <data name="VersionCheckBackup.RestoreFailed">
+    <value>Backup restore failed: {message}</value>
+  </data>
+  <data name="VersionCheckBackup.RestoreSuccess">
+    <value>Backup restored. A snapshot of the replaced patch was retained.</value>
+  </data>
+  <data name="VersionCheckBackup.DeleteTitle">
+    <value>Delete backup</value>
+  </data>
+  <data name="VersionCheckBackup.DeleteConfirm">
+    <value>Delete the backup of {file} from {time}? The final restorable backup for each patch is always protected.</value>
+  </data>
+  <data name="VersionCheckBackup.DeleteFailed">
+    <value>Backup deletion failed: {message}</value>
+  </data>
+  <data name="VersionCheckBackup.DeleteSuccess">
+    <value>Backup deleted.</value>
+  </data>
+  <data name="VersionCheckBackup.CleanConfirm">
+    <value>Keep the newest three backups for each patch and delete older entries? At least one restorable backup is always retained.</value>
+  </data>
+  <data name="VersionCheckBackup.CleanFailed">
+    <value>Backup cleanup failed: {message}</value>
+  </data>
+  <data name="VersionCheckBackup.CleanSuccess">
+    <value>Deleted {count} old backup(s).</value>
+  </data>
+  <data name="VersionCheckBackup.RollbackTimeLabel">
+    <value>Roll back to</value>
+  </data>
+  <data name="VersionCheckBackup.RollbackButton">
+    <value>Roll back whole mod</value>
+  </data>
+  <data name="VersionCheckBackup.RollbackConfirm">
+    <value>Roll the whole mod (including all option folders) back to {time}? {count} file(s) will be restored, and the current files will be backed up first.</value>
+  </data>
+  <data name="VersionCheckBackup.RollbackNothing">
+    <value>Nothing to roll back at this time point.</value>
+  </data>
+  <data name="VersionCheckBackup.RollingBack">
+    <value>Rolling back to {time}...</value>
+  </data>
+  <data name="VersionCheckBackup.RollbackResult">
+    <value>Rolled back to {time}: {restored} restored, {skipped} skipped, {failed} failed.</value>
+  </data>
+  <data name="VersionCheckBatch.Button">
+    <value>Batch repair</value>
+  </data>
+  <data name="VersionCheckBatch.ButtonHint">
+    <value>Scan every mod and repair them in a verified sequence</value>
+  </data>
+  <data name="VersionCheckBatch.ScanTitle">
+    <value>Batch repair scan</value>
+  </data>
+  <data name="VersionCheckBatch.ScanMessage">
+    <value>Analyzing mods, backups, and companion recovery sources...</value>
+  </data>
+  <data name="VersionCheckBatch.ScanProgress">
+    <value>Scanning {current}/{total}: {name}</value>
+  </data>
+  <data name="VersionCheckBatch.ConfirmTitle">
+    <value>Run batch repair</value>
+  </data>
+  <data name="VersionCheckBatch.ConfirmMessage">
+    <value>Found {repairable} repairable model mod(s), {unsupported} skipped non-Unit mod(s), {blocked} blocked mod(s), and {clean} mod(s) requiring no action. Only supported model files will be backed up and validated independently.</value>
+  </data>
+  <data name="VersionCheckBatch.ScanFailed">
+    <value>Batch scan failed: {message}</value>
+  </data>
+  <data name="VersionCheckBatch.RepairTitle">
+    <value>Batch repair</value>
+  </data>
+  <data name="VersionCheckBatch.RepairMessage">
+    <value>Processing companion recovery, metadata repair, then Unit repair...</value>
+  </data>
+  <data name="VersionCheckBatch.RepairProgress">
+    <value>Processing {current}/{total}: {name}</value>
+  </data>
+  <data name="VersionCheckBatch.RepairFailed">
+    <value>Batch repair failed: {message}</value>
+  </data>
+  <data name="VersionCheckBatch.PlanSummary">
+    <value>Batch scan complete: {repairable} repairable model mod(s), {unsupported} skipped non-Unit mod(s), {blocked} blocked, {clean} requiring no action.</value>
+  </data>
+  <data name="VersionCheckBatch.UnsupportedResourceType">
+    <value>Skipped: automatic repair currently supports only model mods containing Unit resources. Audio and other non-Unit resources are still under investigation; no backup was created and no files were modified.</value>
+  </data>
+  <data name="VersionCheckBatch.ResultSummary">
+    <value>Batch repair complete: {repaired} succeeded, {failed} failed, {skipped} skipped.</value>
+  </data>
+  <data name="VersionCheckRecovery.Button">
+    <value>Recover {count} companion file(s)</value>
+  </data>
+  <data name="VersionCheckRecovery.Unavailable">
+    <value>No reliable companion source</value>
+  </data>
+  <data name="VersionCheckRecovery.ConfirmTitle">
+    <value>Recover missing companion files</value>
+  </data>
+  <data name="VersionCheckRecovery.ConfirmMessage">
+    <value>HD2MM will recover {count} companion file(s) from byte-verified sources, stage them in temporary files, and commit only after bounds validation. Continue?</value>
+  </data>
+  <data name="VersionCheckRecovery.Recovering">
+    <value>Recovering and validating companion files...</value>
+  </data>
+  <data name="VersionCheckRecovery.Success">
+    <value>Recovered {count} companion file(s).</value>
+  </data>
+  <data name="VersionCheckRecovery.Failed">
+    <value>Companion recovery failed: {message}</value>
+  </data>
+  <data name="VersionCheckDisclaimer.Title">
+    <value>Mod repair risk and usage notice</value>
+  </data>
+  <data name="VersionCheckDisclaimer.Message">
+    <value>Mod repair rebuilds game resource structures, and automatic decisions cannot be guaranteed to work for every mod. A repaired mod may have invisible models, crash the equipment screen or game, or contain damaged files. HD2MM attempts to create backups, but you should also retain the original mod before repairing it.
+
+Repaired mods are for your personal use only. Do not upload, share, resell, or redistribute them in any form. Rights to models, textures, and other assets remain with their original authors.
+
+Selecting Confirm means that you understand and accept these risks and restrictions. This notice will not be shown again after acceptance.</value>
+  </data>
+  <data name="VersionCheckDisclaimer.SaveFailed">
+    <value>The repair notice acceptance could not be saved, so repair was canceled: {message}</value>
+  </data>
+  <data name="VersionCheckDisclaimer.SettingsUnavailable">
+    <value>Repair settings are unavailable. Restart HD2MM and try again.</value>
+  </data>
+  <data name="ModService.CalculatingHashes">
+    <value>Calculating current mod file hashes (using cached)...</value>
+  </data>
+  <data name="ModService.CalculatingHashesProgress">
+    <value>Calculating file hashes ({done}/{total})...</value>
+  </data>
+  <data name="ModService.CalculatingHashesCache">
+    <value>Calculating file hashes ({done}/{total}/{cache}cached)...</value>
+  </data>
+  <data name="ModService.HashError">
+    <value>Failed to calculate file hash: {message}</value>
+  </data>
+  <data name="ModService.CalculatingNewHashes">
+    <value>Calculating new version file hashes...</value>
+  </data>
+  <data name="ModService.CalculatingNewHashesProgress">
+    <value>Calculating new version hashes ({done}/{total})...</value>
+  </data>
+  <data name="ModService.NewHashError">
+    <value>Failed to calculate new version file hash: {message}</value>
+  </data>
+  <data name="ModService.ComparingFiles">
+    <value>Comparing file differences...</value>
+  </data>
+  <data name="ModService.AllFilesUpToDate">
+    <value>All files are up to date.</value>
+  </data>
+  <data name="ModService.FileUpdateError">
+    <value>Failed to update file '{path}': {message}</value>
+  </data>
+  <data name="ModService.UpdatingProgress">
+    <value>Updating files ({current}/{total})...</value>
+  </data>
+  <data name="ModService.CopyingFileProgress">
+    <value>Copying file {done}/{total}: {name}</value>
+  </data>
+  <data name="ModService.LinkingFileProgress">
+    <value>Linking file {done}/{total}: {name}</value>
+  </data>
+  <data name="ModService.CopyingLargeFile">
+    <value>Copying: {name} ({percent}%)</value>
+  </data>
+  <data name="ModService.UpdateComplete">
+    <value>Update complete: {updated} files updated, {skipped} skipped, {failed} failed</value>
+  </data>
+  <data name="ModHashService.ComputingFingerprints">
+    <value>Computing fingerprints for {count} mods...</value>
+  </data>
+  <data name="ModHashService.FingerprintProgress">
+    <value>Computing file fingerprint ({current}/{total}): {name}</value>
+  </data>
+  <data name="ModHashService.FingerprintDone">
+    <value>Fingerprint computation complete: {success} succeeded, {fail} failed</value>
+  </data>
+  <data name="ModHashService.FingerprintReady">
+    <value>Fingerprint computation complete: {count} mods ready</value>
+  </data>
+  <data name="ModHashService.FingerprintSingleProgress">
+    <value>Computing file fingerprint: {name}</value>
+  </data>
+  <data name="ModHashService.FingerprintSingleReady">
+    <value>File fingerprint computation complete: {name}</value>
+  </data>
+  <data name="ModHashService.FingerprintCancelled">
+    <value>File fingerprint computation cancelled: {name}</value>
+  </data>
+  <data name="FileHashUtils.HashError">
+    <value>Failed to compute hash for file '{path}': {message}</value>
+  </data>
+  <data name="CreateModOption.SelectIconTitle">
+    <value>Select Option Icon</value>
+  </data>
+  <data name="CreateModOption.SetSourceDirHint">
+    <value>Please set the source directory first before selecting Include paths.</value>
+  </data>
+  <data name="CreateModOption.DefaultName">
+    <value>Unnamed Option</value>
+  </data>
+  <data name="CreateSubOption.SelectIconTitle">
+    <value>Select Sub-Option Icon</value>
+  </data>
+  <data name="CreateSubOption.DefaultName">
+    <value>Unnamed Sub-Option</value>
+  </data>
+  <data name="ImagePicker.SelectImageTitle">
+    <value>Select Image</value>
+  </data>
+  <data name="IncludePicker.ParentOptionMissing">
+    <value>Parent option's Include directory does not exist or is empty</value>
+  </data>
+  <data name="ManifestEditPage.SaveFailed">
+    <value>Failed to save manifest</value>
+  </data>
+  <data name="ManifestEditPage.SaveConfigFailed">
+    <value>Failed to save Mod config</value>
+  </data>
+  <data name="CreatePage.AutoGenerateOptions">
+    <value>Auto-generated {count} options from directory structure</value>
+  </data>
+  <data name="CreatePage.JsonParseError">
+    <value>JSON parse failed, switching to visual edit mode</value>
+  </data>
+  <data name="BackendTestCenter.Title">
+    <value>Acceptance Test Center</value>
+  </data>
+  <data name="BackendTestCenter.Description">
+    <value>Trigger core backend flows in one place and record every result. Press F12 to return here at any time.</value>
+  </data>
+  <data name="BackendTestCenter.StatusTitle">
+    <value>Current status</value>
+  </data>
+  <data name="BackendTestCenter.Storage">
+    <value>Storage: {path}</value>
+  </data>
+  <data name="BackendTestCenter.Game">
+    <value>Game: {path}</value>
+  </data>
+  <data name="BackendTestCenter.ModCount">
+    <value>Loaded mods: {count}</value>
+  </data>
+  <data name="BackendTestCenter.SymbolicLinks">
+    <value>Deployment: symbolic links</value>
+  </data>
+  <data name="BackendTestCenter.FileCopy">
+    <value>Deployment: file copy</value>
+  </data>
+  <data name="BackendTestCenter.NotReady">
+    <value>Application initialization is not complete.</value>
+  </data>
+  <data name="BackendTestCenter.ModActions">
+    <value>Mod actions</value>
+  </data>
+  <data name="BackendTestCenter.ImportArchive">
+    <value>Import archive</value>
+  </data>
+  <data name="BackendTestCenter.RescanMods">
+    <value>Rescan mods</value>
+  </data>
+  <data name="BackendTestCenter.CheckVersions">
+    <value>Check all versions</value>
+  </data>
+  <data name="BackendTestCenter.AnalysisActions">
+    <value>Analysis actions</value>
+  </data>
+  <data name="BackendTestCenter.ScanConflicts">
+    <value>Scan conflict overrides</value>
+  </data>
+  <data name="BackendTestCenter.ScanArmorReuse">
+    <value>Scan armor reuse</value>
+  </data>
+  <data name="BackendTestCenter.DeployActions">
+    <value>Deployment actions</value>
+  </data>
+  <data name="BackendTestCenter.DeployEnabledMods">
+    <value>Deploy enabled mods</value>
+  </data>
+  <data name="BackendTestCenter.PageLinks">
+    <value>Related pages</value>
+  </data>
+  <data name="BackendTestCenter.OpenLogs">
+    <value>Open logs</value>
+  </data>
+  <data name="BackendTestCenter.LogTitle">
+    <value>Test log</value>
+  </data>
+  <data name="BackendTestCenter.Ready">
+    <value>Ready</value>
+  </data>
+  <data name="BackendTestCenter.Busy">
+    <value>Running...</value>
+  </data>
+  <data name="BackendTestCenter.Welcome">
+    <value>Acceptance Test Center loaded.</value>
+  </data>
+  <data name="BackendTestCenter.NoEnabledMods">
+    <value>No enabled mods. Enable at least one mod on the dashboard first.</value>
+  </data>
+  <data name="BackendTestCenter.ArchiveFilter">
+    <value>Supported archives (*.zip;*.7z;*.rar;*.tar)|*.zip;*.7z;*.rar;*.tar|All files (*.*)|*.*</value>
+  </data>
+  <data name="BackendTestCenter.Importing">
+    <value>Importing {name}</value>
+  </data>
+  <data name="BackendTestCenter.ImportProgress">
+    <value>{done}/{total}: {name}</value>
+  </data>
+  <data name="BackendTestCenter.ImportDone">
+    <value>Import complete. Mods: {count}, problems: {problems}.</value>
+  </data>
+  <data name="BackendTestCenter.RescanDone">
+    <value>Rescan complete. Mods: {count}, problems: {problems}.</value>
+  </data>
+  <data name="BackendTestCenter.WarningPrefix">
+    <value>[Warning]</value>
+  </data>
+  <data name="BackendTestCenter.VersionDone">
+    <value>Version check complete for {count} mods.</value>
+  </data>
+  <data name="BackendTestCenter.ConflictDone">
+    <value>Conflict scan complete: mods {mods}, patches {patches}, units {units}, conflicts {conflicts}.</value>
+  </data>
+  <data name="BackendTestCenter.ArmorDone">
+    <value>Armor reuse scan complete: mods {mods}, patches {patches}, units {units}, records {records}.</value>
+  </data>
+  <data name="BackendTestCenter.DeployConfirmTitle">
+    <value>Confirm deployment</value>
+  </data>
+  <data name="BackendTestCenter.DeployConfirmMessage">
+    <value>Deploy {count} enabled mods with the new backend and overwrite matching files in the game directory. Continue?</value>
+  </data>
+  <data name="BackendTestCenter.Deploying">
+    <value>Deploying {count} mods</value>
+  </data>
+  <data name="BackendTestCenter.DeployDone">
+    <value>Deployment complete for {count} mods.</value>
+  </data>
+  <data name="BackendTestCenter.Success">
+    <value>Operation completed successfully.</value>
+  </data>
+  <data name="BackendTestCenter.Cancelled">
+    <value>Operation cancelled.</value>
+  </data>
+  <data name="BackendTestCenter.Failed">
+    <value>Operation failed: {message}</value>
+  </data>
+  <data name="BackendTestCenter.Operation.RescanMods">
+    <value>Rescan mods</value>
+  </data>
+  <data name="BackendTestCenter.Operation.ImportArchive">
+    <value>Import archive</value>
+  </data>
+  <data name="BackendTestCenter.Operation.CheckVersions">
+    <value>Check all versions</value>
+  </data>
+  <data name="BackendTestCenter.Operation.ScanConflicts">
+    <value>Conflict override scan</value>
+  </data>
+  <data name="BackendTestCenter.Operation.ScanArmorReuse">
+    <value>Armor reuse scan</value>
+  </data>
+  <data name="BackendTestCenter.Operation.DeployEnabled">
+    <value>Deploy enabled mods</value>
+  </data>
+  <data name="ErrorCode.None">
+    <value>None</value>
+  </data>
+  <data name="ErrorCode.Unknown">
+    <value>Unknown</value>
+  </data>
+  <data name="ErrorCode.InvalidInput">
+    <value>InvalidInput</value>
+  </data>
+  <data name="ErrorCode.PathOutsideRoot">
+    <value>PathOutsideRoot</value>
+  </data>
+  <data name="ErrorCode.PathNotFound">
+    <value>PathNotFound</value>
+  </data>
+  <data name="ErrorCode.InvalidFormat">
+    <value>InvalidFormat</value>
+  </data>
+  <data name="ErrorCode.ResourceNotFound">
+    <value>ResourceNotFound</value>
+  </data>
+  <data name="ErrorCode.ResourceTooLarge">
+    <value>ResourceTooLarge</value>
+  </data>
+  <data name="ErrorCode.Conflict">
+    <value>Conflict</value>
+  </data>
+  <data name="ErrorCode.OperationCanceled">
+    <value>OperationCanceled</value>
+  </data>
+  <data name="ErrorCode.IoError">
+    <value>IoError</value>
+  </data>
+</root>

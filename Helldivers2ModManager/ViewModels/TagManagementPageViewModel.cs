@@ -11,7 +11,6 @@ using System.Collections.ObjectModel;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class TagManagementPageViewModel : PageViewModelBase
 {
     public override string Title => _localizationService["DashboardPage.TagManagement"];

@@ -6,14 +6,12 @@ using System.Collections.ObjectModel;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class ModGroupService
 {
 	private readonly ILogger<ModGroupService> _logger;
 	private readonly ModGroupRepository _repository;
 	private readonly LocalizationService _localizationService;
 	private readonly Dictionary<Guid, Dictionary<Guid, GroupedEnabledData>> _stateCache = [];
-	private string _storageDirectory = string.Empty;
 	private bool _initialized;
 	private Guid _lastSelectedGroupId = ModGroup.DefaultGroupId;
 
@@ -35,12 +33,11 @@ internal sealed class ModGroupService
 
 	public async Task InitAsync(SettingsService settingsService, IReadOnlyList<ModData> mods)
 	{
-		_storageDirectory = settingsService.StorageDirectory;
 		Groups.Clear();
 		var existingGuids = mods.Select(static mod => mod.Manifest.Guid).ToHashSet();
 		var missingGuids = new HashSet<Guid>();
 
-		var loadedGroups = _repository.LoadGroups(_storageDirectory)
+		var loadedGroups = (await _repository.LoadGroupsAsync().ConfigureAwait(false))
 			.Where(static group => !group.IsDefault)
 			.OrderBy(static group => group.DisplayIndex)
 			.ToList();
@@ -57,14 +54,14 @@ internal sealed class ModGroupService
 		_stateCache.Clear();
 		foreach (var group in Groups)
 		{
-			_stateCache[group.Id] = _repository.LoadStates(_storageDirectory, group.Id)
+			_stateCache[group.Id] = (await _repository.LoadStatesAsync(group.Id).ConfigureAwait(false))
 				.Where(state => KeepExistingState(state, existingGuids, missingGuids))
 				.GroupBy(static state => state.Guid)
 				.ToDictionary(static group => group.Key, static group => group.OrderBy(static state => state.SortOrder).First());
 		}
 
 		if (missingGuids.Count > 0)
-			await _repository.DeleteStatesByGuidsAsync(_storageDirectory, missingGuids);
+			await _repository.DeleteStatesByGuidsAsync(missingGuids).ConfigureAwait(false);
 
 		// enabled_mods 是默认组的权威来源。每次启动都用已加载的 Profile 刷新默认组缓存，
 		// 避免上次写入中断造成 group_mod_states 反向覆盖较新的主页状态。
@@ -161,7 +158,7 @@ internal sealed class ModGroupService
 
 		Groups.Remove(group);
 		_stateCache.Remove(group.Id);
-		await _repository.DeleteGroupAsync(_storageDirectory, group.Id);
+		await _repository.DeleteGroupAsync(group.Id).ConfigureAwait(false);
 		await SaveGroupsAsync();
 
 		if (SelectedGroup.Id == group.Id)
@@ -291,7 +288,7 @@ internal sealed class ModGroupService
 			InvalidateSelectedMemberCache();
 			await SaveGroupsAsync();
 		}
-		await _repository.DeleteStatesByGuidsAsync(_storageDirectory, guidSet);
+		await _repository.DeleteStatesByGuidsAsync(guidSet).ConfigureAwait(false);
 		SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
 	}
 
@@ -367,9 +364,20 @@ internal sealed class ModGroupService
 			.ToDictionary(static state => state.Guid);
 		_stateCache[snapshot.GroupId] = states;
 		await _repository.SaveStatesAsync(
-			_storageDirectory,
 			snapshot.GroupId,
 			states.Values.OrderBy(static state => state.SortOrder)).ConfigureAwait(false);
+	}
+
+	public async Task SaveGroupSnapshotAsync(Guid groupId, IReadOnlyList<GroupedEnabledData> states)
+	{
+		GuardInitialized();
+		var stateMap = states
+			.Select(state => state with { GroupId = groupId })
+			.ToDictionary(state => state.Guid);
+		_stateCache[groupId] = stateMap;
+		await _repository.SaveStatesAsync(
+			groupId,
+			stateMap.Values.OrderBy(static state => state.SortOrder)).ConfigureAwait(false);
 	}
 
 	public int GetMemberCount(ModGroup group, int totalModCount)
@@ -379,7 +387,7 @@ internal sealed class ModGroupService
 
 	private async Task SaveGroupsAsync()
 	{
-		await _repository.SaveGroupsAsync(_storageDirectory, Groups.Where(static group => !group.IsDefault));
+		await _repository.SaveGroupsAsync(Groups.Where(static group => !group.IsDefault)).ConfigureAwait(false);
 	}
 
 	private async Task SaveGroupStateAsync(Guid groupId)
@@ -387,7 +395,7 @@ internal sealed class ModGroupService
 		if (!_stateCache.TryGetValue(groupId, out var states))
 			return;
 
-		await _repository.SaveStatesAsync(_storageDirectory, groupId, states.Values.OrderBy(static state => state.SortOrder));
+		await _repository.SaveStatesAsync(groupId, states.Values.OrderBy(static state => state.SortOrder));
 	}
 
 	private bool IsModVisibleInGroup(Guid groupId, Guid modGuid)

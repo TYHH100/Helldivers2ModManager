@@ -14,7 +14,6 @@ namespace Helldivers2ModManager.Services;
 /// Reads patch TOC and Unit GPU stream metadata for the resource viewer. All reads are
 /// bounded and random-access; companion GPU files are never loaded as a whole.
 /// </summary>
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class PatchResourceInspectionService
 {
     private const int PatchHeaderMagic = unchecked((int)0xF0000011);

@@ -1,5 +1,7 @@
 using Helldivers2ModManager.Models;
 
+using Helldivers2ModManager.Core.Deployment;
+
 namespace Helldivers2ModManager.Services;
 
 /// <summary>
@@ -20,40 +22,14 @@ internal static class DeploymentOrderHelper
 		bool deployBottomToTop)
 	{
 		var enabledMods = snapshot.Mods.Where(static mod => mod.Enabled).ToArray();
-		if (useDeploymentOrder && deploymentOrderGuids.Count > 0)
-		{
-			var enabledGuids = enabledMods.Select(static mod => mod.Guid).ToArray();
-			var enabledSet = enabledGuids.ToHashSet();
-			var modsByGuid = enabledMods.ToDictionary(static mod => mod.Guid);
-			var result = new List<ModData>();
+		var orderedMods = Core.Deployment.DeploymentOrderBuilder.Build(
+			enabledMods,
+			static mod => mod.Guid,
+			preferredOrder: null,
+			useDeploymentOrder,
+			deploymentOrderGuids,
+			deployBottomToTop);
 
-			foreach (var guid in deploymentOrderGuids)
-			{
-				if (enabledSet.Contains(guid))
-				{
-					result.Add(modsByGuid[guid].CreateDeploymentMod());
-					enabledSet.Remove(guid);
-				}
-			}
-
-			// 添加不在 DeploymentOrderGuids 中的已启用模组（防御性）
-			result.AddRange(enabledGuids
-				.Where(enabledSet.Contains)
-				.Select(guid => modsByGuid[guid].CreateDeploymentMod()));
-
-			if (deployBottomToTop)
-				result.Reverse();
-
-			return result.ToArray();
-		}
-		else
-		{
-			var mods = enabledMods.Select(static mod => mod.CreateDeploymentMod()).ToArray();
-
-			if (deployBottomToTop)
-				Array.Reverse(mods);
-
-			return mods;
-		}
+		return [.. orderedMods.Select(static mod => mod.CreateDeploymentMod())];
 	}
 }

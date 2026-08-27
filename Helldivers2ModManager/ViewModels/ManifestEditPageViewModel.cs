@@ -19,7 +19,6 @@ namespace Helldivers2ModManager.ViewModels;
 /// 清单编辑页面的视图模型（右键菜单"编辑模组"打开）。
 /// 支持编辑模组基本信息（名称、描述、图标）和管理选项（添加/删除/编辑选项和子选项）。
 /// </summary>
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 {
 	public override string Title => _localizationService["DashboardPage.EditManifest"];

@@ -1,11 +1,11 @@
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.ViewModels;
+using FuzzySearchMatcher = Helldivers2ModManager.Core.Search.FuzzySearchMatcher;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Transient)]
 /// <summary>
 /// 搜索和过滤服务 —— 负责模组列表的文本搜索、标签搜索和分组过滤
 /// </summary>

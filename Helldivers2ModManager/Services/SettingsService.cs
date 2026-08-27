@@ -8,12 +8,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class SettingsService
 {
 	public const float OpacityMax = 1.0f;
@@ -621,6 +621,8 @@ internal sealed class SettingsService
 	};
 
 	private readonly ILogger<SettingsService> _logger;
+	private readonly Database? _database;
+	private readonly PreferenceRepository? _preferences;
 	
 	[JsonInclude]
 	private string _gameDirectory = null!;
@@ -693,9 +695,16 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private Dictionary<Guid, Dictionary<int, int[]>> _subOptionOrders = [];
 
-	public SettingsService(ILogger<SettingsService> logger)
+	public SettingsService(ILogger<SettingsService> logger, Database database, PreferenceRepository preferences)
 	{
 		_logger = logger;
+		_database = database;
+		_preferences = preferences;
+	}
+
+	public SettingsService(ILogger<SettingsService> logger)
+		: this(logger, null!, null!)
+	{
 	}
 
 	private string? EncryptString(string? plainText)
@@ -746,15 +755,32 @@ internal sealed class SettingsService
 			return true;
 
 		_logger.LogInformation("Initializing settings service (readonly = {})", @readonly);
-		
-		s_file.Refresh();
-		if (!s_file.Exists)
-			return false;
+
+		if (_database is null || _preferences is null)
+		{
+			s_file.Refresh();
+			if (!s_file.Exists)
+				return false;
+
+			ResetInternal();
+			await ReadAsync().ConfigureAwait(false);
+			IsReadonly = @readonly;
+			Initialized = true;
+			CleanExcessLogs();
+			return true;
+		}
+
+		await _database!.InitializeAsync().ConfigureAwait(false);
+		var boot = await BootConfigurationStore.LoadAsync().ConfigureAwait(false);
+		var persisted = await _preferences!.GetAppSettingsAsync("settings").ConfigureAwait(false);
 
 		ResetInternal();
+		ApplyCoreModel(persisted);
+		if (!string.IsNullOrWhiteSpace(boot?.StorageDirectory))
+			_storageDirectory = boot.StorageDirectory;
+		if (!string.IsNullOrWhiteSpace(boot?.TempDirectory))
+			_tempDirectory = boot.TempDirectory;
 
-		await ReadAsync();
-		
 		IsReadonly = @readonly;
 		Initialized = true;
 		_logger.LogInformation("Settings service initialization complete");
@@ -768,15 +794,30 @@ internal sealed class SettingsService
 	public async Task ReloadAsync()
 	{
 		_logger.LogInformation("Reloading settings from disk");
-		
-		s_file.Refresh();
-		if (!s_file.Exists)
+
+		if (_database is null || _preferences is null)
+		{
+			s_file.Refresh();
+			if (!s_file.Exists)
+				return;
+
+			ResetInternal();
+			await ReadAsync().ConfigureAwait(false);
+			Initialized = true;
 			return;
+		}
+
+		await _database!.InitializeAsync().ConfigureAwait(false);
+		var boot = await BootConfigurationStore.LoadAsync().ConfigureAwait(false);
+		var persisted = await _preferences!.GetAppSettingsAsync("settings").ConfigureAwait(false);
 
 		ResetInternal();
+		ApplyCoreModel(persisted);
+		if (!string.IsNullOrWhiteSpace(boot?.StorageDirectory))
+			_storageDirectory = boot.StorageDirectory;
+		if (!string.IsNullOrWhiteSpace(boot?.TempDirectory))
+			_tempDirectory = boot.TempDirectory;
 
-		await ReadAsync();
-		
 		Initialized = true;
 		_logger.LogInformation("Settings reloaded successfully");
 	}
@@ -808,8 +849,21 @@ internal sealed class SettingsService
 		GuardInitialized();
 		GuardReadonly();
 
-		var json = JsonSerializer.Serialize(CreateJsonModel(), s_serializerOptions);
-		await File.WriteAllTextAsync(s_file.FullName, json);
+		if (_database is null || _preferences is null)
+		{
+			var json = JsonSerializer.Serialize(CreateJsonModel(), s_serializerOptions);
+			await File.WriteAllTextAsync(s_file.FullName, json);
+			SettingsChanged?.Invoke(this, EventArgs.Empty);
+			return;
+		}
+
+		await _database!.InitializeAsync().ConfigureAwait(false);
+		await _preferences!.SetAppSettingsAsync("settings", CreateCoreModel()).ConfigureAwait(false);
+		await BootConfigurationStore.SaveAsync(new BootConfiguration
+		{
+			StorageDirectory = _storageDirectory,
+			TempDirectory = _tempDirectory,
+		}).ConfigureAwait(false);
 		SettingsChanged?.Invoke(this, EventArgs.Empty);
 	}
 
@@ -908,6 +962,117 @@ internal sealed class SettingsService
 	private async Task ReadAsync()
 	{
 		await ReadAsyncFallback();
+	}
+
+	private AppSettings CreateCoreModel()
+	{
+		return new AppSettings
+		{
+			GameDirectory = _gameDirectory,
+			StorageDirectory = _storageDirectory,
+			TempDirectory = _tempDirectory,
+			LogLevel = (int)_logLevel,
+			Opacity = _opacity,
+			SkipList = [.. _skipList],
+			OrganizationalFolderNames = [.. _organizationalFolderNames],
+			CaseSensitiveSearch = _caseSensitiveSearch,
+			EnableFuzzySearch = _enableFuzzySearch,
+			UseSymbolicLinks = _useSymbolicLinks,
+			DeleteToRecycleBin = _deleteToRecycleBin,
+			AutoRemoveMissingMods = _autoRemoveMissingMods,
+			DeployBottomToTop = _deployBottomToTop,
+			AutoCheckVersionOnStartup = _autoCheckVersionOnStartup,
+			EnableBatchRepair = _enableBatchRepair,
+			RepairDisclaimerAccepted = _repairDisclaimerAccepted,
+			FirstRunTutorialCompleted = _firstRunTutorialCompleted,
+			AutoCleanLogs = _autoCleanLogs,
+			ShowSeparator = _showSeparator,
+			EnableAutoTagging = _enableAutoTagging,
+			AutoTagCreateMissingTags = _autoTagCreateMissingTags,
+			AutoTagMappings = [.. _autoTagMappings.Select(static mapping =>
+				new AutoTagMappingSetting((int)mapping.Type, mapping.TagId))],
+			Separators = [.. _separators.Select(static separator => new SeparatorSetting(
+				separator.Id,
+				separator.Name,
+				separator.Color,
+				separator.IsExpanded,
+				separator.ModGuids,
+				separator.DisplayIndex))],
+			MaxLogFiles = _maxLogFiles,
+			Tags = [.. _tags.Select(static tag => new TagSetting(tag.Id, tag.Name, tag.Color))],
+			NexusApiKey = _encryptedNexusApiKey,
+			Language = _language,
+			BackgroundMode = (int)_backgroundMode,
+			BackgroundImagePath = _backgroundImagePath,
+			BackgroundOpacity = _backgroundOpacity,
+			CardOpacity = _cardOpacity,
+			UseDeploymentOrder = _useDeploymentOrder,
+			DeploymentOrderGuids = [.. _deploymentOrderGuids],
+			OptionOrders = new Dictionary<Guid, int[]>(_optionOrders),
+			SubOptionOrders = _subOptionOrders.ToDictionary(
+				static pair => pair.Key,
+				static pair => new Dictionary<int, int[]>(pair.Value)),
+		};
+	}
+
+	private void ApplyCoreModel(AppSettings? settings)
+	{
+		if (settings is null)
+			return;
+
+		_gameDirectory = settings.GameDirectory;
+		_storageDirectory = settings.StorageDirectory;
+		_tempDirectory = settings.TempDirectory;
+		_logLevel = (LogLevel)settings.LogLevel;
+		_opacity = Math.Clamp(settings.Opacity, OpacityMin, OpacityMax);
+		_skipList = new ObservableCollection<string>(settings.SkipList);
+		_organizationalFolderNames = new ObservableCollection<string>(settings.OrganizationalFolderNames);
+		_caseSensitiveSearch = settings.CaseSensitiveSearch;
+		_enableFuzzySearch = settings.EnableFuzzySearch;
+		_useSymbolicLinks = settings.UseSymbolicLinks;
+		_deleteToRecycleBin = settings.DeleteToRecycleBin;
+		_autoRemoveMissingMods = settings.AutoRemoveMissingMods;
+		_deployBottomToTop = settings.DeployBottomToTop;
+		_autoCheckVersionOnStartup = settings.AutoCheckVersionOnStartup;
+		_enableBatchRepair = settings.EnableBatchRepair;
+		_repairDisclaimerAccepted = settings.RepairDisclaimerAccepted;
+		_firstRunTutorialCompleted = settings.FirstRunTutorialCompleted;
+		_autoCleanLogs = settings.AutoCleanLogs;
+		_showSeparator = settings.ShowSeparator;
+		_enableAutoTagging = settings.EnableAutoTagging;
+		_autoTagCreateMissingTags = settings.AutoTagCreateMissingTags;
+		_autoTagMappings = settings.AutoTagMappings.Select(static mapping => new AutoTagMapping
+		{
+			Type = (ModType)mapping.Type,
+			TagId = mapping.TagId,
+		}).ToList();
+		_separators = new ObservableCollection<ModSeparator>(settings.Separators.Select(static separator => new ModSeparator
+		{
+			Id = separator.Id,
+			Name = separator.Name,
+			Color = separator.Color,
+			IsExpanded = separator.IsExpanded,
+			ModGuids = [.. separator.ModGuids],
+			DisplayIndex = separator.DisplayIndex,
+		}));
+		_maxLogFiles = Math.Max(1, settings.MaxLogFiles);
+		_tags = new ObservableCollection<ModTag>(settings.Tags.Select(static tag => new ModTag(tag.Id, tag.Name, tag.Color)));
+		_encryptedNexusApiKey = settings.NexusApiKey;
+		_language = settings.Language;
+		_backgroundMode = (BackgroundMode)settings.BackgroundMode;
+		_backgroundImagePath = settings.BackgroundImagePath;
+		_backgroundOpacity = Math.Clamp(settings.BackgroundOpacity, 0f, 1f);
+		_cardOpacity = Math.Clamp(settings.CardOpacity, 0.3f, 1f);
+		_useDeploymentOrder = settings.UseDeploymentOrder;
+		_deploymentOrderGuids = [.. settings.DeploymentOrderGuids];
+		_optionOrders = settings.OptionOrders.ToDictionary(
+			static pair => pair.Key,
+			static pair => pair.Value.ToArray());
+		_subOptionOrders = settings.SubOptionOrders.ToDictionary(
+			static pair => pair.Key,
+			static pair => pair.Value.ToDictionary(
+				static nestedPair => nestedPair.Key,
+				static nestedPair => nestedPair.Value.ToArray()));
 	}
 
 	private object CreateJsonModel()

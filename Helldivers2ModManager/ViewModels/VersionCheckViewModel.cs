@@ -20,7 +20,6 @@ internal enum VersionAutoCheckReason
 /// 版本检查视图模型 —— 封装版本兼容性检查的所有逻辑和状态
 /// 从 DashboardPageViewModel 中拆分出来，独立管理版本检测相关的 UI 状态和业务逻辑
 /// </summary>
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class VersionCheckViewModel : ObservableObject
 {
     private static readonly Dictionary<Guid, DateTime> s_knownModTimestamps = [];
@@ -105,7 +104,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 if (File.Exists(gameExePath))
                 {
                     var currentExeTime = new FileInfo(gameExePath).LastWriteTimeUtc;
-                    var lastExeTime = _versionCheckRepository.GetGameExeLastWriteTime(_settingsService.StorageDirectory);
+                    var lastExeTime = await _versionCheckRepository.GetGameExeLastWriteTimeAsync();
                     if (lastExeTime != DateTime.MinValue && currentExeTime != lastExeTime)
                     {
                         _logger.LogInformation("检测到游戏 exe 已更新 (上次: {Last}, 当前: {Current})，强制全量扫描",
@@ -235,14 +234,14 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     /// <summary>
     /// 从数据库加载已缓存的版本检测结果并应用到每个 ModViewModel
     /// </summary>
-    public void LoadCachedResults(ObservableCollection<ModViewModel> mods)
+    public async Task LoadCachedResultsAsync(ObservableCollection<ModViewModel> mods)
     {
         try
         {
-            if (!_settingsService.Initialized || string.IsNullOrEmpty(_settingsService.StorageDirectory))
+            if (!_settingsService.Initialized)
                 return;
 
-            var cached = _versionCheckRepository.LoadAll(_settingsService.StorageDirectory);
+            var cached = await _versionCheckRepository.LoadAllAsync();
             foreach (var vm in mods)
             {
                 if (cached.TryGetValue(vm.Guid, out var entry))
@@ -276,12 +275,12 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
     /// <summary>
     /// 判断是否需要自动触发版本检查（启动时检测新增/变动模组或游戏 exe 更新）
     /// </summary>
-    public bool ShouldAutoCheck(ObservableCollection<ModViewModel> mods)
+    public async Task<bool> ShouldAutoCheckAsync(ObservableCollection<ModViewModel> mods)
     {
-        return GetAutoCheckReason(mods) != VersionAutoCheckReason.None;
+        return await GetAutoCheckReasonAsync(mods) != VersionAutoCheckReason.None;
     }
 
-    public VersionAutoCheckReason GetAutoCheckReason(ObservableCollection<ModViewModel> mods)
+    public async Task<VersionAutoCheckReason> GetAutoCheckReasonAsync(ObservableCollection<ModViewModel> mods)
     {
         if (!_settingsService.AutoCheckVersionOnStartup || mods.Count == 0)
             return VersionAutoCheckReason.None;
@@ -295,7 +294,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         if (File.Exists(gameExePath))
         {
             var currentExeTime = new FileInfo(gameExePath).LastWriteTimeUtc;
-            var lastExeTime = _versionCheckRepository.GetGameExeLastWriteTime(_settingsService.StorageDirectory);
+            var lastExeTime = await _versionCheckRepository.GetGameExeLastWriteTimeAsync();
             if (lastExeTime != DateTime.MinValue && currentExeTime != lastExeTime)
                 return VersionAutoCheckReason.GameExeUpdated;
         }
@@ -494,7 +493,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                 }
             }
 
-            await _versionCheckRepository.SaveAllAsync(_settingsService.StorageDirectory, results);
+            await _versionCheckRepository.SaveAllAsync(results);
         }
         catch (Exception ex)
         {
@@ -544,7 +543,7 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             if (File.Exists(exePath))
             {
                 var lastWrite = new FileInfo(exePath).LastWriteTimeUtc;
-                await _versionCheckRepository.UpdateGameExeLastWriteTimeAsync(_settingsService.StorageDirectory, lastWrite);
+                await _versionCheckRepository.UpdateGameExeLastWriteTimeAsync(lastWrite);
             }
         }
         catch (Exception ex)

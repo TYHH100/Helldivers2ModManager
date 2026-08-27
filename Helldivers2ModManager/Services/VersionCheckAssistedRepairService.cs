@@ -87,12 +87,101 @@ internal sealed partial class VersionCheckService
 
     public Task<AssistedModRepairPlan> CreateAssistedRepairPlanAsync(
         DirectoryInfo modDirectory,
+        AssistedLodStrategy lodStrategy)
+    {
+		if (_coreAssistedRepairService is not null)
+		{
+			return MapCorePlanAsync(_coreAssistedRepairService.CreatePlanAsync(
+				modDirectory,
+				(Core.Repair.AssistedLodStrategy)(int)lodStrategy));
+		}
+
+		return CreateAssistedRepairPlanInternalAsync(modDirectory, _ => lodStrategy);
+	}
+
+	private async Task<AssistedModRepairPlan> MapCorePlanAsync(Task<Core.Repair.AssistedModRepairPlan> coreTask)
+	{
+		return ToLegacyPlan(await coreTask.ConfigureAwait(false));
+	}
+
+	private AssistedModRepairPlan ToLegacyPlan(Core.Repair.AssistedModRepairPlan plan)
+	{
+		return new AssistedModRepairPlan
+		{
+			Actions = plan.Actions.Select(static action => new AssistedUnitRepairAction
+			{
+				PatchFilePath = action.PatchFilePath,
+				EntryIndex = action.EntryIndex,
+				FileId = action.FileId,
+				CurrentVersion = action.CurrentVersion,
+				ReferenceVersion = action.ReferenceVersion,
+				CurrentLodSize = (int)action.CurrentLodSize,
+				ReferenceLodSize = (int)action.ReferenceLodSize,
+				CurrentGpuSize = action.CurrentGpuSize,
+				ReferenceGpuSize = action.ReferenceGpuSize,
+				MeshIdsDiffer = action.MeshIdsDiffer,
+				CurrentMeshSignature = action.CurrentMeshSignature,
+				StrongCustomModelSignal = action.StrongCustomModelSignal,
+				BodyShape = (ModelPreviewBodyShape)action.BodyShape,
+				CustomizationSlot = (ModelPreviewCustomizationSlot)action.CustomizationSlot,
+				LodStrategy = action.LodStrategy == Core.Repair.AssistedLodStrategy.PreserveMod
+					? AssistedLodStrategy.PreserveMod
+					: AssistedLodStrategy.UseGameReference,
+				LodDataDiffers = action.LodDataDiffers,
+				FriendlyName = GetUnitFriendlyName(action.FileId),
+			}).ToList(),
+			MaterialActions = plan.MaterialActions.Select(static action => new AssistedMaterialRepairAction
+			{
+				PatchFilePath = action.PatchFilePath,
+				EntryIndex = action.EntryIndex,
+				FileId = action.FileId,
+				Kind = (AssistedMaterialRepairKind)action.Kind,
+				OldParentMaterialId = action.OldParentMaterialId,
+				NewParentMaterialId = action.NewParentMaterialId,
+			}).ToList(),
+			BlockingReasons = plan.BlockingReasons.ToList(),
+			MatchedReferenceCount = plan.MatchedReferenceCount,
+			MissingReferenceCount = plan.MissingReferenceCount,
+			IsAutomatic = plan.IsAutomatic,
+			AutomaticStrongCustomCount = plan.AutomaticStrongCustomCount,
+			AutomaticPreserveUnitCount = plan.AutomaticPreserveUnitCount,
+			AutomaticGameLodUnitCount = plan.AutomaticGameLodUnitCount,
+		};
+	}
+
+	private static Task<ModRepairResult> ToLegacyResult(Task<Core.Repair.ModRepairResult> coreTask)
+	{
+		return MapCoreRepairResultAsync(coreTask);
+	}
+
+	private static async Task<ModRepairResult> MapCoreRepairResultAsync(Task<Core.Repair.ModRepairResult> coreTask)
+	{
+		var result = await coreTask.ConfigureAwait(false);
+		return MapCoreRepairResult(result);
+	}
+
+	private static ModRepairResult MapCoreRepairResult(Core.Repair.ModRepairResult result)
+	{
+		return new ModRepairResult
+		{
+			Success = result.Success,
+			AppliedActionCount = result.AppliedActionCount,
+			BackupPaths = result.BackupPaths?.ToList() ?? [],
+			ErrorMessage = result.ErrorMessage,
+		};
+	}
+
+	private Task<AssistedModRepairPlan> CreateAssistedRepairPlanOldAsync(
+        DirectoryInfo modDirectory,
         AssistedLodStrategy lodStrategy) =>
         CreateAssistedRepairPlanInternalAsync(modDirectory, _ => lodStrategy);
 
     public Task<AssistedModRepairPlan> CreateMixedAssistedRepairPlanAsync(
         DirectoryInfo modDirectory,
         IReadOnlySet<long> preserveModLodUnitIds) =>
+        _coreAssistedRepairService is not null
+            ? MapCorePlanAsync(_coreAssistedRepairService.CreateMixedPlanAsync(modDirectory, preserveModLodUnitIds))
+            :
         CreateAssistedRepairPlanInternalAsync(
             modDirectory,
             fileId => preserveModLodUnitIds.Contains(fileId)
@@ -102,6 +191,9 @@ internal sealed partial class VersionCheckService
     public async Task<AssistedModRepairPlan> CreateAutomaticAssistedRepairPlanAsync(
         DirectoryInfo modDirectory)
     {
+		if (_coreAssistedRepairService is not null)
+			return await MapCorePlanAsync(_coreAssistedRepairService.CreateAutomaticPlanAsync(modDirectory)).ConfigureAwait(false);
+
         var gamePlan = await CreateAssistedRepairPlanAsync(
             modDirectory,
             AssistedLodStrategy.UseGameReference);
@@ -453,7 +545,22 @@ internal sealed partial class VersionCheckService
         DirectoryInfo modDirectory,
         AssistedLodStrategy lodStrategy)
     {
-        await _repairSemaphore.WaitAsync();
+		if (_coreAssistedRepairService is not null)
+		{
+			await _repairSemaphore.WaitAsync();
+			try
+			{
+				return ToLegacyResult(await _coreAssistedRepairService.RepairAsync(
+					modDirectory,
+					(Core.Repair.AssistedLodStrategy)(int)lodStrategy).ConfigureAwait(false));
+			}
+			finally
+			{
+				_repairSemaphore.Release();
+			}
+		}
+
+		await _repairSemaphore.WaitAsync();
         try
         {
             return await RepairModWithGameReferencesCoreAsync(
@@ -470,7 +577,22 @@ internal sealed partial class VersionCheckService
         DirectoryInfo modDirectory,
         IReadOnlySet<long> preserveModLodUnitIds)
     {
-        await _repairSemaphore.WaitAsync();
+		if (_coreAssistedRepairService is not null)
+		{
+			await _repairSemaphore.WaitAsync();
+			try
+			{
+				return ToLegacyResult(await _coreAssistedRepairService.RepairAsync(
+					modDirectory,
+					preserveIds: preserveModLodUnitIds).ConfigureAwait(false));
+			}
+			finally
+			{
+				_repairSemaphore.Release();
+			}
+		}
+
+		await _repairSemaphore.WaitAsync();
         try
         {
             return await RepairModWithGameReferencesCoreAsync(
@@ -486,7 +608,22 @@ internal sealed partial class VersionCheckService
     public async Task<ModRepairResult> RepairModAutomaticallyAsync(
         DirectoryInfo modDirectory)
     {
-        await _repairSemaphore.WaitAsync();
+		if (_coreAssistedRepairService is not null)
+		{
+			await _repairSemaphore.WaitAsync();
+			try
+			{
+				return ToLegacyResult(await _coreAssistedRepairService.RepairAsync(
+					modDirectory,
+					automatic: true).ConfigureAwait(false));
+			}
+			finally
+			{
+				_repairSemaphore.Release();
+			}
+		}
+
+		await _repairSemaphore.WaitAsync();
         try
         {
             return await RepairModWithGameReferencesCoreAsync(

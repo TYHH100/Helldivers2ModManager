@@ -4,7 +4,9 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using Helldivers2ModManager.Core.Localization;
 using Microsoft.Extensions.DependencyInjection;
+using System.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Helldivers2ModManager.Services;
@@ -13,7 +15,6 @@ namespace Helldivers2ModManager.Services;
 /// 本地化服务 - 单例，负责加载 JSON 格式的本地化资源并提供运行时切换语言能力。
 /// 实现 INotifyPropertyChanged 以便 WPF 绑定在语言切换时自动更新。
 /// </summary>
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class LocalizationService : INotifyPropertyChanged
 {
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -67,6 +68,10 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 	/// 保护 <see cref="_localeCache"/> 的锁（net9+ Lock 类型，比 Monitor 更快）。
 	/// </summary>
 	private readonly Lock _localeCacheGate = new();
+
+	private static readonly ResourceManager StringsResourceManager = new(
+		"Helldivers2ModManager.Core.Localization.StringResources",
+		typeof(LocalizationCatalog).Assembly);
 
 	/// <summary>
 	/// 语言文件元数据列表（仅扫描结果，strings 未解析）。
@@ -325,14 +330,22 @@ internal sealed class LocalizationService : INotifyPropertyChanged
 			}
 		}
 
-		// 更新字符串字典：整体重建为冻结字典（一次性成本，换取后续每次查找更快）。
-		// GroupBy 防御忽略大小写重复键（ToFrozenDictionary 遇重复键会抛异常，
-		// 原 Dictionary 赋值是静默覆盖）——组内取最后写入的值，语义与原实现一致。
-		_strings = data.Strings
-			.GroupBy(static kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+		var culture = new CultureInfo(targetLocale);
+		var resourceSet = StringsResourceManager.GetResourceSet(culture, createIfNotExists: true, tryParents: false);
+		if (resourceSet is null)
+		{
+			_logger.LogError("Resx 本地化资源不存在: {Locale}", targetLocale);
+			return;
+		}
+
+		var entries = resourceSet.Cast<System.Collections.DictionaryEntry>()
+			.Select(static entry => ((string)entry.Key, (string)entry.Value!))
+			.ToArray();
+		_strings = entries
+			.GroupBy(static entry => entry.Item1, StringComparer.OrdinalIgnoreCase)
 			.ToFrozenDictionary(
 				static group => group.Key,
-				static group => group.Last().Value,
+				static group => group.Last().Item2,
 				StringComparer.OrdinalIgnoreCase);
 
 		_currentLanguage = targetLocale;

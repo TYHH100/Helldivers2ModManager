@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class HelpPageViewModel : PageViewModelBase
 {
 	public override string Title => _localizationService["MainWindow.Help"];

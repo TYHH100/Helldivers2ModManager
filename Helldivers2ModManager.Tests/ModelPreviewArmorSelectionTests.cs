@@ -1,6 +1,8 @@
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ModelPreviewMesh = Helldivers2ModManager.Core.Preview.ModelPreviewMesh;
+using ModelPreviewResult = Helldivers2ModManager.Core.Preview.ModelPreviewResult;
 
 namespace Helldivers2ModManager.Tests;
 
@@ -49,8 +51,8 @@ public sealed class ModelPreviewArmorSelectionTests
     public void FilterByArmor_AllKeepsTheCompleteSelectedPatchSet()
     {
         var meshes = new[] { CreateMesh(1), CreateMesh(2) };
-        meshes[0].ArmorIds = ["aaaaaaaaaaaaaaaa"];
-        meshes[1].ArmorIds = ["bbbbbbbbbbbbbbbb"];
+        meshes[0].SetArmorIds(["aaaaaaaaaaaaaaaa"]);
+        meshes[1].SetArmorIds(["bbbbbbbbbbbbbbbb"]);
 
         var filtered = ModelPreviewBackend.FilterByArmor(meshes, ModelPreviewArmorSelection.AllId);
 

@@ -8,21 +8,17 @@ using System.Text.Json;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class ProfileService
 {
 	private readonly ILogger<ProfileService> _logger;
 	private readonly EnabledDataRepository _repository;
-	private readonly DatabaseService _databaseService;
 
 	public ProfileService(
 		ILogger<ProfileService> logger,
-		EnabledDataRepository repository,
-		DatabaseService databaseService)
+		EnabledDataRepository repository)
 	{
 		_logger = logger;
 		_repository = repository;
-		_databaseService = databaseService;
 	}
 
 	/// <summary>
@@ -35,7 +31,7 @@ internal sealed class ProfileService
 		var enabledJsonPath = Path.Combine(storageDir, "enabled.json");
 
 		// 检查是否需要从 JSON 迁移数据（HasData 内部会触发数据库初始化）
-		if (File.Exists(enabledJsonPath) && !_repository.HasData(storageDir))
+		if (File.Exists(enabledJsonPath) && !await _repository.HasDataAsync())
 		{
 			_logger.LogInformation("Detected legacy enabled.json file, starting migration to SQLite...");
 			try
@@ -54,7 +50,7 @@ internal sealed class ProfileService
 		List<EnabledData> enabledDataList;
 		try
 		{
-			enabledDataList = _repository.LoadAll(storageDir);
+			enabledDataList = await _repository.LoadAllAsync();
 		}
 		catch (Exception ex)
 		{
@@ -92,7 +88,7 @@ internal sealed class ProfileService
 		if (settingsService.AutoRemoveMissingMods && missingGuids.Count > 0)
 		{
 			_logger.LogInformation("Auto-removed {Count} missing mod records", missingGuids.Count);
-			await _repository.DeleteByGuidsAsync(storageDir, missingGuids);
+			await _repository.DeleteByGuidsAsync(missingGuids);
 		}
 
 		var remainder = modService.Mods.Count - enabledDataList.Count;
@@ -229,10 +225,10 @@ internal sealed class ProfileService
 		_logger.LogInformation("Read {Count} records from JSON file", enabledDataList.Count);
 
 		// 2. 写入 SQLite 数据库
-		await _repository.SaveAllAsync(storageDir, enabledDataList);
+		await _repository.SaveAllAsync(enabledDataList);
 
 		// 3. 验证数据完整性 —— 从数据库重新读取并比对数量
-		var dbCount = _repository.GetCount(storageDir);
+		var dbCount = await _repository.GetCountAsync();
 		if (dbCount != enabledDataList.Count)
 		{
 			throw new InvalidOperationException(
@@ -269,7 +265,21 @@ internal sealed class ProfileService
 		_logger.LogInformation("Saving profile snapshot {Sequence} to SQLite", snapshot.Sequence);
 		try
 		{
-			await _repository.SaveAllAsync(settingsService.StorageDirectory, dataList).ConfigureAwait(false);
+			await _repository.SaveAllAsync(dataList).ConfigureAwait(false);
+			_logger.LogInformation("Profile saved to SQLite ({Count} records)", dataList.Count);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "保存 Mod 配置到 SQLite 失败");
+			throw;
+		}
+	}
+
+	public async Task SaveSnapshotAsync(SettingsService settingsService, IReadOnlyList<EnabledData> dataList)
+	{
+		try
+		{
+			await _repository.SaveAllAsync(dataList).ConfigureAwait(false);
 			_logger.LogInformation("Profile saved to SQLite ({Count} records)", dataList.Count);
 		}
 		catch (Exception ex)
@@ -286,7 +296,7 @@ internal sealed class ProfileService
 	{
 		try
 		{
-			await _repository.DeleteByGuidsAsync(storageDirectory, [guid]);
+			await _repository.DeleteByGuidsAsync([guid]);
 			_logger.LogInformation("Deleted mod config {Guid} from database", guid);
 		}
 		catch (Exception ex)
@@ -303,7 +313,7 @@ internal sealed class ProfileService
 		try
 		{
 			var list = guids.ToList();
-			await _repository.DeleteByGuidsAsync(storageDirectory, list);
+			await _repository.DeleteByGuidsAsync(list);
 			_logger.LogInformation("Deleted {Count} mod configs from database", list.Count);
 		}
 		catch (Exception ex)

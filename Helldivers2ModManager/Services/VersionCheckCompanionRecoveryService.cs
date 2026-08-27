@@ -14,7 +14,34 @@ internal sealed partial class VersionCheckService
         DirectoryInfo modDirectory,
         CancellationToken cancellationToken = default)
     {
-        var items = new List<CompanionRecoveryItem>();
+		if (_coreCompanionRecoveryService is not null)
+		{
+			var corePlan = await _coreCompanionRecoveryService.CreatePlanAsync(
+				modDirectory,
+				new DirectoryInfo(_settingsService.GameDirectory),
+				cancellationToken).ConfigureAwait(false);
+			return new CompanionRecoveryPlan
+			{
+				Items = corePlan.Items.Select(static item => new CompanionRecoveryItem
+				{
+					PatchPath = item.PatchPath,
+					CompanionPath = item.CompanionPath,
+					Suffix = item.Kind == Core.GameData.GameCompanionKind.GpuResources ? ".gpu_resources" : ".stream",
+					IsRequired = true,
+					IsMissing = true,
+					CanRecover = item.CanRecover,
+					SourceKind = item.SourcePath is not null
+						? CompanionRecoverySourceKind.ExactPatchCopy
+						: item.Recipe is not null
+							? CompanionRecoverySourceKind.CurrentGameBundles
+							: CompanionRecoverySourceKind.None,
+					SourcePath = item.SourcePath,
+					Reason = item.Reason,
+				}).ToList(),
+			};
+		}
+
+		var items = new List<CompanionRecoveryItem>();
         if (!modDirectory.Exists)
             return new CompanionRecoveryPlan { Items = items };
 
@@ -50,7 +77,29 @@ internal sealed partial class VersionCheckService
         DirectoryInfo modDirectory,
         CancellationToken cancellationToken = default)
     {
-        await _repairSemaphore.WaitAsync(cancellationToken);
+		if (_coreCompanionRecoveryService is not null)
+		{
+			await _repairSemaphore.WaitAsync(cancellationToken);
+			try
+			{
+				var result = await _coreCompanionRecoveryService.RecoverAsync(
+					modDirectory,
+					new DirectoryInfo(_settingsService.GameDirectory),
+					cancellationToken).ConfigureAwait(false);
+				return new CompanionRecoveryResult
+				{
+					Success = result.Success,
+					RecoveredPaths = result.RecoveredPaths?.ToList() ?? [],
+					ErrorMessage = result.ErrorMessage,
+				};
+			}
+			finally
+			{
+				_repairSemaphore.Release();
+			}
+		}
+
+		await _repairSemaphore.WaitAsync(cancellationToken);
         try
         {
             return await RecoverCompanionFilesCoreAsync(modDirectory, cancellationToken);

@@ -28,6 +28,15 @@ internal sealed partial class VersionCheckService
         DirectoryInfo modDirectory,
         CancellationToken cancellationToken = default)
     {
+        if (_coreBackupService is not null)
+        {
+            var detailed = await _coreBackupService.GetDetailedHistoryAsync(modDirectory, cancellationToken).ConfigureAwait(false);
+            return new ModBackupHistory
+            {
+                Entries = detailed.Entries.Select(ToLegacyEntry).ToList()
+            };
+        }
+
         if (!modDirectory.Exists)
             return new ModBackupHistory();
 
@@ -54,6 +63,19 @@ internal sealed partial class VersionCheckService
         string backupPath,
         CancellationToken cancellationToken = default)
     {
+        if (_coreBackupService is not null)
+        {
+            await _repairSemaphore.WaitAsync(cancellationToken);
+            try
+            {
+                return await RestoreDetailedAsync(_coreBackupService.RestoreSelectedAsync(modDirectory, backupPath, cancellationToken)).ConfigureAwait(false);
+            }
+            finally
+            {
+                _repairSemaphore.Release();
+            }
+        }
+
         await _repairSemaphore.WaitAsync(cancellationToken);
         try
         {
@@ -91,6 +113,19 @@ internal sealed partial class VersionCheckService
         DateTime targetLocal,
         CancellationToken cancellationToken = default)
     {
+        if (_coreBackupService is not null)
+        {
+            await _repairSemaphore.WaitAsync(cancellationToken);
+            try
+            {
+                return await RestoreDetailedAsync(_coreBackupService.RollbackToAsync(modDirectory, targetLocal, cancellationToken)).ConfigureAwait(false);
+            }
+            finally
+            {
+                _repairSemaphore.Release();
+            }
+        }
+
         await _repairSemaphore.WaitAsync(cancellationToken);
         try
         {
@@ -249,6 +284,19 @@ internal sealed partial class VersionCheckService
         string backupPath,
         CancellationToken cancellationToken = default)
     {
+        if (_coreBackupService is not null)
+        {
+            await _repairSemaphore.WaitAsync(cancellationToken);
+            try
+            {
+                return await RestoreDetailedAsync(_coreBackupService.DeleteValidatedAsync(modDirectory, backupPath, cancellationToken)).ConfigureAwait(false);
+            }
+            finally
+            {
+                _repairSemaphore.Release();
+            }
+        }
+
         await _repairSemaphore.WaitAsync(cancellationToken);
         try
         {
@@ -290,6 +338,19 @@ internal sealed partial class VersionCheckService
         int keepPerPatch = 3,
         CancellationToken cancellationToken = default)
     {
+        if (_coreBackupService is not null)
+        {
+            await _repairSemaphore.WaitAsync(cancellationToken);
+            try
+            {
+                return await RestoreDetailedAsync(_coreBackupService.CleanValidatedOldAsync(modDirectory, keepPerPatch, cancellationToken)).ConfigureAwait(false);
+            }
+            finally
+            {
+                _repairSemaphore.Release();
+            }
+        }
+
         keepPerPatch = Math.Max(1, keepPerPatch);
         await _repairSemaphore.WaitAsync(cancellationToken);
         try
@@ -328,6 +389,66 @@ internal sealed partial class VersionCheckService
         {
             _repairSemaphore.Release();
         }
+    }
+
+    private static ModBackupHistory ToLegacyHistory(Core.Repair.DetailedBackupHistory history)
+    {
+        return new ModBackupHistory
+        {
+            Entries = history.Entries.Select(ToLegacyEntry).ToList()
+        };
+    }
+
+    private static ModBackupEntry ToLegacyEntry(Core.Repair.ValidatedBackupEntry entry)
+    {
+        return new ModBackupEntry
+        {
+            BackupPath = entry.BackupPath,
+            OriginalPath = entry.OriginalPath,
+            CreatedLocal = entry.CreatedLocal,
+            BackupSize = entry.BackupSize,
+            BackupSha256 = entry.BackupSha256,
+            CurrentSha256 = entry.CurrentSha256,
+            RepairKind = ToLegacyKind(entry.RepairKind),
+            ActionCount = entry.ActionCount,
+            HasMetadata = entry.HasMetadata,
+            MetadataMatchesFile = entry.MetadataMatchesFile,
+            CurrentExists = entry.CurrentExists,
+            CurrentMatchesBackup = entry.CurrentMatchesBackup,
+            CanRestore = entry.CanRestore,
+            HealthStatus = (PatchHealthStatus)entry.HealthStatus,
+            ValidationMessage = entry.ValidationMessage
+        };
+    }
+
+    private static ModBackupRepairKind ToLegacyKind(Core.Repair.ModBackupRepairKind kind)
+    {
+        return kind switch
+        {
+            Core.Repair.ModBackupRepairKind.SafeMetadata => ModBackupRepairKind.SafeMetadata,
+            Core.Repair.ModBackupRepairKind.PreRestore => ModBackupRepairKind.PreRestore,
+            Core.Repair.ModBackupRepairKind.PreserveModLod => ModBackupRepairKind.PreserveModLod,
+            Core.Repair.ModBackupRepairKind.UseGameLod => ModBackupRepairKind.UseGameLod,
+            Core.Repair.ModBackupRepairKind.MixedLod => ModBackupRepairKind.MixedLod,
+            Core.Repair.ModBackupRepairKind.AutomaticLod => ModBackupRepairKind.AutomaticLod,
+            _ => ModBackupRepairKind.Unknown
+        };
+    }
+
+    private static async Task<ModBackupOperationResult> RestoreDetailedAsync(Task<Core.Repair.DetailedBackupOperationResult> coreTask)
+    {
+        var result = await coreTask.ConfigureAwait(false);
+        return new ModBackupOperationResult
+        {
+            Success = result.Success,
+            ErrorMessage = result.ErrorMessage,
+            RestoredPath = result.RestoredPath,
+            RollbackBackupPath = result.RollbackBackupPath,
+            DeletedCount = result.DeletedCount,
+            RestoredCount = result.RestoredCount,
+            SkippedCount = result.SkippedCount,
+            FailedItems = result.FailedItems?.ToList() ?? []
+        };
     }
 
     private async Task<ModBackupEntry> ReadBackupEntryAsync(

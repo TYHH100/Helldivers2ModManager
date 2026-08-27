@@ -13,7 +13,6 @@ using System.Windows.Media;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class MainViewModel : ObservableObject, IDisposable, IRecipient<ReplayFirstRunTutorialMessage>
 {
 	public string Title => $"{_localizationService["Common.AppName"]} {Version} - {CurrentViewModel.Title}";

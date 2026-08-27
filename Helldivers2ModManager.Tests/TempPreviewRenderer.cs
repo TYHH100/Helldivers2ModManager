@@ -9,6 +9,11 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
 using System.Windows.Threading;
+using ModelPreviewCharacterOrientation = Helldivers2ModManager.Core.Preview.ModelPreviewCharacterOrientation;
+using ModelPreviewMesh = Helldivers2ModManager.Core.Preview.ModelPreviewMesh;
+using ModelPreviewMeshRenderStatus = Helldivers2ModManager.Core.Preview.ModelPreviewMeshRenderStatus;
+using ModelPreviewMeshSelector = Helldivers2ModManager.Core.Preview.ModelPreviewMeshSelector;
+using ModelPreviewPresentationRotation = Helldivers2ModManager.Core.Preview.ModelPreviewPresentationRotation;
 
 namespace Helldivers2ModManager.Tests;
 
@@ -36,7 +41,7 @@ public sealed class TempPreviewRenderer
                 .Where(f => !f.Name.Contains(".gpu_resources") && !f.Name.Contains(".stream"))
                 .OrderBy(f => f.FullName)
                 .ToArray();
-            var result = await new PatchResourceInspectionService().PreviewModelAsync(dir, patches);
+            var result = await new global::Helldivers2ModManager.Core.Preview.PatchResourceInspector().PreviewModelAsync(dir, patches);
             var visible = ModelPreviewMeshSelector.Select(result.Meshes).VisibleMeshes
                 .Where(m => m.RenderStatus == ModelPreviewMeshRenderStatus.Visible)
                 .ToArray();

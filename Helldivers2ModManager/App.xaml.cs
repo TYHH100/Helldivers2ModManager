@@ -1,7 +1,7 @@
 // Ignore Spelling: App
 
 using System.IO;
-using System.Reflection;
+using Helldivers2ModManager.Adapters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -199,57 +199,64 @@ internal partial class App : Application
 
 	private static void AddServices(IServiceCollection services)
 	{
-		var tuples = Assembly.GetExecutingAssembly()
-			.GetTypes()
-			.Select(static type => (type, type.GetCustomAttribute<RegisterServiceAttribute>()))
-			.Where(static tuple => tuple.Item2 is not null)
-			.Cast<ValueTuple<Type, RegisterServiceAttribute>>()
-			.ToArray();
-
-		foreach (var (type, attr) in tuples)
+		AddApplicationServices(services);
+		services.AddCoreBackend();
+		services.AddSingleton<LegacyProfileSaveAdapter>();
+		services.AddSingleton<global::Helldivers2ModManager.Core.Profiles.ProfileSaveCoordinator>(static provider =>
 		{
-			switch (attr.Lifetime)
-			{
-				case ServiceLifetime.Singleton:
-					if (attr.Contract is null)
-					{
-						services.AddSingleton(type);
-					}
-					else
-					{
-						// 同时注册接口和具体类型（复用同一单例）
-						services.AddSingleton(type);
-						services.AddSingleton(attr.Contract, sp => sp.GetRequiredService(type));
-					}
-					break;
-				
-				case ServiceLifetime.Scoped:
-					if (attr.Contract is null)
-					{
-						services.AddScoped(type);
-					}
-					else
-					{
-						// 同时注册接口和具体类型
-						services.AddScoped(type);
-						services.AddScoped(attr.Contract, sp => sp.GetRequiredService(type));
-					}
-					break;
-				
-				case ServiceLifetime.Transient:
-					if (attr.Contract is null)
-					{
-						services.AddTransient(type);
-					}
-					else
-					{
-						// 同时注册接口和具体类型
-						services.AddTransient(type);
-						services.AddTransient(attr.Contract, sp => sp.GetRequiredService(type));
-					}
-					break;
-			}
-		}
+			var adapter = provider.GetRequiredService<LegacyProfileSaveAdapter>();
+			return new global::Helldivers2ModManager.Core.Profiles.ProfileSaveCoordinator(
+				adapter.SaveAsync,
+				provider.GetRequiredService<ILogger<global::Helldivers2ModManager.Core.Profiles.ProfileSaveCoordinator>>());
+		});
+		services.AddSingleton<Services.Nexus.INexusModsService>(static _ => new NexusModsServiceAdapter());
+	}
+
+	private static void AddApplicationServices(IServiceCollection services)
+	{
+		services.AddSingleton<Stores.EditModStore>();
+
+		services.AddSingleton<Services.ArmorReuseService>();
+		services.AddSingleton<Services.BackgroundTaskService>();
+		services.AddSingleton<Services.BisectService>();
+		services.AddSingleton<Services.EnabledDataRepository>();
+		services.AddSingleton<Services.GpuSkinningService>();
+		services.AddSingleton<Services.LocalizationService>();
+		services.AddSingleton<Services.ModConflictRepository>();
+		services.AddSingleton<Services.ModConflictService>();
+		services.AddSingleton<Services.ModelPreviewBackend>();
+		services.AddSingleton<Services.ModGroupRepository>();
+		services.AddSingleton<Services.ModGroupService>();
+		services.AddSingleton<Services.ModHashService>();
+		services.AddSingleton<Services.ModService>();
+		services.AddSingleton<Services.PatchResourceInspectionService>();
+		services.AddSingleton<Services.ProfileSaveCoordinator>();
+		services.AddSingleton<Services.ProfileService>();
+		services.AddSingleton<Services.RepairDisclaimerService>();
+		services.AddSingleton<Services.SettingsService>();
+		services.AddSingleton<Services.VersionCheckRepository>();
+		services.AddSingleton<Services.VersionCheckService>();
+
+		services.AddTransient<ViewModels.ArmorReusePageViewModel>();
+		services.AddTransient<ViewModels.AutoTagPairingPageViewModel>();
+		services.AddTransient<ViewModels.BackgroundTasksPageViewModel>();
+		services.AddTransient<ViewModels.BackendTestCenterPageViewModel>();
+		services.AddTransient<ViewModels.BisectPageViewModel>();
+		services.AddTransient<ViewModels.CreatePageViewModel>();
+		services.AddTransient<ViewModels.DashboardPageViewModel>();
+		services.AddTransient<ViewModels.DeploymentOrderPageViewModel>();
+		services.AddTransient<ViewModels.EditPageViewModel>();
+		services.AddTransient<ViewModels.HelpPageViewModel>();
+		services.AddTransient<ViewModels.MainViewModel>();
+		services.AddTransient<ViewModels.ManifestEditPageViewModel>();
+		services.AddTransient<ViewModels.ModelPreviewPageViewModel>();
+		services.AddTransient<ViewModels.ModGroupSidebarViewModel>();
+		services.AddTransient<ViewModels.NexusDownloadPageViewModel>();
+		services.AddTransient<ViewModels.PatchResourceViewerPageViewModel>();
+		services.AddTransient<Services.SearchFilterService>();
+		services.AddTransient<ViewModels.SettingsPageViewModel>();
+		services.AddTransient<ViewModels.TagManagementPageViewModel>();
+		services.AddTransient<ViewModels.VersionCheckViewModel>();
 	}
 	
 	private void LogUnhandledException(Exception? ex)

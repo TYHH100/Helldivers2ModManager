@@ -10,7 +10,6 @@ using System.Windows;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class ArmorReusePageViewModel : PageViewModelBase
 {
     private readonly ILogger<ArmorReusePageViewModel> _logger;

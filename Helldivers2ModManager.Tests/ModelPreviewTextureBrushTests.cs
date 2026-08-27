@@ -5,6 +5,8 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
+using ModelPreviewMesh = Helldivers2ModManager.Core.Preview.ModelPreviewMesh;
+using TexturePreviewData = Helldivers2ModManager.Core.Preview.TexturePreviewData;
 
 namespace Helldivers2ModManager.Tests;
 

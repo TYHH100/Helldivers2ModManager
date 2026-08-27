@@ -1,6 +1,10 @@
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.ViewModels;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ModelPreviewCharacterOrientation = Helldivers2ModManager.Core.Preview.ModelPreviewCharacterOrientation;
+using ModelPreviewCustomizationSlot = Helldivers2ModManager.Core.Preview.ModelPreviewCustomizationSlot;
+using ModelPreviewMesh = Helldivers2ModManager.Core.Preview.ModelPreviewMesh;
+using ModelPreviewPresentationRotation = Helldivers2ModManager.Core.Preview.ModelPreviewPresentationRotation;
 using System.Windows.Media.Media3D;
 
 namespace Helldivers2ModManager.Tests;

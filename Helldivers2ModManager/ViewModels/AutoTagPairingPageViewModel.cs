@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Components;
+using CoreMods = Helldivers2ModManager.Core.Mods;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Stores;
@@ -15,7 +16,6 @@ namespace Helldivers2ModManager.ViewModels;
 /// 自动识别标签配对页：把每种自动识别类型手动配对一个已有标签，
 /// 也可以直接创建新标签。配对结果在自动打标签时优先使用。
 /// </summary>
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class AutoTagPairingPageViewModel : PageViewModelBase
 {
     public override string Title => _localizationService["AutoTagPairingPage.Title"];
@@ -51,7 +51,7 @@ internal sealed partial class AutoTagPairingPageViewModel : PageViewModelBase
     private void BuildItems()
     {
         Items.Clear();
-        foreach (var def in ModTypeDetectionService.BuiltInTagDefinitions)
+        foreach (var def in CoreMods.ModTypeDetectionService.BuiltInTags)
         {
             var item = new AutoTagPairingItem(def, _settingsService, _localizationService);
             item.CreateNewRequested += OnCreateNewRequested;
@@ -147,7 +147,7 @@ internal sealed class AutoTagPairingItem : ObservableObject
 
     public string TypeName => _localizationService[_definition.NameKey];
 
-    private readonly ModTypeDetectionService.BuiltInTagDefinition _definition;
+    private readonly CoreMods.BuiltInTagDefinition _definition;
 
     public AutoTagOption? Selected
     {
@@ -171,12 +171,12 @@ internal sealed class AutoTagPairingItem : ObservableObject
     public Guid? SelectedTagId => Selected is { TagId: { } id } ? id : null;
 
     public AutoTagPairingItem(
-        ModTypeDetectionService.BuiltInTagDefinition definition,
+        CoreMods.BuiltInTagDefinition definition,
         SettingsService settings,
         LocalizationService localizationService)
     {
         _definition = definition;
-        Type = definition.Type;
+        Type = (ModType)definition.Type;
         _settings = settings;
         _localizationService = localizationService;
 

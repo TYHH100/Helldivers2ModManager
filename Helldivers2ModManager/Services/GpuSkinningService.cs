@@ -2,6 +2,8 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Helldivers2ModManager.Models;
 using Microsoft.Extensions.DependencyInjection;
+using ModelPreviewMesh = Helldivers2ModManager.Core.Preview.ModelPreviewMesh;
+using ModelPreviewSkinningData = Helldivers2ModManager.Core.Preview.ModelPreviewSkinningData;
 using Microsoft.Extensions.Logging;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -15,7 +17,6 @@ namespace Helldivers2ModManager.Services;
 /// WPF still owns the final MeshGeometry3D upload for now; the expensive skinning loop
 /// itself no longer runs once per vertex on the CPU.
 /// </summary>
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class GpuSkinningService : IDisposable
 {
     private const int ThreadsPerGroup = 64;

@@ -4,10 +4,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class BackgroundTaskService
 {
+	private readonly Core.Common.IBackgroundTaskRunner _runner;
+
 	public ObservableCollection<BackgroundTaskItem> Tasks { get; } = [];
+
+	public BackgroundTaskService(Core.Common.IBackgroundTaskRunner runner)
+	{
+		_runner = runner;
+	}
 
 	/// <summary>
 	/// 添加一个任务条目。
@@ -222,21 +228,29 @@ internal sealed class BackgroundTaskService
 		var task = Add(name, description, isForeground);
 		taskCreated?.Invoke(task);
 		var context = new BackgroundTaskContext(this, task);
-		try
-		{
-			await Task.Run(() => work(context, cancellationToken), cancellationToken);
-			QueueOnUiThread(() => Complete(task, completedDescription));
-		}
-		catch (OperationCanceledException)
-		{
-			QueueOnUiThread(() => Cancel(task));
-			throw;
-		}
-		catch (Exception ex)
-		{
-			QueueOnUiThread(() => Fail(task, ex.Message));
-			throw;
-		}
+		Exception? workException = null;
+		var result = await _runner.RunAsync(
+			name,
+			description,
+			async (_, cancellationToken) =>
+			{
+				try
+				{
+					await work(context, cancellationToken);
+				}
+				catch (OperationCanceledException)
+				{
+					throw;
+				}
+				catch (Exception ex)
+				{
+					workException = ex;
+					throw;
+				}
+			},
+			cancellationToken: cancellationToken);
+
+		await FinishAsync(task, result, completedDescription, workException);
 	}
 
 	/// <summary>
@@ -267,21 +281,54 @@ internal sealed class BackgroundTaskService
 		var task = Add(name, description, isForeground);
 		taskCreated?.Invoke(task);
 		var context = new BackgroundTaskContext(this, task);
-		try
+		T? workResult = default;
+		Exception? workException = null;
+		var taskResult = await _runner.RunAsync(
+			name,
+			description,
+			async (_, cancellationToken) =>
+			{
+				try
+				{
+					workResult = await work(context, cancellationToken);
+				}
+				catch (OperationCanceledException)
+				{
+					throw;
+				}
+				catch (Exception ex)
+				{
+					workException = ex;
+					throw;
+				}
+			},
+			cancellationToken: cancellationToken);
+
+		await FinishAsync(task, taskResult, completedDescription, workException);
+		return workResult!;
+	}
+
+	private async Task FinishAsync(
+		BackgroundTaskItem task,
+		Core.Common.BackgroundTaskResult result,
+		string? completedDescription,
+		Exception? workException)
+	{
+		switch (result.Status)
 		{
-			var result = await Task.Run(() => work(context, cancellationToken), cancellationToken);
-			QueueOnUiThread(() => Complete(task, completedDescription));
-			return result;
-		}
-		catch (OperationCanceledException)
-		{
-			QueueOnUiThread(() => Cancel(task));
-			throw;
-		}
-		catch (Exception ex)
-		{
-			QueueOnUiThread(() => Fail(task, ex.Message));
-			throw;
+			case Core.Common.BackgroundTaskStatus.Succeeded:
+				QueueOnUiThread(() => Complete(task, completedDescription));
+				break;
+			case Core.Common.BackgroundTaskStatus.Canceled:
+				QueueOnUiThread(() => Cancel(task));
+				throw new OperationCanceledException();
+			case Core.Common.BackgroundTaskStatus.Failed:
+				var message = result.Error?.Message ?? workException?.Message ?? "Background task failed.";
+				QueueOnUiThread(() => Fail(task, message));
+				if (workException is not null)
+					throw workException;
+
+				throw new InvalidOperationException(result.Error?.Message ?? "Background task failed.");
 		}
 	}
 

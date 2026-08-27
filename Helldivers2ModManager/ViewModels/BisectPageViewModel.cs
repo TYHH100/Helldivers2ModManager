@@ -13,7 +13,6 @@ using System.Windows;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class BisectPageViewModel : PageViewModelBase
 {
 	private readonly ILogger<BisectPageViewModel> _logger;

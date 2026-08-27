@@ -1,3 +1,4 @@
+using Helldivers2ModManager.Stores;
 using Helldivers2ModManager.ViewModels;
 using System.Collections.Generic;
 using System.IO;
@@ -5,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +27,7 @@ internal partial class MainWindow : Window
 	/// 拖拽离开后的延迟复查计时器：鼠标在窗口内子元素间移动也会触发 DragLeave，
 	/// 延迟 300ms 后检查是否还有持续的 DragOver，避免误隐藏提示。
 	/// </summary>
+	private readonly Stores.NavigationStore _navigationStore;
 	private readonly DispatcherTimer _dropHintTimer;
 	private DateTime _lastFileDragOverTime = DateTime.MinValue;
 
@@ -34,10 +37,11 @@ internal partial class MainWindow : Window
 	private StackPanel? _dropHintValidPanel;
 	private StackPanel? _dropHintInvalidPanel;
 
-	public MainWindow(MainViewModel viewModel)
+	public MainWindow(MainViewModel viewModel, Stores.NavigationStore navigationStore)
 	{
 		InitializeComponent();
 
+		_navigationStore = navigationStore;
 		DataContext = viewModel;
 
 		_dropHintTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
@@ -53,10 +57,26 @@ internal partial class MainWindow : Window
 		_dropHintInvalidPanel = Template.FindName("dropHintInvalidPanel", this) as StackPanel;
 	}
 
+	protected override void OnPreviewKeyDown(KeyEventArgs e)
+	{
+		if (e.Key == Key.F12)
+		{
+			_navigationStore.Navigate<BackendTestCenterPageViewModel>();
+			e.Handled = true;
+		}
+
+		base.OnPreviewKeyDown(e);
+	}
+
 	protected override void OnActivated(EventArgs e)
 	{
 		DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 33, 1, sizeof(int));
 		base.OnActivated(e);
+	}
+
+	private void TestCenterButton_Click(object sender, RoutedEventArgs e)
+	{
+		_navigationStore.Navigate<BackendTestCenterPageViewModel>();
 	}
 
 	private void HelpButton_Click(object sender, RoutedEventArgs e)

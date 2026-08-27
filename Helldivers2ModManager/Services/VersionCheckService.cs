@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Helldivers2ModManager.Adapters;
 
 namespace Helldivers2ModManager.Services;
 
@@ -17,7 +18,6 @@ namespace Helldivers2ModManager.Services;
 /// 参考版本优先从当前游戏归档（bundles*.nxa）读取，游戏数据不可用时回退到多数版本基准。
 /// v1.5.0 新增深度分析：文件结构完整性校验、Unit 内部结构分析、伴生文件检查。
 /// </summary>
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed partial class VersionCheckService
 {
     /// <summary>
@@ -72,6 +72,13 @@ internal sealed partial class VersionCheckService
     private readonly ILogger<VersionCheckService> _logger;
     private readonly SettingsService _settingsService;
     private readonly LocalizationService _localizationService;
+    private readonly Core.Versioning.PatchStructureAnalyzer _coreAnalyzer;
+    private readonly Core.Versioning.VersionCheckService _coreVersionCheckService;
+    private readonly Core.Repair.MetadataRepairService? _coreMetadataRepairService;
+    private readonly Core.Repair.CompanionRecoveryService? _coreCompanionRecoveryService;
+    private readonly Core.Repair.AssistedRepairService? _coreAssistedRepairService;
+    private readonly Core.Repair.BackupService? _coreBackupService;
+    private readonly Core.Repair.BatchRepairService? _coreBatchRepairService;
     private readonly ConcurrentDictionary<string, PatchUnitCacheEntry> _patchUnitCache =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -100,10 +107,43 @@ internal sealed partial class VersionCheckService
     }
 
     public VersionCheckService(ILogger<VersionCheckService> logger, SettingsService settingsService, LocalizationService localizationService)
+        : this(logger, settingsService, localizationService, new Core.Versioning.PatchStructureAnalyzer(), null)
+    {
+    }
+
+    public VersionCheckService(
+        ILogger<VersionCheckService> logger,
+        SettingsService settingsService,
+        LocalizationService localizationService,
+        Core.Versioning.PatchStructureAnalyzer coreAnalyzer,
+        Core.Versioning.VersionCheckService? coreVersionCheckService,
+        Core.Repair.MetadataRepairService? coreMetadataRepairService = null)
+        : this(logger, settingsService, localizationService, coreAnalyzer, coreVersionCheckService, coreMetadataRepairService, null, null, null, null)
+    {
+    }
+
+    public VersionCheckService(
+        ILogger<VersionCheckService> logger,
+        SettingsService settingsService,
+        LocalizationService localizationService,
+        Core.Versioning.PatchStructureAnalyzer coreAnalyzer,
+        Core.Versioning.VersionCheckService? coreVersionCheckService,
+        Core.Repair.MetadataRepairService? coreMetadataRepairService,
+        Core.Repair.CompanionRecoveryService? coreCompanionRecoveryService,
+        Core.Repair.AssistedRepairService? coreAssistedRepairService,
+        Core.Repair.BackupService? coreBackupService,
+        Core.Repair.BatchRepairService? coreBatchRepairService = null)
     {
         _logger = logger;
         _settingsService = settingsService;
         _localizationService = localizationService;
+        _coreAnalyzer = coreAnalyzer;
+        _coreVersionCheckService = coreVersionCheckService ?? new Core.Versioning.VersionCheckService(coreAnalyzer);
+        _coreMetadataRepairService = coreMetadataRepairService;
+        _coreCompanionRecoveryService = coreCompanionRecoveryService;
+        _coreAssistedRepairService = coreAssistedRepairService;
+        _coreBackupService = coreBackupService;
+        _coreBatchRepairService = coreBatchRepairService;
     }
 
     /// <summary>
@@ -116,9 +156,28 @@ internal sealed partial class VersionCheckService
     /// </summary>
     /// <param name="mods">模组数据列表</param>
     /// <returns>模组 GUID 到检测结果的映射字典</returns>
-    public async Task<Dictionary<Guid, ModVersionCheckResult>> CheckAllModsAsync(IEnumerable<ModData> mods)
-    {
-        var results = new ConcurrentDictionary<Guid, ModVersionCheckResult>();
+	public async Task<Dictionary<Guid, ModVersionCheckResult>> CheckAllModsAsync(IEnumerable<ModData> mods)
+	{
+		var modList = mods.ToList();
+		if (modList.Count == 0)
+			return [];
+
+		_logger.LogInformation("开始扫描 {Count} 个模组的补丁结构和 Unit 版本...", modList.Count);
+		var coreResults = await _coreVersionCheckService.CheckAllModsAsync(
+			modList.Select(static mod => new Core.Versioning.DiscoveredModInput(
+				mod.Manifest.Guid,
+				mod.Manifest.Name,
+				mod.Directory))).ConfigureAwait(false);
+
+		_logger.LogInformation("版本和结构检查完成: {Total} 个模组", coreResults.Count);
+		return coreResults.ToDictionary(
+			static pair => pair.Key,
+			pair => CoreVersionCheckMapper.ToLegacy(pair.Value, _localizationService, includeDetailedAnalysis: false));
+	}
+
+	private async Task<Dictionary<Guid, ModVersionCheckResult>> CheckAllModsLegacyAsync(IEnumerable<ModData> mods)
+	{
+		var results = new ConcurrentDictionary<Guid, ModVersionCheckResult>();
         var modList = mods.ToList();
         if (modList.Count == 0)
             return [];
@@ -219,9 +278,23 @@ internal sealed partial class VersionCheckService
     /// 对单个新增或变动模组执行版本与结构检测。
     /// 参考版本优先从当前游戏归档解析；游戏数据不可用时回退到缓存/多数版本。
     /// </summary>
-    public async Task<ModVersionCheckResult?> CheckSingleModAsync(ModData mod, uint? fallbackVersion = null, bool includeDetailedAnalysis = false)
-    {
-        var referenceVersion = s_cachedReferenceVersion ?? fallbackVersion;
+	public async Task<ModVersionCheckResult?> CheckSingleModAsync(ModData mod, uint? fallbackVersion = null, bool includeDetailedAnalysis = false)
+	{
+		var coreResult = await _coreVersionCheckService.CheckSingleModAsync(
+			new Core.Versioning.DiscoveredModInput(mod.Manifest.Guid, mod.Manifest.Name, mod.Directory),
+			fallbackVersion,
+			includeDetailedAnalysis).ConfigureAwait(false);
+		return coreResult is null
+			? null
+			: CoreVersionCheckMapper.ToLegacy(coreResult, _localizationService, includeDetailedAnalysis);
+	}
+
+	private async Task<ModVersionCheckResult?> CheckSingleModLegacyAsync(
+		ModData mod,
+		uint? fallbackVersion = null,
+		bool includeDetailedAnalysis = false)
+	{
+		var referenceVersion = s_cachedReferenceVersion ?? fallbackVersion;
         var analysis = await AnalyzeModPatchFilesAsync(mod.Directory);
         var infos = analysis.PatchFiles
             .SelectMany(p => p.UnitDetails)
@@ -317,9 +390,21 @@ internal sealed partial class VersionCheckService
     /// 从单个补丁文件中提取所有 Unit 版本信息
     /// 参考 hd2-repatcher update_patch_file() 实现
     /// </summary>
-    public async Task<List<PatchUnitInfo>> ExtractUnitVersionsFromPatchFileAsync(FileInfo patchFile)
-    {
-        patchFile.Refresh();
+	public async Task<List<PatchUnitInfo>> ExtractUnitVersionsFromPatchFileAsync(FileInfo patchFile)
+	{
+		patchFile.Refresh();
+		if (!patchFile.Exists)
+			return [];
+
+		var analysis = await _coreAnalyzer.AnalyzeFileAsync(patchFile).ConfigureAwait(false);
+		return analysis.UnitDetails
+			.Select(unit => CoreVersionCheckMapper.ToLegacy(unit))
+			.ToList();
+	}
+
+	private async Task<List<PatchUnitInfo>> ExtractUnitVersionsFromPatchFileLegacyAsync(FileInfo patchFile)
+	{
+		patchFile.Refresh();
         if (!patchFile.Exists || patchFile.Length < HeaderSize)
             return [];
 

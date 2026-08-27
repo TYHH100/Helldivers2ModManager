@@ -1,0 +1,59 @@
+<UserControl x:Class="Helldivers2ModManager.Frontend.Views.NexusDownloadPageView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Themes/FrontendTokens.xaml"/>
+                <ResourceDictionary Source="../Themes/FrontendControls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
+                BorderThickness="1" CornerRadius="10" Padding="20" Margin="0,0,0,16">
+            <StackPanel>
+                <TextBlock Text="Nexus 链接" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Style="{StaticResource SearchBox}" Text="{Binding NexusUrl, UpdateSourceTrigger=PropertyChanged}"/>
+                    <Button Style="{StaticResource FButton}" Grid.Column="1" Margin="8,0,0,0"
+                            Command="{Binding FetchCommand}" Content="获取模组"/>
+                </Grid>
+                <TextBlock Text="{Binding Status}" Margin="0,12,0,0"
+                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
+                BorderThickness="1" CornerRadius="10" Padding="20" VerticalAlignment="Top">
+            <StackPanel>
+                <TextBlock Text="{Binding SelectedMod.Name}" FontSize="17" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding SelectedMod.Summary}" Margin="0,6,0,0"
+                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                <TextBlock Text="文件" Margin="0,18,0,6" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <ComboBox Style="{StaticResource FComboBox}" ItemsSource="{Binding Files}"
+                          SelectedItem="{Binding SelectedFile}" DisplayMemberPath="Name" MinWidth="360"
+                          HorizontalAlignment="Left"/>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="2" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
+                BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,16,0,0">
+            <StackPanel Orientation="Horizontal">
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding DownloadCommand}" Content="下载并导入"/>
+                <Button Style="{StaticResource FButton}" Margin="10,0,0,0" Command="{Binding BackCommand}" Content="返回模组库"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

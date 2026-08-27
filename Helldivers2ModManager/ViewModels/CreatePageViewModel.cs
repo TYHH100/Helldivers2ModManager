@@ -19,7 +19,6 @@ namespace Helldivers2ModManager.ViewModels;
 /// 模组创建页面的视图模型，提供表单式的模组创建功能。
 /// 用户可以输入模组名称、描述、图标，选择源目录，添加选项和子选项，然后创建模组。
 /// </summary>
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class CreatePageViewModel : PageViewModelBase
 {
 	public override string Title => _localizationService["CreatePage.Title"];

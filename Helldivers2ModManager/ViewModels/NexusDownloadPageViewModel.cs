@@ -16,7 +16,6 @@ using System.Text.RegularExpressions;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
 {
     public override string Title => _localizationService["NexusDownloadPage.Title"];

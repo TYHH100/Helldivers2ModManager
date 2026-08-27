@@ -17,9 +17,42 @@ using System.Windows.Media.Media3D;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
+using Helldivers2ModManager.Core.Preview;
+using MaterialTextureReader = Helldivers2ModManager.Core.Preview.MaterialTextureReader;
+using ModelPreviewAnimationBinding = Helldivers2ModManager.Core.Preview.ModelPreviewAnimationBinding;
+using ModelPreviewAnimationChannel = Helldivers2ModManager.Core.Preview.ModelPreviewAnimationChannel;
+using ModelPreviewAnimationClip = Helldivers2ModManager.Core.Preview.ModelPreviewAnimationClip;
+using ModelPreviewAnimationCompatibility = Helldivers2ModManager.Core.Preview.ModelPreviewAnimationCompatibility;
+using ModelPreviewAnimationKeyframe = Helldivers2ModManager.Core.Preview.ModelPreviewAnimationKeyframe;
+using ModelPreviewAnimationLibrary = Helldivers2ModManager.Core.Preview.ModelPreviewAnimationLibrary;
+using ModelPreviewAnimationOption = Helldivers2ModManager.Core.Preview.ModelPreviewAnimationOption;
+using ModelPreviewArmorOption = Helldivers2ModManager.Core.Preview.ModelPreviewArmorOption;
+using ModelPreviewBodyShapeSelection = Helldivers2ModManager.Core.Preview.ModelPreviewBodyShapeSelection;
+using ModelPreviewBonePose = Helldivers2ModManager.Core.Preview.ModelPreviewBonePose;
+using ModelPreviewCharacterOrientation = Helldivers2ModManager.Core.Preview.ModelPreviewCharacterOrientation;
+using ModelPreviewCpuSkinner = Helldivers2ModManager.Core.Preview.ModelPreviewCpuSkinner;
+using ModelPreviewMaterialSection = Helldivers2ModManager.Core.Preview.ModelPreviewMaterialSection;
+using ModelPreviewMesh = Helldivers2ModManager.Core.Preview.ModelPreviewMesh;
+using ModelPreviewMeshRenderStatus = Helldivers2ModManager.Core.Preview.ModelPreviewMeshRenderStatus;
+using ModelPreviewMeshSelector = Helldivers2ModManager.Core.Preview.ModelPreviewMeshSelector;
+using ModelPreviewPresentationRotation = Helldivers2ModManager.Core.Preview.ModelPreviewPresentationRotation;
+using ModelPreviewResult = Helldivers2ModManager.Core.Preview.ModelPreviewResult;
+using ModelPreviewSelection = Helldivers2ModManager.Core.Preview.ModelPreviewSelection;
+using ModelPreviewSkeleton = Helldivers2ModManager.Core.Preview.ModelPreviewSkeleton;
+using ModelPreviewSkeletonBone = Helldivers2ModManager.Core.Preview.ModelPreviewSkeletonBone;
+using ModelPreviewSkinningData = Helldivers2ModManager.Core.Preview.ModelPreviewSkinningData;
+using ModelPreviewSkinnedGeometry = Helldivers2ModManager.Core.Preview.ModelPreviewSkinnedGeometry;
+using ModelPreviewTextureAnalysis = Helldivers2ModManager.Core.Preview.ModelPreviewTextureAnalysis;
+using ModelPreviewTextureIndex = Helldivers2ModManager.Core.Preview.ModelPreviewTextureIndex;
+using ModelPreviewTextureRequestState = Helldivers2ModManager.Core.Preview.ModelPreviewTextureRequestState;
+using ModelPreviewTextureResolutionState = Helldivers2ModManager.Core.Preview.ModelPreviewTextureResolutionState;
+using ModelPreviewTextureRole = Helldivers2ModManager.Core.Preview.ModelPreviewTextureRole;
+using TextureInspectionItem = Helldivers2ModManager.Core.Preview.TextureInspectionItem;
+using TexturePreviewData = Helldivers2ModManager.Core.Preview.TexturePreviewData;
+using TexturePreviewRole = Helldivers2ModManager.Core.Preview.TexturePreviewRole;
+
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
 {
     private const int ModelPreviewMaxTexturePixels = 1_048_576; // 1024 x 1024 is sufficient for the viewport.
@@ -40,7 +73,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     private readonly ILogger<ModelPreviewPageViewModel> _logger;
     private readonly Lazy<NavigationStore> _navigationStore;
     private readonly ModService _modService;
-    private readonly PatchResourceInspectionService _inspectionService;
+    private readonly PatchResourceInspector _inspectionService;
     private readonly ModelPreviewBackend _previewBackend;
     private readonly GpuSkinningService _gpuSkinningService;
     private readonly LocalizationService _localizationService;
@@ -192,7 +225,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         ILogger<ModelPreviewPageViewModel> logger,
         IServiceProvider provider,
         ModService modService,
-        PatchResourceInspectionService inspectionService,
+        PatchResourceInspector inspectionService,
         ModelPreviewBackend previewBackend,
         GpuSkinningService gpuSkinningService,
         LocalizationService localizationService)

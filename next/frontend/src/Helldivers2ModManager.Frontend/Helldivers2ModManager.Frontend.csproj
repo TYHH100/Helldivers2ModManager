@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Helldivers2ModManager.Core\Helldivers2ModManager.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Helldivers2ModManager.Frontend.Host" />
+    <InternalsVisibleTo Include="Helldivers2ModManager.Frontend.Tests" />
+  </ItemGroup>
+
+</Project>

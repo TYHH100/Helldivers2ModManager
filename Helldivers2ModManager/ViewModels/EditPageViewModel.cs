@@ -13,7 +13,6 @@ namespace Helldivers2ModManager.ViewModels;
 /// 模组选项编辑页面（点击首页"编辑"按钮打开）。
 /// 显示模组作者定义的自定义选项，支持切换启用/禁用和选择子选项。
 /// </summary>
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class EditPageViewModel : PageViewModelBase
 {
 	public override string Title => _localizationService["EditPage.Title"];

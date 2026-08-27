@@ -5,6 +5,11 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Buffers.Binary;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
+using MaterialTextureReader = Helldivers2ModManager.Core.Preview.MaterialTextureReader;
+using ModelPreviewMaterialTextureSet = Helldivers2ModManager.Core.Preview.ModelPreviewMaterialTextureSet;
+using ModelPreviewMesh = Helldivers2ModManager.Core.Preview.ModelPreviewMesh;
+using ModelPreviewTextureRole = Helldivers2ModManager.Core.Preview.ModelPreviewTextureRole;
+using TexturePreviewRole = Helldivers2ModManager.Core.Preview.TexturePreviewRole;
 
 namespace Helldivers2ModManager.Tests;
 
@@ -29,7 +34,7 @@ public sealed class ModelPreviewMaterialTextureTests
         WriteUInt64(material, 0xA8, emissiveTextureId);
         WriteUInt64(material, 0xB0, albedoTextureId);
 
-        var textures = PatchResourceInspectionService.TryReadMaterialTextures(
+        var textures = MaterialTextureReader.TryReadMaterialTextures(
             material,
             new HashSet<ulong> { normalTextureId, maskTextureId, emissiveTextureId, albedoTextureId });
 
@@ -68,7 +73,7 @@ public sealed class ModelPreviewMaterialTextureTests
         WriteUInt64(material, 0xB4, albedoTextureId);
         WriteUInt64(material, 0xBC, opacityTextureId);
 
-        var textures = PatchResourceInspectionService.TryReadMaterialTextures(
+        var textures = MaterialTextureReader.TryReadMaterialTextures(
             material,
             new HashSet<ulong> { normalTextureId, mraTextureId, emissiveTextureId, albedoTextureId, opacityTextureId });
 

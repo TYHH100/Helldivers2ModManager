@@ -126,6 +126,7 @@ internal enum BatchModRepairState
 
 internal sealed class BatchModRepairItem
 {
+    public Guid ModGuid { get; set; }
     public required string ModName { get; init; }
     public required string ModDirectory { get; init; }
     public BatchModRepairState State { get; set; }

@@ -38,9 +38,15 @@ internal sealed partial class VersionCheckService
         public required string BackupPath { get; init; }
     }
 
-    public async Task<ModRepairPlan> CreateRepairPlanAsync(DirectoryInfo modDirectory)
-    {
-        var actions = new List<PatchRepairAction>();
+	public async Task<ModRepairPlan> CreateRepairPlanAsync(DirectoryInfo modDirectory)
+	{
+		if (_coreMetadataRepairService is not null)
+		{
+			var corePlan = await _coreMetadataRepairService.CreatePlanAsync(modDirectory).ConfigureAwait(false);
+			return ToLegacyPlan(corePlan);
+		}
+
+		var actions = new List<PatchRepairAction>();
         var blockers = new List<string>();
         var patchFiles = modDirectory.GetFiles("*", SearchOption.AllDirectories)
             .Where(f => IsMainPatchFile(f.Name))
@@ -56,9 +62,22 @@ internal sealed partial class VersionCheckService
         };
     }
 
-    public async Task<ModRepairResult> RepairModAsync(DirectoryInfo modDirectory)
-    {
-        await _repairSemaphore.WaitAsync();
+	public async Task<ModRepairResult> RepairModAsync(DirectoryInfo modDirectory)
+	{
+		if (_coreMetadataRepairService is not null)
+		{
+			await _repairSemaphore.WaitAsync();
+			try
+			{
+				return ToLegacyResult(await _coreMetadataRepairService.RepairAsync(modDirectory).ConfigureAwait(false));
+			}
+			finally
+			{
+				_repairSemaphore.Release();
+			}
+		}
+
+		await _repairSemaphore.WaitAsync();
         try
         {
             return await RepairModCoreAsync(modDirectory);
@@ -68,6 +87,36 @@ internal sealed partial class VersionCheckService
             _repairSemaphore.Release();
         }
     }
+
+	private static ModRepairPlan ToLegacyPlan(Core.Repair.ModRepairPlan plan)
+	{
+		return new ModRepairPlan
+		{
+			Actions = plan.Actions.Select(static action => new PatchRepairAction
+			{
+				Kind = (PatchRepairKind)action.Kind,
+				PatchFilePath = action.PatchFilePath,
+				Offset = action.Offset,
+				Width = action.Width,
+				OldValue = action.OldValue,
+				NewValue = action.NewValue,
+				EntryIndex = action.EntryIndex,
+				FileId = action.FileId,
+			}).ToList(),
+			BlockingReasons = plan.BlockingReasons.ToList(),
+		};
+	}
+
+	private static ModRepairResult ToLegacyResult(Core.Repair.ModRepairResult result)
+	{
+		return new ModRepairResult
+		{
+			Success = result.Success,
+			AppliedActionCount = result.AppliedActionCount,
+			BackupPaths = result.BackupPaths?.ToList() ?? [],
+			ErrorMessage = result.ErrorMessage,
+		};
+	}
 
     /// <summary>
     /// 安全元数据修复核心（不加全局锁；由入口持锁，或批量修复持锁后并发调用，仅操作该模组目录）。

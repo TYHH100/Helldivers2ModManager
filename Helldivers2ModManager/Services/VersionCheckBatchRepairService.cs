@@ -11,6 +11,30 @@ internal sealed partial class VersionCheckService
         IProgress<BatchModRepairItem>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        if (_coreBatchRepairService is not null)
+        {
+            var grouped = mods
+                .GroupBy(item => item.Directory.FullName, StringComparer.OrdinalIgnoreCase)
+                .Select(static group => group.First())
+                .ToArray();
+            var coreItems = await _coreBatchRepairService.CreatePlanAsync(
+                grouped.Select(static mod => (mod.Manifest.Guid, mod.Directory)),
+                cancellationToken).ConfigureAwait(false);
+
+            var mappedItems = new List<BatchModRepairItem>(grouped.Length);
+            foreach (var mod in grouped)
+            {
+                var coreItem = coreItems.FirstOrDefault(item => item.ModId == mod.Manifest.Guid);
+                if (coreItem is null)
+                    continue;
+                var mapped = ToLegacyItem(mod.Manifest.Name, coreItem, _localizationService);
+                mappedItems.Add(mapped);
+                progress?.Report(mapped);
+            }
+
+            return new BatchModRepairPlan { Items = mappedItems };
+        }
+
         var items = new List<BatchModRepairItem>();
         foreach (var mod in mods
                      .GroupBy(item => item.Directory.FullName, StringComparer.OrdinalIgnoreCase)
@@ -49,6 +73,61 @@ internal sealed partial class VersionCheckService
         IProgress<BatchModRepairItem>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        if (_coreBatchRepairService is not null)
+        {
+            await _repairSemaphore.WaitAsync(cancellationToken);
+            try
+            {
+                var candidates = plan.Items
+                    .Where(candidate => candidate.State == BatchModRepairState.Repairable)
+                    .ToArray();
+                var maxDegree = Math.Max(1, Math.Min(4, Environment.ProcessorCount));
+                await Parallel.ForEachAsync(
+                    candidates,
+                    new ParallelOptions { MaxDegreeOfParallelism = maxDegree, CancellationToken = cancellationToken },
+                    async (item, ct) =>
+                    {
+                        try
+                        {
+                            var directory = new DirectoryInfo(item.ModDirectory);
+                            var coreItems = await _coreBatchRepairService.CreatePlanAsync(
+                                [(item.ModGuid, directory)],
+                                ct).ConfigureAwait(false);
+                            if (coreItems.Count == 0)
+                                return;
+
+                            var results = await _coreBatchRepairService.RepairAsync(coreItems, ct).ConfigureAwait(false);
+                            var result = results.Items[0];
+                            item.MetadataActionCount = result.MetadataActionCount;
+                            item.AssistedActionCount = result.AssistedActionCount;
+                            item.CompanionRecoveryCount = result.CompanionRecoveryCount;
+                            item.Message = result.Message;
+                            item.State = ToLegacyState(result.State);
+                            if (result.State == Core.Repair.BatchRepairState.NoAction && result.Message != "No repair was required after the plan was refreshed.")
+                                item.State = BatchModRepairState.Repaired;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            item.State = BatchModRepairState.Failed;
+                            item.Message = ex.Message;
+                            _logger.LogWarning(ex, "Batch repair failed for {Mod}", item.ModName);
+                        }
+
+                        progress?.Report(item);
+                    });
+            }
+            finally
+            {
+                _repairSemaphore.Release();
+            }
+
+            return new BatchModRepairResult { Items = plan.Items };
+        }
+
         // 批量修复整体持锁：与外部单个修复互斥，避免并发写同一模组；
         // 内部不同模组之间有限并发（仅操作各自目录，使用不加锁的 Core 变体）。
         await _repairSemaphore.WaitAsync(cancellationToken);
@@ -152,6 +231,38 @@ internal sealed partial class VersionCheckService
             _logger.LogError(ex, "Batch repair failed for {Mod}", item.ModName);
         }
         progress?.Report(item);
+    }
+
+    private static BatchModRepairState ToLegacyState(Core.Repair.BatchRepairState state)
+    {
+        return state switch
+        {
+            Core.Repair.BatchRepairState.Repairable => BatchModRepairState.Repairable,
+            Core.Repair.BatchRepairState.Blocked => BatchModRepairState.Blocked,
+            Core.Repair.BatchRepairState.SkippedUnsupported => BatchModRepairState.SkippedUnsupported,
+            _ => BatchModRepairState.NoAction
+        };
+    }
+
+    private static BatchModRepairItem ToLegacyItem(
+        string modName,
+        Core.Repair.BatchRepairItem item,
+        LocalizationService localization)
+    {
+        var message = item.State == Core.Repair.BatchRepairState.SkippedUnsupported
+            ? localization["VersionCheckBatch.UnsupportedResourceType"]
+            : item.Message;
+        return new BatchModRepairItem
+        {
+            ModGuid = item.ModId,
+            ModName = modName,
+            ModDirectory = item.Directory.FullName,
+            State = ToLegacyState(item.State),
+            Message = message,
+            MetadataActionCount = item.MetadataActionCount,
+            AssistedActionCount = item.AssistedActionCount,
+            CompanionRecoveryCount = item.CompanionRecoveryCount
+        };
     }
 
     private async Task PopulateBatchPlanItemAsync(

@@ -9,7 +9,6 @@ using System.Collections.Specialized;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class BackgroundTasksPageViewModel : PageViewModelBase
 {
 	private readonly Lazy<NavigationStore> _navStore;

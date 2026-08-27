@@ -199,6 +199,11 @@ catch (Exception ex)
 | 启动黑闪（LOGO 透明区透出黑底）只查闪屏图片 alpha | WPF 默认 `<SplashScreen>` 项在 `CompositionTarget.Rendering`（**帧渲染前**触发）第一次时就关闭闪屏，此时主窗口首帧还没提交给 DWM，DWM 侧主窗口区域是纯黑的；闪屏 LOGO 透明，黑底就从透明区透出"一闪"。修复：csproj 移除 SplashScreen 项（图片改 `<Resource>`），自实现透明闪屏窗口（`AllowsTransparency` + `Topmost`），在 `MainWindow.ContentRendered`（首帧真正渲染完成后）再 `Close()`。验证：启动进程 + `CopyFromScreen` 连续截屏统计中央区域纯黑帧比例（采样间隔 ≤20ms），修复后应全程为 0。 |
 | 用 `ToolGood.Words.WordsHelper` 引用拼音库 | `ToolGood.Words.Pinyin` 包的命名空间是 `ToolGood.Words.Pinyin`（WordsHelper / PinyinMatch 都在其下），不是 `ToolGood.Words`。`GetPinyin(name, false)` 输出无音调、首字母大写，英文/数字原样保留（`Helldivers2` → `Helldivers2`），转匹配串前要 `ToLowerInvariant()`；`GetFirstPinyin(name)` 同。搜索场景应把转换结果按 Mod 名称惰性缓存（名称不变），不要在防抖热路径里重复转换。**进程首次调用会加载 8 万词组字典（实测约 180ms）且发生在调用线程**：上千 Mod 批量转换仅需数毫秒、每次过滤仅需亚毫秒级，真正的成本只在首次字典加载——应在 Mod 列表就绪后在后台线程预热（快照 + `Task.Run` 串行遍历触发缓存构建），避免用户第一次输入搜索时在 UI 线程上卡顿。 |
 | 构建报 CS2001 找不到 `obj\...\*.g.cs`，且同时出现多个随机后缀 `_wpftmp.csproj` | obj 目录残留了旧 WPF 临时编译产物（多个随机后缀 wpftmp 项目交错），删除 `Helldivers2ModManager\obj\Debug` 目录及其中 `*wpftmp*` 文件后重新**串行**构建（`/m:1`）即可恢复；正常构建后留下的 wpftmp 残留属于成功产物，无需清理。 |
+| Transient 页面 VM 用匿名 lambda 订阅 Singleton 服务事件（如 `LocalizationService.PropertyChanged`）或静态事件 | 匿名 lambda 无法退订，事件委托链把每次导航创建的 VM 永久钉住（内存泄漏）。必须用命名方法订阅，并在 `OnDispose()` 中 `-=` 退订后调用 `base.OnDispose()`。正确示范：`BackgroundTasksPageViewModel.cs:39→143`、`SettingsPageViewModel.cs:411→422`（静态事件）。新增页面 VM 时逐个检查所有 `+=` 是否都有配对退订。 |
+| `_ = SaveAsync()` 裸弃元丢弃设置保存任务 | `SaveAsync` 内部无异常处理时，磁盘满/IO 错误会让设置静默丢失（UnobservedTaskException 默认被吞），且全库曾有 12 处这样的裸调用。兜底必须在服务内部做：`SaveAsync` 内聚 try/catch + Error 日志，一处修复惠及所有调用方；不要依赖每个调用点自行包 try/catch。 |
+| 异常过滤器只排除 IOException，漏掉取消异常 | `catch (Exception ex) when (ex is not IOException)` 会放行 `TaskCanceledException`/`OperationCanceledException` 并包装成失败（曾导致用户取消哈希被误报为"哈希错误"，`FileHashUtils.cs` 过滤器已修复）。凡是用过滤器区分"真失败"的 catch，必须同时排除 `OperationCanceledException`，否则上层取消路径失效、取消被显示为操作失败。 |
+| 新增路由页面时只注册服务或只加模板 | 必须同时确认路由键唯一、`MainWindow` 中该 ViewModel 模板唯一、View 文件存在；冻结候选要用测试守护这三件事。曾因 `ArmorReuse` 模板重复造成资源映射歧义。 |
+| 新 UI 状态文案直接写字符串但不补本地化键 | 每个用户可见状态必须进入 Core 本地化资源并同步 `zh-CN`/`en-US`；用静态扫描提取 `_localization.GetString("...")` 引用并断言双向存在，避免运行时只出现空白或默认文案。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
 

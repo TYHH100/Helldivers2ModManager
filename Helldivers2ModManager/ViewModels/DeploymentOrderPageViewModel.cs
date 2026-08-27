@@ -16,7 +16,6 @@ namespace Helldivers2ModManager.ViewModels;
 /// 用户可以在该页面通过拖拽或按钮调整模组的部署顺序，
 /// 并展开模组以调整其选项/子选项的部署顺序
 /// </summary>
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class DeploymentOrderPageViewModel : PageViewModelBase, IDropTarget
 {
     public override string Title => _localizationService["DashboardPage.DeploymentOrder"];

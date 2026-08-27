@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class RepairDisclaimerService(
     ILogger<RepairDisclaimerService> logger,
     SettingsService settingsService,

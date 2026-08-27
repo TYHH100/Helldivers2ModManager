@@ -1,7 +1,10 @@
 using Helldivers2ModManager.Exceptions;
 using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Core.Persistence;
 using Helldivers2ModManager.ViewModels;
+using Helldivers2ModManager.Adapters;
+using CoreDeployment = Helldivers2ModManager.Core.Deployment;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualBasic.FileIO;
@@ -15,7 +18,6 @@ using System.Text.RegularExpressions;
 
 namespace Helldivers2ModManager.Services;
 
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed partial class ModService
 {
 	internal readonly struct PatchFileTriplet
@@ -38,20 +40,33 @@ internal sealed partial class ModService
 
 	private readonly ILogger<ModService> _logger;
 	private readonly List<ModData> _mods;
-	private readonly ConcurrentDictionary<Guid, ModViewModel> _modViewModelCache = new();
-	private readonly FileHashRepository _fileHashRepository;
+	private readonly IFileHashRepository _fileHashRepository;
 	private readonly ModHashService _modHashService;
 	private readonly LocalizationService _localizationService;
 	private readonly VersionCheckService _versionCheckService;
+	private readonly CoreDeployment.DeploymentService _deploymentService;
+	private readonly Core.Mods.ModArchiveService _modArchiveService;
+	private readonly Core.Mods.ModDirectoryService _modDirectoryService;
 	private SettingsService? _settingsService;
 
-	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService, LocalizationService localizationService, VersionCheckService versionCheckService)
+	public ModService(
+		ILogger<ModService> logger,
+		IFileHashRepository fileHashRepository,
+		ModHashService modHashService,
+		LocalizationService localizationService,
+		VersionCheckService versionCheckService,
+		CoreDeployment.DeploymentService deploymentService,
+		Core.Mods.ModArchiveService modArchiveService,
+		Core.Mods.ModDirectoryService modDirectoryService)
 	{
 		_logger = logger;
 		_fileHashRepository = fileHashRepository;
 		_modHashService = modHashService;
 		_localizationService = localizationService;
 		_versionCheckService = versionCheckService;
+		_deploymentService = deploymentService;
+		_modArchiveService = modArchiveService;
+		_modDirectoryService = modDirectoryService;
 		_mods = new();
 	}
 	
@@ -335,6 +350,43 @@ internal sealed partial class ModService
 	{
 		GuardInitialized();
 
+		var storageDirectory = new DirectoryInfo(Path.Combine(_settingsService.StorageDirectory, "Mods"));
+		var tempDirectory = new DirectoryInfo(_settingsService.TempDirectory);
+		var result = await _modArchiveService.ImportArchiveAsync(
+			file,
+			storageDirectory,
+			tempDirectory,
+			deleteExistingToRecycleBin: _settingsService.DeleteToRecycleBin,
+			nestedProgress: progress => nestedProgress?.Invoke(progress.Index, progress.TotalCount, progress.ArchiveName));
+
+		var problems = new List<ModProblem>();
+		problems.AddRange(result.Problems.Select(CoreModMapper.MapProblem));
+
+		foreach (var discovered in result.ImportedMods)
+		{
+			var manifest = CoreModMapper.Map(discovered.Manifest);
+			var existing = _mods.FirstOrDefault(mod =>
+				mod.Manifest.Guid == manifest.Guid ||
+				string.Equals(mod.Directory.FullName, discovered.Directory.FullName, StringComparison.OrdinalIgnoreCase));
+			if (existing is not null)
+			{
+				_mods.Remove(existing);
+			}
+
+			var mod = new ModData(discovered.Directory, manifest);
+			_mods.Add(mod);
+			ModAdded?.Invoke(mod);
+			_modHashService.ComputeAndStoreForModAsync(mod);
+			_logger.LogInformation("Imported mod \"{}\" to \"{}\"", manifest.Name, discovered.Directory.FullName);
+		}
+
+		return problems.ToArray();
+	}
+
+	private async Task<ModProblem[]> TryAddModFromArchiveWithLegacyBackendAsync(FileInfo file, Action<int, int, string>? nestedProgress = null)
+	{
+		GuardInitialized();
+
 		var problems = new List<ModProblem>();
 
 		_logger.LogInformation("Attempting to add mod from \"{}\"", file.Name);
@@ -589,8 +641,15 @@ internal sealed partial class ModService
 		// 该模组已部署时，自动清理游戏 data 目录中由它部署的补丁文件
 		await CleanupDeployedFilesForModAsync(removedMod);
 
-		var recycleOption = _settingsService.DeleteToRecycleBin ? RecycleOption.SendToRecycleBin : RecycleOption.DeletePermanently;
-		await Task.Run(() => FileSystem.DeleteDirectory(removedMod.Directory.FullName, UIOption.OnlyErrorDialogs, recycleOption));
+		var deletion = await _modDirectoryService.DeleteAsync(
+			removedMod.Directory,
+			new DirectoryInfo(_settingsService.StorageDirectory),
+			removedMod.Manifest.Guid,
+			sendToRecycleBin: _settingsService.DeleteToRecycleBin);
+		if (deletion.Failed)
+		{
+			throw new InvalidOperationException(deletion.Error.Message);
+		}
 
 		_logger.LogInformation("Mod {} removed", removedMod.Manifest.Name);
 	}
@@ -606,37 +665,27 @@ internal sealed partial class ModService
 			if (!mod.Enabled)
 				return;
 
-			var dataDir = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data"));
-			if (!dataDir.Exists)
-				return;
-
 			var otherMods = _mods.Where(m => !ReferenceEquals(m, mod) && m.Enabled).ToArray();
-			var otherFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-			foreach (var other in otherMods)
-				foreach (var file in GetSelectedPatchFiles(other))
-					otherFileNames.Add(file.Name);
+			var removedInput = new CoreDeployment.ModDeploymentInput(
+				mod.Manifest.Guid,
+				mod.Directory,
+				CoreManifestMapper.Map(mod.Manifest),
+				mod.EnabledOptions,
+				mod.SelectedOptions);
+			var remainingInputs = otherMods.Select(static other => new CoreDeployment.ModDeploymentInput(
+				other.Manifest.Guid,
+				other.Directory,
+				CoreManifestMapper.Map(other.Manifest),
+				other.EnabledOptions,
+				other.SelectedOptions)).ToArray();
+			var options = new CoreDeployment.DeploymentOptions(
+				new DirectoryInfo(Path.Combine(_settingsService!.GameDirectory, "data")),
+				_settingsService.UseSymbolicLinks,
+				_settingsService.SkipList);
 
-			foreach (var file in GetSelectedPatchFiles(mod))
+			foreach (var path in await _deploymentService.CleanupDeployedFilesAsync(removedInput, remainingInputs, options))
 			{
-				if (otherFileNames.Contains(file.Name))
-					continue;
-
-				var match = GetPatchIndexRegex().Match(file.Name);
-				if (!match.Success)
-					continue;
-				var index = int.Parse(match.Groups[1].ValueSpan);
-				var baseName = file.Name[0..16];
-				// 与部署逻辑一致：SkipList 中的资源名整体后移一个槽位
-				var deployedIndex = index + (_settingsService.SkipList.Contains(baseName) ? 1 : 0);
-				var deployedBase = Path.Combine(dataDir.FullName, $"{baseName}.patch_{deployedIndex}");
-
-				foreach (var path in new[] { deployedBase, deployedBase + ".gpu_resources", deployedBase + ".stream" })
-				{
-					if (!File.Exists(path))
-						continue;
-					await Task.Run(() => File.Delete(path));
-					_logger.LogInformation("Cleaned up deployed file \"{Path}\" for removed mod \"{Name}\"", Path.GetFileName(path), mod.Manifest.Name);
-				}
+				_logger.LogInformation("Cleaned up deployed file \"{Path}\" for removed mod \"{Name}\"", Path.GetFileName(path), mod.Manifest.Name);
 			}
 		}
 		catch (Exception ex)
@@ -835,6 +884,103 @@ internal sealed partial class ModService
 	{
 		GuardInitialized();
 
+		var oldState = mod.ToEnabledData();
+		var sourceDirectory = new DirectoryInfo(Path.Combine(_settingsService.TempDirectory, $"update_{mod.Manifest.Guid:N}"));
+		UpdateProgressInfo Report(UpdatePhase phase, string message, string? currentFile = null, int processed = 0, int total = 0) => new()
+		{
+			Phase = phase,
+			Message = message,
+			CurrentFile = currentFile,
+			ProcessedCount = processed,
+			TotalCount = total,
+		};
+
+		try
+		{
+			progress?.Report(Report(
+				UpdatePhase.HashingCurrent,
+				_localizationService["ModService.CalculatingHashes"]));
+			await _modArchiveService.PrepareUpdateSourceAsync(archive, sourceDirectory);
+
+			progress?.Report(Report(
+				UpdatePhase.HashingNew,
+				_localizationService["ModService.CalculatingNewHashes"]));
+			progress?.Report(Report(
+				UpdatePhase.Comparing,
+				_localizationService["ModService.ComparingFiles"]));
+
+			var updateProgress = progress is null ? null : new Progress<Core.Mods.ModUpdateProgress>(item =>
+			{
+				progress.Report(new UpdateProgressInfo
+				{
+					Phase = item.Stage switch
+					{
+						Core.Mods.ModUpdateStage.HashingCurrent => UpdatePhase.HashingCurrent,
+						Core.Mods.ModUpdateStage.HashingNew => UpdatePhase.HashingNew,
+						Core.Mods.ModUpdateStage.Comparing => UpdatePhase.Comparing,
+						_ => UpdatePhase.Updating,
+					},
+					CurrentFile = item.CurrentFile,
+					ProcessedCount = item.ProcessedCount,
+					TotalCount = item.TotalCount,
+					CacheHits = item.CacheHits,
+					NeedUpdateCount = item.ChangedCount,
+				});
+			});
+			var result = await _modDirectoryService.UpdateFromDirectoryAsync(
+				mod.Directory,
+				sourceDirectory,
+				CoreManifestMapper.Map(mod.Manifest),
+				mod.Manifest.Guid,
+				saveCurrentHashes: true,
+				progress: updateProgress);
+			if (result.Failed)
+			{
+				throw new InvalidOperationException(result.Error.Message);
+			}
+
+			mod.Manifest = CoreModMapper.Map(result.Value!.Manifest);
+			mod.ApplyData(oldState);
+			await _modHashService.RecomputeForUpdatedModAsync(mod);
+
+			var comparison = result.Value.Comparison;
+			var message = result.Value.FilesChanged
+				? _localizationService["ModService.UpdateComplete"]
+					.Replace("{updated}", comparison.ChangedFiles.Count.ToString())
+					.Replace("{skipped}", comparison.UnchangedCount.ToString())
+					.Replace("{failed}", comparison.DeletedFiles.Count.ToString())
+				: _localizationService["ModService.AllFilesUpToDate"];
+			progress?.Report(new UpdateProgressInfo
+			{
+				Phase = UpdatePhase.Completed,
+				IsCompleted = true,
+				UnchangedCount = comparison.UnchangedCount,
+				NeedUpdateCount = comparison.ChangedFiles.Count,
+				DeletedCount = comparison.DeletedFiles.Count,
+				Message = message,
+			});
+			_logger.LogInformation("Mod \"{}\" updated from archive \"{}\"", mod.Manifest.Name, archive.Name);
+		}
+		finally
+		{
+			if (sourceDirectory.Exists)
+			{
+				try
+				{
+					sourceDirectory.Delete(true);
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "Failed to clean up update source directory \"{Path}\"", sourceDirectory.FullName);
+				}
+			}
+		}
+	}
+
+	private async Task UpdateModFromArchiveWithLegacyBackendAsync(ModData mod, FileInfo archive, IProgress<UpdateProgressInfo>? progress = null)
+	{
+		GuardInitialized();
+
 		_logger.LogInformation("Attempting to update mod \"{}\" from archive \"{}\" with hash-based incremental update", mod.Manifest.Name, archive.Name);
 
 		// 阶段1: 计算当前mod目录中所有文件的SHA-256哈希值（优先使用数据库缓存）
@@ -868,7 +1014,6 @@ internal sealed partial class ModService
 				mod.Directory,
 				mod.Manifest.Guid,
 				_fileHashRepository,
-				_settingsService.StorageDirectory,
 				hashingProgress);
 		}
 		catch (Exception ex)
@@ -1169,6 +1314,60 @@ internal sealed partial class ModService
 	/// <param name="reportStepCompleted">模组全部文件复制完成时上报（步骤 → ✓）。</param>
 	/// <param name="reportStepFailed">复制失败时上报（当前步骤 → ✗），随后重新抛出异常。</param>
 	public async Task DeployAsync(
+		IReadOnlyList<ModData> requestedMods,
+		Action<string>? reportStep = null,
+		Action<string>? reportStepDetail = null,
+		Action? reportStepCompleted = null,
+		Action? reportStepFailed = null)
+	{
+		GuardInitialized();
+
+		if (requestedMods.Count == 0)
+		{
+			_logger.LogInformation("No mods enabled, skipping deployment");
+			return;
+		}
+
+		var inputs = requestedMods.Select(static mod => new CoreDeployment.ModDeploymentInput(
+			mod.Manifest.Guid,
+			mod.Directory,
+			CoreManifestMapper.Map(mod.Manifest),
+			mod.EnabledOptions,
+			mod.SelectedOptions)).ToArray();
+		var options = new CoreDeployment.DeploymentOptions(
+			new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data")),
+			_settingsService.UseSymbolicLinks,
+			_settingsService.SkipList);
+		var modNames = requestedMods.ToDictionary(
+			static mod => mod.Manifest.Guid,
+			static mod => mod.Manifest.Name);
+		var plan = _deploymentService.CreatePlan(inputs, options);
+
+		await _deploymentService.DeployPlanAsync(plan, options, new CoreDeployment.DeploymentStepCallbacks(
+			ModStarted: guid => reportStep?.Invoke(modNames[guid]),
+			FileCopied: progress =>
+			{
+				if (progress.CompletedBytes != progress.TotalBytes)
+				{
+					var percent = progress.TotalBytes == 0 ? 100 : progress.CompletedBytes * 100D / progress.TotalBytes;
+					reportStepDetail?.Invoke(_localizationService["ModService.CopyingLargeFile"]
+						.Replace("{name}", Path.GetFileName(progress.Item.SourcePath!))
+						.Replace("{percent}", percent.ToString("F0")));
+					return;
+				}
+
+				var key = options.UseSymbolicLinks ? "ModService.LinkingFileProgress" : "ModService.CopyingFileProgress";
+				reportStepDetail?.Invoke(_localizationService[key]
+					.Replace("{done}", progress.CompletedFiles.ToString())
+					.Replace("{total}", progress.TotalFiles.ToString())
+					.Replace("{name}", Path.GetFileName(progress.Item.SourcePath!)));
+			},
+			ModCompleted: _ => reportStepCompleted?.Invoke(),
+			ModFailed: (_, _) => reportStepFailed?.Invoke()));
+
+	}
+
+	private async Task DeployWithLegacyBackendAsync(
 		IReadOnlyList<ModData> requestedMods,
 		Action<string>? reportStep = null,
 		Action<string>? reportStepDetail = null,
@@ -1689,20 +1888,6 @@ internal sealed partial class ModService
 			if (mod.Manifest.Guid == guid)
 				return mod;
 		return null;
-	}
-
-	public ModViewModel GetOrCreateModViewModel(ModData mod, ILogger logger, SettingsService settingsService, Services.Nexus.INexusModsService nexusModsService)
-	{
-		return _modViewModelCache.GetOrAdd(mod.Manifest.Guid, _ => new ModViewModel(mod, logger, settingsService, nexusModsService, _localizationService, _versionCheckService));
-	}
-
-	public void ClearModViewModelCache()
-	{
-		foreach (var kvp in _modViewModelCache)
-		{
-			kvp.Value.Dispose();
-		}
-		_modViewModelCache.Clear();
 	}
 
 	[MemberNotNull(nameof(_settingsService))]

@@ -1,37 +1,26 @@
+using Helldivers2ModManager.Core.Persistence;
 using Helldivers2ModManager.Models;
-using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using System.Globalization;
 using System.Text.Json;
 
 namespace Helldivers2ModManager.Services;
 
 /// <summary>
-/// 护甲覆盖扫描缓存仓储。
-/// 以部署配置签名为键，保存最近一次有效的覆盖分析结果，供启动时和重复配置切换时直接复用。
+/// 冲突扫描缓存的 Core 持久化门面：以部署配置签名为键，复用统一 json_cache 表。
 /// </summary>
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class ModConflictRepository
 {
-    private readonly ILogger<ModConflictRepository> _logger;
-    private readonly DatabaseService _databaseService;
-    private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private const string CacheCategory = "conflict-analysis-v3";
 
-    public ModConflictRepository(ILogger<ModConflictRepository> logger, DatabaseService databaseService)
+    private readonly JsonCacheRepository _cache;
+
+    public ModConflictRepository(JsonCacheRepository cache)
     {
-        _logger = logger;
-        _databaseService = databaseService;
+        _cache = cache;
     }
 
-    public ModConflictAnalysisResult? Load(string storageDirectory, string cacheKey)
+    public async Task<ModConflictAnalysisResult?> LoadAsync(string cacheKey, CancellationToken cancellationToken = default)
     {
-        using var connection = _databaseService.OpenConnection(storageDirectory);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT ResultJson FROM conflict_scan_cache WHERE CacheKey = @CacheKey;";
-        cmd.Parameters.AddWithValue("@CacheKey", cacheKey);
-
-        var resultJson = cmd.ExecuteScalar() as string;
+        var resultJson = await _cache.GetAsync(CacheCategory, cacheKey, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(resultJson))
             return null;
 
@@ -39,49 +28,14 @@ internal sealed class ModConflictRepository
         {
             return JsonSerializer.Deserialize<ModConflictAnalysisResult>(resultJson);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _logger.LogWarning(ex, "Failed to deserialize cached conflict scan result for key {CacheKey}", cacheKey);
             return null;
         }
     }
 
-    public async Task SaveAsync(string storageDirectory, string cacheKey, ModConflictAnalysisResult result)
+    public Task SaveAsync(string cacheKey, ModConflictAnalysisResult result, CancellationToken cancellationToken = default)
     {
-        await _writeLock.WaitAsync();
-        try
-        {
-            using var connection = _databaseService.OpenConnection(storageDirectory);
-            using var transaction = connection.BeginTransaction();
-
-            try
-            {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = @"
-                    INSERT INTO conflict_scan_cache (CacheKey, ResultJson, UpdatedUtc)
-                    VALUES (@CacheKey, @ResultJson, @UpdatedUtc)
-                    ON CONFLICT(CacheKey) DO UPDATE SET
-                        ResultJson = excluded.ResultJson,
-                        UpdatedUtc = excluded.UpdatedUtc;
-                ";
-
-                cmd.Parameters.AddWithValue("@CacheKey", cacheKey);
-                cmd.Parameters.AddWithValue("@ResultJson", JsonSerializer.Serialize(result));
-                cmd.Parameters.AddWithValue("@UpdatedUtc", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
-
-                cmd.ExecuteNonQuery();
-                transaction.Commit();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to save cached conflict scan result for key {CacheKey}", cacheKey);
-                transaction.Rollback();
-                throw;
-            }
-        }
-        finally
-        {
-            _writeLock.Release();
-        }
+        return _cache.SetAsync(CacheCategory, cacheKey, JsonSerializer.Serialize(result), cancellationToken);
     }
 }

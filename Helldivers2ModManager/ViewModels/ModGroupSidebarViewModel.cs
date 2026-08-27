@@ -10,7 +10,6 @@ using System.Collections.ObjectModel;
 
 namespace Helldivers2ModManager.ViewModels;
 
-[RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class ModGroupSidebarViewModel : ObservableObject
 {
 	private readonly ILogger<ModGroupSidebarViewModel> _logger;

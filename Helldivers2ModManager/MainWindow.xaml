@@ -67,6 +67,9 @@
 		<DataTemplate DataType="{x:Type vms:BisectPageViewModel}">
 			<views:BisectPageView/>
 		</DataTemplate>
+		<DataTemplate DataType="{x:Type vms:BackendTestCenterPageViewModel}">
+			<views:BackendTestCenterPageView/>
+		</DataTemplate>
 
 	</Window.Resources>
 
@@ -139,6 +142,13 @@
 										<StackPanel Grid.Column="2"
 													Orientation="Horizontal"
 													VerticalAlignment="Top">
+											<Button Style="{StaticResource FluentTitleBarButton}"
+													Click="TestCenterButton_Click"
+													ToolTip="{loc:Loc BackendTestCenter.Title}">
+												<TextBlock Text="&#xE90F;"
+														   FontFamily="Segoe Fluent Icons"
+														   FontSize="14"/>
+											</Button>
 											<Button Style="{StaticResource FluentTitleBarButton}"
 													Command="{Binding ReportBugCommand}"
 													ToolTip="{loc:Loc MainWindow.ReportBug}">

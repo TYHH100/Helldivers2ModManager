@@ -38,7 +38,6 @@ internal static class BisectCore
 /// 二分排查会话与核心逻辑：创建临时分组承载排查状态（原分组零改动），
 /// 每轮启用一半候选模组部署并记录用户报告，收敛到嫌疑模组后可迭代排查多个。
 /// </summary>
-[RegisterService(ServiceLifetime.Singleton)]
 internal sealed class BisectService
 {
 	public sealed class BisectSession
