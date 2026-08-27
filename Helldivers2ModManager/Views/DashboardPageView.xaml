@@ -61,6 +61,9 @@
 								<MenuItem Header="{loc:Loc ModGroup.AddToGroup}"
 										  Command="{Binding PlacementTarget.Tag.AddModsToGroupCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
 										  CommandParameter="{Binding}"/>
+								<MenuItem Header="{loc:Loc DashboardPage.EditLink}"
+										  Command="{Binding EditLinkCommand}"
+										  CommandParameter="{Binding}"/>
 								<Separator/>
 								<MenuItem Header="{loc:Loc DashboardPage.EditManifest}"
 										  Command="{Binding PlacementTarget.Tag.EditManifestCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
@@ -333,6 +336,27 @@
 										  HorizontalAlignment="Center"
 										  VerticalAlignment="Center"/>
 							</Border>
+
+							<!-- 链接指示器：点击跳转作者主页/发布页；无链接时点击进入编辑 -->
+							<Button Grid.Column="0"
+									Grid.Row="0"
+									Style="{StaticResource FluentIconButton}"
+									Width="18"
+									Height="18"
+									HorizontalAlignment="Left"
+									VerticalAlignment="Top"
+									Margin="34,-9,0,0"
+									Panel.ZIndex="2"
+									ToolTip="{loc:Loc DashboardPage.ModLinkHint}"
+									Command="{Binding OpenLinkCommand}">
+								<TextBlock Text="&#xE71B;"
+											   FontFamily="Segoe Fluent Icons"
+											   FontSize="13"
+											   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+											   HorizontalAlignment="Center"
+											   VerticalAlignment="Center"/>
+							</Button>
+
 						</Grid>
 					</Border>
 				</DataTemplate>

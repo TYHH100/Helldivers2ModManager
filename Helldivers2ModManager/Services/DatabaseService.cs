@@ -115,6 +115,16 @@ internal sealed class DatabaseService : IDisposable
 		);
 	";
 
+	/// <summary>
+	/// 数据库表创建 SQL —— 存储每个 Mod 的链接（作者主页/发布页），仅保存在管理器数据库，不写入模组档案 JSON。
+	/// </summary>
+	private const string CreateModLinksTableSql = @"
+		CREATE TABLE IF NOT EXISTS mod_links (
+			ModGuid TEXT PRIMARY KEY NOT NULL,
+			LinkUrl TEXT NOT NULL DEFAULT ''
+		);
+	";
+
 	private const string AddModLastWriteTimeColumnSql = "ALTER TABLE version_check_results ADD COLUMN ModLastWriteTimeUtc TEXT NOT NULL DEFAULT '';";
 
 	private const string CheckModLastWriteTimeColumnSql = "SELECT COUNT(*) FROM pragma_table_info('version_check_results') WHERE name='ModLastWriteTimeUtc';";
@@ -299,6 +309,13 @@ internal sealed class DatabaseService : IDisposable
 				using (var cmd = initConnection.CreateCommand())
 				{
 					cmd.CommandText = CreateConflictScanCacheTableSql;
+					cmd.ExecuteNonQuery();
+				}
+
+				// 创建 Mod 链接表（作者主页/发布页，仅存管理器数据库）
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateModLinksTableSql;
 					cmd.ExecuteNonQuery();
 				}
 

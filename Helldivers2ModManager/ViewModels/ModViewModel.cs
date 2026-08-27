@@ -26,6 +26,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     private readonly INexusModsService _nexusModsService;
     private readonly LocalizationService _localizationService;
     private readonly VersionCheckService _versionCheckService;
+    private readonly ModLinkRepository _modLinkRepository;
 
     public Guid Guid => _mod.Manifest.Guid;
 
@@ -155,6 +156,106 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
     }
 
     public Brush ConflictStatusBrush => HasConflict ? s_conflictBrush : s_noConflictBrush;
+
+    // ===== Mod 链接（作者主页 / 发布页，仅存管理器数据库） =====
+
+    /// <summary>
+    /// Mod 链接文本（作者主页或发布页）。仅保存到管理器数据库，不写入模组档案 JSON。
+    /// </summary>
+    [ObservableProperty]
+    private string? _link;
+
+    /// <summary>
+    /// 是否已设置有效链接（控制链接图标样式/行为）。
+    /// </summary>
+    public bool HasLink => !string.IsNullOrWhiteSpace(Link);
+
+    partial void OnLinkChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasLink));
+    }
+
+    [RelayCommand]
+    public void OpenLink()
+    {
+        if (!HasLink)
+        {
+            EditLink();
+            return;
+        }
+
+        var url = Link!.Trim();
+        // 未带协议时按 https 处理，保证能直接跳转
+        if (!url.Contains("://"))
+            url = "https://" + url;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open link for mod {ModName}", Name);
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = _localizationService["ModViewModel.OpenLinkFailed"].Replace("{message}", ex.Message)
+            });
+        }
+    }
+
+    [RelayCommand]
+    public void EditLink()
+    {
+        if (_settingsService.IsReadonly)
+        {
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = _localizationService["ModViewModel.ModLinkReadonly"]
+            });
+            return;
+        }
+
+        WeakReferenceMessenger.Default.Send(new MessageBoxInputMessage
+        {
+            Title = _localizationService["ModViewModel.ModLinkEditTitle"],
+            Message = _localizationService["ModViewModel.ModLinkEditMsg"],
+            InitialText = Link ?? string.Empty,
+            MaxLength = 2048,
+            Confirm = (input) =>
+            {
+                var newLink = string.IsNullOrWhiteSpace(input) ? null : input.Trim();
+                Link = newLink;
+                _ = PersistLinkAsync(newLink);
+            }
+        });
+    }
+
+    /// <summary>
+    /// 后台持久化链接到数据库（fire-and-forget，异常自行捕获并提示）。
+    /// </summary>
+    private async Task PersistLinkAsync(string? link)
+    {
+        try
+        {
+            await _modLinkRepository.SaveLinkAsync(_settingsService.StorageDirectory, Guid, link);
+            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+            {
+                Message = _localizationService["ModViewModel.ModLinkUpdated"]
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save link for mod {ModName}", Name);
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
+            {
+                Message = _localizationService["ModViewModel.ModLinkSaveFailed"].Replace("{message}", ex.Message)
+            });
+        }
+    }
 
     public ModData Data => _mod;
 
@@ -336,7 +437,7 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
 
     private readonly ModData _mod;
 
-    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService, INexusModsService nexusModsService, LocalizationService localizationService, VersionCheckService versionCheckService)
+    public ModViewModel(ModData mod, ILogger logger, SettingsService settingsService, INexusModsService nexusModsService, LocalizationService localizationService, VersionCheckService versionCheckService, ModLinkRepository modLinkRepository)
     {
         _mod = mod;
         _logger = logger;
@@ -344,8 +445,10 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         _nexusModsService = nexusModsService;
         _localizationService = localizationService;
         _versionCheckService = versionCheckService;
+        _modLinkRepository = modLinkRepository;
 
         _mod.PropertyChanged += ModData_PropertyChanged;
+        Link = _modLinkRepository.GetLink(_settingsService.StorageDirectory, Guid);
 
         switch (_mod.Manifest.Version)
         {

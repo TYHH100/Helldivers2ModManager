@@ -14,15 +14,18 @@ internal sealed class ProfileService
 	private readonly ILogger<ProfileService> _logger;
 	private readonly EnabledDataRepository _repository;
 	private readonly DatabaseService _databaseService;
+	private readonly ModLinkRepository _modLinkRepository;
 
 	public ProfileService(
 		ILogger<ProfileService> logger,
 		EnabledDataRepository repository,
-		DatabaseService databaseService)
+		DatabaseService databaseService,
+		ModLinkRepository modLinkRepository)
 	{
 		_logger = logger;
 		_repository = repository;
 		_databaseService = databaseService;
+		_modLinkRepository = modLinkRepository;
 	}
 
 	/// <summary>
@@ -287,6 +290,7 @@ internal sealed class ProfileService
 		try
 		{
 			await _repository.DeleteByGuidsAsync(storageDirectory, [guid]);
+			await _modLinkRepository.DeleteByGuidsAsync(storageDirectory, [guid]);
 			_logger.LogInformation("Deleted mod config {Guid} from database", guid);
 		}
 		catch (Exception ex)
@@ -304,6 +308,7 @@ internal sealed class ProfileService
 		{
 			var list = guids.ToList();
 			await _repository.DeleteByGuidsAsync(storageDirectory, list);
+			await _modLinkRepository.DeleteByGuidsAsync(storageDirectory, list);
 			_logger.LogInformation("Deleted {Count} mod configs from database", list.Count);
 		}
 		catch (Exception ex)
