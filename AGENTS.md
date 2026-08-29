@@ -204,6 +204,7 @@ catch (Exception ex)
 | 异常过滤器只排除 IOException，漏掉取消异常 | `catch (Exception ex) when (ex is not IOException)` 会放行 `TaskCanceledException`/`OperationCanceledException` 并包装成失败（曾导致用户取消哈希被误报为"哈希错误"，`FileHashUtils.cs` 过滤器已修复）。凡是用过滤器区分"真失败"的 catch，必须同时排除 `OperationCanceledException`，否则上层取消路径失效、取消被显示为操作失败。 |
 | 新增路由页面时只注册服务或只加模板 | 必须同时确认路由键唯一、`MainWindow` 中该 ViewModel 模板唯一、View 文件存在；冻结候选要用测试守护这三件事。曾因 `ArmorReuse` 模板重复造成资源映射歧义。 |
 | 新 UI 状态文案直接写字符串但不补本地化键 | 每个用户可见状态必须进入 Core 本地化资源并同步 `zh-CN`/`en-US`；用静态扫描提取 `_localization.GetString("...")` 引用并断言双向存在，避免运行时只出现空白或默认文案。 |
+| 用脚本批量写三份本地化 resx，值语言写错 | `StringResources.resx`（中性=中文）、`.zh-CN`、`.en-US` 必须逐键值同步。脚本按索引取值时，写入后必须抽查中文文件里新键的值语言——本地化守卫测试只验键存在、不验值语言，英文值写进中文文件只能在实机 UI 看到中英混排（`next/frontend` 曾实际发生）。交付前对三个文件做键集合一致 + zh 值 ≠ en 值的交叉验证。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
 
