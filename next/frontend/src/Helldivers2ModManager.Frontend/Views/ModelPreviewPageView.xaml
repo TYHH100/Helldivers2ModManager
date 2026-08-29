@@ -1,6 +1,7 @@
 <UserControl x:Class="Helldivers2ModManager.Frontend.Views.ModelPreviewPageView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:common="clr-namespace:Helldivers2ModManager.Frontend.Common">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -26,7 +27,7 @@
                           DisplayMemberPath="Name"/>
                 <TextBlock Grid.Column="1" Margin="14,0" Text="{Binding Status}" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
-                <Button Grid.Column="2" Style="{StaticResource FButton}" Command="{Binding CancelCommand}" Content="取消"/>
+                <Button Grid.Column="2" Style="{StaticResource FButton}" Command="{Binding CancelCommand}" Content="{common:Loc Common.Cancel}"/>
             </Grid>
         </Border>
         <Grid Grid.Row="1">

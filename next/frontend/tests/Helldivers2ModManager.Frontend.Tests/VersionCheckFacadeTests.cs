@@ -1,5 +1,6 @@
 using System.IO;
 using Helldivers2ModManager.Core.Common;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Core.GameData;
 using Helldivers2ModManager.Core.Mods;
 using Helldivers2ModManager.Core.Persistence;
@@ -40,6 +41,7 @@ public sealed class VersionCheckFacadeTests
         services.AddProfiles();
         services.AddGameData();
         services.AddSingleton(paths);
+        services.AddSingleton<LocalizationCatalog>();
         services.AddSingleton<ApplicationSettingsService>();
         services.AddSingleton<TaskExecutionService>();
         services.AddSingleton<PatchStructureAnalyzer>();
@@ -58,6 +60,9 @@ public sealed class VersionCheckFacadeTests
         Assert.AreEqual(1, results.Count);
         Assert.AreEqual(ModVersionStatus.Unknown, results[0].Status);
         Assert.AreEqual(0, results[0].UnitCount);
-        Assert.AreEqual("无法判定版本", results[0].Summary);
+        // 摘要文案随 UI 文化变化，期望值经目录解析而不是硬编码。
+        var catalog = provider.GetRequiredService<LocalizationCatalog>();
+        Assert.AreEqual(catalog.GetString("Next.VersionCheck.Undetermined"), results[0].Summary);
+        Assert.AreNotEqual(string.Empty, results[0].Summary);
     }
 }

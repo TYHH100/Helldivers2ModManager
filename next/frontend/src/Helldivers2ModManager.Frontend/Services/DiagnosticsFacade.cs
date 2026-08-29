@@ -1,5 +1,6 @@
 using System.IO;
 using Helldivers2ModManager.Core.GameData;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Core.Repair;
 using Helldivers2ModManager.Core.Versioning;
 using Helldivers2ModManager.Frontend.Models;
@@ -33,6 +34,7 @@ public sealed class DiagnosticsFacade(
     VersionCheckFacade versionCheck,
     ConflictAnalysisFacade conflicts,
     ArmorReuseFacade armorReuse,
+    LocalizationCatalog localization,
     TaskExecutionService tasks)
 {
     private readonly Func<DirectoryInfo?> _gameDataDirectoryProvider = () =>
@@ -82,8 +84,8 @@ public sealed class DiagnosticsFacade(
             _gameDataDirectoryProvider);
         IReadOnlyList<BatchRepairItem>? plannedItems = null;
         await tasks.RunAsync(
-            "生成修复计划",
-            $"正在分析 {result.Mods.Count} 个模组",
+            localization.GetString("Next.Tasks.RepairPlan"),
+            string.Format(localization.GetString("Next.Tasks.AnalyzeModsFormat"), result.Mods.Count),
             async (_, token) =>
             {
                 plannedItems = await batchRepair.CreatePlanAsync(
@@ -122,8 +124,8 @@ public sealed class DiagnosticsFacade(
             _gameDataDirectoryProvider);
         IReadOnlyList<BatchRepairItem>? repaired = null;
         await tasks.RunAsync(
-            "执行修复",
-            $"正在修复 {items.Count} 个计划项",
+            localization.GetString("Next.Tasks.RepairExecute"),
+            string.Format(localization.GetString("Next.Tasks.RepairingFormat"), items.Count),
             async (_, token) => repaired = (await batchRepair.RepairAsync(items, token).ConfigureAwait(false)).Items,
             cancellationToken).ConfigureAwait(false);
         return repaired!;

@@ -1,6 +1,7 @@
 <UserControl x:Class="Helldivers2ModManager.Frontend.Views.ManifestEditPageView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:common="clr-namespace:Helldivers2ModManager.Frontend.Common">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -20,19 +21,19 @@
                 BorderThickness="1" CornerRadius="10" Padding="20" Margin="0,0,0,16">
             <Grid>
                 <StackPanel>
-                    <TextBlock Text="基本信息" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                    <TextBlock Text="模组名称" Margin="0,14,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{common:Loc ManifestEditPage.BasicInfo}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Text="{common:Loc Next.Edit.NameLabel}" Margin="0,14,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     <TextBox Style="{StaticResource SearchBox}" Text="{Binding ModName, UpdateSourceTrigger=PropertyChanged}"/>
-                    <TextBlock Text="描述" Margin="0,12,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{common:Loc CreatePage.Description}" Margin="0,12,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     <TextBox Style="{StaticResource SearchBox}" Text="{Binding ModDescription, UpdateSourceTrigger=PropertyChanged}"/>
-                    <TextBlock Text="图标" Margin="0,12,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{common:Loc CreatePage.Icon}" Margin="0,12,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox Style="{StaticResource SearchBox}" Text="{Binding IconPath, UpdateSourceTrigger=PropertyChanged}"/>
-                        <Button Style="{StaticResource FButton}" Grid.Column="1" Margin="8,0,0,0" Command="{Binding BrowseIconCommand}" Content="选择"/>
+                        <Button Style="{StaticResource FButton}" Grid.Column="1" Margin="8,0,0,0" Command="{Binding BrowseIconCommand}" Content="{common:Loc Next.Edit.Select}"/>
                     </Grid>
                 </StackPanel>
                 <TextBlock Text="{Binding Status}" HorizontalAlignment="Right" VerticalAlignment="Top" MaxWidth="320"
@@ -44,11 +45,11 @@
             <StackPanel>
                 <Border Background="#33FFB900" CornerRadius="7" Padding="12" Margin="0,0,0,12"
                         Visibility="{Binding IsLegacyManifest, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <TextBlock Text="Legacy 清单包含 V1 特有能力时会自动升级。" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{common:Loc Next.Edit.LegacyUpgradeHint}" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"/>
                 </Border>
                 <Grid Margin="0,0,0,10">
-                    <TextBlock Text="选项" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-                    <Button Style="{StaticResource FButton}" HorizontalAlignment="Right" Command="{Binding AddOptionCommand}" Content="添加选项"/>
+                    <TextBlock Text="{common:Loc CreatePage.OptionTitle}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                    <Button Style="{StaticResource FButton}" HorizontalAlignment="Right" Command="{Binding AddOptionCommand}" Content="{common:Loc CreatePage.AddOption}"/>
                 </Grid>
                 <ItemsControl ItemsSource="{Binding Options}">
                     <ItemsControl.ItemTemplate>
@@ -57,18 +58,18 @@
                                     BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,10">
                                 <StackPanel>
                                     <Grid>
-                                        <TextBlock Text="选项" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-                                        <Button Style="{StaticResource FButton}" HorizontalAlignment="Right" Content="删除"
+                                        <TextBlock Text="{common:Loc CreatePage.OptionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                                        <Button Style="{StaticResource FButton}" HorizontalAlignment="Right" Content="{common:Loc Common.Delete}"
                                                 Command="{Binding DataContext.RemoveOptionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"/>
                                     </Grid>
-                                    <TextBox Style="{StaticResource SearchBox}" Margin="0,12,0,0" Tag="名称" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
-                                    <TextBox Style="{StaticResource SearchBox}" Margin="0,8,0,0" Tag="描述" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"/>
-                                    <TextBox Style="{StaticResource SearchBox}" Margin="0,8,0,0" Tag="Include 路径，用 ; 分隔" Text="{Binding IncludePaths, UpdateSourceTrigger=PropertyChanged}"/>
-                                    <TextBox Style="{StaticResource SearchBox}" Margin="0,8,0,0" Tag="选项图片路径" Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Style="{StaticResource SearchBox}" Margin="0,12,0,0" Tag="{common:Loc Next.Manifest.NameWatermark}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Style="{StaticResource SearchBox}" Margin="0,8,0,0" Tag="{common:Loc Next.Manifest.DescriptionWatermark}" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Style="{StaticResource SearchBox}" Margin="0,8,0,0" Tag="{common:Loc Next.Manifest.IncludeWatermark}" Text="{Binding IncludePaths, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBox Style="{StaticResource SearchBox}" Margin="0,8,0,0" Tag="{common:Loc Next.Manifest.ImagePathWatermark}" Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"/>
                                     <Grid Margin="0,14,0,0">
-                                        <TextBlock Text="子选项" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-                                        <Button Style="{StaticResource FButton}" HorizontalAlignment="Right" Content="添加子选项"
+                                        <TextBlock Text="{common:Loc CreatePage.SubOptionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                                        <Button Style="{StaticResource FButton}" HorizontalAlignment="Right" Content="{common:Loc CreatePage.AddSubOption}"
                                                 Command="{Binding DataContext.AddSubOptionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"/>
                                     </Grid>
@@ -81,11 +82,11 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel>
-                                                        <TextBox Style="{StaticResource SearchBox}" Tag="子选项名称" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
-                                                        <TextBox Style="{StaticResource SearchBox}" Margin="0,6,0,0" Tag="Include 路径，用 ; 分隔" Text="{Binding IncludePaths, UpdateSourceTrigger=PropertyChanged}"/>
-                                                        <TextBox Style="{StaticResource SearchBox}" Margin="0,6,0,0" Tag="子选项图片路径" Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        <TextBox Style="{StaticResource SearchBox}" Tag="{common:Loc Next.Manifest.SubOptionNameWatermark}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        <TextBox Style="{StaticResource SearchBox}" Margin="0,6,0,0" Tag="{common:Loc Next.Manifest.IncludeWatermark}" Text="{Binding IncludePaths, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        <TextBox Style="{StaticResource SearchBox}" Margin="0,6,0,0" Tag="{common:Loc Next.Manifest.SubOptionImagePathWatermark}" Text="{Binding ImagePath, UpdateSourceTrigger=PropertyChanged}"/>
                                                     </StackPanel>
-                                                    <Button Style="{StaticResource FButton}" Grid.Column="1" Height="34" Margin="8,0,0,0" Content="删除"
+                                                    <Button Style="{StaticResource FButton}" Grid.Column="1" Height="34" Margin="8,0,0,0" Content="{common:Loc Common.Delete}"
                                                             Command="{Binding DataContext.RemoveSubOptionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"/>
                                                 </Grid>
@@ -103,9 +104,9 @@
         <Border Grid.Row="2" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
                 BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,16,0,0">
             <StackPanel Orientation="Horizontal">
-                <Button Style="{StaticResource PrimaryButton}" Command="{Binding DoneCommand}" Content="完成"/>
-                <Button Style="{StaticResource FButton}" Margin="10,0,0,0" Command="{Binding SaveCommand}" Content="保存"/>
-                <Button Style="{StaticResource FButton}" Margin="10,0,0,0" Command="{Binding CancelCommand}" Content="取消"/>
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding DoneCommand}" Content="{common:Loc EditPage.Done}"/>
+                <Button Style="{StaticResource FButton}" Margin="10,0,0,0" Command="{Binding SaveCommand}" Content="{common:Loc Common.Save}"/>
+                <Button Style="{StaticResource FButton}" Margin="10,0,0,0" Command="{Binding CancelCommand}" Content="{common:Loc Common.Cancel}"/>
             </StackPanel>
         </Border>
     </Grid>

@@ -1,6 +1,7 @@
 <UserControl x:Class="Helldivers2ModManager.Frontend.Views.DiagnosticsPageView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:common="clr-namespace:Helldivers2ModManager.Frontend.Common">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -20,12 +21,12 @@
                 BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,16">
             <StackPanel>
                 <WrapPanel Orientation="Horizontal">
-                    <Button Style="{StaticResource FButton}" Command="{Binding RefreshCommand}" Content="刷新状态"/>
-                    <Button Style="{StaticResource FButton}" Margin="8,0,0,0" Command="{Binding CheckVersionsCommand}" Content="版本检查"/>
-                    <Button Style="{StaticResource FButton}" Margin="8,0,0,0" Command="{Binding ScanConflictsCommand}" Content="冲突扫描"/>
-                    <Button Style="{StaticResource FButton}" Margin="8,0,0,0" Command="{Binding ScanArmorReuseCommand}" Content="护甲复用"/>
-                    <Button Style="{StaticResource FButton}" Margin="16,0,0,0" Command="{Binding CreateRepairPlanCommand}" Content="生成修复计划"/>
-                    <Button Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Command="{Binding ExecuteRepairsCommand}" Content="执行修复"/>
+                    <Button Style="{StaticResource FButton}" Command="{Binding RefreshCommand}" Content="{common:Loc Next.Diagnostics.RefreshStatus}"/>
+                    <Button Style="{StaticResource FButton}" Margin="8,0,0,0" Command="{Binding CheckVersionsCommand}" Content="{common:Loc Next.Tasks.VersionCheck}"/>
+                    <Button Style="{StaticResource FButton}" Margin="8,0,0,0" Command="{Binding ScanConflictsCommand}" Content="{common:Loc Next.Tasks.ConflictScan}"/>
+                    <Button Style="{StaticResource FButton}" Margin="8,0,0,0" Command="{Binding ScanArmorReuseCommand}" Content="{common:Loc Nav.ArmorReuse}"/>
+                    <Button Style="{StaticResource FButton}" Margin="16,0,0,0" Command="{Binding CreateRepairPlanCommand}" Content="{common:Loc Next.Diagnostics.CreatePlan}"/>
+                    <Button Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Command="{Binding ExecuteRepairsCommand}" Content="{common:Loc Next.Diagnostics.ExecuteRepairs}"/>
                 </WrapPanel>
                 <TextBlock Text="{Binding Status}" Margin="0,12,0,0"
                            Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
@@ -33,36 +34,26 @@
         </Border>
 
         <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
-            <TabItem Header="状态">
+            <TabItem Header="{common:Loc Next.Diagnostics.TabStatus}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel MaxWidth="880" HorizontalAlignment="Left">
                         <TextBlock Text="{Binding CurrentStatus.StorageDirectory}" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
                         <TextBlock Text="{Binding CurrentStatus.GameDirectory}" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
-                        <TextBlock Margin="0,12,0,0" Foreground="{DynamicResource TextPrimaryBrush}">
-                            <Run Text="模组 "/><Run Text="{Binding CurrentStatus.ModCount, Mode=OneWay}"/><Run Text="，启用 "/>
-                            <Run Text="{Binding CurrentStatus.EnabledCount, Mode=OneWay}"/><Run Text="，GameData "/>
-                            <Run Text="{Binding CurrentStatus.GameDataAvailable, Mode=OneWay}"/><Run Text="，部署模式 "/>
-                            <Run Text="{Binding CurrentStatus.UseSymbolicLinks, Mode=OneWay}"/>
-                        </TextBlock>
-                        <TextBlock Margin="0,14,0,0" Foreground="{DynamicResource TextPrimaryBrush}">
-                            <Run Text="版本结果 "/><Run Text="{Binding VersionCount, Mode=OneWay}"/><Run Text="；冲突 "/>
-                            <Run Text="{Binding ConflictCount, Mode=OneWay}"/><Run Text="（确定 "/>
-                            <Run Text="{Binding DefiniteConflictCount, Mode=OneWay}"/><Run Text="）；护甲复用 "/>
-                            <Run Text="{Binding ArmorReuseCount, Mode=OneWay}"/>
-                        </TextBlock>
+                        <TextBlock Text="{Binding StatusSummary}" Margin="0,12,0,0" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding CountersSummary}" Margin="0,14,0,0" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
-            <TabItem Header="修复计划">
+            <TabItem Header="{common:Loc Next.Diagnostics.TabRepairPlan}">
                 <DataGrid ItemsSource="{Binding Repairs}" AutoGenerateColumns="False" IsReadOnly="True"
                           Background="Transparent" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="模组" Binding="{Binding ModName}" Width="220"/>
-                        <DataGridTextColumn Header="状态" Binding="{Binding StateText}" Width="150"/>
-                        <DataGridTextColumn Header="元数据" Binding="{Binding MetadataActionCount}" Width="90"/>
+                        <DataGridTextColumn Header="{common:Loc Next.Diagnostics.ColMod}" Binding="{Binding ModName}" Width="220"/>
+                        <DataGridTextColumn Header="{common:Loc Next.Diagnostics.ColState}" Binding="{Binding StateText}" Width="150"/>
+                        <DataGridTextColumn Header="{common:Loc Next.Diagnostics.ColMetadata}" Binding="{Binding MetadataActionCount}" Width="90"/>
                         <DataGridTextColumn Header="Unit" Binding="{Binding AssistedActionCount}" Width="90"/>
-                        <DataGridTextColumn Header="伴生恢复" Binding="{Binding CompanionRecoveryCount}" Width="110"/>
-                        <DataGridTextColumn Header="说明" Binding="{Binding Message}" Width="*"/>
+                        <DataGridTextColumn Header="{common:Loc Next.Diagnostics.ColCompanion}" Binding="{Binding CompanionRecoveryCount}" Width="110"/>
+                        <DataGridTextColumn Header="{common:Loc Next.Diagnostics.ColMessage}" Binding="{Binding Message}" Width="*"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </TabItem>

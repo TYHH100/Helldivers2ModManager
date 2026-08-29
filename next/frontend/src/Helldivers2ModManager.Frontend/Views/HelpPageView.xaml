@@ -1,6 +1,7 @@
 <UserControl x:Class="Helldivers2ModManager.Frontend.Views.HelpPageView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:common="clr-namespace:Helldivers2ModManager.Frontend.Common">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -30,7 +31,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="Bold" VerticalAlignment="Center"
                                            Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"/>
-                                <Button Grid.Column="1" Style="{StaticResource FButton}" Content="打开"
+                                <Button Grid.Column="1" Style="{StaticResource FButton}" Content="{common:Loc Next.Help.Open}"
                                         Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding RouteKey}"/>
                             </Grid>

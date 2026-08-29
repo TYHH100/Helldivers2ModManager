@@ -36,13 +36,19 @@ src/Helldivers2ModManager.Frontend.Host/bin/Debug/net10.0-windows/Helldivers2Mod
 - [x] Navigation creates pages through scoped resolution and replaces the current page.
 - [x] Temporary Host starts against Core only and shows the shell.
 - [ ] Manual review passes for window resize, maximize, keyboard focus, navigation, and drag overlay.
+      （冒烟已过：Host 启动、模块切换、设置页语言双向切换即时生效；窗口尺寸/键盘/拖拽覆盖层仍需人工过目。）
 
 ### Feature Parity
 
-- [ ] Mod library import, scan, selection, enable/disable, grouping, tags, and search.
-- [ ] Deployment order, copy/symlink deployment, purge, progress, cancellation, and rollback reporting.
-- [ ] Create/edit/manifest/tag/auto-tag/Nexus tools.
-- [ ] Resource viewer/model preview/armor reuse/bisect diagnostics.
-- [ ] Settings/help/first-run experience and language switching.
+- [x] Mod library import, scan, selection, enable/disable, grouping, tags, and search.
+      （分组：新建/重命名/删除/按组过滤/行内归属下拉；标签：库内展示与手动赋值面板；
+      搜索：`EnableFuzzySearch` 接入 `FuzzySearchMatcher`，名称拼音后台预热缓存。）
+- [x] Deployment order, copy/symlink deployment, purge, progress, cancellation, and rollback reporting.
+- [x] Create/edit/manifest/tag/auto-tag/Nexus tools.
+- [x] Resource viewer/model preview/armor reuse/bisect diagnostics.
+- [x] Settings/help/first-run experience and language switching.
+      （保存设置即应用 `CurrentUICulture` 并刷新主壳标题与当前页头；页面静态文本随页面重建刷新；
+      游戏目录未配置时库页显示首启引导。）
 
 功能清单全部勾选并完成人工验收前，禁止把 `next/frontend/src/Helldivers2ModManager.Frontend` 迁出隔离目录或设为主程序默认 UI。
+当前剩余门槛：上方 Foundation 人工验收项 + `ACCEPTANCE.md` 逐项签署。

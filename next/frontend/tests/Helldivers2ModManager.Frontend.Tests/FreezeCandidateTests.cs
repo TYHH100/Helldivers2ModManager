@@ -85,10 +85,18 @@ public sealed partial class FreezeCandidateTests
         var catalog = new LocalizationCatalog();
         HashSet<string> missing = [];
 
-        foreach (var path in Directory.EnumerateFiles(sourceDirectory, "*.cs", SearchOption.AllDirectories))
+        foreach (var path in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
         {
+            var isSource = path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
+            var isMarkup = path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase);
+            if (!isSource && !isMarkup)
+            {
+                continue;
+            }
+
             var content = File.ReadAllText(path);
-            foreach (Match match in LocalizationReferenceRegex().Matches(content))
+            var regex = isSource ? LocalizationReferenceRegex() : XamlLocalizationReferenceRegex();
+            foreach (Match match in regex.Matches(content))
             {
                 var key = match.Groups["Key"].Value;
                 if (!string.IsNullOrWhiteSpace(key))
@@ -171,4 +179,7 @@ public sealed partial class FreezeCandidateTests
 
     [GeneratedRegex("\\.GetString\\(\"(?<Key>[^\"]+)\"\\)")]
     private static partial Regex LocalizationReferenceRegex();
+
+    [GeneratedRegex("\\bLoc\\s+(?<Key>[A-Za-z_][A-Za-z0-9_.]*)")]
+    private static partial Regex XamlLocalizationReferenceRegex();
 }

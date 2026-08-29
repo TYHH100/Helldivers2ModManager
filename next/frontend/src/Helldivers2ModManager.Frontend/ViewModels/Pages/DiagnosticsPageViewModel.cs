@@ -34,11 +34,80 @@ public sealed class DiagnosticsPageViewModel : FrontendPageViewModel
 
     public bool IsBusy { get => _isBusy; private set => SetProperty(ref _isBusy, value); }
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
-    public DiagnosticsStatus? CurrentStatus { get => _currentStatus; private set => SetProperty(ref _currentStatus, value); }
-    public int VersionCount { get => _versionCount; private set => SetProperty(ref _versionCount, value); }
-    public int ConflictCount { get => _conflictCount; private set => SetProperty(ref _conflictCount, value); }
-    public int DefiniteConflictCount { get => _definiteConflictCount; private set => SetProperty(ref _definiteConflictCount, value); }
-    public int ArmorReuseCount { get => _armorReuseCount; private set => SetProperty(ref _armorReuseCount, value); }
+    public DiagnosticsStatus? CurrentStatus
+    {
+        get => _currentStatus;
+        private set
+        {
+            if (SetProperty(ref _currentStatus, value))
+            {
+                OnPropertyChanged(nameof(StatusSummary));
+            }
+        }
+    }
+
+    public int VersionCount
+    {
+        get => _versionCount;
+        private set
+        {
+            if (SetProperty(ref _versionCount, value))
+            {
+                OnPropertyChanged(nameof(CountersSummary));
+            }
+        }
+    }
+
+    public int ConflictCount
+    {
+        get => _conflictCount;
+        private set
+        {
+            if (SetProperty(ref _conflictCount, value))
+            {
+                OnPropertyChanged(nameof(CountersSummary));
+            }
+        }
+    }
+
+    public int DefiniteConflictCount
+    {
+        get => _definiteConflictCount;
+        private set
+        {
+            if (SetProperty(ref _definiteConflictCount, value))
+            {
+                OnPropertyChanged(nameof(CountersSummary));
+            }
+        }
+    }
+
+    public int ArmorReuseCount
+    {
+        get => _armorReuseCount;
+        private set
+        {
+            if (SetProperty(ref _armorReuseCount, value))
+            {
+                OnPropertyChanged(nameof(CountersSummary));
+            }
+        }
+    }
+
+    public string StatusSummary => CurrentStatus is null
+        ? string.Empty
+        : string.Format(
+            _localization.GetString("Next.Diagnostics.SummaryFormat"),
+            CurrentStatus.ModCount,
+            CurrentStatus.EnabledCount,
+            CurrentStatus.UseSymbolicLinks);
+
+    public string CountersSummary => string.Format(
+        _localization.GetString("Next.Diagnostics.CountersFormat"),
+        VersionCount,
+        ConflictCount,
+        DefiniteConflictCount,
+        ArmorReuseCount);
     public bool HasRepairPlan => _repairPlan.Count > 0;
 
     public ICommand RefreshCommand { get; }
@@ -87,8 +156,8 @@ public sealed class DiagnosticsPageViewModel : FrontendPageViewModel
         try
         {
             CurrentStatus = await _diagnostics.GetStatusAsync(cancellationToken).ConfigureAwait(true);
-            Status = "诊断状态已刷新。";
-            Log("诊断状态已刷新。");
+            Status = _localization.GetString("Next.Diagnostics.StatusRefreshed");
+            Log(Status);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -99,13 +168,13 @@ public sealed class DiagnosticsPageViewModel : FrontendPageViewModel
 
     private async Task CheckVersionsAsync()
     {
-        SetBusy(true, "正在检查版本兼容性…");
+        SetBusy(true, _localization.GetString("Next.Diagnostics.CheckingVersions"));
         try
         {
             var mods = (await _library.LoadAsync().ConfigureAwait(true)).Mods;
             var results = await _versionCheck.CheckAllAsync(mods).ConfigureAwait(true);
             VersionCount = results.Count;
-            Status = $"版本检查完成：{results.Count} 个模组。";
+            Status = string.Format(_localization.GetString("Next.Diagnostics.VersionCheckDoneFormat"), results.Count);
             Log(Status);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -121,14 +190,17 @@ public sealed class DiagnosticsPageViewModel : FrontendPageViewModel
 
     private async Task ScanConflictsAsync()
     {
-        SetBusy(true, "正在扫描冲突…");
+        SetBusy(true, _localization.GetString("Next.Diagnostics.ScanningConflicts"));
         try
         {
             var mods = (await _library.LoadAsync().ConfigureAwait(true)).Mods;
             var result = await _conflicts.ScanEnabledAsync(mods).ConfigureAwait(true);
             ConflictCount = result.Conflicts.Count;
             DefiniteConflictCount = result.DefiniteConflictCount;
-            Status = $"冲突扫描完成：{result.ScannedUnitCount} 个 Unit，{result.Conflicts.Count} 个冲突。";
+            Status = string.Format(
+                _localization.GetString("Next.Diagnostics.ConflictScanDoneFormat"),
+                result.ScannedUnitCount,
+                result.Conflicts.Count);
             Log(Status);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -144,13 +216,13 @@ public sealed class DiagnosticsPageViewModel : FrontendPageViewModel
 
     private async Task ScanArmorReuseAsync()
     {
-        SetBusy(true, "正在扫描护甲复用…");
+        SetBusy(true, _localization.GetString("Next.Diagnostics.ScanningArmorReuse"));
         try
         {
             var mods = (await _library.LoadAsync().ConfigureAwait(true)).Mods;
             var result = await _armorReuse.ScanEnabledAsync(mods).ConfigureAwait(true);
             ArmorReuseCount = result.Records.Count;
-            Status = $"护甲复用扫描完成：{result.Records.Count} 条记录。";
+            Status = string.Format(_localization.GetString("Next.Diagnostics.ArmorReuseDoneFormat"), result.Records.Count);
             Log(Status);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -166,12 +238,14 @@ public sealed class DiagnosticsPageViewModel : FrontendPageViewModel
 
     private async Task CreateRepairPlanAsync()
     {
-        SetBusy(true, "正在生成修复计划…");
+        SetBusy(true, _localization.GetString("Next.Diagnostics.GeneratingPlan"));
         try
         {
             var plan = await _diagnostics.CreateRepairPlanAsync().ConfigureAwait(true);
             ApplyRepairPlan(plan);
-            Status = $"修复计划已生成：{plan.Count(item => item.State == BatchRepairState.Repairable)} 项可修复。";
+            Status = string.Format(
+                _localization.GetString("Next.Diagnostics.PlanDoneFormat"),
+                plan.Count(item => item.State == BatchRepairState.Repairable));
             foreach (var item in plan.Take(20))
             {
                 Log($"{item.ModName}: {item.StateText} - {item.Message}");
@@ -196,7 +270,7 @@ public sealed class DiagnosticsPageViewModel : FrontendPageViewModel
         }
 
         if (MessageBox.Show(
-                "修复会修改模组补丁文件并创建备份。\n\n确定执行当前修复计划？",
+                _localization.GetString("Next.Diagnostics.ExecuteConfirm"),
                 Title,
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
@@ -204,7 +278,7 @@ public sealed class DiagnosticsPageViewModel : FrontendPageViewModel
             return;
         }
 
-        SetBusy(true, "正在执行修复…");
+        SetBusy(true, _localization.GetString("Next.Diagnostics.ExecutingRepairs"));
         try
         {
             var results = await _diagnostics.ExecuteRepairsAsync([.. _repairPlan.Select(item => item.Source)]).ConfigureAwait(true);
@@ -213,7 +287,10 @@ public sealed class DiagnosticsPageViewModel : FrontendPageViewModel
                 result.AssistedActionCount > 0 ||
                 result.CompanionRecoveryCount > 0);
             ApplyRepairResults(results);
-            Status = $"修复完成：{changed} 个计划项发生变更，{results.Count(item => item.State == BatchRepairState.Blocked)} 项被阻断。";
+            Status = string.Format(
+                _localization.GetString("Next.Diagnostics.RepairDoneFormat"),
+                changed,
+                results.Count(item => item.State == BatchRepairState.Blocked));
             foreach (var item in results.Take(30))
             {
                 Log($"{item.ModId}: {item.Message}");

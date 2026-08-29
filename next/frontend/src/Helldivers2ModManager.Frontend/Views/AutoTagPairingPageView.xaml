@@ -1,6 +1,7 @@
 <UserControl x:Class="Helldivers2ModManager.Frontend.Views.AutoTagPairingPageView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:common="clr-namespace:Helldivers2ModManager.Frontend.Common">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -8,7 +9,7 @@
                 <ResourceDictionary Source="../Themes/FrontendControls.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <common:HexColorConverter x:Key="ColorConverter"
-                                      xmlns:common="clr-namespace:Helldivers2ModManager.Frontend.Common"/>
+                                     />
         </ResourceDictionary>
     </UserControl.Resources>
     <Grid>
@@ -36,7 +37,7 @@
                                 <ComboBox Style="{StaticResource FComboBox}" Grid.Column="1" Margin="12,0"
                                           ItemsSource="{Binding Tags}" DisplayMemberPath="Name"
                                           SelectedValuePath="Id" SelectedValue="{Binding SelectedTagId}"/>
-                                <Button Style="{StaticResource FButton}" Grid.Column="2" Content="新建标签"
+                                <Button Style="{StaticResource FButton}" Grid.Column="2" Content="{common:Loc Next.AutoTagPairing.CreateTag}"
                                         Command="{Binding DataContext.CreateTagCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding}"/>
                             </Grid>
@@ -48,8 +49,8 @@
         <Border Grid.Row="1" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
                 BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,16,0,0">
             <StackPanel Orientation="Horizontal">
-                <Button Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" Content="保存配对"/>
-                <Button Style="{StaticResource FButton}" Margin="10,0,0,0" Command="{Binding BackCommand}" Content="返回设置"/>
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" Content="{common:Loc AutoTagPairingPage.Save}"/>
+                <Button Style="{StaticResource FButton}" Margin="10,0,0,0" Command="{Binding BackCommand}" Content="{common:Loc Next.AutoTagPairing.BackToSettings}"/>
                 <TextBlock Text="{Binding Status}" Margin="16,0,0,0" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
             </StackPanel>

@@ -75,6 +75,7 @@ public sealed class NexusDownloadServiceTests
         services.AddMods();
         services.AddProfiles();
         services.AddSingleton(paths);
+        services.AddSingleton<LocalizationCatalog>();
         services.AddSingleton(httpClient);
         services.AddSingleton<ApplicationSettingsService>();
         services.AddSingleton<TaskExecutionService>();

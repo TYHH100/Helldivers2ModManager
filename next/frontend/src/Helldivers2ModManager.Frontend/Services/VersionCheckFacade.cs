@@ -1,5 +1,6 @@
 using System.IO;
 using Helldivers2ModManager.Core.GameData;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Core.Versioning;
 using Helldivers2ModManager.Frontend.Models;
 
@@ -22,6 +23,7 @@ public sealed class VersionCheckFacade(
     PatchStructureAnalyzer analyzer,
     GameArchiveService gameArchive,
     ApplicationSettingsService settings,
+    LocalizationCatalog localization,
     TaskExecutionService tasks)
 {
     public VersionCheckService CreateService() => new(
@@ -36,8 +38,8 @@ public sealed class VersionCheckFacade(
         var service = CreateService();
         IReadOnlyList<VersionCheckItem>? result = null;
         await tasks.RunAsync(
-            "版本检查",
-            $"正在检查 {mods.Count} 个模组",
+            localization.GetString("Next.Tasks.VersionCheck"),
+            string.Format(localization.GetString("Next.Tasks.VersionCheckingFormat"), mods.Count),
             async (_, token) =>
             {
                 var inputs = mods.Select(mod => new DiscoveredModInput(
@@ -63,23 +65,28 @@ public sealed class VersionCheckFacade(
         return dataDirectory.Exists ? dataDirectory : null;
     }
 
-    private static VersionCheckItem CreateItem(ModItem mod, ModVersionCheckResult? result)
+    private VersionCheckItem CreateItem(ModItem mod, ModVersionCheckResult? result)
     {
         if (result is null)
         {
-            return new(mod.Id, mod.Name, ModVersionStatus.Unknown, 0, DateTimeOffset.Now, 0, 0, 0, 0, 0, "未检查");
+            return new(mod.Id, mod.Name, ModVersionStatus.Unknown, 0, DateTimeOffset.Now, 0, 0, 0, 0, 0, localization.GetString("Next.VersionCheck.NotChecked"));
         }
 
         var analysis = result.DetailedAnalysis;
         var summary = result.Status switch
         {
-            ModVersionStatus.Compatible => "版本兼容",
-            ModVersionStatus.Incompatible => $"版本不兼容；{result.UnitsMissingGameReference.Count} 个 Unit 缺少游戏引用",
-            _ => "无法判定版本",
+            ModVersionStatus.Compatible => localization.GetString("Next.VersionCheck.Compatible"),
+            ModVersionStatus.Incompatible => string.Format(
+                localization.GetString("Next.VersionCheck.IncompatibleFormat"),
+                result.UnitsMissingGameReference.Count),
+            _ => localization.GetString("Next.VersionCheck.Undetermined"),
         };
         if (analysis is { HasBlockingStructuralIssues: true })
         {
-            summary += $"；结构问题：{analysis.CorruptedFileCount} 损坏 / {analysis.WarningFileCount} 警告";
+            summary += string.Format(
+                localization.GetString("Next.VersionCheck.StructureIssuesFormat"),
+                analysis.CorruptedFileCount,
+                analysis.WarningFileCount);
         }
 
         return new(

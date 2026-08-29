@@ -49,16 +49,16 @@ public sealed class AutoTaggingFacade(
         var tagNames = ModTypeDetectionService.BuiltInTags
             .ToDictionary(definition => definition.Type, definition => localization.GetString(definition.NameKey));
         await tasks.RunAsync(
-            "自动打标签",
-            $"正在分析 {mods.Count} 个模组",
+            localization.GetString("Next.Tasks.AutoTagging"),
+            string.Format(localization.GetString("Next.Tasks.AnalyzeModsFormat"), mods.Count),
             async (task, token) =>
             {
-                var scanStep = task.AddStep("扫描模组类型", BackgroundStepStatus.Running);
+                var scanStep = task.AddStep(localization.GetString("Next.Tasks.StepScanTypes"), BackgroundStepStatus.Running);
                 var directories = mods.Select(mod => mod.Directory).ToArray();
                 var detections = await detector.DetectAllAsync(directories, token).ConfigureAwait(false);
-                task.UpdateStep(scanStep, "扫描模组类型", BackgroundStepStatus.Succeeded);
+                task.UpdateStep(scanStep, localization.GetString("Next.Tasks.StepScanTypes"), BackgroundStepStatus.Succeeded);
 
-                var applyStep = task.AddStep("应用标签映射", BackgroundStepStatus.Running);
+                var applyStep = task.AddStep(localization.GetString("Next.Tasks.StepApplyTagMapping"), BackgroundStepStatus.Running);
                 var requests = mods.Select(mod => new AutoTagRequest(
                     mod.Directory.FullName,
                     mod.TagIds,
@@ -87,7 +87,7 @@ public sealed class AutoTaggingFacade(
                     }
                     : record).ToArray();
                 await enabledStates.ReplaceAllAsync(records, token).ConfigureAwait(false);
-                task.UpdateStep(applyStep, "应用标签映射", BackgroundStepStatus.Succeeded);
+                task.UpdateStep(applyStep, localization.GetString("Next.Tasks.StepApplyTagMapping"), BackgroundStepStatus.Succeeded);
                 task.ReportProgress(1);
             },
             cancellationToken).ConfigureAwait(false);

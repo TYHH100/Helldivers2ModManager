@@ -1,6 +1,7 @@
 using System.IO;
 using Helldivers2ModManager.Core.Analysis;
 using Helldivers2ModManager.Core.GameData;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Core.Versioning;
 using Helldivers2ModManager.Frontend.Models;
 
@@ -24,6 +25,7 @@ public sealed class ConflictAnalysisFacade(
     PatchStructureAnalyzer analyzer,
     GameArchiveService gameArchive,
     VersionCheckFacade versionCheck,
+    LocalizationCatalog localization,
     TaskExecutionService tasks)
 {
     public async Task<ConflictScanResult> ScanEnabledAsync(
@@ -33,8 +35,8 @@ public sealed class ConflictAnalysisFacade(
         var service = new ModConflictService(analyzer, gameArchive);
         ConflictScanResult? result = null;
         await tasks.RunAsync(
-            "冲突扫描",
-            "正在扫描启用模组的 Unit 覆盖",
+            localization.GetString("Next.Tasks.ConflictScan"),
+            localization.GetString("Next.Tasks.ConflictScanning"),
             async (_, token) =>
             {
                 var enabled = mods.Where(mod => mod.IsEnabled)

@@ -1,5 +1,6 @@
 using System.IO;
 using Helldivers2ModManager.Core.Common;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Core.Deployment;
 using Helldivers2ModManager.Core.Mods;
 using Helldivers2ModManager.Core.Persistence;
@@ -39,6 +40,7 @@ public sealed class LibraryDeploymentServiceTests
         services.AddProfiles();
         services.AddDeployment();
         services.AddSingleton(paths);
+        services.AddSingleton<LocalizationCatalog>();
         services.AddSingleton<ApplicationSettingsService>();
         services.AddSingleton<TaskExecutionService>();
         services.AddSingleton<ModLibraryService>();

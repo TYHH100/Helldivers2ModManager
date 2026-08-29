@@ -1,5 +1,6 @@
 using System.IO;
 using Helldivers2ModManager.Core.Common;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Core.Mods;
 using Helldivers2ModManager.Core.Persistence;
 using Helldivers2ModManager.Core.Profiles;
@@ -119,6 +120,7 @@ public sealed class BisectServiceTests
         services.AddMods();
         services.AddProfiles();
         services.AddSingleton(paths);
+        services.AddSingleton<LocalizationCatalog>();
         services.AddSingleton<ApplicationSettingsService>();
         services.AddSingleton<TaskExecutionService>();
         services.AddSingleton<ModLibraryService>();

@@ -1,6 +1,7 @@
 using System.IO;
 using Helldivers2ModManager.Core.Common;
 using Helldivers2ModManager.Core.Deployment;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Core.Mods;
 using Helldivers2ModManager.Frontend.Models;
 
@@ -13,6 +14,7 @@ public sealed class DeploymentServiceFacade(
     DeploymentService deployment,
     ApplicationSettingsService settings,
     ApplicationPaths paths,
+    LocalizationCatalog localization,
     TaskExecutionService taskRunner)
 {
     public async Task<IReadOnlyList<ModItem>> LoadEnabledModsAsync(CancellationToken cancellationToken = default)
@@ -33,8 +35,8 @@ public sealed class DeploymentServiceFacade(
             settings.Current.UseSymbolicLinks,
             settings.Current.SkipList);
         return await taskRunner.RunAsync(
-            "部署模组",
-            $"正在部署 {inputs.Length} 个启用的模组",
+            localization.GetString("Next.Tasks.Deploy"),
+            string.Format(localization.GetString("Next.Tasks.DeployingFormat"), inputs.Length),
             (_, token) => deployment.DeployAsync(inputs, options, progress, token),
             cancellationToken).ConfigureAwait(false);
     }
@@ -43,8 +45,8 @@ public sealed class DeploymentServiceFacade(
     {
         var gameData = ResolveGameDataDirectory();
         return await taskRunner.RunAsync(
-            "清理模组",
-            "正在清理游戏 data 目录中的模组文件",
+            localization.GetString("Next.Tasks.Purge"),
+            localization.GetString("Next.Tasks.Purging"),
             (_, token) => deployment.PurgeAsync(gameData, token),
             cancellationToken).ConfigureAwait(false);
     }

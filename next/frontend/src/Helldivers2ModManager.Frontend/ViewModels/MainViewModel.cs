@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Helldivers2ModManager.Core.Localization;
+using Helldivers2ModManager.Core.Persistence;
 using Helldivers2ModManager.Frontend.Common;
 using Helldivers2ModManager.Frontend.Navigation;
+using Helldivers2ModManager.Frontend.Services;
 
 namespace Helldivers2ModManager.Frontend.ViewModels;
 
@@ -19,13 +21,20 @@ public sealed class NavigationItem : ObservableObject
 
     public string Group { get; }
 
-    public string Title { get; }
-
     public bool IsCurrent { get => _isCurrent; private set => SetProperty(ref _isCurrent, value); }
 
     private bool _isCurrent;
+    private string _title = string.Empty;
+
+    public string Title
+    {
+        get => _title;
+        private set => SetProperty(ref _title, value);
+    }
 
     internal void SetCurrent(bool isCurrent) => IsCurrent = isCurrent;
+
+    internal void SetTitle(string title) => Title = title;
 }
 
 public sealed class NavigationModule : ObservableObject
@@ -39,30 +48,42 @@ public sealed class NavigationModule : ObservableObject
 
     public string Key { get; }
 
-    public string Title { get; }
-
     public IReadOnlyList<NavigationItem> Pages { get; }
 
     public bool IsCurrent { get => _isCurrent; private set => SetProperty(ref _isCurrent, value); }
 
     private bool _isCurrent;
+    private string _title = string.Empty;
+
+    public string Title
+    {
+        get => _title;
+        private set => SetProperty(ref _title, value);
+    }
 
     internal void SetCurrent(bool isCurrent) => IsCurrent = isCurrent;
+
+    internal void SetTitle(string title) => Title = title;
 }
 
 public sealed class MainViewModel : ObservableObject
 {
     private readonly INavigationStore _navigationStore;
     private readonly LocalizationCatalog _localization;
+    private readonly ApplicationSettingsService _settings;
     private string _currentTitle = string.Empty;
     private string _currentDescription = string.Empty;
     private string _searchText = string.Empty;
     private NavigationModule _currentModule;
 
-    public MainViewModel(INavigationStore navigationStore, LocalizationCatalog localization)
+    public MainViewModel(
+        INavigationStore navigationStore,
+        LocalizationCatalog localization,
+        ApplicationSettingsService settings)
     {
         _navigationStore = navigationStore;
         _localization = localization;
+        _settings = settings;
         var routesByGroup = FrontendRouteRegistry.All
             .GroupBy(route => route.Group)
             .ToDictionary(group => group.Key, group => group.ToArray());
@@ -82,8 +103,30 @@ public sealed class MainViewModel : ObservableObject
         OpenTasksCommand = new DelegateCommand(_ => Navigate("Deployment.Tasks"));
         OpenSettingsCommand = new DelegateCommand(_ => Navigate("System.Settings"));
         _navigationStore.CurrentPageChanged += (_, _) => RefreshCurrentRoute();
+        _settings.Saved += OnSettingsSaved;
         UpdateSelection("Library");
         Navigate("Library");
+    }
+
+    private void OnSettingsSaved(object? sender, AppSettings settings)
+    {
+        // 语言切换后：常驻主壳的标题全部按新文化重建；当前页头同步刷新。
+        foreach (var module in Modules)
+        {
+            module.SetTitle(_localization.GetString($"Nav.Group.{module.Key}"));
+            foreach (var item in module.Pages)
+            {
+                item.SetTitle(_localization.GetString(FrontendRouteRegistry.Get(item.RouteKey).TitleKey));
+            }
+        }
+
+        OnPropertyChanged(nameof(CurrentModuleTitle));
+        OnPropertyChanged(nameof(AppTitle));
+        OnPropertyChanged(nameof(SearchWatermark));
+        OnPropertyChanged(nameof(ImportLabel));
+        OnPropertyChanged(nameof(DeployLabel));
+        OnPropertyChanged(nameof(TasksLabel));
+        RefreshCurrentRoute();
     }
 
     public IReadOnlyList<NavigationModule> Modules { get; }

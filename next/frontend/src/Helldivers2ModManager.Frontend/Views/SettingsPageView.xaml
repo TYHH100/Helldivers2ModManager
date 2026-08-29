@@ -1,6 +1,7 @@
 <UserControl x:Class="Helldivers2ModManager.Frontend.Views.SettingsPageView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:common="clr-namespace:Helldivers2ModManager.Frontend.Common">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -13,30 +14,30 @@
         <StackPanel MaxWidth="820" HorizontalAlignment="Left">
             <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="10" Padding="20" Margin="0,0,0,16">
                 <StackPanel>
-                    <TextBlock Text="目录" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                    <TextBlock Text="游戏目录" Margin="0,16,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Style="{StaticResource SearchBox}" Text="{Binding GameDirectory, UpdateSourceTrigger=PropertyChanged}"/><StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0"><Button Style="{StaticResource FButton}" Command="{Binding DetectGameCommand}" Content="自动检测"/><Button Style="{StaticResource FButton}" Margin="8,0,0,0" Command="{Binding BrowseGameCommand}" Content="浏览"/></StackPanel></Grid>
-                    <TextBlock Text="存储目录" Margin="0,14,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Style="{StaticResource SearchBox}" Text="{Binding StorageDirectory, UpdateSourceTrigger=PropertyChanged}"/><Button Style="{StaticResource FButton}" Grid.Column="1" Margin="8,0,0,0" Command="{Binding BrowseStorageCommand}" Content="浏览"/></Grid>
-                    <TextBlock Text="临时目录" Margin="0,14,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Style="{StaticResource SearchBox}" Text="{Binding TempDirectory, UpdateSourceTrigger=PropertyChanged}"/><Button Style="{StaticResource FButton}" Grid.Column="1" Margin="8,0,0,0" Command="{Binding BrowseTempCommand}" Content="浏览"/></Grid>
+                    <TextBlock Text="{common:Loc Next.Settings.SectionDirectories}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Text="{common:Loc SettingsPage.GameDir}" Margin="0,16,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Style="{StaticResource SearchBox}" Text="{Binding GameDirectory, UpdateSourceTrigger=PropertyChanged}"/><StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0"><Button Style="{StaticResource FButton}" Command="{Binding DetectGameCommand}" Content="{common:Loc SettingsPage.AutoDetect}"/><Button Style="{StaticResource FButton}" Margin="8,0,0,0" Command="{Binding BrowseGameCommand}" Content="{common:Loc CreatePage.OptionBrowse}"/></StackPanel></Grid>
+                    <TextBlock Text="{common:Loc SettingsPage.StorageDir}" Margin="0,14,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Style="{StaticResource SearchBox}" Text="{Binding StorageDirectory, UpdateSourceTrigger=PropertyChanged}"/><Button Style="{StaticResource FButton}" Grid.Column="1" Margin="8,0,0,0" Command="{Binding BrowseStorageCommand}" Content="{common:Loc CreatePage.OptionBrowse}"/></Grid>
+                    <TextBlock Text="{common:Loc SettingsPage.TempDir}" Margin="0,14,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Style="{StaticResource SearchBox}" Text="{Binding TempDirectory, UpdateSourceTrigger=PropertyChanged}"/><Button Style="{StaticResource FButton}" Grid.Column="1" Margin="8,0,0,0" Command="{Binding BrowseTempCommand}" Content="{common:Loc CreatePage.OptionBrowse}"/></Grid>
                 </StackPanel>
             </Border>
             <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="10" Padding="20" Margin="0,0,0,16">
                 <StackPanel>
-                    <TextBlock Text="行为" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                    <CheckBox Style="{StaticResource FCheckBox}" Content="使用符号链接部署" IsChecked="{Binding UseSymbolicLinks}" Margin="0,16,0,0"/>
-                    <CheckBox Style="{StaticResource FCheckBox}" Content="删除到回收站" IsChecked="{Binding DeleteToRecycleBin}" Margin="0,10,0,0"/>
-                    <CheckBox Style="{StaticResource FCheckBox}" Content="启用模糊搜索" IsChecked="{Binding EnableFuzzySearch}" Margin="0,10,0,0"/>
-                    <CheckBox Style="{StaticResource FCheckBox}" Content="启动时检查版本" IsChecked="{Binding AutoCheckVersionOnStartup}" Margin="0,10,0,0"/>
-                    <CheckBox Style="{StaticResource FCheckBox}" Content="启用自动标签" IsChecked="{Binding EnableAutoTagging}" Margin="0,10,0,0"/>
-                    <CheckBox Style="{StaticResource FCheckBox}" Content="自动创建缺失标签" IsChecked="{Binding AutoTagCreateMissingTags}" Margin="0,10,0,0"/>
+                    <TextBlock Text="{common:Loc Next.Settings.SectionBehavior}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <CheckBox Style="{StaticResource FCheckBox}" Content="{common:Loc Next.Settings.UseSymlinks}" IsChecked="{Binding UseSymbolicLinks}" Margin="0,16,0,0"/>
+                    <CheckBox Style="{StaticResource FCheckBox}" Content="{common:Loc Next.Settings.RecycleBin}" IsChecked="{Binding DeleteToRecycleBin}" Margin="0,10,0,0"/>
+                    <CheckBox Style="{StaticResource FCheckBox}" Content="{common:Loc Next.Settings.FuzzySearch}" IsChecked="{Binding EnableFuzzySearch}" Margin="0,10,0,0"/>
+                    <CheckBox Style="{StaticResource FCheckBox}" Content="{common:Loc Next.Settings.CheckVersionOnStartup}" IsChecked="{Binding AutoCheckVersionOnStartup}" Margin="0,10,0,0"/>
+                    <CheckBox Style="{StaticResource FCheckBox}" Content="{common:Loc Next.Settings.EnableAutoTagging}" IsChecked="{Binding EnableAutoTagging}" Margin="0,10,0,0"/>
+                    <CheckBox Style="{StaticResource FCheckBox}" Content="{common:Loc Next.Settings.AutoCreateTags}" IsChecked="{Binding AutoTagCreateMissingTags}" Margin="0,10,0,0"/>
                 </StackPanel>
             </Border>
             <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="10" Padding="20" Margin="0,0,0,16">
                 <StackPanel>
-                    <TextBlock Text="集成" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                    <TextBlock Text="语言" Margin="0,16,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{common:Loc Next.Settings.SectionIntegration}" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Text="{common:Loc Next.Settings.LanguageLabel}" Margin="0,16,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     <ComboBox Style="{StaticResource FComboBox}" ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" Width="180" HorizontalAlignment="Left"/>
                     <TextBlock Text="Nexus API Key" Margin="0,14,0,5" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     <TextBox Style="{StaticResource SearchBox}" Text="{Binding NexusApiKey, UpdateSourceTrigger=PropertyChanged}"/>
@@ -44,7 +45,7 @@
             </Border>
             <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" CornerRadius="10" Padding="20">
                 <StackPanel Orientation="Horizontal">
-                    <Button Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" Content="保存设置"/>
+                    <Button Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" Content="{common:Loc Next.Settings.Save}"/>
                     <TextBlock Text="{Binding Status}" Margin="16,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>

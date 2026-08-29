@@ -1,5 +1,6 @@
 using System.IO;
 using Helldivers2ModManager.Core.Common;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Core.GameData;
 using Helldivers2ModManager.Core.Mods;
 using Helldivers2ModManager.Core.Persistence;
@@ -40,6 +41,7 @@ public sealed class ConflictAnalysisFacadeTests
         services.AddProfiles();
         services.AddGameData();
         services.AddSingleton(paths);
+        services.AddSingleton<LocalizationCatalog>();
         services.AddSingleton<ApplicationSettingsService>();
         services.AddSingleton<TaskExecutionService>();
         services.AddSingleton<PatchStructureAnalyzer>();

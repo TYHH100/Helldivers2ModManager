@@ -128,18 +128,18 @@ public sealed class SettingsPageViewModel : FrontendPageViewModel
             return;
         }
 
-        SetBusy(true, "正在自动查找 Helldivers 2...");
+        SetBusy(true, _localization.GetString("Next.Settings.DetectingGame"));
         try
         {
             var gameDirectory = await Task.Run(FindGameDirectory).ConfigureAwait(true);
             if (gameDirectory is null)
             {
-                Status = "无法自动找到 Helldivers 2，请手动设置。";
+                Status = _localization.GetString("Next.Settings.GameNotFound");
                 return;
             }
 
             GameDirectory = gameDirectory;
-            Status = "已找到 Helldivers 2 安装目录。";
+            Status = _localization.GetString("Next.Settings.GameFound");
         }
         catch (Exception exception)
         {

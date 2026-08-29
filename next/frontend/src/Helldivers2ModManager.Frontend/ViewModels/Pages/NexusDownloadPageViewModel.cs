@@ -59,7 +59,7 @@ public sealed class NexusDownloadPageViewModel : FrontendPageViewModel
         var parsed = NexusDownloadService.ParseUrl(NexusUrl);
         if (parsed is null)
         {
-            Status = "无法解析 Nexus 链接。";
+            Status = _localization.GetString("Next.Nexus.InvalidUrl");
             return;
         }
 
@@ -97,7 +97,7 @@ public sealed class NexusDownloadPageViewModel : FrontendPageViewModel
         var parsed = NexusDownloadService.ParseUrl(NexusUrl);
         if (parsed is null)
         {
-            Status = "无法解析 Nexus 链接。";
+            Status = _localization.GetString("Next.Nexus.InvalidUrl");
             return;
         }
 

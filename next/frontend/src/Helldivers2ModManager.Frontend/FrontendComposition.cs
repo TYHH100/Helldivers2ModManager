@@ -6,6 +6,7 @@ using Helldivers2ModManager.Core.Preview;
 using Helldivers2ModManager.Core.Repair;
 using Helldivers2ModManager.Core.Versioning;
 using Helldivers2ModManager.Frontend.Navigation;
+using Helldivers2ModManager.Frontend.Common;
 using Helldivers2ModManager.Frontend.ViewModels;
 using Helldivers2ModManager.Frontend.ViewModels.Pages;
 using Helldivers2ModManager.Frontend.Views;
@@ -20,7 +21,9 @@ internal static class FrontendComposition
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddSingleton<LocalizationCatalog>();
+        var localization = new LocalizationCatalog();
+        LocalizationSource.Catalog = localization;
+        services.AddSingleton(localization);
         services.AddSingleton<ApplicationSettingsService>();
         services.AddSingleton<ModLibraryService>();
         services.AddSingleton<TaskExecutionService>();
@@ -71,7 +74,6 @@ internal static class FrontendComposition
         services.AddTransient<ConflictScanPageViewModel>();
         services.AddTransient<ArmorReusePageViewModel>();
         services.AddTransient<ModelPreviewPageViewModel>();
-        services.AddTransient<ArmorReusePageViewModel>();
         services.AddTransient<BisectPageViewModel>();
         services.AddTransient<DiagnosticsPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();

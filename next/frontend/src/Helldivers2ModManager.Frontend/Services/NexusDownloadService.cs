@@ -2,6 +2,7 @@ using System.IO;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using Helldivers2ModManager.Core.Mods;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Core.Nexus;
 
 namespace Helldivers2ModManager.Frontend.Services;
@@ -11,6 +12,7 @@ public sealed record NexusFetchResult(NexusMod Mod, IReadOnlyList<NexusFile> Fil
 public sealed class NexusDownloadService(
     HttpClient httpClient,
     ApplicationSettingsService settings,
+    LocalizationCatalog localization,
     TaskExecutionService tasks)
 {
     private static readonly Regex NexusUrlPattern = new(
@@ -33,8 +35,8 @@ public sealed class NexusDownloadService(
         var client = CreateClient();
         NexusFetchResult? result = null;
         await tasks.RunAsync(
-            "获取 Nexus 模组",
-            $"正在获取模组 {modId}",
+            localization.GetString("Next.Tasks.NexusFetch"),
+            string.Format(localization.GetString("Next.Tasks.NexusFetchingFormat"), modId),
             async (_, token) =>
             {
                 var mod = await client.GetModAsync(gameDomain, modId, token).ConfigureAwait(false);
@@ -63,8 +65,8 @@ public sealed class NexusDownloadService(
         var savePath = Path.Combine(tempDirectory, $"{Guid.NewGuid():N}-{fileName}");
         string? result = null;
         await tasks.RunAsync(
-            "下载 Nexus 模组",
-            $"正在下载 {file.Name ?? mod.Name}",
+            localization.GetString("Next.Tasks.NexusDownload"),
+            string.Format(localization.GetString("Next.Tasks.NexusDownloadingFormat"), file.Name ?? mod.Name),
             async (_, token) =>
             {
                 result = await client.DownloadModFileAsync(

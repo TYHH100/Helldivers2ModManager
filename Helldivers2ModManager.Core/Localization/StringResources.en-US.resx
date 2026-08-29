@@ -3380,4 +3380,414 @@ Selecting Confirm means that you understand and accept these risks and restricti
   <data name="ErrorCode.IoError">
     <value>IoError</value>
   </data>
+  <data name="Next.Tasks.Deploy">
+    <value>Deploy mods</value>
+  </data>
+  <data name="Next.Tasks.DeployingFormat">
+    <value>Deploying {0} enabled mods</value>
+  </data>
+  <data name="Next.Tasks.Purge">
+    <value>Purge mods</value>
+  </data>
+  <data name="Next.Tasks.Purging">
+    <value>Purging mod files from the game data directory</value>
+  </data>
+  <data name="Next.Tasks.Import">
+    <value>Import mods</value>
+  </data>
+  <data name="Next.Tasks.ImportingFormat">
+    <value>Importing {0} archives</value>
+  </data>
+  <data name="Next.Tasks.AnalyzeModsFormat">
+    <value>Analyzing {0} mods</value>
+  </data>
+  <data name="Next.Tasks.RepairPlan">
+    <value>Generate repair plan</value>
+  </data>
+  <data name="Next.Tasks.RepairExecute">
+    <value>Execute repairs</value>
+  </data>
+  <data name="Next.Tasks.RepairingFormat">
+    <value>Repairing {0} plan items</value>
+  </data>
+  <data name="Next.Tasks.AutoTagging">
+    <value>Auto tagging</value>
+  </data>
+  <data name="Next.Tasks.StepScanTypes">
+    <value>Scan mod types</value>
+  </data>
+  <data name="Next.Tasks.StepApplyTagMapping">
+    <value>Apply tag mapping</value>
+  </data>
+  <data name="Next.Tasks.ConflictScan">
+    <value>Conflict scan</value>
+  </data>
+  <data name="Next.Tasks.ConflictScanning">
+    <value>Scanning unit coverage of enabled mods</value>
+  </data>
+  <data name="Next.Tasks.ArmorReuseScan">
+    <value>Armor reuse scan</value>
+  </data>
+  <data name="Next.Tasks.ArmorReuseScanning">
+    <value>Analyzing armor part reuse of enabled mods</value>
+  </data>
+  <data name="Next.Tasks.VersionCheck">
+    <value>Version check</value>
+  </data>
+  <data name="Next.Tasks.VersionCheckingFormat">
+    <value>Checking {0} mods</value>
+  </data>
+  <data name="Next.Tasks.NexusFetch">
+    <value>Fetch Nexus mod</value>
+  </data>
+  <data name="Next.Tasks.NexusFetchingFormat">
+    <value>Fetching mod {0}</value>
+  </data>
+  <data name="Next.Tasks.NexusDownload">
+    <value>Download Nexus mod</value>
+  </data>
+  <data name="Next.Tasks.NexusDownloadingFormat">
+    <value>Downloading {0}</value>
+  </data>
+  <data name="Next.VersionCheck.NotChecked">
+    <value>Not checked</value>
+  </data>
+  <data name="Next.VersionCheck.Compatible">
+    <value>Compatible</value>
+  </data>
+  <data name="Next.VersionCheck.IncompatibleFormat">
+    <value>Incompatible; {0} units missing game references</value>
+  </data>
+  <data name="Next.VersionCheck.Undetermined">
+    <value>Version could not be determined</value>
+  </data>
+  <data name="Next.VersionCheck.StructureIssuesFormat">
+    <value>; structural issues: {0} corrupted / {1} warnings</value>
+  </data>
+  <data name="Next.Library.DeployEnabled">
+    <value>Deploy enabled</value>
+  </data>
+  <data name="Next.Library.Options">
+    <value>Options</value>
+  </data>
+  <data name="Next.Library.Edit">
+    <value>Edit</value>
+  </data>
+  <data name="Next.Library.Manifest">
+    <value>Manifest</value>
+  </data>
+  <data name="Next.Library.OptionsSubtitle">
+    <value>Option toggles and sub-options</value>
+  </data>
+  <data name="Next.Library.SaveDeployOptions">
+    <value>Save and deploy options</value>
+  </data>
+  <data name="Next.Library.EnabledModsFallback">
+    <value>enabled mods</value>
+  </data>
+  <data name="Next.Library.FirstRunGameHint">
+    <value>The game directory is not configured yet. Select the game root under System → Settings first.</value>
+  </data>
+  <data name="Next.Library.TagsButton">
+    <value>Assign tags</value>
+  </data>
+  <data name="Next.Library.TagsSubtitle">
+    <value>Check the tags to apply</value>
+  </data>
+  <data name="Next.Library.SaveTags">
+    <value>Save tags</value>
+  </data>
+  <data name="Next.Library.GroupLabel">
+    <value>Group</value>
+  </data>
+  <data name="Next.Groups.Ungrouped">
+    <value>Ungrouped</value>
+  </data>
+  <data name="Next.Groups.All">
+    <value>All mods</value>
+  </data>
+  <data name="Next.Groups.FilterLabel">
+    <value>By group</value>
+  </data>
+  <data name="Next.Groups.CreatePrompt">
+    <value>Enter a group name</value>
+  </data>
+  <data name="Next.Groups.RenamePrompt">
+    <value>Enter a new group name</value>
+  </data>
+  <data name="Next.Groups.RenameGroup">
+    <value>Rename group</value>
+  </data>
+  <data name="Next.Groups.Created">
+    <value>Group created.</value>
+  </data>
+  <data name="Next.Groups.Renamed">
+    <value>Group renamed.</value>
+  </data>
+  <data name="Next.Groups.Deleted">
+    <value>Group deleted.</value>
+  </data>
+  <data name="Next.Groups.MembershipUpdated">
+    <value>Group membership updated.</value>
+  </data>
+  <data name="Next.Settings.DetectingGame">
+    <value>Searching for Helldivers 2 automatically...</value>
+  </data>
+  <data name="Next.Settings.GameNotFound">
+    <value>Could not find Helldivers 2 automatically. Please set it manually.</value>
+  </data>
+  <data name="Next.Settings.GameFound">
+    <value>Found the Helldivers 2 installation directory.</value>
+  </data>
+  <data name="Next.Settings.SectionDirectories">
+    <value>Directories</value>
+  </data>
+  <data name="Next.Settings.SectionBehavior">
+    <value>Behavior</value>
+  </data>
+  <data name="Next.Settings.SectionIntegration">
+    <value>Integration</value>
+  </data>
+  <data name="Next.Settings.LanguageLabel">
+    <value>Language</value>
+  </data>
+  <data name="Next.Settings.UseSymlinks">
+    <value>Deploy with symbolic links</value>
+  </data>
+  <data name="Next.Settings.RecycleBin">
+    <value>Delete to recycle bin</value>
+  </data>
+  <data name="Next.Settings.FuzzySearch">
+    <value>Enable fuzzy search</value>
+  </data>
+  <data name="Next.Settings.CheckVersionOnStartup">
+    <value>Check versions on startup</value>
+  </data>
+  <data name="Next.Settings.EnableAutoTagging">
+    <value>Enable auto tagging</value>
+  </data>
+  <data name="Next.Settings.AutoCreateTags">
+    <value>Create missing tags automatically</value>
+  </data>
+  <data name="Next.Settings.Save">
+    <value>Save settings</value>
+  </data>
+  <data name="Next.Nexus.InvalidUrl">
+    <value>Could not parse the Nexus URL.</value>
+  </data>
+  <data name="Next.Nexus.UrlLabel">
+    <value>Nexus URL</value>
+  </data>
+  <data name="Next.Nexus.FetchButton">
+    <value>Fetch mod</value>
+  </data>
+  <data name="Next.Nexus.FilesLabel">
+    <value>Files</value>
+  </data>
+  <data name="Next.Nexus.BackToLibrary">
+    <value>Back to library</value>
+  </data>
+  <data name="Next.Diagnostics.RefreshStatus">
+    <value>Refresh status</value>
+  </data>
+  <data name="Next.Diagnostics.TabStatus">
+    <value>Status</value>
+  </data>
+  <data name="Next.Diagnostics.TabRepairPlan">
+    <value>Repair plan</value>
+  </data>
+  <data name="Next.Diagnostics.CreatePlan">
+    <value>Generate repair plan</value>
+  </data>
+  <data name="Next.Diagnostics.ExecuteRepairs">
+    <value>Execute repairs</value>
+  </data>
+  <data name="Next.Diagnostics.ColMod">
+    <value>Mod</value>
+  </data>
+  <data name="Next.Diagnostics.ColState">
+    <value>State</value>
+  </data>
+  <data name="Next.Diagnostics.ColMetadata">
+    <value>Metadata</value>
+  </data>
+  <data name="Next.Diagnostics.ColCompanion">
+    <value>Companion recovery</value>
+  </data>
+  <data name="Next.Diagnostics.ColMessage">
+    <value>Message</value>
+  </data>
+  <data name="Next.Diagnostics.StatusRefreshed">
+    <value>Diagnostics status refreshed.</value>
+  </data>
+  <data name="Next.Diagnostics.CheckingVersions">
+    <value>Checking version compatibility...</value>
+  </data>
+  <data name="Next.Diagnostics.VersionCheckDoneFormat">
+    <value>Version check finished: {0} mods.</value>
+  </data>
+  <data name="Next.Diagnostics.ScanningConflicts">
+    <value>Scanning conflicts...</value>
+  </data>
+  <data name="Next.Diagnostics.ConflictScanDoneFormat">
+    <value>Conflict scan finished: {0} units, {1} conflicts.</value>
+  </data>
+  <data name="Next.Diagnostics.ScanningArmorReuse">
+    <value>Scanning armor reuse...</value>
+  </data>
+  <data name="Next.Diagnostics.ArmorReuseDoneFormat">
+    <value>Armor reuse scan finished: {0} records.</value>
+  </data>
+  <data name="Next.Diagnostics.GeneratingPlan">
+    <value>Generating repair plan...</value>
+  </data>
+  <data name="Next.Diagnostics.PlanDoneFormat">
+    <value>Repair plan generated: {0} items are repairable.</value>
+  </data>
+  <data name="Next.Diagnostics.ExecuteConfirm">
+    <value>Repairs modify mod patch files and create backups.
+
+Run the current repair plan?</value>
+  </data>
+  <data name="Next.Diagnostics.ExecutingRepairs">
+    <value>Applying repairs...</value>
+  </data>
+  <data name="Next.Diagnostics.RepairDoneFormat">
+    <value>Repairs finished: {0} plan items changed, {1} blocked.</value>
+  </data>
+  <data name="Next.Diagnostics.SummaryFormat">
+    <value>Mods {0}, enabled {1}, deployment mode {2}</value>
+  </data>
+  <data name="Next.Diagnostics.CountersFormat">
+    <value>Version results {0}; conflicts {1} ({2} definite); armor reuse {3}</value>
+  </data>
+  <data name="Next.ArmorReuse.SourceArmorFormat">
+    <value>Source armor {0}</value>
+  </data>
+  <data name="Next.ArmorReuse.SharedUnitsFormat">
+    <value>Shared units: {0}</value>
+  </data>
+  <data name="Next.AutoTagPairing.CreateTag">
+    <value>Create tag</value>
+  </data>
+  <data name="Next.AutoTagPairing.BackToSettings">
+    <value>Back to settings</value>
+  </data>
+  <data name="Next.Bisect.Start">
+    <value>Start bisect</value>
+  </data>
+  <data name="Next.Bisect.Crashed">
+    <value>Game crashed</value>
+  </data>
+  <data name="Next.Bisect.Ok">
+    <value>Runs fine</value>
+  </data>
+  <data name="Next.Bisect.SingleVerify">
+    <value>Deploy single-mod verification</value>
+  </data>
+  <data name="Next.Bisect.CancelRestore">
+    <value>Cancel and restore</value>
+  </data>
+  <data name="Next.Bisect.Finish">
+    <value>Finish</value>
+  </data>
+  <data name="Next.Bisect.Candidates">
+    <value>Current candidates</value>
+  </data>
+  <data name="Next.Bisect.Suspects">
+    <value>Suspects</value>
+  </data>
+  <data name="Next.Bisect.Rounds">
+    <value>Rounds</value>
+  </data>
+  <data name="Next.Bisect.RoundFormat">
+    <value>Round {0}:</value>
+  </data>
+  <data name="Next.Bisect.SingleDeployedHint">
+    <value>Single-mod verification deployed. Confirm in game.</value>
+  </data>
+  <data name="Next.Bisect.SubmitHint">
+    <value>Report a crash to mark the mod as a suspect, or a clean run to clear it. Submit with the buttons above.</value>
+  </data>
+  <data name="Next.ConflictScan.ScanButton">
+    <value>Scan conflicts</value>
+  </data>
+  <data name="Next.ConflictScan.DefiniteFormat">
+    <value>Definite conflict: {0}</value>
+  </data>
+  <data name="Next.Edit.NameLabel">
+    <value>Mod name</value>
+  </data>
+  <data name="Next.Edit.Select">
+    <value>Select</value>
+  </data>
+  <data name="Next.Edit.V1Manifest">
+    <value>V1 manifest</value>
+  </data>
+  <data name="Next.Edit.LegacyManifest">
+    <value>Legacy manifest</value>
+  </data>
+  <data name="Next.Edit.CreateMod">
+    <value>Create mod</value>
+  </data>
+  <data name="Next.Edit.LegacyUpgradeHint">
+    <value>Legacy manifests upgrade automatically when they use V1-only capabilities.</value>
+  </data>
+  <data name="Next.Help.Open">
+    <value>Open</value>
+  </data>
+  <data name="Next.Tags.Add">
+    <value>Add tag</value>
+  </data>
+  <data name="Next.Tags.Save">
+    <value>Save tags</value>
+  </data>
+  <data name="Next.VersionCheckPage.CheckAll">
+    <value>Check all</value>
+  </data>
+  <data name="Next.VersionCheckPage.ReferenceVersion">
+    <value>Reference version </value>
+  </data>
+  <data name="Next.Groups.DeleteConfirmFormat">
+    <value>Delete group "{0}"? Mod files will not be deleted.</value>
+  </data>
+  <data name="Next.ArmorReuse.SourceArmorPrefix">
+    <value>Source armor </value>
+  </data>
+  <data name="Next.ArmorReuse.SharedUnitsPrefix">
+    <value>Shared units: </value>
+  </data>
+  <data name="Next.ConflictScan.DefinitePrefix">
+    <value>Definite conflict: </value>
+  </data>
+  <data name="Next.Bisect.RoundPrefix">
+    <value>Round </value>
+  </data>
+  <data name="Next.Bisect.RoundSuffix">
+    <value>: </value>
+  </data>
+  <data name="Next.Edit.Enable">
+    <value>Enabled</value>
+  </data>
+  <data name="Next.Manifest.NameWatermark">
+    <value>Name</value>
+  </data>
+  <data name="Next.Manifest.DescriptionWatermark">
+    <value>Description</value>
+  </data>
+  <data name="Next.Manifest.IncludeWatermark">
+    <value>Include paths, separated by ;</value>
+  </data>
+  <data name="Next.Manifest.ImagePathWatermark">
+    <value>Option image path</value>
+  </data>
+  <data name="Next.Manifest.SubOptionNameWatermark">
+    <value>Sub-option name</value>
+  </data>
+  <data name="Next.Manifest.SubOptionImagePathWatermark">
+    <value>Sub-option image path</value>
+  </data>
+  <data name="Next.Tags.NameWatermark">
+    <value>New tag name</value>
+  </data>
 </root>

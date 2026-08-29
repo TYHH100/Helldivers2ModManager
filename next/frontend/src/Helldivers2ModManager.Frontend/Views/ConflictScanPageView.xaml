@@ -1,6 +1,7 @@
 <UserControl x:Class="Helldivers2ModManager.Frontend.Views.ConflictScanPageView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:common="clr-namespace:Helldivers2ModManager.Frontend.Common">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -17,7 +18,7 @@
         <Border Grid.Row="0" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
                 BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,16">
             <StackPanel Orientation="Horizontal">
-                <Button Style="{StaticResource PrimaryButton}" Command="{Binding ScanCommand}" Content="扫描冲突"/>
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding ScanCommand}" Content="{common:Loc Next.ConflictScan.ScanButton}"/>
                 <TextBlock Text="{Binding Status}" Margin="16,0,0,0" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
             </StackPanel>
@@ -37,8 +38,9 @@
                                                    Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center"
-                                               Text="{Binding IsDefinite, StringFormat=确定冲突：{0}}"
-                                               Foreground="{DynamicResource AccentBrush}"/>
+                                               Foreground="{DynamicResource AccentBrush}">
+                                        <Run Text="{common:Loc Next.ConflictScan.DefinitePrefix}"/><Run Text="{Binding IsDefinite, Mode=OneWay}"/>
+                                    </TextBlock>
                                 </Grid>
                                 <ItemsControl ItemsSource="{Binding Participants}" Margin="0,10,0,0">
                                     <ItemsControl.ItemTemplate>

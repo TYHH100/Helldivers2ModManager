@@ -3378,4 +3378,414 @@
   <data name="ErrorCode.IoError">
     <value>IoError</value>
   </data>
+  <data name="Next.Tasks.Deploy">
+    <value>部署模组</value>
+  </data>
+  <data name="Next.Tasks.DeployingFormat">
+    <value>正在部署 {0} 个启用的模组</value>
+  </data>
+  <data name="Next.Tasks.Purge">
+    <value>清理模组</value>
+  </data>
+  <data name="Next.Tasks.Purging">
+    <value>正在清理游戏 data 目录中的模组文件</value>
+  </data>
+  <data name="Next.Tasks.Import">
+    <value>导入模组</value>
+  </data>
+  <data name="Next.Tasks.ImportingFormat">
+    <value>正在导入 {0} 个压缩包</value>
+  </data>
+  <data name="Next.Tasks.AnalyzeModsFormat">
+    <value>正在分析 {0} 个模组</value>
+  </data>
+  <data name="Next.Tasks.RepairPlan">
+    <value>生成修复计划</value>
+  </data>
+  <data name="Next.Tasks.RepairExecute">
+    <value>执行修复</value>
+  </data>
+  <data name="Next.Tasks.RepairingFormat">
+    <value>正在修复 {0} 个计划项</value>
+  </data>
+  <data name="Next.Tasks.AutoTagging">
+    <value>自动打标签</value>
+  </data>
+  <data name="Next.Tasks.StepScanTypes">
+    <value>扫描模组类型</value>
+  </data>
+  <data name="Next.Tasks.StepApplyTagMapping">
+    <value>应用标签映射</value>
+  </data>
+  <data name="Next.Tasks.ConflictScan">
+    <value>冲突扫描</value>
+  </data>
+  <data name="Next.Tasks.ConflictScanning">
+    <value>正在扫描启用模组的 Unit 覆盖</value>
+  </data>
+  <data name="Next.Tasks.ArmorReuseScan">
+    <value>护甲复用扫描</value>
+  </data>
+  <data name="Next.Tasks.ArmorReuseScanning">
+    <value>正在分析启用模组的护甲部件复用</value>
+  </data>
+  <data name="Next.Tasks.VersionCheck">
+    <value>版本检查</value>
+  </data>
+  <data name="Next.Tasks.VersionCheckingFormat">
+    <value>正在检查 {0} 个模组</value>
+  </data>
+  <data name="Next.Tasks.NexusFetch">
+    <value>获取 Nexus 模组</value>
+  </data>
+  <data name="Next.Tasks.NexusFetchingFormat">
+    <value>正在获取模组 {0}</value>
+  </data>
+  <data name="Next.Tasks.NexusDownload">
+    <value>下载 Nexus 模组</value>
+  </data>
+  <data name="Next.Tasks.NexusDownloadingFormat">
+    <value>正在下载 {0}</value>
+  </data>
+  <data name="Next.VersionCheck.NotChecked">
+    <value>未检查</value>
+  </data>
+  <data name="Next.VersionCheck.Compatible">
+    <value>版本兼容</value>
+  </data>
+  <data name="Next.VersionCheck.IncompatibleFormat">
+    <value>版本不兼容；{0} 个 Unit 缺少游戏引用</value>
+  </data>
+  <data name="Next.VersionCheck.Undetermined">
+    <value>无法判定版本</value>
+  </data>
+  <data name="Next.VersionCheck.StructureIssuesFormat">
+    <value>；结构问题：{0} 损坏 / {1} 警告</value>
+  </data>
+  <data name="Next.Library.DeployEnabled">
+    <value>部署启用项</value>
+  </data>
+  <data name="Next.Library.Options">
+    <value>选项</value>
+  </data>
+  <data name="Next.Library.Edit">
+    <value>编辑</value>
+  </data>
+  <data name="Next.Library.Manifest">
+    <value>清单</value>
+  </data>
+  <data name="Next.Library.OptionsSubtitle">
+    <value>选项开关与子选项</value>
+  </data>
+  <data name="Next.Library.SaveDeployOptions">
+    <value>保存并部署选项</value>
+  </data>
+  <data name="Next.Library.EnabledModsFallback">
+    <value>启用模组</value>
+  </data>
+  <data name="Next.Library.FirstRunGameHint">
+    <value>尚未配置游戏目录：请先在「系统 → 设置」中选择游戏根目录。</value>
+  </data>
+  <data name="Next.Library.TagsButton">
+    <value>设置标签</value>
+  </data>
+  <data name="Next.Library.TagsSubtitle">
+    <value>勾选要应用的标签</value>
+  </data>
+  <data name="Next.Library.SaveTags">
+    <value>保存标签</value>
+  </data>
+  <data name="Next.Library.GroupLabel">
+    <value>分组</value>
+  </data>
+  <data name="Next.Groups.Ungrouped">
+    <value>未分组</value>
+  </data>
+  <data name="Next.Groups.All">
+    <value>全部模组</value>
+  </data>
+  <data name="Next.Groups.FilterLabel">
+    <value>按分组</value>
+  </data>
+  <data name="Next.Groups.CreatePrompt">
+    <value>输入分组名称</value>
+  </data>
+  <data name="Next.Groups.RenamePrompt">
+    <value>输入新的分组名称</value>
+  </data>
+  <data name="Next.Groups.RenameGroup">
+    <value>重命名分组</value>
+  </data>
+  <data name="Next.Groups.Created">
+    <value>分组已创建。</value>
+  </data>
+  <data name="Next.Groups.Renamed">
+    <value>分组已重命名。</value>
+  </data>
+  <data name="Next.Groups.Deleted">
+    <value>分组已删除。</value>
+  </data>
+  <data name="Next.Groups.MembershipUpdated">
+    <value>分组归属已更新。</value>
+  </data>
+  <data name="Next.Settings.DetectingGame">
+    <value>正在自动查找 Helldivers 2...</value>
+  </data>
+  <data name="Next.Settings.GameNotFound">
+    <value>无法自动找到 Helldivers 2，请手动设置。</value>
+  </data>
+  <data name="Next.Settings.GameFound">
+    <value>已找到 Helldivers 2 安装目录。</value>
+  </data>
+  <data name="Next.Settings.SectionDirectories">
+    <value>目录</value>
+  </data>
+  <data name="Next.Settings.SectionBehavior">
+    <value>行为</value>
+  </data>
+  <data name="Next.Settings.SectionIntegration">
+    <value>集成</value>
+  </data>
+  <data name="Next.Settings.LanguageLabel">
+    <value>语言</value>
+  </data>
+  <data name="Next.Settings.UseSymlinks">
+    <value>使用符号链接部署</value>
+  </data>
+  <data name="Next.Settings.RecycleBin">
+    <value>删除到回收站</value>
+  </data>
+  <data name="Next.Settings.FuzzySearch">
+    <value>启用模糊搜索</value>
+  </data>
+  <data name="Next.Settings.CheckVersionOnStartup">
+    <value>启动时检查版本</value>
+  </data>
+  <data name="Next.Settings.EnableAutoTagging">
+    <value>启用自动标签</value>
+  </data>
+  <data name="Next.Settings.AutoCreateTags">
+    <value>自动创建缺失标签</value>
+  </data>
+  <data name="Next.Settings.Save">
+    <value>保存设置</value>
+  </data>
+  <data name="Next.Nexus.InvalidUrl">
+    <value>无法解析 Nexus 链接。</value>
+  </data>
+  <data name="Next.Nexus.UrlLabel">
+    <value>Nexus 链接</value>
+  </data>
+  <data name="Next.Nexus.FetchButton">
+    <value>获取模组</value>
+  </data>
+  <data name="Next.Nexus.FilesLabel">
+    <value>文件</value>
+  </data>
+  <data name="Next.Nexus.BackToLibrary">
+    <value>返回模组库</value>
+  </data>
+  <data name="Next.Diagnostics.RefreshStatus">
+    <value>刷新状态</value>
+  </data>
+  <data name="Next.Diagnostics.TabStatus">
+    <value>状态</value>
+  </data>
+  <data name="Next.Diagnostics.TabRepairPlan">
+    <value>修复计划</value>
+  </data>
+  <data name="Next.Diagnostics.CreatePlan">
+    <value>生成修复计划</value>
+  </data>
+  <data name="Next.Diagnostics.ExecuteRepairs">
+    <value>执行修复</value>
+  </data>
+  <data name="Next.Diagnostics.ColMod">
+    <value>模组</value>
+  </data>
+  <data name="Next.Diagnostics.ColState">
+    <value>状态</value>
+  </data>
+  <data name="Next.Diagnostics.ColMetadata">
+    <value>元数据</value>
+  </data>
+  <data name="Next.Diagnostics.ColCompanion">
+    <value>伴生恢复</value>
+  </data>
+  <data name="Next.Diagnostics.ColMessage">
+    <value>说明</value>
+  </data>
+  <data name="Next.Diagnostics.StatusRefreshed">
+    <value>诊断状态已刷新。</value>
+  </data>
+  <data name="Next.Diagnostics.CheckingVersions">
+    <value>正在检查版本兼容性…</value>
+  </data>
+  <data name="Next.Diagnostics.VersionCheckDoneFormat">
+    <value>版本检查完成：{0} 个模组。</value>
+  </data>
+  <data name="Next.Diagnostics.ScanningConflicts">
+    <value>正在扫描冲突…</value>
+  </data>
+  <data name="Next.Diagnostics.ConflictScanDoneFormat">
+    <value>冲突扫描完成：{0} 个 Unit，{1} 个冲突。</value>
+  </data>
+  <data name="Next.Diagnostics.ScanningArmorReuse">
+    <value>正在扫描护甲复用…</value>
+  </data>
+  <data name="Next.Diagnostics.ArmorReuseDoneFormat">
+    <value>护甲复用扫描完成：{0} 条记录。</value>
+  </data>
+  <data name="Next.Diagnostics.GeneratingPlan">
+    <value>正在生成修复计划…</value>
+  </data>
+  <data name="Next.Diagnostics.PlanDoneFormat">
+    <value>修复计划已生成：{0} 项可修复。</value>
+  </data>
+  <data name="Next.Diagnostics.ExecuteConfirm">
+    <value>修复会修改模组补丁文件并创建备份。
+
+确定执行当前修复计划？</value>
+  </data>
+  <data name="Next.Diagnostics.ExecutingRepairs">
+    <value>正在执行修复…</value>
+  </data>
+  <data name="Next.Diagnostics.RepairDoneFormat">
+    <value>修复完成：{0} 个计划项发生变更，{1} 项被阻断。</value>
+  </data>
+  <data name="Next.Diagnostics.SummaryFormat">
+    <value>模组 {0}，启用 {1}，部署模式 {2}</value>
+  </data>
+  <data name="Next.Diagnostics.CountersFormat">
+    <value>版本结果 {0}；冲突 {1}（确定 {2}）；护甲复用 {3}</value>
+  </data>
+  <data name="Next.ArmorReuse.SourceArmorFormat">
+    <value>来源护甲 {0}</value>
+  </data>
+  <data name="Next.ArmorReuse.SharedUnitsFormat">
+    <value>共享 Unit：{0}</value>
+  </data>
+  <data name="Next.AutoTagPairing.CreateTag">
+    <value>新建标签</value>
+  </data>
+  <data name="Next.AutoTagPairing.BackToSettings">
+    <value>返回设置</value>
+  </data>
+  <data name="Next.Bisect.Start">
+    <value>开始排查</value>
+  </data>
+  <data name="Next.Bisect.Crashed">
+    <value>游戏崩溃</value>
+  </data>
+  <data name="Next.Bisect.Ok">
+    <value>运行正常</value>
+  </data>
+  <data name="Next.Bisect.SingleVerify">
+    <value>部署单模组验证</value>
+  </data>
+  <data name="Next.Bisect.CancelRestore">
+    <value>取消并还原</value>
+  </data>
+  <data name="Next.Bisect.Finish">
+    <value>结束</value>
+  </data>
+  <data name="Next.Bisect.Candidates">
+    <value>当前候选</value>
+  </data>
+  <data name="Next.Bisect.Suspects">
+    <value>嫌疑模组</value>
+  </data>
+  <data name="Next.Bisect.Rounds">
+    <value>排查记录</value>
+  </data>
+  <data name="Next.Bisect.RoundFormat">
+    <value>第 {0} 轮：</value>
+  </data>
+  <data name="Next.Bisect.SingleDeployedHint">
+    <value>单模组验证已部署，请进入游戏确认。</value>
+  </data>
+  <data name="Next.Bisect.SubmitHint">
+    <value>崩溃则确认该模组为嫌疑；正常则排除该嫌疑。结果使用上方按钮提交。</value>
+  </data>
+  <data name="Next.ConflictScan.ScanButton">
+    <value>扫描冲突</value>
+  </data>
+  <data name="Next.ConflictScan.DefiniteFormat">
+    <value>确定冲突：{0}</value>
+  </data>
+  <data name="Next.Edit.NameLabel">
+    <value>模组名称</value>
+  </data>
+  <data name="Next.Edit.Select">
+    <value>选择</value>
+  </data>
+  <data name="Next.Edit.V1Manifest">
+    <value>V1 清单</value>
+  </data>
+  <data name="Next.Edit.LegacyManifest">
+    <value>Legacy 清单</value>
+  </data>
+  <data name="Next.Edit.CreateMod">
+    <value>创建模组</value>
+  </data>
+  <data name="Next.Edit.LegacyUpgradeHint">
+    <value>Legacy 清单包含 V1 特有能力时会自动升级。</value>
+  </data>
+  <data name="Next.Help.Open">
+    <value>打开</value>
+  </data>
+  <data name="Next.Tags.Add">
+    <value>添加标签</value>
+  </data>
+  <data name="Next.Tags.Save">
+    <value>保存标签</value>
+  </data>
+  <data name="Next.VersionCheckPage.CheckAll">
+    <value>检查全部</value>
+  </data>
+  <data name="Next.VersionCheckPage.ReferenceVersion">
+    <value>参考版本 </value>
+  </data>
+  <data name="Next.Groups.DeleteConfirmFormat">
+    <value>确定删除分组“{0}”？该操作不会删除模组文件。</value>
+  </data>
+  <data name="Next.ArmorReuse.SourceArmorPrefix">
+    <value>来源护甲 </value>
+  </data>
+  <data name="Next.ArmorReuse.SharedUnitsPrefix">
+    <value>共享 Unit：</value>
+  </data>
+  <data name="Next.ConflictScan.DefinitePrefix">
+    <value>确定冲突：</value>
+  </data>
+  <data name="Next.Bisect.RoundPrefix">
+    <value>第 </value>
+  </data>
+  <data name="Next.Bisect.RoundSuffix">
+    <value> 轮：</value>
+  </data>
+  <data name="Next.Edit.Enable">
+    <value>启用</value>
+  </data>
+  <data name="Next.Manifest.NameWatermark">
+    <value>名称</value>
+  </data>
+  <data name="Next.Manifest.DescriptionWatermark">
+    <value>描述</value>
+  </data>
+  <data name="Next.Manifest.IncludeWatermark">
+    <value>Include 路径，用 ; 分隔</value>
+  </data>
+  <data name="Next.Manifest.ImagePathWatermark">
+    <value>选项图片路径</value>
+  </data>
+  <data name="Next.Manifest.SubOptionNameWatermark">
+    <value>子选项名称</value>
+  </data>
+  <data name="Next.Manifest.SubOptionImagePathWatermark">
+    <value>子选项图片路径</value>
+  </data>
+  <data name="Next.Tags.NameWatermark">
+    <value>新标签名称</value>
+  </data>
 </root>

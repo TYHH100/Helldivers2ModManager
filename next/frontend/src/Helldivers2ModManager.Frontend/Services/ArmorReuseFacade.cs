@@ -1,6 +1,7 @@
 using System.IO;
 using Helldivers2ModManager.Core.Analysis;
 using Helldivers2ModManager.Core.GameData;
+using Helldivers2ModManager.Core.Localization;
 using Helldivers2ModManager.Frontend.Models;
 
 namespace Helldivers2ModManager.Frontend.Services;
@@ -14,6 +15,7 @@ public sealed record ArmorReuseScanResult(
 public sealed class ArmorReuseFacade(
     ArmorReuseService service,
     VersionCheckFacade versionCheck,
+    LocalizationCatalog localization,
     TaskExecutionService tasks)
 {
     public async Task<ArmorReuseScanResult> ScanEnabledAsync(
@@ -22,8 +24,8 @@ public sealed class ArmorReuseFacade(
     {
         ArmorReuseScanResult? result = null;
         await tasks.RunAsync(
-            "护甲复用扫描",
-            "正在分析启用模组的护甲部件复用",
+            localization.GetString("Next.Tasks.ArmorReuseScan"),
+            localization.GetString("Next.Tasks.ArmorReuseScanning"),
             async (_, token) =>
             {
                 var enabled = mods.Where(mod => mod.IsEnabled)

@@ -10,6 +10,9 @@ public sealed class ModItem : ObservableObject
 {
     private bool _isEnabled;
     private bool _isSelected;
+    private Guid? _groupId;
+    private string? _groupName;
+    private string _tagSummary = string.Empty;
 
     public ModItem(DiscoveredMod source)
     {
@@ -42,6 +45,30 @@ public sealed class ModItem : ObservableObject
     public bool IsEnabled { get => _isEnabled; set => SetProperty(ref _isEnabled, value); }
 
     public bool IsSelected { get => _isSelected; set => SetProperty(ref _isSelected, value); }
+
+    /// <summary>所属分组；<c>null</c> 表示未分组。分组名由库服务在加载/变更时一并写入。</summary>
+    public Guid? GroupId
+    {
+        get => _groupId;
+        set
+        {
+            if (SetProperty(ref _groupId, value) && value is null)
+            {
+                GroupName = null;
+            }
+        }
+    }
+
+    public string? GroupName { get => _groupName; private set => SetProperty(ref _groupName, value); }
+
+    public string TagSummary { get => _tagSummary; internal set => SetProperty(ref _tagSummary, value); }
+
+    public void SetGroup(Guid? groupId, string? groupName)
+    {
+        _groupId = groupId;
+        GroupName = groupName;
+        OnPropertyChanged(nameof(GroupId));
+    }
 
     public List<Guid> TagIds { get; set; } = [];
 
