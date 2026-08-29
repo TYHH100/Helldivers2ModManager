@@ -608,7 +608,8 @@ internal sealed class SettingsService
 	{
 		WriteIndented = true,
 		AllowTrailingCommas = true,
-		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+		Converters = { new JsonStringEnumConverter() }
 	};
 
 	private readonly ILogger<SettingsService> _logger;
@@ -975,6 +976,9 @@ internal sealed class SettingsService
 		if (root.TryGetProperty(nameof(LogLevel), JsonValueKind.String, out prop))
 			if (Enum.TryParse<LogLevel>(prop.GetString()!, out var value))
 				_logLevel = value;
+		if (root.TryGetProperty(nameof(LogLevel), JsonValueKind.Number, out prop))
+			if (prop.TryGetInt32(out var numericLogLevel) && Enum.IsDefined((LogLevel)numericLogLevel))
+				_logLevel = (LogLevel)numericLogLevel;
 		if (root.TryGetProperty(nameof(Opacity), JsonValueKind.Number, out prop))
 			if (prop.TryGetSingle(out var value))
 				_opacity = value;
@@ -1130,8 +1134,12 @@ internal sealed class SettingsService
 			_maxLogFiles = Math.Max(1, prop.GetInt32());
 		if (root.TryGetProperty(nameof(Language), JsonValueKind.String, out prop))
 			_language = prop.GetString() ?? string.Empty;
+		if (root.TryGetProperty(nameof(BackgroundMode), JsonValueKind.String, out prop))
+			if (Enum.TryParse<BackgroundMode>(prop.GetString()!, out var backgroundMode))
+				_backgroundMode = backgroundMode;
 		if (root.TryGetProperty(nameof(BackgroundMode), JsonValueKind.Number, out prop))
-			_backgroundMode = (BackgroundMode)prop.GetInt32();
+			if (prop.TryGetInt32(out var numericBackgroundMode) && Enum.IsDefined((BackgroundMode)numericBackgroundMode))
+				_backgroundMode = (BackgroundMode)numericBackgroundMode;
 		if (root.TryGetProperty(nameof(BackgroundImagePath), JsonValueKind.String, out prop))
 			_backgroundImagePath = prop.GetString() ?? string.Empty;
 		if (root.TryGetProperty(nameof(BackgroundOpacity), JsonValueKind.Number, out prop))
