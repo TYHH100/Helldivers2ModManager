@@ -381,6 +381,9 @@ Complete
 # Visual Studio Code
 .vscode/
 
+# ZCode
+.zcode/
+
 docs/
 settings.json
 Test/
