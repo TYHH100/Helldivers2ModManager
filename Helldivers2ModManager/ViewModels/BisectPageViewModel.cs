@@ -24,6 +24,7 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 	private readonly BisectService _bisectService;
 	private readonly BackgroundTaskService _backgroundTaskService;
 	private readonly LocalizationService _localizationService;
+	private readonly GameProcessService _gameProcessService;
 
 	private static readonly ProcessStartInfo s_gameStartInfo = new("steam://run/553850") { UseShellExecute = true };
 
@@ -55,7 +56,8 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 		ModGroupService modGroupService,
 		BisectService bisectService,
 		BackgroundTaskService backgroundTaskService,
-		LocalizationService localizationService)
+		LocalizationService localizationService,
+		GameProcessService gameProcessService)
 	{
 		_logger = logger;
 		_navStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
@@ -65,6 +67,7 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 		_bisectService = bisectService;
 		_backgroundTaskService = backgroundTaskService;
 		_localizationService = localizationService;
+		_gameProcessService = gameProcessService;
 
 		_localizationService.PropertyChanged += (_, _) =>
 		{
@@ -309,16 +312,15 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 
 	private async Task<bool> DeployWithProgressAsync()
 	{
-		// 游戏运行时部署不会生效：弹窗确认后自动关闭游戏再部署
-		if (IsGameRunning())
+		// 游戏运行时部署不会生效。绝不主动结束游戏进程（用户可能正在游戏中）：
+		// 提示用户自行关闭游戏，关闭后点「确定」继续，点「取消」中止本轮二分
+		while (_gameProcessService.IsGameRunning())
 		{
 			var confirmed = await AskConfirmAsync(
 				_localizationService["Bisect.GameRunningTitle"],
 				_localizationService["Bisect.GameRunningMessage"]);
 			if (!confirmed)
 				return false;
-
-			await CloseGameAsync();
 		}
 
 		try
@@ -341,11 +343,17 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 				},
 				isForeground: true);
 
+			// 成功：隐藏进度弹窗。不放 finally——失败时错误弹窗要替换进度弹窗并保留给用户
+			WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+
 			LaunchGame();
 		}
-		finally
+		catch (Exception ex)
 		{
-			WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+			// 部署失败（如游戏未在确认后完全退出被服务守卫拦截）：提示后中止本轮二分
+			_logger.LogError(ex, "Bisect deploy failed");
+			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = ex.Message });
+			return false;
 		}
 
 		return true;
@@ -364,44 +372,6 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 		{
 			_logger.LogWarning(ex, "Failed to launch game via Steam after bisect deploy");
 		}
-	}
-
-	private static bool IsGameRunning()
-	{
-		return Process.GetProcessesByName("helldivers2").Length > 0;
-	}
-
-	/// <summary>
-	/// 关闭游戏进程：先尝试优雅关闭主窗口，超时后强制结束。
-	/// </summary>
-	private static async Task CloseGameAsync()
-	{
-		foreach (var process in Process.GetProcessesByName("helldivers2"))
-		{
-			try
-			{
-				if (process.CloseMainWindow())
-				{
-					if (!process.WaitForExit(5000))
-						process.Kill();
-				}
-				else
-				{
-					process.Kill();
-				}
-			}
-			catch
-			{
-				// 进程可能已经退出
-			}
-			finally
-			{
-				process.Dispose();
-			}
-		}
-
-		// 留出进程完全退出的时间，避免文件仍被占用
-		await Task.Delay(1000);
 	}
 
 	private Task<string> AskReportAsync(string message)

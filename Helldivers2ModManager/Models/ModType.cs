@@ -38,4 +38,8 @@ public enum ModType
 
     /// <summary>脚本/代码模组：Lua 等脚本资源（HUD、功能修改）。</summary>
     Script,
+
+    /// <summary>HD2PhysBone 物理模组：携带参数集（hd2_spring_rig.bin / hd2_ib_needle.bin / lua_units.txt），
+    /// 依赖 ReShade add-on 运行时；部署时参数复制到 bin\HD2PhysBone\ 并在部署序列中置底。</summary>
+    PhysBone,
 }

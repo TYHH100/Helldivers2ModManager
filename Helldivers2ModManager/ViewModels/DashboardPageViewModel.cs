@@ -1661,10 +1661,17 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 (_, _) => _modService.PurgeAsync(),
                 _localizationService["BackgroundTasksPage.PurgeComplete"],
                 isForeground: true);
-        }
-        finally
-        {
+
+            // 成功：隐藏进度弹窗。不放 finally——失败时错误弹窗要替换进度弹窗并保留给用户
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Purge failed");
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage()
+            {
+                Message = ex.Message
+            });
         }
     }
 

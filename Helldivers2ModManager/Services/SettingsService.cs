@@ -25,7 +25,7 @@ internal sealed class SettingsService
 	/// </summary>
 	public event EventHandler? SettingsChanged;
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_separators))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_organizationalFolderNames), nameof(_separators))]
 	[JsonIgnore]
 	public bool Initialized { get; private set; }
 	
@@ -176,15 +176,6 @@ internal sealed class SettingsService
 			GuardInitialized();
 			GuardReadonly();
 			_cardOpacity = Math.Clamp(value, 0.3f, 1f);
-		}
-	}
-
-	public ObservableCollection<string> SkipList
-	{
-		get
-		{
-			GuardInitialized();
-			return _skipList;
 		}
 	}
 
@@ -633,8 +624,6 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private float _opacity;
 	[JsonInclude]
-	private ObservableCollection<string> _skipList = null!;
-	[JsonInclude]
 	private ObservableCollection<string> _organizationalFolderNames = null!;
 	[JsonInclude]
 	private bool _caseSensitiveSearch;
@@ -795,7 +784,7 @@ internal sealed class SettingsService
 		_logger.LogInformation("Settings service initialization complete");
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_tags), nameof(_separators))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_organizationalFolderNames), nameof(_tags), nameof(_separators))]
 	public void Reset()
 	{
 		GuardInitialized();
@@ -878,15 +867,6 @@ internal sealed class SettingsService
 			_cardOpacity = Math.Clamp(_cardOpacity, 0.3f, 1f);
 		}
 
-		var elms = _skipList.Where(static elm => elm.Length != 16).ToArray();
-		if (elms.Length != 0)
-		{
-			if (IsReadonly)
-				return false;
-			foreach (var elm in elms)
-				_skipList.Remove(elm);
-		}
-
 		return true;
 	}
 
@@ -897,7 +877,7 @@ internal sealed class SettingsService
 			throw new InvalidOperationException("Object is readonly!");
 	}
 	
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_separators))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_organizationalFolderNames), nameof(_separators))]
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void GuardInitialized()
 	{
@@ -919,7 +899,6 @@ internal sealed class SettingsService
 			TempDirectory = _tempDirectory,
 			LogLevel = _logLevel,
 			Opacity = _opacity,
-			SkipList = _skipList,
 			OrganizationalFolderNames = _organizationalFolderNames,
 			CaseSensitiveSearch = _caseSensitiveSearch,
 			EnableFuzzySearch = _enableFuzzySearch,
@@ -999,21 +978,7 @@ internal sealed class SettingsService
 		if (root.TryGetProperty(nameof(Opacity), JsonValueKind.Number, out prop))
 			if (prop.TryGetSingle(out var value))
 				_opacity = value;
-		if (root.TryGetProperty(nameof(SkipList), JsonValueKind.Array, out var arr))
-		{
-			var list = new List<string>(arr.GetArrayLength());
-			
-			foreach (var elm in arr.EnumerateArray())
-				if (elm.ValueKind == JsonValueKind.String)
-				{
-					var value = elm.GetString();
-					if (value is not null)
-						list.Add(value);
-				}
-
-			_skipList = new ObservableCollection<string>(list);
-		}
-		if (root.TryGetProperty(nameof(OrganizationalFolderNames), JsonValueKind.Array, out arr))
+		if (root.TryGetProperty(nameof(OrganizationalFolderNames), JsonValueKind.Array, out var arr))
 		{
 			var orgList = new List<string>(arr.GetArrayLength());
 			
@@ -1252,7 +1217,7 @@ internal sealed class SettingsService
 		}
 	}
 
-	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_skipList), nameof(_organizationalFolderNames), nameof(_tags), nameof(_separators))]
+	[MemberNotNull(nameof(_gameDirectory), nameof(_storageDirectory), nameof(_tempDirectory), nameof(_organizationalFolderNames), nameof(_tags), nameof(_separators))]
 	private void ResetInternal()
 	{
 		_gameDirectory = string.Empty;
@@ -1264,7 +1229,6 @@ internal sealed class SettingsService
 		_backgroundImagePath = string.Empty;
 		_backgroundOpacity = 0.6f;
 		_cardOpacity = 0.7f;
-		_skipList = [];
 		_caseSensitiveSearch = false;
 		_enableFuzzySearch = true;
 		_useSymbolicLinks = false;

@@ -73,6 +73,7 @@ internal sealed class ProfileModSnapshot
 	private readonly bool[] _toggled;
 	private readonly int[] _selected;
 	private readonly Guid[] _tagIds;
+	private readonly bool _isPhysBoneMod;
 
 	public Guid Guid => _manifest.Guid;
 
@@ -84,7 +85,8 @@ internal sealed class ProfileModSnapshot
 		bool enabled,
 		bool[] toggled,
 		int[] selected,
-		Guid[] tagIds)
+		Guid[] tagIds,
+		bool isPhysBoneMod)
 	{
 		_directory = directory;
 		_manifest = manifest;
@@ -92,6 +94,7 @@ internal sealed class ProfileModSnapshot
 		_toggled = toggled;
 		_selected = selected;
 		_tagIds = tagIds;
+		_isPhysBoneMod = isPhysBoneMod;
 	}
 
 	public static ProfileModSnapshot Capture(ModData mod)
@@ -102,7 +105,8 @@ internal sealed class ProfileModSnapshot
 			mod.Enabled,
 			[.. mod.EnabledOptions],
 			[.. mod.SelectedOptions],
-			[.. mod.TagIds]);
+			[.. mod.TagIds],
+			mod.IsPhysBoneMod);
 	}
 
 	public EnabledData ToEnabledData()
@@ -135,6 +139,8 @@ internal sealed class ProfileModSnapshot
 		var result = new ModData(_directory, _manifest);
 		var enabledData = ToEnabledData();
 		result.ApplyData(enabledData);
+		// 传递捕获时的探测结果，避免部署排序时重复扫描模组目录
+		result.IsPhysBoneMod = _isPhysBoneMod;
 		return result;
 	}
 }

@@ -50,6 +50,7 @@ internal sealed class ModTypeDetectionService
     /// <summary>Tag priority: earlier entries win when ordering a mod's type set.</summary>
     private static readonly ModType[] s_typePriority =
     [
+        ModType.PhysBone,
         ModType.Enemy,
         ModType.Audio,
         ModType.Script,
@@ -99,6 +100,7 @@ internal sealed class ModTypeDetectionService
         new(ModType.Model, new Guid("D1C3A7B0-0000-4000-8000-000000000008"), "ModType.Tag.Model", "#EC4899"),
         new(ModType.PrimaryWeapon, new Guid("D1C3A7B0-0000-4000-8000-000000000009"), "ModType.Tag.PrimaryWeapon", "#F59E0B"),
         new(ModType.Script, new Guid("D1C3A7B0-0000-4000-8000-00000000000A"), "ModType.Tag.Script", "#64748B"),
+        new(ModType.PhysBone, new Guid("D1C3A7B0-0000-4000-8000-00000000000B"), "ModType.Tag.PhysBone", "#14B8A6"),
     ];
 
     /// <summary>
@@ -171,6 +173,15 @@ internal sealed class ModTypeDetectionService
 
         var modLabel = ClassifyPatch(counts, hasBkHd, hasDds, hasLua, paths, out var modReason);
         var types = AggregateTypes(modLabel, patchTypes);
+
+        // HD2PhysBone 参数集是显式文件信号（三件参数文件），置顶并作为主类型；
+        // 模组本体通常同时是护甲/模型模组，因此保留其余检测类型作为附加标签。
+        if (PhysBoneParamLocator.HasParamSet(modDirectory))
+        {
+            types = [ModType.PhysBone, .. types.Where(static t => t != ModType.PhysBone)];
+            modReason = string.IsNullOrEmpty(modReason) ? "PhysBone parameter set" : modReason + " + PhysBone parameter set";
+        }
+
         var reason = patches > 1
             ? modReason + " across " + patches + " patches"
             : modReason;
@@ -321,6 +332,7 @@ internal sealed class ModTypeDetectionService
         [ModType.Model] = ["模型", "Model"],
         [ModType.PrimaryWeapon] = ["主武器", "Primary Weapon", "PrimaryWeapon"],
         [ModType.Script] = ["脚本", "Script", "Lua"],
+        [ModType.PhysBone] = ["PhysBone", "物理", "物理骨骼", "HD2PhysBone"],
     };
 
     /// <summary>

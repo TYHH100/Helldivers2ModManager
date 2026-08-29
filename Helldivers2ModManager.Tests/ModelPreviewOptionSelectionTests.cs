@@ -151,6 +151,8 @@ public sealed class ModelPreviewOptionSelectionTests
             null!,
             null!,
             null!,
+            null!,
+            null!,
             null!);
         var initializedField = typeof(ModService).GetField(
             "<Initialized>k__BackingField",

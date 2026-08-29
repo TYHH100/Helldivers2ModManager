@@ -44,9 +44,10 @@ internal sealed partial class ModService
 	private readonly LocalizationService _localizationService;
 	private readonly VersionCheckService _versionCheckService;
 	private readonly ModLinkRepository _modLinkRepository;
+	private readonly GameProcessService _gameProcessService;
 	private SettingsService? _settingsService;
 
-	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService, LocalizationService localizationService, VersionCheckService versionCheckService, ModLinkRepository modLinkRepository)
+	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService, LocalizationService localizationService, VersionCheckService versionCheckService, ModLinkRepository modLinkRepository, GameProcessService gameProcessService)
 	{
 		_logger = logger;
 		_fileHashRepository = fileHashRepository;
@@ -54,7 +55,20 @@ internal sealed partial class ModService
 		_localizationService = localizationService;
 		_versionCheckService = versionCheckService;
 		_modLinkRepository = modLinkRepository;
+		_gameProcessService = gameProcessService;
 		_mods = new();
+	}
+
+	/// <summary>
+	/// 部署、清理、删除都会写游戏目录下的文件；游戏运行时执行会与游戏读写冲突（句柄占用、补丁链读到一半）。
+	/// </summary>
+	private void GuardGameNotRunning()
+	{
+		if (_gameProcessService.IsGameRunning())
+		{
+			_logger.LogWarning("Blocked a game-directory write operation because helldivers2.exe is running");
+			throw new InvalidOperationException(_localizationService["ModService.GameRunningBlocked"]);
+		}
 	}
 	
 	public ModProblem[] Init(SettingsService settings)
@@ -563,6 +577,7 @@ internal sealed partial class ModService
 	public async Task RemoveAsync(ModData mod)
 	{
 		GuardInitialized();
+		GuardGameNotRunning();
 
 		_logger.LogInformation("Attempting to remove {}", mod.Manifest.Guid);
 
@@ -591,6 +606,16 @@ internal sealed partial class ModService
 		// 该模组已部署时，自动清理游戏 data 目录中由它部署的补丁文件
 		await CleanupDeployedFilesForModAsync(removedMod);
 
+		// 同步清理它部署到 bin\HD2PhysBone 的托管参数目录（删除即卸载）
+		try
+		{
+			CleanupPhysBoneParamsForMod(removedMod);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to clean up PhysBone parameter directories for mod \"{Name}\"", removedMod.Manifest.Name);
+		}
+
 		var recycleOption = _settingsService.DeleteToRecycleBin ? RecycleOption.SendToRecycleBin : RecycleOption.DeletePermanently;
 		await Task.Run(() => FileSystem.DeleteDirectory(removedMod.Directory.FullName, UIOption.OnlyErrorDialogs, recycleOption));
 
@@ -600,6 +625,8 @@ internal sealed partial class ModService
 	/// <summary>
 	/// 删除模组时清理游戏 data 目录中由该模组部署的补丁文件（含 gpu_resources/stream 伴生文件）。
 	/// 仅处理启用状态下实际会部署的文件；被其他仍启用模组使用的同名资源跳过。
+	/// 删除后对受影响的资源名执行补丁链补洞：游戏按 patch_0..N 连续读取，遇到第一个空洞即停止，
+	/// 不补洞会让排在被删模组之后的所有同资源名模组整段失效。
 	/// </summary>
 	private async Task CleanupDeployedFilesForModAsync(ModData mod)
 	{
@@ -618,8 +645,11 @@ internal sealed partial class ModService
 				foreach (var file in GetSelectedPatchFiles(other))
 					otherFileNames.Add(file.Name);
 
+			var affectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			foreach (var file in GetSelectedPatchFiles(mod))
 			{
+				affectedNames.Add(file.Name[0..16]);
+
 				if (otherFileNames.Contains(file.Name))
 					continue;
 
@@ -628,9 +658,7 @@ internal sealed partial class ModService
 					continue;
 				var index = int.Parse(match.Groups[1].ValueSpan);
 				var baseName = file.Name[0..16];
-				// 与部署逻辑一致：SkipList 中的资源名整体后移一个槽位
-				var deployedIndex = index + (_settingsService.SkipList.Contains(baseName) ? 1 : 0);
-				var deployedBase = Path.Combine(dataDir.FullName, $"{baseName}.patch_{deployedIndex}");
+				var deployedBase = Path.Combine(dataDir.FullName, $"{baseName}.patch_{index}");
 
 				foreach (var path in new[] { deployedBase, deployedBase + ".gpu_resources", deployedBase + ".stream" })
 				{
@@ -640,10 +668,249 @@ internal sealed partial class ModService
 					_logger.LogInformation("Cleaned up deployed file \"{Path}\" for removed mod \"{Name}\"", Path.GetFileName(path), mod.Manifest.Name);
 				}
 			}
+
+			foreach (var baseName in affectedNames)
+				await CompactPatchChainAsync(dataDir, baseName, _logger);
 		}
 		catch (Exception ex)
 		{
 			_logger.LogWarning(ex, "Failed to clean up deployed files for mod \"{Name}\"", mod.Manifest.Name);
+		}
+	}
+
+	private static readonly string[] PatchFileSuffixes = ["", ".gpu_resources", ".stream"];
+
+	/// <summary>
+	/// 把某资源名在 data 目录中的补丁链左移补成 0..N-1 连续。
+	/// 移动按 fromIndex 升序执行：目标位要么本来就是空洞、要么已被前一次移动腾出，因此不需要覆盖。
+	/// </summary>
+	internal static async Task CompactPatchChainAsync(DirectoryInfo dataDir, string baseName, ILogger logger)
+	{
+		var moves = PlanPatchChainCompact(EnumeratePatchChainIndexes(dataDir, baseName));
+		foreach (var (fromIndex, toIndex) in moves)
+		{
+			foreach (var suffix in PatchFileSuffixes)
+			{
+				var source = Path.Combine(dataDir.FullName, $"{baseName}.patch_{fromIndex}{suffix}");
+				if (!File.Exists(source))
+					continue;
+				var destination = Path.Combine(dataDir.FullName, $"{baseName}.patch_{toIndex}{suffix}");
+				await Task.Run(() => File.Move(source, destination));
+				logger.LogInformation("Compacted patch chain \"{Name}\": patch_{From} -> patch_{To}{Suffix}", baseName, fromIndex, toIndex, suffix);
+			}
+		}
+	}
+
+	/// <summary>枚举 data 目录中某资源名的补丁链文件（含 sidecar），返回仍存在的部署 index 集合。</summary>
+	internal static HashSet<int> EnumeratePatchChainIndexes(DirectoryInfo dataDir, string baseName)
+	{
+		var indexes = new HashSet<int>();
+		foreach (var file in dataDir.GetFiles($"{baseName}.patch_*"))
+		{
+			var match = GetPatchIndexRegex().Match(file.Name);
+			if (!match.Success)
+				continue;
+			indexes.Add(int.Parse(match.Groups[1].ValueSpan));
+		}
+		return indexes;
+	}
+
+	/// <summary>
+	/// 计算把补丁链压缩为 0..N-1 连续的左移计划（游戏按 patch_0..N 连续读取，遇第一个空洞即停止）。
+	/// 输入为删除后仍存在的部署 index；返回 (fromIndex, toIndex) 列表，调用方必须按返回顺序（fromIndex 升序）执行。
+	/// </summary>
+	internal static List<(int FromIndex, int ToIndex)> PlanPatchChainCompact(IReadOnlyCollection<int> remainingIndexes)
+	{
+		var sorted = remainingIndexes.Distinct().OrderBy(static i => i).ToArray();
+		var moves = new List<(int FromIndex, int ToIndex)>(sorted.Length);
+		for (int target = 0; target < sorted.Length; target++)
+		{
+			if (sorted[target] != target)
+				moves.Add((sorted[target], target));
+		}
+		return moves;
+	}
+
+	/// <summary>HD2PhysBone 参数集的三个必备文件名（add-on 从 bin\HD2PhysBone\&lt;目录名&gt;\ 加载）。</summary>
+	internal static readonly string[] PhysBoneParamFileNames = [PhysBoneParamLocator.RigFileName, PhysBoneParamLocator.NeedleFileName, PhysBoneParamLocator.LuaUnitsFileName];
+
+	/// <summary>add-on 额外读取的可选文件名。</summary>
+	private static readonly string[] PhysBoneOptionalFileNames = [PhysBoneParamLocator.GroundFileName];
+
+	/// <summary>管理器部署的参数目录内的标记文件；对账清理只删除带此标记的目录，保护管理器之外手动安装的参数。</summary>
+	internal const string PhysBoneManagedMarkerFileName = ".hd2mm-managed";
+
+	/// <summary>
+	/// 在模组目录中查找 HD2PhysBone 参数集：同时包含三个必备参数文件的目录（递归，逐集独立）。
+	/// 参数目录名优先取 mod.json 的 name 字段（从参数目录向上查到模组根目录，取最近者），否则回退清单名称。
+	/// 名称非法（含路径非法字符、清空、或以 _/. 开头——add-on 会跳过这类目录）时回退模组 GUID。
+	/// </summary>
+	internal static List<(DirectoryInfo ParamDir, string DirName)> DetectPhysBoneParamSets(DirectoryInfo modDirectory, string fallbackName, string fallbackGuid)
+	{
+		var sets = new List<(DirectoryInfo, string)>();
+		foreach (var paramDir in PhysBoneParamLocator.FindParamSetDirectories(modDirectory))
+		{
+			var requestedName = FindPhysBoneRequestedName(paramDir, modDirectory);
+			var dirName = SanitizePhysBoneDirName(requestedName);
+			if (string.IsNullOrEmpty(dirName))
+				dirName = SanitizePhysBoneDirName(fallbackName);
+			if (string.IsNullOrEmpty(dirName))
+				dirName = fallbackGuid;
+			sets.Add((paramDir, dirName));
+		}
+		return sets;
+	}
+
+	/// <summary>从参数目录向上查找到模组根目录（含），返回最近的 mod.json 中声明的 name；找不到返回 null。</summary>
+	private static string? FindPhysBoneRequestedName(DirectoryInfo paramDir, DirectoryInfo modDirectory)
+	{
+		var rootFullName = modDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+		for (var dir = paramDir; dir is not null; dir = dir.Parent)
+		{
+			var modJson = Path.Combine(dir.FullName, "mod.json");
+			if (File.Exists(modJson))
+			{
+				try
+				{
+					using var document = JsonDocument.Parse(File.ReadAllText(modJson));
+					if (document.RootElement.ValueKind == JsonValueKind.Object &&
+						document.RootElement.TryGetProperty("name", out var name) &&
+						name.ValueKind == JsonValueKind.String)
+					{
+						var value = name.GetString();
+						if (!string.IsNullOrWhiteSpace(value))
+							return value;
+					}
+				}
+				catch (JsonException)
+				{
+					// mod.json 不是合法 JSON 时继续向上找
+				}
+			}
+
+			if (dir.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Equals(rootFullName, StringComparison.OrdinalIgnoreCase))
+				break;
+		}
+		return null;
+	}
+
+	/// <summary>
+	/// 清洗参数目录名：剔除路径非法字符与首尾空白，结尾的点和空格一并去掉（Windows 目录名限制）。
+	/// 目录名为空或以 _/. 开头（add-on 跳过这类目录）时返回空串，由调用方回退。
+	/// </summary>
+	internal static string SanitizePhysBoneDirName(string name)
+	{
+		if (string.IsNullOrWhiteSpace(name))
+			return string.Empty;
+
+		var invalidChars = Path.GetInvalidFileNameChars();
+		var cleaned = new string(name.Trim().Select(c => invalidChars.Contains(c) ? '_' : c).ToArray()).TrimEnd('.', ' ');
+		if (cleaned.Length == 0 || cleaned.StartsWith('_') || cleaned.StartsWith('.'))
+			return string.Empty;
+		return cleaned;
+	}
+
+	/// <summary>判断参数目录是否由管理器部署（含托管标记文件）。</summary>
+	private static bool IsManagedPhysBoneDir(DirectoryInfo dir)
+	{
+		return File.Exists(Path.Combine(dir.FullName, PhysBoneManagedMarkerFileName));
+	}
+
+	/// <summary>
+	/// 部署收尾：把本次部署模组携带的 HD2PhysBone 参数复制到 bin\HD2PhysBone\&lt;目录名&gt;\，
+	/// 并对账清理带托管标记但不在本次部署集合中的参数目录（模组被取消启用、删除或改名后的残留）——
+	/// add-on 枚举该目录下的所有参数目录即加载，残留 rig 会白白占用资源。
+	/// 管理器之外手动安装的参数目录（无托管标记）不受影响。
+	/// </summary>
+	private async Task DeployPhysBoneParamsAsync(IReadOnlyList<ModData> deployedMods, Action<string>? reportStep, Action<string>? reportStepDetail, Action? reportStepCompleted)
+	{
+		var physBoneRoot = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "bin", "HD2PhysBone"));
+
+		var detected = new List<(DirectoryInfo ParamDir, string DirName)>();
+		foreach (var mod in deployedMods)
+			detected.AddRange(DetectPhysBoneParamSets(mod.Directory, mod.Manifest.Name, mod.Manifest.Guid.ToString("N")));
+
+		ReconcilePhysBoneParamDirectories(physBoneRoot, detected.Select(static set => set.DirName).ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+		if (detected.Count == 0)
+			return;
+
+		reportStep?.Invoke(_localizationService["ModService.PhysBoneParamsStep"]);
+
+		physBoneRoot.Create();
+		var done = 0;
+		foreach (var (paramDir, dirName) in detected)
+		{
+			var targetDir = Path.Combine(physBoneRoot.FullName, dirName);
+			Directory.CreateDirectory(targetDir);
+			foreach (var fileName in PhysBoneParamFileNames.Concat(PhysBoneOptionalFileNames))
+			{
+				var source = Path.Combine(paramDir.FullName, fileName);
+				if (!File.Exists(source))
+					continue;
+				await Task.Run(() => File.Copy(source, Path.Combine(targetDir, fileName), true));
+				reportStepDetail?.Invoke(_localizationService["ModService.CopyingPhysBoneParams"]
+					.Replace("{name}", fileName));
+			}
+
+			// 托管标记：对账清理只删除带标记的目录
+			var markerPath = Path.Combine(targetDir, PhysBoneManagedMarkerFileName);
+			if (!File.Exists(markerPath))
+				await Task.Run(() => File.WriteAllText(markerPath, string.Empty));
+
+			done++;
+			_logger.LogInformation("Deployed PhysBone parameters \"{Dir}\" from \"{Source}\"", dirName, paramDir.FullName);
+		}
+
+		reportStepDetail?.Invoke(_localizationService["ModService.PhysBoneParamsDone"].Replace("{count}", done.ToString()));
+		reportStepCompleted?.Invoke();
+	}
+
+	/// <summary>
+	/// 删除 bin\HD2PhysBone 下带托管标记、且目录名不在期望集合中的参数目录；期望集合为空表示全部托管目录都要清理。
+	/// </summary>
+	private void ReconcilePhysBoneParamDirectories(DirectoryInfo physBoneRoot, HashSet<string> expectedNames)
+	{
+		if (!physBoneRoot.Exists)
+			return;
+
+		foreach (var dir in physBoneRoot.EnumerateDirectories())
+		{
+			if (expectedNames.Contains(dir.Name) || !IsManagedPhysBoneDir(dir))
+				continue;
+			try
+			{
+				dir.Delete(true);
+				_logger.LogInformation("Removed stale managed PhysBone parameter directory \"{Name}\"", dir.Name);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogWarning(ex, "Failed to remove stale managed PhysBone parameter directory \"{Name}\"", dir.Name);
+			}
+		}
+	}
+
+	/// <summary>删除模组时同步清理它部署到 bin\HD2PhysBone 下的参数目录（仅托管目录）。</summary>
+	private void CleanupPhysBoneParamsForMod(ModData mod)
+	{
+		var physBoneRoot = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "bin", "HD2PhysBone"));
+		if (!physBoneRoot.Exists)
+			return;
+
+		foreach (var (_, dirName) in DetectPhysBoneParamSets(mod.Directory, mod.Manifest.Name, mod.Manifest.Guid.ToString("N")))
+		{
+			var dir = new DirectoryInfo(Path.Combine(physBoneRoot.FullName, dirName));
+			if (!dir.Exists || !IsManagedPhysBoneDir(dir))
+				continue;
+			try
+			{
+				dir.Delete(true);
+				_logger.LogInformation("Removed managed PhysBone parameter directory \"{Name}\" for removed mod \"{Mod}\"", dirName, mod.Manifest.Name);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogWarning(ex, "Failed to remove managed PhysBone parameter directory \"{Name}\"", dirName);
+			}
 		}
 	}
 
@@ -1185,7 +1452,9 @@ internal sealed partial class ModService
 			return;
 		}
 
-		await PurgeAsync();
+		GuardGameNotRunning();
+
+		await PurgeCoreAsync();
 
 		_logger.LogInformation("Starting deployment of {} dashboard snapshot mods", requestedMods.Count);
 
@@ -1359,7 +1628,6 @@ internal sealed partial class ModService
 			var placeholderPaths = new List<string>();
 			foreach (var (name, ranges) in perNameModRanges)
 			{
-				int offset = _settingsService.SkipList.Contains(name) ? 1 : 0;
 				int position = 0;
 				foreach (var (rangeMod, triplets) in ranges)
 				{
@@ -1370,7 +1638,7 @@ internal sealed partial class ModService
 						for (int i = 0; i < triplets.Count; i++)
 						{
 							var triplet = triplets[i];
-							var index = position + i + offset;
+							var index = position + i;
 
 							var newPatchPath = Path.Combine(_settingsService.GameDirectory, "data", $"{name}.patch_{index}");
 							if (triplet.Patch is not null)
@@ -1456,6 +1724,10 @@ internal sealed partial class ModService
 
 			reportStepCompleted?.Invoke();
 			}
+
+			// HD2PhysBone 参数目录生命周期：复制本次部署模组的参数到 bin\HD2PhysBone，
+			// 并对账清理带托管标记的残留目录（模组被取消启用、删除或改名后）
+			await DeployPhysBoneParamsAsync(requestedMods, reportStep, reportStepDetail, reportStepCompleted);
 		}
 		catch
 		{
@@ -1662,7 +1934,14 @@ internal sealed partial class ModService
 	public async Task PurgeAsync()
 	{
 		GuardInitialized();
+		GuardGameNotRunning();
 
+		await PurgeCoreAsync();
+	}
+
+	/// <summary>清理 data 目录中的全部补丁文件，不带游戏运行守卫（部署流程已在外层统一检查）。</summary>
+	private async Task PurgeCoreAsync()
+	{
 		_logger.LogInformation("Purging mods");
 
 		var dataDir = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data"));
@@ -1681,6 +1960,12 @@ internal sealed partial class ModService
 				_logger.LogTrace("Deleted \"{}\"", file.Name);
 				return ValueTask.CompletedTask;
 			});
+
+		// data 已全部清空：托管参数目录必为残留（add-on 枚举 bin\HD2PhysBone 即加载，残留 rig 白占资源）。
+		// 期望集合为空 = 清理全部托管目录；无托管标记的目录（管理器之外手动安装）不动。
+		ReconcilePhysBoneParamDirectories(
+			new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "bin", "HD2PhysBone")),
+			new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
 		_logger.LogInformation("Purge complete");
 	}

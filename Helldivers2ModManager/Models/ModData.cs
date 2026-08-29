@@ -141,6 +141,18 @@ internal sealed class ModData(DirectoryInfo dir, IModManifest manifest) : INotif
         }
     }
 
+    private bool? _isPhysBoneMod;
+
+    /// <summary>
+    /// 模组目录是否携带 HD2PhysBone 参数集。惰性探测并缓存（目录内容在运行期视为不变），
+    /// 用于部署排序（PhysBone 模组置底最后部署）与参数目录生命周期。
+    /// </summary>
+    public bool IsPhysBoneMod
+    {
+        get => _isPhysBoneMod ??= Services.PhysBoneParamLocator.HasParamSet(Directory);
+        internal set => _isPhysBoneMod = value;
+    }
+
     public void ApplyData(in EnabledData data)
     {
         Enabled = data.Enabled;
