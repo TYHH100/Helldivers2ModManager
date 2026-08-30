@@ -19,13 +19,13 @@ jobs:
 
       - name: Build HD2MM
         run: |
-          cd Helldivers2ModManager
+          cd src/Helldivers2ModManager
           dotnet publish Helldivers2ModManager.csproj --configuration Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o HD2MM-Complete
 
       - name: Zip HD2MM
         uses: vimtor/action-zip@v1.2
         with:
-          files: Helldivers2ModManager/HD2MM-Complete
+          files: src/Helldivers2ModManager/HD2MM-Complete
           dest: Helldivers2ModManager.zip
 
       - name: Upload HD2MM zip to Release
@@ -48,13 +48,13 @@ jobs:
 
       - name: Build Purger
         run: |
-          cd Purger
+          cd src/Purger
           dotnet publish Purger.csproj --configuration Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o Purger-Complete
 
       - name: Zip Purger
         uses: vimtor/action-zip@v1.2
         with:
-          files: Purger/Purger-Complete
+          files: src/Purger/Purger-Complete
           dest: Purger.zip
 
       - name: Upload Purger zip to Release

@@ -1,9 +1,9 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.10.35122.118
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Helldivers2ModManager", "Helldivers2ModManager\Helldivers2ModManager.csproj", "{211EED12-1D66-481B-9CDC-D3FF77053413}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Helldivers2ModManager", "src\Helldivers2ModManager\Helldivers2ModManager.csproj", "{211EED12-1D66-481B-9CDC-D3FF77053413}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{2A0A466C-C7C7-4544-AF49-2D54CD76C10D}"
 	ProjectSection(SolutionItems) = preProject
@@ -11,9 +11,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Purger", "Purger\Purger.csproj", "{550568D3-A9A4-4B60-8CDD-9CBD850F661A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Purger", "src\Purger\Purger.csproj", "{550568D3-A9A4-4B60-8CDD-9CBD850F661A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Helldivers2PatchTool", "Helldivers2PatchTool\Helldivers2PatchTool.csproj", "{46BE5475-3C66-43BB-8725-5FF829BA63B8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Helldivers2PatchTool", "src\Helldivers2PatchTool\Helldivers2PatchTool.csproj", "{46BE5475-3C66-43BB-8725-5FF829BA63B8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Helldivers2ModManager.Tests", "tests\Helldivers2ModManager.Tests\Helldivers2ModManager.Tests.csproj", "{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -61,6 +63,18 @@ Global
 		{46BE5475-3C66-43BB-8725-5FF829BA63B8}.Release|x64.Build.0 = Release|Any CPU
 		{46BE5475-3C66-43BB-8725-5FF829BA63B8}.Release|x86.ActiveCfg = Release|Any CPU
 		{46BE5475-3C66-43BB-8725-5FF829BA63B8}.Release|x86.Build.0 = Release|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Debug|x64.Build.0 = Debug|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Debug|x86.Build.0 = Debug|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Release|x64.ActiveCfg = Release|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Release|x64.Build.0 = Release|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Release|x86.ActiveCfg = Release|Any CPU
+		{9EAF845B-BDF2-4C94-9E7A-D87F24EEC8EC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

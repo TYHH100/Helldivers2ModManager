@@ -16,16 +16,39 @@
 
 | 项目 | 作用 | 目标框架 |
 |---|---|---|
-| `Helldivers2ModManager` | 主 WPF 应用 | `net10.0-windows` |
+| `Helldivers2ModManager` | 主 WPF 应用（唯一的库代码载体：领域模型、VersionCheck、服务、UI 全在本项目） | `net10.0-windows` |
 | `Helldivers2ModManager.Tests` | MSTest 测试 | `net10.0-windows` |
 | `Purger` | 独立清理工具 | `net10.0-windows` |
-| `Helldivers2PatchTool` | 独立补丁检测/修复工具 | `net10.0-windows7.0` |
+| `Helldivers2PatchTool` | 独立补丁检测/修复工具，通过 `ProjectReference` 引用主程序（引用构建经 `SetTargetFramework` 钉死为自包含 + win-x64，规避 NETSDK1150） | `net10.0-windows7.0` |
 
-解决方案文件是 `Helldivers2ModManager.sln`。主应用的服务、模型、ViewModel、View 和资源分别位于同名目录；补丁解析与模型/纹理预览的关键实现集中在 `Services/`、`Models/` 和对应的 `ViewModels/` 中。
+解决方案文件是 `Helldivers2ModManager.sln`，仓库采用 src/ 布局：四个可构建项目都在 `src/`，测试在 `tests/`，补丁解析/模型相关资料在 `docs/`（含 `mod_manifest_v1-schema.json`）。主应用的服务、模型、ViewModel、View 和资源分别位于同名目录；补丁解析与模型/纹理预览的关键实现集中在 `Services/`、`Models/` 和对应的 `ViewModels/` 中。
 
-版本以 `Helldivers2ModManager/App.xaml.cs` 和主项目文件为准，不在本文件维护版本号。
+仓库布局说明：
+
+- 仓库采用 src/ 布局：四个可构建项目都在 `src/`，测试在 `tests/`，资料与 `mod_manifest_v1-schema.json` 在 `docs/`；`archive/` 是历史遗留归档（未跟踪）。
+- 服务注册：`App.xaml.cs` 反射扫描主程序集的 `[RegisterService]` 标注。
 
 ## 3. 架构约定
+
+### 分层总览（核心 / 基础 / 前端）
+
+代码按三层组织，目录即分层；所有命名空间为 `Helldivers2ModManager.*`，目录移动不影响 DI/XAML。
+
+**核心（领域逻辑）**——不依赖 UI：
+- `Models/`：清单家族（Mod/Option/Manifest）、Patch 资源描述、`Models/ModelPreview/` 预览数据模型。
+- `Services/VersionCheck/`：`VersionCheckService` 门面 + 修复/备份/伴生恢复/批量修复子服务 + 游戏引用读取器 + `VersionCheckShared`（共享常量与 `RepairGate`）/`VersionCheckFileOps`。
+- `Services/Parsing/`：`PatchResourceInspectionService`（补丁资源检视）、`PhysBoneParamLocator`。
+- `Services/ModManagement/`：mod 生命周期——`ModService`（+Import/Update/Deploy partial）、`ModHashService`/`FileHashUtils`、`ModTypeDetectionService`、`ModConflictService`、`ModGroupService`、`ProfileService`/`ProfileSaveCoordinator`、`BisectService`、`ArmorReuseService`、`DeploymentOrderHelper`。
+- `Services/Search/`（SearchFilterService/FuzzySearchMatcher）、`Services/ModelPreview/`（ModelPreviewBackend/GpuSkinningService）是领域侧的专用子系统。
+
+**基础（设施与持久化）**——为核心与前端提供支撑：
+- `Services/Persistence/`：`DatabaseService` + 全部 `*Repository`（SQLite 仓储）。
+- `Services/Infrastructure/`：`BackgroundTaskService`（后台任务）、`GameProcessService`（游戏运行护栏）、`RepairDisclaimerService`、`FileLogger`。
+- `Services/Nexus/`：NexusMods API 客户端（接口契约注册的范本）。
+
+**前端（UI）**——Views/（页面视图）、ViewModels/（页面 VM 与 partial 流水线）、Components/（覆盖层控件）、Stores/（导航/编辑会话状态）、Resources/（样式/本地化 JSON/字体）、Behaviors/、Converters/、App/MainWindow/SplashWindow。
+
+依赖方向固定：前端 → 领域服务 → 基础设施/持久化；所有 Services 与 Models 不得反向引用 ViewModels。`SettingsService`/`LocalizationService` 位于 `Services/Infrastructure/`，由 PatchTool 直接 `new` 使用（它们不能依赖任何 UI 类型）。
 
 ### 服务注册
 
@@ -47,6 +70,8 @@ internal sealed class MyService
 
 - ViewModel 继承项目已有的基类或 `ObservableObject`，使用 CommunityToolkit 的 `[ObservableProperty]` 和 `[RelayCommand]`。
 - 业务逻辑放在 ViewModel/Service，不在 code-behind 中堆积。
+- 大型 ViewModel/控件按流水线拆 partial 文件（保持单一类型、文件级分区），已有先例：`DashboardPageViewModel.{Selection,Import,Deploy,Scans,Export,Tags}.cs`、`ModelPreviewPageViewModel.{Loading,Textures,Animation,Rebuild}.cs`、`SettingsPageViewModel.Properties.cs`、`VersionCheckDetailOverlay.{Repair,Backup,ViewData}.cs`、`ModService.{Import,Update,Deploy}.cs`。新增功能写进对应 partial 文件，不要把主文件重新养大。
+- 根目录只保留应用入口（App/MainWindow/SplashWindow/AssemblyInfo/FileLogger）；行为类在 `Behaviors/`，值转换器在 `Converters/`，视图辅助类型（如 `DashboardItemTemplateSelector`）在 `Views/`。
 - 公共控件样式集中在 `Resources/Styles/FluentControls.xaml` 等共享资源中；引用前先确认资源键确实存在。
 - 后台线程不得直接修改 WPF 集合或绑定属性；通过 `BackgroundTaskService` 或 Dispatcher 切回 UI 线程。
 
@@ -60,7 +85,7 @@ internal sealed class MyService
 
 ### Mod 清单
 
-- 清单格式以 `mod_manifest_v1-schema.json` 和 `Models/` 中的实现为准。
+- 清单格式以 `docs/mod_manifest_v1-schema.json` 和 `Models/` 中的实现为准。
 - 必须保持 Legacy 与 V1 的兼容行为；不支持的版本应沿用现有异常和提示链路。
 - 修改清单保存、选项或部署逻辑时，要验证 `manifest.json`、备份和恢复行为，不要只验证页面显示。
 - Dashboard/Profile 中的启用状态是部署输入的来源；不要用临时 View 状态或扫描结果覆盖用户选择。
@@ -211,15 +236,15 @@ catch (Exception ex)
 dotnet build Helldivers2ModManager.sln --configuration Debug
 
 # 运行主测试项目
-dotnet test Helldivers2ModManager.Tests/Helldivers2ModManager.Tests.csproj --configuration Debug
+dotnet test tests/Helldivers2ModManager.Tests/Helldivers2ModManager.Tests.csproj --configuration Debug
 
 # 主程序发布
-dotnet publish Helldivers2ModManager/Helldivers2ModManager.csproj `
+dotnet publish src/Helldivers2ModManager/Helldivers2ModManager.csproj `
   --configuration Release -r win-x64 --self-contained true `
   -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o publish
 
 # 独立工具发布时使用各自项目文件和输出目录
-dotnet publish Purger/Purger.csproj --configuration Release -r win-x64 `
+dotnet publish src/Purger/Purger.csproj --configuration Release -r win-x64 `
   --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o publish
 ```
 

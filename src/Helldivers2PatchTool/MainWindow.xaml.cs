@@ -1,0 +1,664 @@
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Windows;
+using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Services;
+using Helldivers2ModManager.Services.Infrastructure;
+using Microsoft.Extensions.Logging;
+using Microsoft.Win32;
+using Forms = System.Windows.Forms;
+
+namespace Helldivers2PatchTool;
+
+public sealed record PatchResultRow(
+    string Path,
+    string Health,
+    int Entries,
+    int Units,
+    string Details,
+    string DiagnosticReport);
+
+public partial class MainWindow : Window
+{
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly SettingsService _settingsService;
+    private readonly VersionCheckService _versionCheckService;
+    private readonly ILogger<MainWindow> _logger;
+    private DirectoryInfo? _targetDirectory;
+
+    public ObservableCollection<PatchResultRow> Results { get; } = [];
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        DataContext = this;
+
+        _loggerFactory = PatchToolLogging.CreateFactory();
+        PatchToolLogging.CleanExcessLogs();
+        _settingsService = new SettingsService(_loggerFactory.CreateLogger<SettingsService>());
+        _settingsService.InitDefault();
+        var localizationService = new LocalizationService(_loggerFactory.CreateLogger<LocalizationService>());
+        _versionCheckService = new VersionCheckService(
+            _loggerFactory.CreateLogger<VersionCheckService>(),
+            _settingsService,
+            localizationService);
+        _logger = _loggerFactory.CreateLogger<MainWindow>();
+        _logger.LogInformation("Patch tool 启动：日志将写入 logs 目录（最多保留 {MaxFiles} 个）", PatchToolLogging.MaxLogFiles);
+
+        Loaded += async (_, _) => await DetectGameDirectoryAsync(showNotFoundMessage: false);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _loggerFactory.Dispose();
+        base.OnClosed(e);
+    }
+
+    private void BrowseTarget_Click(object sender, RoutedEventArgs e)
+    {
+        var path = PickFolder("选择包含 .patch_* 文件的 Mod 目录");
+        if (path is not null)
+            targetPathBox.Text = path;
+    }
+
+    private void BrowseGame_Click(object sender, RoutedEventArgs e)
+    {
+        var path = PickFolder("选择 Helldivers 2 游戏目录（其中应包含 data 文件夹）");
+        if (path is not null)
+        {
+            gamePathBox.Text = path;
+            UpdateGameDirectoryHint(path, detectedAutomatically: false);
+        }
+    }
+
+    private async void AutoDetectGame_Click(object sender, RoutedEventArgs e) =>
+        await DetectGameDirectoryAsync(showNotFoundMessage: true);
+
+    private static string? PickFolder(string description)
+    {
+        using var dialog = new Forms.FolderBrowserDialog
+        {
+            Description = description,
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = false
+        };
+        return dialog.ShowDialog() == Forms.DialogResult.OK ? dialog.SelectedPath : null;
+    }
+
+    private async Task DetectGameDirectoryAsync(bool showNotFoundMessage)
+    {
+        gamePathHint.Text = "正在扫描 Steam 库与常见安装位置…";
+        var path = await Task.Run(FindGameDirectory);
+        if (path is not null)
+        {
+            gamePathBox.Text = path;
+            UpdateGameDirectoryHint(path, detectedAutomatically: true);
+            _logger.LogInformation("自动检测到游戏目录：{Path}", path);
+            if (showNotFoundMessage)
+                statusText.Text = "已自动检测到 Helldivers 2 游戏目录，可用于 Unit 智能修复。";
+            return;
+        }
+
+        gamePathHint.Text = "未自动检测到游戏；智能修复前请手动选择。";
+        _logger.LogWarning("未自动检测到 Helldivers 2 游戏目录，智能修复前需手动选择。");
+        if (showNotFoundMessage)
+            statusText.Text = "未找到 Helldivers 2。请确认 Steam 已安装游戏，或使用“手动选择”。";
+    }
+
+    private void UpdateGameDirectoryHint(string path, bool detectedAutomatically)
+    {
+        if (IsValidGameDirectory(path))
+        {
+            gamePathHint.Text = detectedAutomatically
+                ? "✓ 已自动检测到有效游戏目录，可直接用于 Unit 智能修复。"
+                : "✓ 游戏目录有效，可直接用于 Unit 智能修复。";
+        }
+        else
+        {
+            gamePathHint.Text = "所选目录不是有效的 Helldivers 2 游戏根目录。";
+        }
+    }
+
+    private static string? FindGameDirectory()
+    {
+        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var steamPath in GetSteamInstallPaths())
+        {
+            foreach (var library in GetSteamLibraries(steamPath))
+            {
+                candidates.Add(Path.Combine(library, "steamapps", "common", "Helldivers 2"));
+                var manifestPath = Path.Combine(library, "steamapps", "appmanifest_553850.acf");
+                var installDirectory = ReadSteamInstallDirectory(manifestPath);
+                if (!string.IsNullOrWhiteSpace(installDirectory))
+                    candidates.Add(Path.Combine(library, "steamapps", "common", installDirectory));
+            }
+        }
+
+        foreach (var drive in Environment.GetLogicalDrives())
+        {
+            candidates.Add(Path.Combine(drive, "Steam", "steamapps", "common", "Helldivers 2"));
+            candidates.Add(Path.Combine(drive, "SteamLibrary", "steamapps", "common", "Helldivers 2"));
+        }
+
+        candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam", "steamapps", "common", "Helldivers 2"));
+        return candidates.FirstOrDefault(IsValidGameDirectory);
+    }
+
+    private static IEnumerable<string> GetSteamInstallPaths()
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (hive, keyPath, valueName) in new[]
+        {
+            (Registry.CurrentUser, @"Software\Valve\Steam", "SteamPath"),
+            (Registry.LocalMachine, @"Software\Valve\Steam", "InstallPath"),
+            (Registry.LocalMachine, @"Software\Wow6432Node\Valve\Steam", "InstallPath")
+        })
+        {
+            try
+            {
+                using var key = hive.OpenSubKey(keyPath);
+                if (key?.GetValue(valueName) is string path && Directory.Exists(path))
+                    paths.Add(path);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Registry access is optional; fall back to common paths below.
+            }
+        }
+
+        paths.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam"));
+        return paths.Where(Directory.Exists);
+    }
+
+    private static IEnumerable<string> GetSteamLibraries(string steamPath)
+    {
+        var libraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { steamPath };
+        var libraryFile = Path.Combine(steamPath, "steamapps", "libraryfolders.vdf");
+        try
+        {
+            if (File.Exists(libraryFile))
+            {
+                var content = File.ReadAllText(libraryFile);
+                foreach (Match match in Regex.Matches(content, @"""path""\s*""([^""]+)""", RegexOptions.IgnoreCase))
+                {
+                    var libraryPath = match.Groups[1].Value.Replace(@"\\", @"\");
+                    if (Directory.Exists(libraryPath))
+                        libraries.Add(libraryPath);
+                }
+            }
+        }
+        catch (IOException)
+        {
+            // Steam may be updating the library file; the root library remains available.
+        }
+
+        return libraries;
+    }
+
+    private static string? ReadSteamInstallDirectory(string manifestPath)
+    {
+        try
+        {
+            if (!File.Exists(manifestPath))
+                return null;
+
+            var content = File.ReadAllText(manifestPath);
+            var match = Regex.Match(content, @"""installdir""\s*""([^""]+)""", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsValidGameDirectory(string path) =>
+        Directory.Exists(path) &&
+        File.Exists(Path.Combine(path, "bin", "helldivers2.exe")) &&
+        File.Exists(Path.Combine(path, "data", "bundles.nxa"));
+
+    private async void Analyze_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryPrepareTargetDirectory())
+            return;
+
+        await AnalyzeAsync();
+    }
+
+    private void ResultsGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (resultsGrid.SelectedItem is not PatchResultRow row)
+            return;
+
+        diagnosticTitle.Text = "详细诊断 · " + row.Path;
+        diagnosticText.Text = row.DiagnosticReport;
+    }
+
+    private async void Repair_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryPrepareTargetDirectory())
+            return;
+
+        SetBusy(true, "正在生成修复计划…");
+        _logger.LogInformation("开始生成修复计划，目标目录：{Path}", _targetDirectory!.FullName);
+        try
+        {
+            var analysis = await _versionCheckService.AnalyzePatchDirectoryAsync(_targetDirectory!);
+            if (!analysis.PatchFiles.Any(patch => patch.UnitDetails.Count > 0))
+            {
+                _logger.LogWarning("已跳过：目标目录没有包含 Unit 资源的补丁，仅支持模型模组自动修复。");
+                statusText.Text = "已跳过：自动修复目前仅支持包含 Unit 资源的模型模组；音频及其他非 Unit 资源不会创建备份或修改文件。";
+                return;
+            }
+
+            if (!TryConfigureGameDirectory())
+                return;
+
+            var companionPlan = await _versionCheckService.CreateCompanionRecoveryPlanAsync(_targetDirectory!);
+            foreach (var item in companionPlan.Items)
+            {
+                _logger.LogInformation("companion 计划：{Companion}（对应 {Patch}，后缀 {Suffix}）要求={Required} 缺失={Missing} 可恢复={CanRecover} 来源={Source}{Extra}",
+                    Path.GetFileName(item.CompanionPath),
+                    Path.GetFileName(item.PatchPath),
+                    item.Suffix,
+                    item.IsRequired,
+                    item.IsMissing,
+                    item.CanRecover,
+                    item.SourceKind,
+                    string.IsNullOrWhiteSpace(item.SourcePath) ? string.Empty : $"，来源路径：{item.SourcePath}");
+            }
+            if (companionPlan.MissingCount > 0 && !companionPlan.CanRecover)
+            {
+                _logger.LogWarning("缺失的 companion 文件无法安全恢复：{Reason}", BuildCompanionBlockMessage(companionPlan));
+                statusText.Text = "缺失的 companion 文件无法安全恢复：" + BuildCompanionBlockMessage(companionPlan);
+                return;
+            }
+
+            var safePlan = await _versionCheckService.CreateRepairPlanAsync(_targetDirectory!);
+            foreach (var action in safePlan.Actions)
+            {
+                _logger.LogInformation("元数据修复动作：{Kind} 文件={File} 偏移=0x{Offset:X} 宽度={Width}B 值 0x{Old:X}->0x{New:X}{Extra}",
+                    action.Kind,
+                    Path.GetFileName(action.PatchFilePath),
+                    action.Offset,
+                    action.Width,
+                    action.OldValue,
+                    action.NewValue,
+                    action.EntryIndex > 0 ? $"，Entry #{action.EntryIndex}（ID 0x{unchecked((ulong)action.FileId):X16}）" : string.Empty);
+            }
+            if (safePlan.BlockingReasons.Count > 0)
+            {
+                _logger.LogWarning("元数据修复无法执行：{Reason}", string.Join("；", safePlan.BlockingReasons));
+                statusText.Text = "元数据修复无法执行：" + string.Join("；", safePlan.BlockingReasons);
+                return;
+            }
+
+            var assistedPlan = safePlan.ActionCount == 0 && companionPlan.MissingCount == 0
+                ? await _versionCheckService.CreateAutomaticAssistedRepairPlanAsync(_targetDirectory!)
+                : null;
+            if (assistedPlan is not null)
+            {
+                foreach (var action in assistedPlan.Actions)
+                {
+                    _logger.LogInformation("Unit 修复动作：0x{FileId:X16} 版本 0x{OldVer:X8}->0x{NewVer:X8} LOD {OldLod}->{NewLod}B GPU {OldGpu}->{NewGpu}B 网格差异={MeshDiff} 强自定义={StrongCustom} 体型={Body} 槽位={Slot} 策略={Strategy} 文件={File}",
+                        unchecked((ulong)action.FileId),
+                        action.CurrentVersion,
+                        action.ReferenceVersion,
+                        action.CurrentLodSize,
+                        action.ReferenceLodSize,
+                        action.CurrentGpuSize,
+                        action.ReferenceGpuSize,
+                        action.MeshIdsDiffer,
+                        action.StrongCustomModelSignal,
+                        action.BodyShape,
+                        action.CustomizationSlot,
+                        action.LodStrategy,
+                        Path.GetFileName(action.PatchFilePath));
+                }
+                foreach (var material in assistedPlan.MaterialActions)
+                {
+                    _logger.LogInformation("材质修复动作：0x{FileId:X16} 类型={Kind} 父模板 0x{Old:X16}->0x{New:X16} 文件={File}",
+                        unchecked((ulong)material.FileId),
+                        material.Kind,
+                        material.OldParentMaterialId,
+                        material.NewParentMaterialId,
+                        Path.GetFileName(material.PatchFilePath));
+                }
+            }
+
+            if (assistedPlan is { BlockingReasons.Count: > 0 })
+            {
+                _logger.LogWarning("Unit 智能修复无法执行：{Reason}", string.Join("；", assistedPlan.BlockingReasons));
+                statusText.Text = "Unit 智能修复无法执行：" + string.Join("；", assistedPlan.BlockingReasons);
+                return;
+            }
+
+            if (companionPlan.MissingCount == 0 && safePlan.ActionCount == 0 && assistedPlan is { CanRepair: false })
+            {
+                _logger.LogInformation("没有检测到可安全自动修复的问题。");
+                statusText.Text = "没有检测到可安全自动修复的问题。";
+                return;
+            }
+
+            _logger.LogInformation("修复计划：companion 缺失 {Missing} 个（可恢复 {Recoverable}），元数据修复 {SafeCount} 项（{SafeFiles} 个补丁），Unit/材质智能修复 {AssistedCount} 项（{AssistedFiles} 个补丁）。", companionPlan.MissingCount, companionPlan.RecoverableCount, safePlan.ActionCount, safePlan.FileCount, assistedPlan?.ActionCount ?? 0, assistedPlan?.FileCount ?? 0);
+
+            var confirmation = System.Windows.MessageBox.Show(
+                BuildRepairConfirmation(companionPlan, safePlan, assistedPlan),
+                "确认一键修复",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                _logger.LogInformation("用户取消了修复确认。");
+                return;
+            }
+
+            var recoveredCount = 0;
+            if (companionPlan.MissingCount > 0)
+            {
+                var recoveryResult = await _versionCheckService.RecoverCompanionFilesAsync(_targetDirectory!);
+                if (!recoveryResult.Success)
+                    throw new InvalidDataException("companion 恢复失败：" + recoveryResult.ErrorMessage);
+                recoveredCount = recoveryResult.RecoveredCount;
+                _logger.LogInformation("已恢复 {Count} 个缺失的 companion 文件。", recoveredCount);
+                foreach (var path in recoveryResult.RecoveredPaths)
+                    _logger.LogInformation("  恢复文件：{Path}", path);
+            }
+
+            var metadataActionCount = 0;
+            var backupCount = 0;
+            var refreshedSafePlan = await _versionCheckService.CreateRepairPlanAsync(_targetDirectory!);
+            if (refreshedSafePlan.ActionCount > 0)
+            {
+                if (!refreshedSafePlan.CanRepair)
+                    throw new InvalidDataException(string.Join(Environment.NewLine, refreshedSafePlan.BlockingReasons));
+
+                var metadataResult = await _versionCheckService.RepairModAsync(_targetDirectory!);
+                if (!metadataResult.Success)
+                    throw new InvalidDataException("元数据修复失败：" + metadataResult.ErrorMessage);
+                metadataActionCount = metadataResult.AppliedActionCount;
+                backupCount += metadataResult.BackupPaths.Count;
+                _logger.LogInformation("元数据修复完成：应用 {Count} 项，创建 {Backups} 份备份。", metadataActionCount, metadataResult.BackupPaths.Count);
+                foreach (var path in metadataResult.BackupPaths)
+                    _logger.LogInformation("  元数据修复备份：{Path}", path);
+            }
+
+            var refreshedAssistedPlan = await _versionCheckService.CreateAutomaticAssistedRepairPlanAsync(_targetDirectory!);
+            if (refreshedAssistedPlan.BlockingReasons.Count > 0)
+                throw new InvalidDataException("Unit 智能修复无法执行：" + string.Join("；", refreshedAssistedPlan.BlockingReasons));
+
+            var assistedActionCount = 0;
+            if (refreshedAssistedPlan.CanRepair)
+            {
+                var assistedResult = await _versionCheckService.RepairModAutomaticallyAsync(_targetDirectory!);
+                if (!assistedResult.Success)
+                    throw new InvalidDataException("Unit 智能修复失败：" + assistedResult.ErrorMessage);
+                assistedActionCount = assistedResult.AppliedActionCount;
+                backupCount += assistedResult.BackupPaths.Count;
+                _logger.LogInformation("Unit/材质智能修复完成：应用 {Count} 项，创建 {Backups} 份备份。", assistedActionCount, assistedResult.BackupPaths.Count);
+                foreach (var path in assistedResult.BackupPaths)
+                    _logger.LogInformation("  Unit 智能修复备份：{Path}", path);
+            }
+
+            var successMessage = $"一键修复完成：恢复 {recoveredCount} 个 companion 文件，应用 {metadataActionCount} 项元数据修复和 {assistedActionCount} 项 Unit/材质修复，创建 {backupCount} 份补丁备份。";
+            _logger.LogInformation("一键修复完成：{Message}", successMessage);
+            await AnalyzeAsync();
+            statusText.Text = successMessage;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "一键修复失败：{Message}", ex.Message);
+            statusText.Text = "修复失败：" + ex.Message;
+        }
+        finally
+        {
+            SetBusy(false, null);
+        }
+    }
+
+    private bool TryConfigureGameDirectory()
+    {
+        var path = gamePathBox.Text.Trim();
+        if (!IsValidGameDirectory(path))
+        {
+            _logger.LogWarning("游戏目录无效，无法执行一键修复：{Path}", path);
+            statusText.Text = "一键修复需要有效的 Helldivers 2 游戏目录，以便恢复 companion 文件并执行 Unit/材质智能修复。";
+            return false;
+        }
+
+        _settingsService.GameDirectory = path;
+        return true;
+    }
+
+    private static string BuildRepairConfirmation(
+        CompanionRecoveryPlan companionPlan,
+        ModRepairPlan safePlan,
+        AssistedModRepairPlan? assistedPlan)
+    {
+        var steps = new List<string>();
+        if (companionPlan.MissingCount > 0)
+            steps.Add($"恢复 {companionPlan.RecoverableCount} 个缺失的 companion 文件");
+        if (safePlan.ActionCount > 0)
+            steps.Add($"修复 {safePlan.FileCount} 个补丁中的 {safePlan.ActionCount} 项元数据");
+        if (assistedPlan is { CanRepair: true })
+            steps.Add($"参考当前游戏修复 {assistedPlan.FileCount} 个补丁中的 {assistedPlan.ActionCount} 个 Unit/材质项");
+        if (assistedPlan is null)
+            steps.Add("在前置修复后重新生成 Unit/材质智能修复计划");
+
+        return "将按管理器同样的安全顺序执行：\n\n"
+            + string.Join("\n", steps.Select((step, index) => $"{index + 1}. {step}"))
+            + "\n\n补丁写入前会创建备份，且每个阶段完成后都会重新检查。是否继续？";
+    }
+
+    private static string BuildCompanionBlockMessage(CompanionRecoveryPlan plan)
+    {
+        var reasons = plan.Items
+            .Where(item => item.IsMissing && !item.CanRecover)
+            .Select(item => $"{Path.GetFileName(item.CompanionPath)}：{item.Reason}");
+        return string.Join("；", reasons);
+    }
+
+    private bool TryPrepareTargetDirectory()
+    {
+        var path = targetPathBox.Text.Trim();
+        if (!Directory.Exists(path))
+        {
+            statusText.Text = "请选择存在的 Mod 或补丁目录。";
+            return false;
+        }
+
+        _targetDirectory = new DirectoryInfo(path);
+        return true;
+    }
+
+    private async Task AnalyzeAsync()
+    {
+        SetBusy(true, "正在检查补丁结构和伴生文件…");
+        _logger.LogInformation("开始扫描目标目录：{Path}", _targetDirectory!.FullName);
+        try
+        {
+            var analysis = await _versionCheckService.AnalyzePatchDirectoryAsync(_targetDirectory!);
+            Results.Clear();
+            emptyResultsPanel.Visibility = Visibility.Collapsed;
+            foreach (var patch in analysis.PatchFiles.OrderBy(p => p.FileName, StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation(
+                    "补丁 {File}：大小 {Size} 字节，健康状态 {Health}，{Entries} 个文件条目，{Types} 种类型，声明资源 {Total}，Unit 数量 {UnitCount}。",
+                    patch.FileName,
+                    patch.FileSize,
+                    GetHealthText(patch.HealthStatus),
+                    patch.NumFiles,
+                    patch.NumTypes,
+                    patch.TotalResources,
+                    patch.UnitDetails.Count);
+
+                var patchIssues = BuildDetailIssueTexts(patch);
+                if (patchIssues.Count > 0)
+                    _logger.LogWarning("补丁 {File} 存在问题：{Issues}", patch.FileName, string.Join("；", patchIssues));
+
+                Results.Add(new PatchResultRow(
+                    patch.FileName,
+                    GetHealthText(patch.HealthStatus),
+                    patch.NumFiles,
+                    patch.UnitDetails.Count,
+                    BuildDetails(patch),
+                    BuildDiagnosticReport(patch)));
+            }
+
+            if (Results.Count > 0)
+                resultsGrid.SelectedIndex = 0;
+
+            statusText.Text = analysis.TotalPatchFiles == 0
+                ? "未找到 .patch_* 主补丁文件。"
+                : $"检测完成：{analysis.TotalPatchFiles} 个补丁，正常 {analysis.HealthyFileCount} 个，警告 {analysis.WarningFileCount} 个，异常 {analysis.CorruptedFileCount} 个。";
+            _logger.LogInformation(
+                "扫描完成：{Total} 个补丁，正常 {Healthy} 个，警告 {Warning} 个，异常 {Corrupted} 个。",
+                analysis.TotalPatchFiles,
+                analysis.HealthyFileCount,
+                analysis.WarningFileCount,
+                analysis.CorruptedFileCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "扫描目标目录失败：{Path}", _targetDirectory!.FullName);
+            Results.Clear();
+            emptyResultsPanel.Visibility = Visibility.Visible;
+            diagnosticTitle.Text = "详细诊断";
+            diagnosticText.Text = "检测未完成，因此没有可显示的补丁诊断。\n\n原因：" + ex.Message;
+            statusText.Text = "检测失败：" + ex.Message;
+        }
+        finally
+        {
+            SetBusy(false, null);
+        }
+    }
+
+    private static string GetHealthText(PatchHealthStatus status) => status switch
+    {
+        PatchHealthStatus.Healthy => "正常",
+        PatchHealthStatus.Warning => "警告",
+        PatchHealthStatus.Corrupted => "异常",
+        PatchHealthStatus.NoUnitResources => "无 Unit 资源",
+        _ => status.ToString()
+    };
+
+    private static string BuildDetails(PatchFileAnalysis patch)
+    {
+        var messages = BuildDetailIssueTexts(patch);
+        return messages.Count == 0 ? "结构检查通过" : string.Join("；", messages);
+    }
+
+    /// <summary>汇总补丁级问题（供 UI 与详细日志共用）。</summary>
+    private static List<string> BuildDetailIssueTexts(PatchFileAnalysis patch)
+    {
+        var messages = new List<string>();
+        if (!patch.HeaderValid || !patch.FileEntriesInBounds)
+            messages.Add("TOC 无效");
+        if (!patch.TypeDistributionValid)
+            messages.Add("类型表不一致");
+        if (!patch.MainDataBoundsValid)
+            messages.Add("主数据越界");
+        if (!patch.EntryIndicesValid)
+            messages.Add($"{patch.EntryIndexIssueCount} 个 TOC 索引异常");
+        if (patch.RequiresGpuResources && !patch.HasGpuResources)
+            messages.Add("缺少 GPU 伴生文件");
+        if (patch.RequiresStream && !patch.HasStream)
+            messages.Add("缺少 stream 伴生文件");
+        if (!patch.GpuResourceBoundsValid || patch.GpuAlignmentIssueCount > 0)
+            messages.Add("GPU 引用范围/对齐异常");
+        if (!patch.StreamBoundsValid || patch.StreamAlignmentIssueCount > 0)
+            messages.Add("stream 引用范围/对齐异常");
+        if (patch.UnitDetails.Any(unit => unit.IsTruncated || !unit.UnitDataInBounds || !unit.LODGroupInBounds))
+            messages.Add("Unit 数据异常");
+        if (patch.UnitDetails.Any(unit => !unit.DeclaredSizeMatchesInternal ||
+                                          (unit.LayoutFormatChecked && !unit.LayoutFormatValid)))
+            messages.Add("Unit 内部结构警告");
+        if (patch.UnitDetails.Any(unit => unit.GpuStructureChecked && !unit.GpuStructureValid))
+            messages.Add("GPU Stream 布局或缓冲区异常");
+        return messages;
+    }
+
+    private static string BuildDiagnosticReport(PatchFileAnalysis patch)
+    {
+        var lines = new List<string>
+        {
+            $"状态：{GetHealthText(patch.HealthStatus)}",
+            $"文件表：{patch.NumFiles} 个条目；类型表：{patch.NumTypes} 种类型，声明资源总数 {patch.TotalResources}。"
+        };
+
+        if (patch.ResourceTypes.Count > 0)
+        {
+            var types = string.Join("，", patch.ResourceTypes.Select(type =>
+                $"0x{unchecked((ulong)type.TypeId):X16} × {type.ResourceCount}"));
+            lines.Add("类型表声明：" + types);
+        }
+
+        var issues = new List<string>();
+        if (!patch.HeaderValid || !patch.FileEntriesInBounds)
+            issues.Add("补丁头或 TOC 文件条目无效/越界。" + WithMessage(patch.Message));
+        if (!patch.TypeDistributionValid)
+            issues.Add($"资源类型表与实际文件条目不一致：类型表声明 {patch.TotalResources} 个资源，文件表包含 {patch.NumFiles} 个条目（发现 {patch.TypeDistributionIssueCount} 项不一致）。");
+        if (!patch.MainDataBoundsValid)
+            issues.Add($"主资源数据范围异常：发现 {patch.MainDataIssueCount} 个越界或重叠范围。");
+        if (!patch.EntryIndicesValid)
+            issues.Add($"TOC 条目索引不连续：发现 {patch.EntryIndexIssueCount} 个非 1..N 的索引值。");
+        if (patch.RequiresGpuResources && !patch.HasGpuResources)
+            issues.Add("缺少必需的 .gpu_resources 伴生文件：至少一个条目引用了 GPU 数据。");
+        if (patch.RequiresStream && !patch.HasStream)
+            issues.Add("缺少必需的 .stream 伴生文件：至少一个条目引用了 stream 数据。");
+        if (!patch.GpuResourceBoundsValid || patch.GpuAlignmentIssueCount > 0)
+            issues.Add($"GPU 资源引用异常：越界 {patch.GpuResourceIssueCount} 项，非 64 字节对齐 {patch.GpuAlignmentIssueCount} 项。");
+        if (!patch.StreamBoundsValid || patch.StreamAlignmentIssueCount > 0)
+            issues.Add($"stream 资源引用异常：越界 {patch.StreamIssueCount} 项，非 64 字节对齐 {patch.StreamAlignmentIssueCount} 项。");
+
+        foreach (var unit in patch.UnitDetails)
+        {
+            var identifier = $"Unit #{unit.EntryIndex}（ID 0x{unchecked((ulong)unit.FileId):X16}）";
+            if (unit.IsTruncated)
+                issues.Add($"{identifier} 被截断：TOC 声明 {unit.DataSize} 字节，Unit 内部需要 {unit.ExpectedDataSize} 字节，缺少 {Math.Max(0, unit.ExpectedDataSize - unit.DataSize)} 字节。" + WithMessage(unit.Warning));
+            else if (!unit.DeclaredSizeMatchesInternal)
+                issues.Add($"{identifier} 大小不一致：TOC 声明 {unit.DataSize} 字节，Unit 内部记录 {unit.ExpectedDataSize} 字节。" + WithMessage(unit.Warning));
+
+            if (!unit.UnitDataInBounds)
+                issues.Add($"{identifier} 的 Unit 数据范围超出主补丁文件边界。" + WithMessage(unit.Warning));
+            else if (!unit.LODGroupInBounds)
+                issues.Add($"{identifier} 的 LOD 数据范围超出 Unit 声明边界。" + WithMessage(unit.Warning));
+
+            if (unit.LayoutFormatChecked && !unit.LayoutFormatValid)
+                issues.Add($"{identifier} 的旧版 Layout 格式异常：检测到 {unit.LayoutFormatIssueCount} 个无效 item_format。" + WithMessage(unit.Warning));
+
+            if (unit.GpuStructureChecked && !unit.GpuStructureValid)
+                issues.Add($"{identifier} 的 GPU Stream 结构异常：{unit.GpuStructureIssueCount} 个布局或缓冲区问题。" + WithMessage(unit.Warning));
+            else if (unit.GpuStructureChecked && unit.UnknownGpuComponentCount > 0)
+                issues.Add($"{identifier} 包含 {unit.UnknownGpuComponentCount} 个未知 GPU 顶点组件，未按损坏处理。" + WithMessage(unit.Warning));
+        }
+
+        if (issues.Count == 0)
+        {
+            lines.Add("\n✓ 未发现结构、伴生文件、资源边界或 Unit 内部结构问题。");
+        }
+        else
+        {
+            lines.Add("\n检测到的问题：");
+            lines.AddRange(issues.Select(issue => "• " + issue));
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string WithMessage(string? message) =>
+        string.IsNullOrWhiteSpace(message) ? string.Empty : " 原始解析信息：" + message;
+
+    private void SetBusy(bool isBusy, string? message)
+    {
+        analyzeButton.IsEnabled = !isBusy;
+        repairButton.IsEnabled = !isBusy;
+        if (message is not null)
+        {
+            statusText.Text = message;
+            statusDot.Fill = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(76, 169, 255));
+        }
+    }
+}

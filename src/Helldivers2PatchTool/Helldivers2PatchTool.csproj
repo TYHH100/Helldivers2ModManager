@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>..\Helldivers2ModManager\Resources\Images\icon.ico</ApplicationIcon>
+    <ProductName>Helldivers 2 Patch Check &amp; Repair Tool</ProductName>
+    <ProductVersion>1.0.0</ProductVersion>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>1.0.0</FileVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 主程序是非自包含 exe；本工具发布为自包含单文件。NETSDK1150 禁止自包含 exe 引用非自包含
+         exe，因此这里把主程序的引用构建钉死为自包含 + win-x64，与下方的 SelfContained 保持一致。 -->
+    <ProjectReference Include="..\Helldivers2ModManager\Helldivers2ModManager.csproj">
+      <SetTargetFramework>TargetFramework=net10.0-windows;RuntimeIdentifier=win-x64;SelfContained=true</SetTargetFramework>
+    </ProjectReference>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Helldivers2ModManager\Resources\Language\*.json">
+      <Link>Resources\Language\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>
