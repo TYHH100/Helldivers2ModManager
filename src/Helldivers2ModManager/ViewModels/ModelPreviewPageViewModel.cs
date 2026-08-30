@@ -195,7 +195,10 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         PatchResourceInspectionService inspectionService,
         ModelPreviewBackend previewBackend,
         GpuSkinningService gpuSkinningService,
-        LocalizationService localizationService)
+        LocalizationService localizationService,
+        AudioBankInspectionService audioInspectionService,
+        AudioPlaybackService audioPlaybackService,
+        ModTypeDetectionService modTypeDetectionService)
     {
         _logger = logger;
         _navigationStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
@@ -204,12 +207,22 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _previewBackend = previewBackend;
         _gpuSkinningService = gpuSkinningService;
         _localizationService = localizationService;
+        _audioInspectionService = audioInspectionService;
+        _audioPlaybackService = audioPlaybackService;
+        _modTypeDetectionService = modTypeDetectionService;
         _localizationService.PropertyChanged += LocalizationServiceOnPropertyChanged;
         _animationTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromMilliseconds(50)
         };
         _animationTimer.Tick += AnimationTimerOnTick;
+        _audioPositionTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(100)
+        };
+        _audioPositionTimer.Tick += AudioPositionTimerOnTick;
+        _audioPlaybackService.PlaybackEnded += AudioPlaybackServiceOnPlaybackEnded;
+        InitializeAudioView();
 
         _ = RefreshModsAsync();
     }

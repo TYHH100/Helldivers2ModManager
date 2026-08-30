@@ -48,6 +48,16 @@ internal partial class ModelPreviewPageView
         DataContext = null;
     }
 
+    private void AudioEntryRow_OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: AudioEntryViewModel entry } &&
+            DataContext is ModelPreviewPageViewModel viewModel &&
+            viewModel.ToggleAudioEntryPlaybackCommand.CanExecute(entry))
+        {
+            viewModel.ToggleAudioEntryPlaybackCommand.Execute(entry);
+        }
+    }
+
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (e.OldValue is INotifyPropertyChanged oldNotify)

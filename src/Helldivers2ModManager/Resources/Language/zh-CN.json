@@ -9,7 +9,6 @@
     "MainWindow.Close": "关闭",
     "MainWindow.DropImportHint": "松开鼠标导入 Mod 压缩包",
     "MainWindow.DropImportInvalid": "仅支持 zip / 7z / rar / tar 压缩包",
-
     "FirstRunTutorial.WelcomeTitle": "欢迎使用 Helldivers 2 Mod Manager",
     "FirstRunTutorial.WelcomeDescription": "这是一个首次使用引导，带你快速了解主界面的核心功能。你可以随时跳过",
     "FirstRunTutorial.AddModTitle": "导入与创建 Mod",
@@ -38,7 +37,6 @@
     "FirstRunTutorial.Next": "下一步",
     "FirstRunTutorial.Finish": "开始使用",
     "FirstRunTutorial.Skip": "跳过",
-
     "DashboardPage.Title": "主页",
     "DashboardPage.AddMod": "添加模组",
     "DashboardPage.CreateMod": "创建模组",
@@ -178,9 +176,8 @@
     "Bisect.RoundOk": "正常",
     "Bisect.AbortTitle": "放弃排查",
     "Bisect.AbortConfirm": "放弃后将切回原分组并删除临时分组（原分组内容不会受影响）。确定放弃吗？",
-
     "ModelPreviewPage.Title": "模型预览",
-    "ModelPreviewPage.Description": "查看模组模型，并临时切换体型、材质、附件、盔甲或战略配备；这些选择不会修改主页部署配置。",
+    "ModelPreviewPage.Description": "查看模组模型，并临时切换体型、材质、附件、盔甲或战略配备；也可试听音频模组中的音频条目。这些选择不会修改主页部署配置。",
     "ModelPreviewPage.Disclaimer": "模型预览仅依据 Mod 中已解析的资源生成。受缺失资源、材质、骨骼、动画、游戏内光照和渲染逻辑影响，姿态、外观、材质或部件组合可能与游戏内实际效果存在明显差异；请以游戏内实际效果为准。",
     "ModelPreviewPage.Refresh": "刷新模组",
     "ModelPreviewPage.Mods": "模组",
@@ -277,7 +274,6 @@
     "DashboardPage.DeleteSeparatorHint": "删除分隔符",
     "DashboardPage.OriginalRepo": "原仓库 (teutinsa)",
     "DashboardPage.ForkedRepo": "修改版的仓库 (TYHH100)",
-
     "DashboardPage.SavingModConfig": "保存模组配置中",
     "DashboardPage.GoToSettings": "是否立刻前往设置?",
     "DashboardPage.SettingsInvalid": "设置无效!",
@@ -405,7 +401,6 @@
     "DashboardPage.ChangeSeparatorColorTitle": "选择分隔符颜色",
     "DashboardPage.ChangeSeparatorColorPrefix": "请为「",
     "DashboardPage.ChangeSeparatorColorSuffix": "」选择颜色：",
-
     "DashboardPage.DeleteSeparatorPrefix": "确定要删除分隔符「",
     "DashboardPage.DeleteSeparatorSuffix": "」吗？",
     "DashboardPage.RescanMods": "刷新模组",
@@ -493,7 +488,6 @@
     "SettingsPage.CaseSensitive": "区分大小写",
     "SettingsPage.Language": "界面语言",
     "SettingsPage.LanguageDesc": "选择界面显示语言。选择\"自动检测\"将使用系统语言。",
-
     "SettingsPage.ValidateGameDirNotExist": "选择的Helldivers 2文件夹不存在!",
     "SettingsPage.ValidateGameDirInvalid": "选择的Helldivers 2文件夹并不在有效目录中!",
     "SettingsPage.ValidateGameDirNoData": "选择的Helldivers 2根目录中没有名为 \"data\" 文件夹!",
@@ -530,7 +524,6 @@
     "SettingsPage.DetectingGame": "查找游戏",
     "SettingsPage.DetectGameFailed": "无法自动找到 Helldivers 2 游戏，请手动设置.",
     "SettingsPage.SymbolicLinkAdminMsg": "使用符号链接需要以管理员身份运行本程序。\n请右键点击程序图标 → 属性 → 兼容性 → 勾选\"以管理员身份运行此程序\" → 应用并确认，然后以管理员身份重新打开程序。\n\n是否立即关闭程序？",
-
     "CreatePage.Title": "创建 Mod",
     "CreatePage.VisualEdit": "可视化编辑",
     "CreatePage.JsonEdit": "直接编辑 JSON",
@@ -572,17 +565,13 @@
     "CreatePage.Create": "创建",
     "CreatePage.BrowseSourceDialog": "选择模组文件所在的目录",
     "CreatePage.BrowseIconDialog": "选择模组图标",
-
     "ManifestEditPage.BasicInfo": "基本信息",
-
     "ManifestEditPage.LegacyUpgradeHint": "此模组为旧版格式：选项名称即模组目录名，请使用文件夹选择添加选项。若为选项配置描述、Include、图标或子选项，保存时将自动升级为 V1 格式。",
     "ManifestEditPage.SetSourceDirFirst": "无法读取模组目录，请确认模组文件夹存在后再添加选项。",
-
     "EditPage.Title": "模组选项",
     "EditPage.PreviewHint": "悬停选项图片可查看大图预览，但是下拉列表需要点开后才能预览",
     "EditPage.Done": "完成",
     "EditPage.SaveFailed": "保存 Mod 配置失败: ",
-
     "NexusDownloadPage.Title": "从 Nexus Mods 下载模组",
     "NexusDownloadPage.UrlLabel": "Nexus Mods 链接",
     "NexusDownloadPage.UrlDesc": "粘贴 Nexus Mods 模组页面链接",
@@ -632,7 +621,6 @@
     "BackgroundTasksPage.ExportComplete": "导出完成: {name}",
     "BackgroundTasksPage.PurgeComplete": "清理已完成",
     "BackgroundTasksPage.DeleteComplete": "删除完成: {name}",
-
     "TagManagementPage.DeleteTag": "删除标签",
     "TagManagementPage.CreateTitle": "创建标签",
     "TagManagementPage.CreateMsg": "请输入新标签的名称：",
@@ -641,7 +629,6 @@
     "TagManagementPage.CreateReadonly": "无法创建标签，设置处于只读模式",
     "TagManagementPage.RenameTitle": "重命名标签",
     "TagManagementPage.RenameMsg": "请输入新的标签名称：",
-
     "TagManagementPage.RenameSuccess": "标签重命名成功",
     "TagManagementPage.RenameReadonly": "无法重命名标签，设置处于只读模式",
     "TagManagementPage.ColorTitle": "选择颜色",
@@ -649,17 +636,14 @@
     "TagManagementPage.ColorSuffix": "\" 选择颜色：",
     "TagManagementPage.ColorUpdated": "标签颜色已更新",
     "TagManagementPage.ColorReadonly": "无法更改颜色，设置处于只读模式",
-
     "TagManagementPage.DeletePrefix": "确定要删除标签 \"",
     "TagManagementPage.DeleteSuffix": "\" 吗？",
     "TagManagementPage.DeleteSuccess": "标签删除成功",
     "TagManagementPage.DeleteReadonly": "无法删除标签，设置处于只读模式",
-
     "DeploymentOrderPage.MoveUp": "上移",
     "DeploymentOrderPage.MoveDown": "下移",
     "DeploymentOrderPage.SyncFromHome": "从主页同步",
     "DeploymentOrderPage.ClearList": "清空列表",
-
     "DeploymentOrderPage.DeselectAll": "取消全选",
     "DeploymentOrderPage.InvertSelect": "反选",
     "DeploymentOrderPage.ExpandCollapse": "展开/折叠选项",
@@ -669,7 +653,6 @@
     "DeploymentOrderPage.DeletedModPlaceholder": "[已删除的模组]",
     "DeploymentOrderPage.OptionPrefix": "  ▸ ",
     "DeploymentOrderPage.SubOptionPrefix": "    ▪ ",
-
     "CreateWizard.ChooseTitle": "您的模组有可选项吗（比如颜色切换）?",
     "CreateWizard.ChooseDesc": "让我们从一个简单的问题开始:",
     "CreateWizard.Yes": "是",
@@ -679,7 +662,6 @@
     "CreateWizard.IntroNext": "请点击\"下一步\"继续",
     "CreateWizard.IncludePickerTitle": "选择 Include 目录",
     "CreateWizard.IncludePickerDesc": "勾选要包含的目录（相对于源目录的路径将自动生成）：",
-
     "MessageBox.Yes": "确定",
     "MessageBox.No": "取消",
     "MessageBox.CurrentColor": "当前颜色",
@@ -701,7 +683,6 @@
     "MessageBox.NeedUpdateSuffix": " 个文件",
     "MessageBox.DeploySteps": "部署进度",
     "MessageBox.Deploying": "正在部署: ",
-
     "VersionCheck.ScanningMods": "正在扫描模组补丁文件...",
     "VersionCheck.CheckFailed": "检查失败",
     "VersionCheck.IncompatibleFound": "发现不兼容的新增模组: ",
@@ -738,7 +719,6 @@
     "VersionCheck.GpuVertexSampleInvalid": "GPU 顶点抽样包含无效坐标或骨骼权重",
     "VersionCheck.GpuIndexSampleInvalid": "GPU 索引抽样超出 Stream 顶点范围",
     "VersionCheck.UnknownGpuComponentFormats": "发现 {count} 个未知 GPU 顶点组件；为避免误报，未将其判定为损坏",
-
     "ModGroup.DefaultName": "未分类",
     "ModGroup.SidebarTitle": "分组",
     "ModGroup.CurrentGroup": "当前分组",
@@ -758,7 +738,6 @@
     "ModGroup.AddToGroupsMessage": "为选中的 {count} 个模组设置分组（可多选，取消勾选将从对应分组移除）：",
     "ModGroup.GroupsUpdated": "已更新 {count} 个模组的分组",
     "ModGroup.DeleteConfirm": "确定删除分组“{name}”？该操作不会删除模组文件。",
-
     "Common.AppName": "Helldivers 2 Mod Manager",
     "Common.Version": "版本",
     "Common.ErrorPrefix": "错误:",
@@ -770,7 +749,6 @@
     "Common.Delete": "删除",
     "Common.Edit": "编辑",
     "Common.Back": "返回",
-
     "Converters.TaskStatusPending": "等待中",
     "Converters.TaskStatusRunning": "进行中",
     "Converters.TaskStatusCompleted": "已完成",
@@ -1033,12 +1011,35 @@
     "CreateModOption.DefaultName": "未命名选项",
     "CreateSubOption.SelectIconTitle": "选择子选项图标",
     "CreateSubOption.DefaultName": "未命名子选项",
-
     "ImagePicker.SelectImageTitle": "选择图片",
     "IncludePicker.ParentOptionMissing": "父选项的 Include 目录不存在或为空",
     "ManifestEditPage.SaveFailed": "保存模组清单失败",
     "ManifestEditPage.SaveConfigFailed": "保存 Mod 配置失败",
     "CreatePage.AutoGenerateOptions": "已从目录结构自动生成 {count} 个选项",
-    "CreatePage.JsonParseError": "JSON 解析失败，切换到可视化编辑模式"
+    "CreatePage.JsonParseError": "JSON 解析失败，切换到可视化编辑模式",
+    "ModelPreviewPage.AudioTab": "音频",
+    "ModelPreviewPage.AudioEntryCount": "{count} 个音频条目 · {banks} 个音频库",
+    "ModelPreviewPage.AudioLoadedStatus": "已加载 {count} 个音频条目（{banks} 个音频库），来自 {patches} 个 Patch。",
+    "ModelPreviewPage.AudioLooseStreamsGroup": "独立音频流",
+    "ModelPreviewPage.AudioNoSelection": "未在播放音频",
+    "ModelPreviewPage.AudioPlay": "播放",
+    "ModelPreviewPage.AudioPause": "暂停",
+    "ModelPreviewPage.AudioStop": "停止",
+    "ModelPreviewPage.AudioVolume": "音量",
+    "ModelPreviewPage.AudioFilterTip": "按编号、来源（Bank/Stream）、音频库名称或 Patch 路径过滤",
+    "ModelPreviewPage.AudioOverlayHint": "点击下方音频列表中的条目进行试听；播放不会修改任何文件。",
+    "ModelPreviewPage.AudioPlaybackFailed": "音频播放失败：{message}",
+    "ModelPreviewPage.AudioLoadFailed": "音频解析失败：{message}",
+    "ModelPreviewPage.AudioIssueNotRiff": "无法识别（非 RIFF WEM）",
+    "ModelPreviewPage.AudioIssueNotVorbis": "不支持的音频编码",
+    "ModelPreviewPage.AudioIssueTruncated": "媒体不完整（预取截断）",
+    "ModelPreviewPage.AudioIssueReadFailed": "读取失败",
+    "ModelPreviewPage.AudioOnlyShowModified": "只看已替换",
+    "ModelPreviewPage.AudioOnlyShowModifiedTip": "只显示与游戏原版音频不同的条目（需要已配置游戏目录）",
+    "ModelPreviewPage.AudioModifiedTag": "已替换",
+    "ModelPreviewPage.AudioOriginalTag": "原版",
+    "ModelPreviewPage.AudioModifiedCount": "已替换 {modified} / {total} 条",
+    "ModelPreviewPage.AudioUncomparedHint": "另有 {count} 条超出比对预算，未与游戏原版比对",
+    "ModelPreviewPage.AudioMultiOptionSkipped": "该模组包含多个音频选项，音频预览已跳过；部署后在游戏内体验即可。"
   }
 }

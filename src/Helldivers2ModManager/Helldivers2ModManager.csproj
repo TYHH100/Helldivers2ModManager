@@ -47,6 +47,11 @@
 		<PackageReference Include="Vortice.DXGI" Version="3.8.3" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.11" />
+		<PackageReference Include="NAudio" Version="2.2.1" />
+		<PackageReference Include="NVorbis" Version="0.10.5" />
+		<!-- Wwise WEM → Ogg Vorbis 转换（ww2ogg 的 .NET 移植，BSD-3-Clause）。
+		     HD2 音频用 aoTuV codebook 编码，播放时先试 AoTuV 再回退 Default。 -->
+		<PackageReference Include="Ww2Ogg.Core" Version="1.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>

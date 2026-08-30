@@ -444,6 +444,7 @@ internal sealed partial class ModelPreviewPageViewModel
         _decodedTextureOrder.Clear();
         _modelResultCache.Clear();
         _modelResultOrder.Clear();
+        ClearAudioInventoryCache();
         // ConditionalWeakTable has no Clear API. Replacing it removes this page's
         // strong cache root so old WPF MeshGeometry3D instances can be collected.
         _geometryCache = new ConditionalWeakTable<ModelPreviewMesh, CachedMeshGeometry>();
@@ -706,6 +707,10 @@ internal sealed partial class ModelPreviewPageViewModel
         Volatile.Write(ref _isDisposed, 1);
         StopAnimationPlayback();
         _animationTimer.Tick -= AnimationTimerOnTick;
+        _audioPositionTimer.Stop();
+        _audioPositionTimer.Tick -= AudioPositionTimerOnTick;
+        _audioPlaybackService.PlaybackEnded -= AudioPlaybackServiceOnPlaybackEnded;
+        StopAudioPlayback(clearCurrent: true);
         _pageLifetimeCancellation.Cancel();
         _loadCancellation?.Cancel();
         Interlocked.Increment(ref _renderGeneration);

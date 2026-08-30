@@ -292,6 +292,42 @@
                                 <TextBlock Text="{Binding StatusText}" Margin="0 10 0 0" TextAlignment="Center" TextWrapping="Wrap" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
                             </StackPanel>
                         </Border>
+                        <Border Background="#D920252A"
+                                Visibility="{Binding IsAudioOnlyPreview, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
+                                <TextBlock Text="&#xE8D6;" FontFamily="Segoe Fluent Icons" FontSize="40" HorizontalAlignment="Center" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                <TextBlock Text="{Binding AudioCurrentEntryText}" FontSize="18" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0 10 0 0"/>
+                                <Slider Minimum="0"
+                                        Maximum="{Binding AudioDurationSeconds}"
+                                        Value="{Binding AudioPositionSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        IsMoveToPointEnabled="True"
+                                        Margin="0 14 0 0"/>
+                                <TextBlock Text="{Binding AudioTimeText}" HorizontalAlignment="Center" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="12" Margin="0 4 0 0"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0 12 0 0">
+                                    <Button Command="{Binding ToggleAudioPlaybackCommand}"
+                                            Style="{StaticResource FluentIconButton}"
+                                            Width="44" Height="44"
+                                            IsEnabled="{Binding IsAudioBusy, Converter={StaticResource InverseBoolConverter}}"
+                                            ToolTip="{Binding AudioPlaybackToolTip}">
+                                        <TextBlock Text="{Binding AudioPlaybackGlyph}" FontFamily="Segoe Fluent Icons" FontSize="22"/>
+                                    </Button>
+                                    <Button Command="{Binding StopAudioCommand}"
+                                            Style="{StaticResource FluentIconButton}"
+                                            Width="44" Height="44"
+                                            Margin="10 0 0 0"
+                                            ToolTip="{loc:Loc ModelPreviewPage.AudioStop}">
+                                        <TextBlock Text="&#xE71A;" FontFamily="Segoe Fluent Icons" FontSize="18"/>
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock Text="{loc:Loc ModelPreviewPage.AudioOverlayHint}"
+                                           HorizontalAlignment="Center"
+                                           TextAlignment="Center"
+                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                           FontSize="12"
+                                           Margin="0 14 0 0"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
 
@@ -300,6 +336,7 @@
                                 Foreground="{StaticResource NeutralForegroundBrush}"
                                 BorderBrush="{StaticResource NeutralStrokeBrush}"
                                 BorderThickness="0"
+                                SelectedIndex="{Binding SelectedPreviewTabIndex, Mode=TwoWay}"
                                 ItemContainerStyle="{StaticResource ModelPreviewTabItemStyle}">
                         <TabItem Header="{loc:Loc ModelPreviewPage.PartsAndVariants}">
                             <Grid Margin="4">
@@ -460,6 +497,214 @@
                                 </DataGrid>
                             </Grid>
                         </TabItem>
+
+                        <TabItem Header="{loc:Loc ModelPreviewPage.AudioTab}"
+                                 Visibility="{Binding HasAudioEntries, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid Margin="4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0" Margin="2 0 2 4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0"
+                                            Command="{Binding ToggleAudioPlaybackCommand}"
+                                            Style="{StaticResource FluentIconButton}"
+                                            Width="30" Height="30"
+                                            IsEnabled="{Binding IsAudioBusy, Converter={StaticResource InverseBoolConverter}}"
+                                            ToolTip="{Binding AudioPlaybackToolTip}"
+                                            Margin="0 0 4 0">
+                                        <TextBlock Text="{Binding AudioPlaybackGlyph}" FontFamily="Segoe Fluent Icons" FontSize="14"/>
+                                    </Button>
+                                    <Button Grid.Column="1"
+                                            Command="{Binding StopAudioCommand}"
+                                            Style="{StaticResource FluentIconButton}"
+                                            Width="30" Height="30"
+                                            ToolTip="{loc:Loc ModelPreviewPage.AudioStop}"
+                                            Margin="0 0 8 0">
+                                        <TextBlock Text="&#xE71A;" FontFamily="Segoe Fluent Icons" FontSize="13"/>
+                                    </Button>
+                                    <Slider Grid.Column="2"
+                                            Minimum="0"
+                                            Maximum="{Binding AudioDurationSeconds, Mode=OneWay}"
+                                            Value="{Binding AudioPositionSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            IsMoveToPointEnabled="True"
+                                            Width="170"
+                                            VerticalAlignment="Center"
+                                            Margin="0 0 8 0"/>
+                                    <TextBlock Grid.Column="3"
+                                               Text="{Binding AudioTimeText}"
+                                               VerticalAlignment="Center"
+                                               MinWidth="96"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                    <TextBlock Grid.Column="4"
+                                               Text="&#xE767;"
+                                               FontFamily="Segoe Fluent Icons"
+                                               FontSize="14"
+                                               VerticalAlignment="Center"
+                                               Margin="0 0 6 0"
+                                               ToolTip="{loc:Loc ModelPreviewPage.AudioVolume}"/>
+                                    <Slider Grid.Column="5"
+                                            Minimum="0"
+                                            Maximum="100"
+                                            Value="{Binding AudioVolumePercent, Mode=TwoWay}"
+                                            Width="80"
+                                            VerticalAlignment="Center"
+                                            Margin="0 0 10 0"
+                                            ToolTip="{loc:Loc ModelPreviewPage.AudioVolume}"/>
+                                    <TextBox Grid.Column="6"
+                                             Text="{Binding AudioFilterText, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource FluentTextBox}"
+                                             MinWidth="130"
+                                             MaxWidth="200"
+                                             Height="30"
+                                             VerticalAlignment="Center"
+                                             ToolTip="{loc:Loc ModelPreviewPage.AudioFilterTip}"/>
+                                </Grid>
+
+                                <Grid Grid.Row="1" Margin="2 0 2 0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <DockPanel Grid.Row="0" Margin="2 0 2 4">
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                                    Visibility="{Binding HasOriginalComparison, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBlock Text="{Binding AudioModifiedCountText}"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0 0 10 0"/>
+                                            <CheckBox Content="{loc:Loc ModelPreviewPage.AudioOnlyShowModified}"
+                                                      IsChecked="{Binding OnlyShowModified, Mode=TwoWay}"
+                                                      VerticalAlignment="Center"
+                                                      ToolTip="{loc:Loc ModelPreviewPage.AudioOnlyShowModifiedTip}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding AudioCountText}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                                   VerticalAlignment="Center"/>
+                                    </DockPanel>
+
+                                    <!-- 虚拟化 ListBox：语音包可达数千条目，禁止改回 ItemsControl+ScrollViewer（会把全部行实体化拖死 UI）。 -->
+                                    <ListBox Grid.Row="1"
+                                             ItemsSource="{Binding AudioEntriesView}"
+                                             VirtualizingPanel.IsVirtualizing="True"
+                                             VirtualizingPanel.VirtualizationMode="Recycling"
+                                             VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                                             VirtualizingPanel.ScrollUnit="Pixel"
+                                             ScrollViewer.CanContentScroll="True"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             HorizontalContentAlignment="Stretch">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Padding" Value="0"/>
+                                                <Setter Property="Margin" Value="0"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <ContentPresenter/>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.GroupStyle>
+                                            <GroupStyle>
+                                                <GroupStyle.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{StaticResource NeutralBackgroundFillBrush}"
+                                                                BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="4"
+                                                                Padding="6 3"
+                                                                Margin="0 2 0 4">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding Name.Header}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name.Header}"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding Name.PatchPath}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name.PatchPath}"/>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </GroupStyle.HeaderTemplate>
+                                            </GroupStyle>
+                                        </ListBox.GroupStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border x:Name="EntryRow"
+                                                        Background="Transparent"
+                                                        Padding="6 3"
+                                                        Cursor="Hand"
+                                                        MouseLeftButtonDown="AudioEntryRow_OnMouseLeftButtonDown">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="58"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Button Grid.Column="0"
+                                                                Command="{Binding DataContext.ToggleAudioEntryPlaybackCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Style="{StaticResource FluentIconButton}"
+                                                                Width="24" Height="24"
+                                                                IsEnabled="{Binding IsPlayable}"
+                                                                ToolTip="{Binding DataContext.AudioPlaybackToolTip, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                                            <TextBlock Text="{Binding PlayGlyph}" FontFamily="Segoe Fluent Icons" FontSize="12"/>
+                                                        </Button>
+                                                        <TextBlock Grid.Column="1" Text="{Binding DisplayTitle}" FontFamily="Consolas" VerticalAlignment="Center" Margin="6 0 10 0"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding OriginText}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding Model.SizeBytes, Converter={StaticResource BytesToSizeConverter}}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" VerticalAlignment="Center" Margin="0 0 10 0"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding FormatText}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="5" Text="{Binding ModifiedText}" FontSize="11" VerticalAlignment="Center" Margin="10 0 0 0" Visibility="{Binding ModifiedText, Converter={StaticResource StringToVisibilityConverter}}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Model.MatchesOriginal}" Value="False">
+                                                                            <Setter Property="Foreground" Value="{StaticResource SystemAccentBrush}"/>
+                                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock Grid.Column="6" Text="{Binding IssueText}" FontSize="11" Foreground="#FFEA5864" VerticalAlignment="Center" Margin="10 0 0 0" Visibility="{Binding IssueText, Converter={StaticResource StringToVisibilityConverter}}"/>
+                                                    </Grid>
+                                                </Border>
+                                                <DataTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="EntryRow" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                                                    </Trigger>
+                                                    <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                                        <Setter TargetName="EntryRow" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+                            </Grid>
+                                                </TabItem>
                     </TabControl>
                 </Border>
             </Grid>

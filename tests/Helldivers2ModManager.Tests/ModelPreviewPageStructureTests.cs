@@ -18,14 +18,26 @@ public sealed class ModelPreviewPageStructureTests
         var tabControl = tabControls[0];
         var tabs = tabControl.Elements().Where(element => element.Name.LocalName == "TabItem").ToArray();
 
-        Assert.AreEqual(2, tabs.Length);
+        Assert.AreEqual(3, tabs.Length);
         Assert.AreEqual("{loc:Loc ModelPreviewPage.PartsAndVariants}", tabs[0].Attribute("Header")?.Value);
         Assert.AreEqual("{loc:Loc ModelPreviewPage.Meshes}", tabs[1].Attribute("Header")?.Value);
+        Assert.AreEqual("{loc:Loc ModelPreviewPage.AudioTab}", tabs[2].Attribute("Header")?.Value);
+        // 音频 Tab 仅在模组确有音频条目时可见。
+        Assert.IsTrue(tabs[2].Attribute("Visibility")?.Value == "{Binding HasAudioEntries, Converter={StaticResource BoolToVisibilityConverter}}");
         Assert.IsFalse(tabs[0].Descendants().Any(element => element.Name.LocalName == "DataGrid"));
         Assert.AreEqual(1, tabs[1].Descendants().Count(element => element.Name.LocalName == "DataGrid"));
         Assert.IsTrue(tabs[0].Descendants().Any(element =>
             element.Name.LocalName == "ItemsControl" &&
             element.Attribute("ItemsSource")?.Value == "{Binding PreviewOptions}"));
+        // 音频 Tab 的条目列表必须是虚拟化 ListBox（语音包数千条目，ItemsControl+ScrollViewer 会实体化全部行拖死 UI）。
+        var audioList = tabs[2].Descendants().Single(element =>
+            element.Name.LocalName == "ListBox" &&
+            element.Attribute("ItemsSource")?.Value == "{Binding AudioEntriesView}");
+        Assert.AreEqual("True", audioList.Attribute(VirtualizingIsVirtualizing)?.Value ?? audioList.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
+        Assert.IsTrue(audioList.Descendants().Any(element =>
+            element.Name.LocalName == "Button" &&
+            element.Attribute("Command")?.Value.Contains("ToggleAudioEntryPlaybackCommand") == true));
+        Assert.IsTrue(tabs[2].Descendants().Any(element => element.Name.LocalName == "GroupStyle"));
 
         var bodyShapeOptions = document
             .Descendants()
@@ -63,6 +75,8 @@ public sealed class ModelPreviewPageStructureTests
             "{TemplateBinding ItemTemplateSelector}",
             selectionPresenter.Attribute("ContentTemplateSelector")?.Value);
     }
+
+    private static XName VirtualizingIsVirtualizing => XName.Get("IsVirtualizing", "http://schemas.microsoft.com/winfx/2006/xaml/presentation");
 
     private static DirectoryInfo FindRepositoryRoot()
     {

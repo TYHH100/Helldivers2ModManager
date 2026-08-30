@@ -117,6 +117,19 @@ internal sealed class MyService
 - 纹理预览要根据实际通道统计判断用途，并保留 `RGB`、`RGBA`、`A` 等明确显示模式；不要默认把 Alpha 当作模型不透明度。
 - 预览相关改动至少覆盖：资源边界、MeshInfo/变换、材质贴图匹配、纹理格式/通道、取消和缓存行为。
 
+### 音频模组预览（Wwise bank/WEM）
+
+模型预览页同时承载音频模组的试听（`Services/Audio/AudioBankInspectionService` + `AudioPlaybackService`，UI 在 `ModelPreviewPageViewModel.Audio.cs` partial 与 `ModelPreviewPageView.xaml` 的音频 Tab/纯音频覆盖层）。关键约定：
+
+- 音频补丁结构：TOC 类型 `WWISE_BANK(0x535A7BD3E650D799)`/`WWISE_STREAM(0x504B55235D21440E)`/`WWISE_DEP(0xAF32095C82F2B070)`（注意 `ModTypeDetectionService.PathEntryTypeId` 就是 WWISE_DEP——检测扫到的路径字符串来自 dep 条目）。bank 的 toc_data 有 16 字节前缀（`D82F7678`+长度+file_id），其后是 BKHD/DIDX/DATA/HIRC chunk；DIDX 12 字节/条（source_id+offset+size），offset 相对 DATA body。
+- 检查只做有界读取：TOC+chunk 头+DIDX+每条目 128 字节 WEM 头探针；媒体数据按需由播放服务切片读取，禁止把 DATA chunk（数 MB～数十 MB）或整包（语音包数千条目）读入内存。
+- WEM 解码链路：Ww2Ogg.Core（NuGet，ww2ogg 的 .NET 移植，BSD-3）转 Ogg → NVorbis 解码 → NAudio WasapiOut。**HD2 音频用 aoTuV codebook 编码：必须先试 `CodebookLibrary.AoTuV`，失败再回退 `Default`**；用 Default 转换不会抛异常但 NVorbis 解码报 `Residue0.Init` 错误，`VorbisReader` 构造即完成 setup 头校验，因此"构造成功=可播放"。
+- dep（音频库名）按 TOC file_id 关联到 bank，但部分真实补丁 dep 的 file_id 与 bank 不一致（原 hd2-audio-modder 工具同样挂不上），UI 需回退显示 `Bank 0x…`；单 bank 补丁的 stream 条目合并进 bank 组显示。
+- 预取媒体（PREFETCH_STREAM）只存前半段数据，WEM 头声明的 riff 尺寸会大于实际可得字节，探针将其标为 `Truncated` 并禁止播放。
+- 音频列表必须是**虚拟化 ListBox + ListCollectionView**（分组/过滤走视图 Refresh），语音包单模组可达近万条目；改回 ItemsControl+ScrollViewer 会把全部行实体化，UI 卡死并拖慢整个系统（已实测回归）。
+- **多选项全音频模组（V1 manifest，Options.Count > 1 且 ModTypeDetectionService 检测主类型为 Audio）直接跳过音频预览**（用户决策，`ShouldSkipAudioPreviewCore`）：逐选项解析 + 基线比对的代价在该场景不可控，状态栏提示部署后游戏内体验。不要"优化"掉这个跳过。
+- "已替换/原版"标记来自与游戏原版同 FileID 包的比对（`GameAudioBaseline`：legacy 平铺文件与 slim DSAR bundle 两种读取路径，复用 `GameUnitReferenceReader` 的静态读取器；bundle 索引按 data 目录缓存，包名查找为字节级比较）。比对层有硬性的内存/IO 红线——**基线只驻留 TOC 元数据与每媒体 32 字节 SHA-256，绝不缓存媒体字节数组**（曾因整 bank DATA 常驻 + 逐条目开关文件随机读，在万条目语音包上占 1GB+ 内存并造成系统级卡顿）；比对顺序为"原版尺寸先行（零 IO 快速路径）→ 流式哈希（64KB 分块）"，并有单包预算上限（条数 + 字节数，耗尽后一律回答"未知"并在 UI 提示，绝不继续读）；legacy 布局持有常开只读句柄（基线缓存逐出时 Dispose），stream 条目按偏移排序使游戏侧读取近似顺序 IO；非可播放条目（截断/非 RIFF）不参与比对，避免把截断误判为已替换。
+
 ### 材质变体去重与纯黑占位材质（特例模型黑色预览问题）
 
 某些特例模型（如角色装甲"白银之城-侦探-CW9"）在预览中整体显示为黑色，但游戏内显示正常。根因是模型同时包含高分辨率正常材质和低分辨率纯黑占位材质，预览工具渲染了全部变体导致纯黑覆盖。修复分两层：
@@ -224,6 +237,8 @@ catch (Exception ex)
 | 启动黑闪（LOGO 透明区透出黑底）只查闪屏图片 alpha | WPF 默认 `<SplashScreen>` 项在 `CompositionTarget.Rendering`（**帧渲染前**触发）第一次时就关闭闪屏，此时主窗口首帧还没提交给 DWM，DWM 侧主窗口区域是纯黑的；闪屏 LOGO 透明，黑底就从透明区透出"一闪"。修复：csproj 移除 SplashScreen 项（图片改 `<Resource>`），自实现透明闪屏窗口（`AllowsTransparency` + `Topmost`），在 `MainWindow.ContentRendered`（首帧真正渲染完成后）再 `Close()`。验证：启动进程 + `CopyFromScreen` 连续截屏统计中央区域纯黑帧比例（采样间隔 ≤20ms），修复后应全程为 0。 |
 | 用 `ToolGood.Words.WordsHelper` 引用拼音库 | `ToolGood.Words.Pinyin` 包的命名空间是 `ToolGood.Words.Pinyin`（WordsHelper / PinyinMatch 都在其下），不是 `ToolGood.Words`。`GetPinyin(name, false)` 输出无音调、首字母大写，英文/数字原样保留（`Helldivers2` → `Helldivers2`），转匹配串前要 `ToLowerInvariant()`；`GetFirstPinyin(name)` 同。搜索场景应把转换结果按 Mod 名称惰性缓存（名称不变），不要在防抖热路径里重复转换。**进程首次调用会加载 8 万词组字典（实测约 180ms）且发生在调用线程**：上千 Mod 批量转换仅需数毫秒、每次过滤仅需亚毫秒级，真正的成本只在首次字典加载——应在 Mod 列表就绪后在后台线程预热（快照 + `Task.Run` 串行遍历触发缓存构建），避免用户第一次输入搜索时在 UI 线程上卡顿。 |
 | 构建报 CS2001 找不到 `obj\...\*.g.cs`，且同时出现多个随机后缀 `_wpftmp.csproj` | obj 目录残留了旧 WPF 临时编译产物（多个随机后缀 wpftmp 项目交错），删除 `Helldivers2ModManager\obj\Debug` 目录及其中 `*wpftmp*` 文件后重新**串行**构建（`/m:1`）即可恢复；正常构建后留下的 wpftmp 残留属于成功产物，无需清理。 |
+| 用 Ww2Ogg 的 Default codebook 转换 HD2 WEM 并以为成功 | Default 转换不会抛异常，但产物 NVorbis 解码在 `Residue0.Init` 报错（HD2 用 aoTuV 编码）。转换必须 AoTuV 优先、Default 兜底，并以 `VorbisReader` 构造成功作为"可播放"判据；不要只看 `GenerateOgg` 是否抛异常。 |
+| 把 Wwise bank 的 DATA chunk 或整个音频补丁读入内存做清单 | 音频检查只读 TOC、chunk 头、DIDX 和每条目 128 字节头探针；语音包单 patch 可有数千条目（如超级中配 6343 条/117ms），媒体数据一律按需切片读取。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
 

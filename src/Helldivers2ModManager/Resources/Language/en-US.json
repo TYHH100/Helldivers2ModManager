@@ -9,7 +9,6 @@
     "MainWindow.Close": "Close",
     "MainWindow.DropImportHint": "Release to import mod archive",
     "MainWindow.DropImportInvalid": "Only zip / 7z / rar / tar archives are supported",
-
     "FirstRunTutorial.WelcomeTitle": "Welcome to Helldivers 2 Mod Manager",
     "FirstRunTutorial.WelcomeDescription": "This is a first-run guide that walks you through the core features of the main screen. You can skip it anytime.",
     "FirstRunTutorial.AddModTitle": "Import and Create Mods",
@@ -38,7 +37,6 @@
     "FirstRunTutorial.Next": "Next",
     "FirstRunTutorial.Finish": "Get Started",
     "FirstRunTutorial.Skip": "Skip",
-
     "DashboardPage.Title": "Dashboard",
     "DashboardPage.AddMod": "Add Mod",
     "DashboardPage.CreateMod": "Create Mod",
@@ -179,7 +177,7 @@
     "Bisect.AbortTitle": "Abort Bisect",
     "Bisect.AbortConfirm": "Aborting switches back to the original group and deletes the temporary group (the original group is not affected). Abort now?",
     "ModelPreviewPage.Title": "Model Preview",
-    "ModelPreviewPage.Description": "Preview a mod while temporarily switching body types, materials, attachments, armor, or stratagems. Preview choices do not change deployment settings.",
+    "ModelPreviewPage.Description": "Inspect mod models with temporary body shape, material, accessory, armor and stratagem switches; audio mods can be previewed as well. These choices never change the dashboard deployment configuration.",
     "ModelPreviewPage.Disclaimer": "This preview is generated only from the mod resources that could be decoded. Missing resources, materials, skeletons, animations, in-game lighting, and rendering logic can make the pose, appearance, materials, or part combination differ significantly from the actual game. Always treat the in-game result as authoritative.",
     "ModelPreviewPage.Refresh": "Refresh Mods",
     "ModelPreviewPage.Mods": "Mods",
@@ -276,7 +274,6 @@
     "DashboardPage.DeleteSeparatorHint": "Delete Separator",
     "DashboardPage.OriginalRepo": "Original Repo (teutinsa)",
     "DashboardPage.ForkedRepo": "Forked Repo (TYHH100)",
-
     "DashboardPage.SavingModConfig": "Saving mod configuration",
     "DashboardPage.GoToSettings": "Go to settings now?",
     "DashboardPage.SettingsInvalid": "Settings are invalid!",
@@ -397,7 +394,6 @@
     "AutoTagPairingPage.Save": "Save Pairings",
     "AutoTagPairingPage.SaveSuccess": "Pairings saved; they apply on the next auto-tag run",
     "AutoTagPairingPage.ReadonlyError": "Cannot save pairings in read-only mode",
-
     "DashboardPage.DefaultSeparatorName": "New Separator",
     "DashboardPage.RenameSeparatorTitle": "Rename Separator",
     "DashboardPage.RenameSeparatorMsg": "Enter the new separator name:",
@@ -492,7 +488,6 @@
     "SettingsPage.CaseSensitive": "Case Sensitive",
     "SettingsPage.Language": "Interface Language",
     "SettingsPage.LanguageDesc": "Select the interface display language. Select \"Auto Detect\" to use system language.",
-
     "SettingsPage.ValidateGameDirNotExist": "The selected Helldivers 2 folder does not exist!",
     "SettingsPage.ValidateGameDirInvalid": "The selected Helldivers 2 folder is not in a valid directory!",
     "SettingsPage.ValidateGameDirNoData": "The selected Helldivers 2 root directory does not contain a \"data\" folder!",
@@ -529,7 +524,6 @@
     "SettingsPage.DetectingGame": "Detecting Game",
     "SettingsPage.DetectGameFailed": "Could not auto-detect Helldivers 2, please set it manually.",
     "SettingsPage.SymbolicLinkAdminMsg": "Symbolic links require running this application as administrator.\nRight-click the program icon → Properties → Compatibility → Check \"Run this program as an administrator\" → Apply and confirm, then reopen the program as administrator.\n\nClose the program now?",
-
     "CreatePage.Title": "Create Mod",
     "CreatePage.VisualEdit": "Visual Edit",
     "CreatePage.JsonEdit": "Edit JSON Directly",
@@ -574,12 +568,10 @@
     "ManifestEditPage.BasicInfo": "Basic Info",
     "ManifestEditPage.LegacyUpgradeHint": "This mod is in legacy format: option names are the mod folder names, use folder picking to add options. Configuring descriptions, Include paths, icons or sub-options will automatically upgrade it to V1 format on save.",
     "ManifestEditPage.SetSourceDirFirst": "Cannot read the mod directory. Make sure the mod folder exists before adding options.",
-
     "EditPage.Title": "Mod Options",
     "EditPage.PreviewHint": "Hover over option images for a larger preview; dropdown lists need to be opened first to preview",
     "EditPage.Done": "Done",
     "EditPage.SaveFailed": "Failed to save mod configuration: ",
-
     "NexusDownloadPage.Title": "Download Mods from Nexus Mods",
     "NexusDownloadPage.UrlLabel": "Nexus Mods Link",
     "NexusDownloadPage.UrlDesc": "Paste the Nexus Mods mod page link",
@@ -629,7 +621,6 @@
     "BackgroundTasksPage.ExportComplete": "Export complete: {name}",
     "BackgroundTasksPage.PurgeComplete": "Cleanup complete",
     "BackgroundTasksPage.DeleteComplete": "Delete complete: {name}",
-
     "TagManagementPage.DeleteTag": "Delete Tag",
     "TagManagementPage.CreateTitle": "Create Tag",
     "TagManagementPage.CreateMsg": "Enter the name for the new tag:",
@@ -638,7 +629,6 @@
     "TagManagementPage.CreateReadonly": "Cannot create tag, settings are in read-only mode",
     "TagManagementPage.RenameTitle": "Rename Tag",
     "TagManagementPage.RenameMsg": "Enter the new tag name:",
-
     "TagManagementPage.RenameSuccess": "Tag renamed successfully",
     "TagManagementPage.RenameReadonly": "Cannot rename tag, settings are in read-only mode",
     "TagManagementPage.ColorTitle": "Select Color",
@@ -646,17 +636,14 @@
     "TagManagementPage.ColorSuffix": "\":",
     "TagManagementPage.ColorUpdated": "Tag color has been updated",
     "TagManagementPage.ColorReadonly": "Cannot change color, settings are in read-only mode",
-
     "TagManagementPage.DeletePrefix": "Are you sure you want to delete tag \"",
     "TagManagementPage.DeleteSuffix": "\"?",
     "TagManagementPage.DeleteSuccess": "Tag deleted successfully",
     "TagManagementPage.DeleteReadonly": "Cannot delete tag, settings are in read-only mode",
-
     "DeploymentOrderPage.MoveUp": "Move Up",
     "DeploymentOrderPage.MoveDown": "Move Down",
     "DeploymentOrderPage.SyncFromHome": "Sync from Dashboard",
     "DeploymentOrderPage.ClearList": "Clear List",
-
     "DeploymentOrderPage.DeselectAll": "Deselect All",
     "DeploymentOrderPage.InvertSelect": "Invert Selection",
     "DeploymentOrderPage.ExpandCollapse": "Expand/Collapse Options",
@@ -666,7 +653,6 @@
     "DeploymentOrderPage.DeletedModPlaceholder": "[Deleted Mod]",
     "DeploymentOrderPage.OptionPrefix": "  ▸ ",
     "DeploymentOrderPage.SubOptionPrefix": "    ▪ ",
-
     "CreateWizard.ChooseTitle": "Does your mod have options (e.g. color toggles)?",
     "CreateWizard.ChooseDesc": "Let's start with a simple question:",
     "CreateWizard.Yes": "Yes",
@@ -676,13 +662,11 @@
     "CreateWizard.IntroNext": "Click \"Next\" to continue",
     "CreateWizard.IncludePickerTitle": "Select Include Directories",
     "CreateWizard.IncludePickerDesc": "Check the directories to include (paths relative to source directory will be auto-generated):",
-
     "MessageBox.Yes": "Yes",
     "MessageBox.No": "No",
     "MessageBox.CurrentColor": "Current Color",
     "MessageBox.CustomColor": "Custom Color:",
     "MessageBox.ColorFormat": "Format: #FFAABBCC",
-
     "MessageBox.Info": "Info",
     "MessageBox.Warning": "Warning",
     "MessageBox.Error": "Error",
@@ -699,7 +683,6 @@
     "MessageBox.NeedUpdateSuffix": " file(s)",
     "MessageBox.DeploySteps": "Deploy progress",
     "MessageBox.Deploying": "Deploying: ",
-
     "VersionCheck.ScanningMods": "Scanning mod patch files...",
     "VersionCheck.CheckFailed": "Check failed",
     "VersionCheck.IncompatibleFound": "Found incompatible newly added mods: ",
@@ -736,7 +719,6 @@
     "VersionCheck.GpuVertexSampleInvalid": "GPU vertex sample has invalid coordinates or skinning weights",
     "VersionCheck.GpuIndexSampleInvalid": "GPU index sample is outside the Stream vertex range",
     "VersionCheck.UnknownGpuComponentFormats": "Found {count} unknown GPU vertex component(s); they are not treated as corruption to avoid false positives",
-
     "ModGroup.DefaultName": "Uncategorized",
     "ModGroup.SidebarTitle": "Groups",
     "ModGroup.CurrentGroup": "Current group",
@@ -756,7 +738,6 @@
     "ModGroup.AddToGroupsMessage": "Set groups for the selected {count} mods (multi-select; unchecking removes from that group):",
     "ModGroup.GroupsUpdated": "Updated groups for {count} mods",
     "ModGroup.DeleteConfirm": "Delete group \"{name}\"? This will not delete mod files.",
-
     "Common.AppName": "Helldivers 2 Mod Manager",
     "Common.Version": "Version",
     "Common.ErrorPrefix": "Error:",
@@ -768,7 +749,6 @@
     "Common.Delete": "Delete",
     "Common.Edit": "Edit",
     "Common.Back": "Back",
-
     "Converters.TaskStatusPending": "Waiting",
     "Converters.TaskStatusRunning": "Running",
     "Converters.TaskStatusCompleted": "Completed",
@@ -779,7 +759,6 @@
     "Converters.Incompatible": "Incompatible",
     "Converters.UnableToConfirm": "Unable to Confirm",
     "Converters.Checking": "Checking",
-
     "DashboardPage.BatchDeleteConfirm": "Are you sure you want to delete the selected {count} mod(s)?\n",
     "DashboardPage.BatchDeleteFailed2": "Batch delete mods failed",
     "ModViewModel.CheckingUpdate": "Checking for updates...",
@@ -1032,12 +1011,35 @@
     "CreateModOption.DefaultName": "Unnamed Option",
     "CreateSubOption.SelectIconTitle": "Select Sub-Option Icon",
     "CreateSubOption.DefaultName": "Unnamed Sub-Option",
-
     "ImagePicker.SelectImageTitle": "Select Image",
     "IncludePicker.ParentOptionMissing": "Parent option's Include directory does not exist or is empty",
     "ManifestEditPage.SaveFailed": "Failed to save manifest",
     "ManifestEditPage.SaveConfigFailed": "Failed to save Mod config",
     "CreatePage.AutoGenerateOptions": "Auto-generated {count} options from directory structure",
-    "CreatePage.JsonParseError": "JSON parse failed, switching to visual edit mode"
+    "CreatePage.JsonParseError": "JSON parse failed, switching to visual edit mode",
+    "ModelPreviewPage.AudioTab": "Audio",
+    "ModelPreviewPage.AudioEntryCount": "{count} audio entries · {banks} banks",
+    "ModelPreviewPage.AudioLoadedStatus": "Loaded {count} audio entries ({banks} banks) from {patches} patches.",
+    "ModelPreviewPage.AudioLooseStreamsGroup": "Loose audio streams",
+    "ModelPreviewPage.AudioNoSelection": "Nothing playing",
+    "ModelPreviewPage.AudioPlay": "Play",
+    "ModelPreviewPage.AudioPause": "Pause",
+    "ModelPreviewPage.AudioStop": "Stop",
+    "ModelPreviewPage.AudioVolume": "Volume",
+    "ModelPreviewPage.AudioFilterTip": "Filter by id, origin (Bank/Stream), bank name or patch path",
+    "ModelPreviewPage.AudioOverlayHint": "Click an entry in the audio list below to preview it; playback never modifies files.",
+    "ModelPreviewPage.AudioPlaybackFailed": "Audio playback failed: {message}",
+    "ModelPreviewPage.AudioLoadFailed": "Audio inspection failed: {message}",
+    "ModelPreviewPage.AudioIssueNotRiff": "Unrecognized (not a RIFF WEM)",
+    "ModelPreviewPage.AudioIssueNotVorbis": "Unsupported audio codec",
+    "ModelPreviewPage.AudioIssueTruncated": "Incomplete media (truncated prefetch)",
+    "ModelPreviewPage.AudioIssueReadFailed": "Read failed",
+    "ModelPreviewPage.AudioOnlyShowModified": "Replaced only",
+    "ModelPreviewPage.AudioOnlyShowModifiedTip": "Show only entries that differ from the original game audio (requires a configured game directory)",
+    "ModelPreviewPage.AudioModifiedTag": "Replaced",
+    "ModelPreviewPage.AudioOriginalTag": "Original",
+    "ModelPreviewPage.AudioModifiedCount": "{modified} / {total} replaced",
+    "ModelPreviewPage.AudioUncomparedHint": "{count} entries exceeded the comparison budget and were not compared",
+    "ModelPreviewPage.AudioMultiOptionSkipped": "This mod has multiple audio options; audio preview is skipped. Deploy it and enjoy in game."
   }
 }

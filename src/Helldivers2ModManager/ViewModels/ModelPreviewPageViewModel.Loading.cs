@@ -37,7 +37,11 @@ internal sealed partial class ModelPreviewPageViewModel
             _ = LoadSelectedModAsync(value, resetView: true);
     }
 
-    partial void OnModelGroupChanged(Model3DGroup? value) => OnPropertyChanged(nameof(HasModel));
+    partial void OnModelGroupChanged(Model3DGroup? value)
+    {
+        OnPropertyChanged(nameof(HasModel));
+        OnPropertyChanged(nameof(IsAudioOnlyPreview));
+    }
 
     partial void OnSelectedMeshChanged(ModelPreviewMesh? value) => QueueRebuild();
 
@@ -210,6 +214,8 @@ internal sealed partial class ModelPreviewPageViewModel
             ModelGroup = null;
             SuggestedCameraDistance = 5;
             SuggestedCameraYaw = 0;
+            StopAudioPlayback(clearCurrent: true);
+            ClearAudioCollections();
         }
 
         try
@@ -285,6 +291,41 @@ internal sealed partial class ModelPreviewPageViewModel
 
             if (!string.IsNullOrWhiteSpace(result.Error))
                 StatusText += " " + result.Error;
+
+            // 多选项全音频模组：直接跳过音频预览（用户决策——每个选项各自携带 bank/stream，
+            // 全量解析与原版比对的代价过高，部署后在游戏内体验即可）。
+            if (await ShouldSkipAudioPreviewAsync(mod, cancellationToken))
+            {
+                if (!IsCurrentLoad(mod, loadGeneration))
+                    return;
+                ApplyAudioInventory(AudioInventoryResult.Empty);
+                if (Meshes.Count == 0)
+                    StatusText = _localizationService["ModelPreviewPage.AudioMultiOptionSkipped"];
+            }
+            else
+            {
+                var audioResult = await LoadAudioInventoryAsync(
+                    mod,
+                    selectedPatchFiles,
+                    patchSetKey,
+                    loadGeneration,
+                    cancellationToken);
+                if (!IsCurrentLoad(mod, loadGeneration))
+                    return;
+                ApplyAudioInventory(audioResult);
+                if (Meshes.Count == 0)
+                {
+                    // Audio-only mods have no 3D preview to describe; the audio summary replaces
+                    // the "no geometry" status and the audio tab becomes the landing tab.
+                    UpdateAudioSummaryStatus(audioResult.PatchCount, audioResult.Error);
+                    if (HasAudioEntries && resetView)
+                        SelectedPreviewTabIndex = AudioPreviewTabIndex;
+                }
+                else if (resetView)
+                {
+                    SelectedPreviewTabIndex = 0;
+                }
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
