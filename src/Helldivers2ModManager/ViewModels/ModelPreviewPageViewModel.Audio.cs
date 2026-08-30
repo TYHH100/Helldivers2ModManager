@@ -69,6 +69,18 @@ internal sealed partial class ModelPreviewPageViewModel
     [ObservableProperty]
     private bool _isAudioBusy;
 
+    /// <summary>音频出处声明横幅开关（会话级，重新打开页面会再显示；与 CreatePage 横幅同款做法）。</summary>
+    [ObservableProperty]
+    private bool _showAudioSourceBanner = true;
+
+    partial void OnShowAudioSourceBannerChanged(bool value) => OnPropertyChanged(nameof(ShowAudioAttributionBanner));
+
+    /// <summary>横幅仅在存在音频条目且未被用户关闭时显示。</summary>
+    public bool ShowAudioAttributionBanner => ShowAudioSourceBanner && HasAudioEntries;
+
+    [RelayCommand]
+    private void DismissAudioAttributionBanner() => ShowAudioSourceBanner = false;
+
     [ObservableProperty]
     private bool _isAudioPlaying;
 
@@ -441,6 +453,7 @@ internal sealed partial class ModelPreviewPageViewModel
         OnPropertyChanged(nameof(AudioEntryTotalCount));
         OnPropertyChanged(nameof(AudioBankCount));
         OnPropertyChanged(nameof(AudioCountText));
+        OnPropertyChanged(nameof(ShowAudioAttributionBanner));
         OnPropertyChanged(nameof(HasOriginalComparison));
         OnPropertyChanged(nameof(AudioModifiedCount));
         OnPropertyChanged(nameof(AudioModifiedCountText));
@@ -467,6 +480,7 @@ internal sealed partial class ModelPreviewPageViewModel
         OnPropertyChanged(nameof(AudioEntryTotalCount));
         OnPropertyChanged(nameof(AudioBankCount));
         OnPropertyChanged(nameof(AudioCountText));
+        OnPropertyChanged(nameof(ShowAudioAttributionBanner));
     }
 
     private void UpdateAudioSummaryStatus(int patchCount, string? error)

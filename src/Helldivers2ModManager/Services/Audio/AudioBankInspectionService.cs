@@ -32,7 +32,8 @@ internal sealed class AudioBankInspectionService
     private const int WemHeaderProbeBytes = 128;
     private const int BankDataPrefixSize = 16;
 
-    // ToC resource type ids (same values as hd2-audio-modder's const.py).
+    // ToC resource type ids (structure reference: hd2-audio-modder's const.py — unlicensed/ARR
+    // project; format constants referenced only, no source code copied. See README 第三方声明).
     internal const ulong WwiseBankTypeId = 0x535A7BD3E650D799UL;   // 6006249203084351385
     internal const ulong WwiseStreamTypeId = 0x504B55235D21440EUL; // 5785811756662211598
     internal const ulong WwiseDepTypeId = 0xAF32095C82F2B070UL;    // 12624162998411505776

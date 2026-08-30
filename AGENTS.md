@@ -121,6 +121,7 @@ internal sealed class MyService
 
 模型预览页同时承载音频模组的试听（`Services/Audio/AudioBankInspectionService` + `AudioPlaybackService`，UI 在 `ModelPreviewPageViewModel.Audio.cs` partial 与 `ModelPreviewPageView.xaml` 的音频 Tab/纯音频覆盖层）。关键约定：
 
+- 结构知识来源：hd2-audio-modder（无许可证，保留所有权利 ARR）。只参考其公开的补丁结构/常量（TOC 类型 ID、bank chunk 布局等），**禁止复制其源码**；出处声明保留在 README"第三方声明"与 `AudioBankInspectionService` 常量注释中，改动相关代码时不要移除。
 - 音频补丁结构：TOC 类型 `WWISE_BANK(0x535A7BD3E650D799)`/`WWISE_STREAM(0x504B55235D21440E)`/`WWISE_DEP(0xAF32095C82F2B070)`（注意 `ModTypeDetectionService.PathEntryTypeId` 就是 WWISE_DEP——检测扫到的路径字符串来自 dep 条目）。bank 的 toc_data 有 16 字节前缀（`D82F7678`+长度+file_id），其后是 BKHD/DIDX/DATA/HIRC chunk；DIDX 12 字节/条（source_id+offset+size），offset 相对 DATA body。
 - 检查只做有界读取：TOC+chunk 头+DIDX+每条目 128 字节 WEM 头探针；媒体数据按需由播放服务切片读取，禁止把 DATA chunk（数 MB～数十 MB）或整包（语音包数千条目）读入内存。
 - WEM 解码链路：Ww2Ogg.Core（NuGet，ww2ogg 的 .NET 移植，BSD-3）转 Ogg → NVorbis 解码 → NAudio WasapiOut。**HD2 音频用 aoTuV codebook 编码：必须先试 `CodebookLibrary.AoTuV`，失败再回退 `Default`**；用 Default 转换不会抛异常但 NVorbis 解码报 `Residue0.Init` 错误，`VorbisReader` 构造即完成 setup 头校验，因此"构造成功=可播放"。
