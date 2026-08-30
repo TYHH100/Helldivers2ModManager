@@ -1018,8 +1018,6 @@
     "CreatePage.AutoGenerateOptions": "Auto-generated {count} options from directory structure",
     "CreatePage.JsonParseError": "JSON parse failed, switching to visual edit mode",
     "ModelPreviewPage.AudioTab": "Audio",
-    "ModelPreviewPage.AudioAttributionTitle": "Audio parsing attribution",
-    "ModelPreviewPage.AudioAttributionDesc": "The audio patch (Wwise bank/WEM) structure parsing references hd2-audio-modder. That project ships no open-source license and retains all rights (ARR); this tool only references its published format structures and constants, and copies none of its source code.",
     "ModelPreviewPage.AudioEntryCount": "{count} audio entries · {banks} banks",
     "ModelPreviewPage.AudioLoadedStatus": "Loaded {count} audio entries ({banks} banks) from {patches} patches.",
     "ModelPreviewPage.AudioLooseStreamsGroup": "Loose audio streams",

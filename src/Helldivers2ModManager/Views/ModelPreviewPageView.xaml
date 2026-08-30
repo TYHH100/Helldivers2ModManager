@@ -294,56 +294,7 @@
                         </Border>
                         <Border Background="#D920252A"
                                 Visibility="{Binding IsAudioOnlyPreview, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <!-- 音频出处声明横幅（hd2-audio-modder 为无许可证/ARR 项目，保留出处） -->
-                                <Border Grid.Row="0"
-                                        Background="#1a3a5c"
-                                        CornerRadius="8"
-                                        Padding="14 12"
-                                        Margin="12 12 12 0"
-                                        BorderBrush="#2a5a8c"
-                                        BorderThickness="1"
-                                        Visibility="{Binding ShowAudioAttributionBanner, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0"
-                                                   Text="&#xE946;"
-                                                   FontFamily="Segoe Fluent Icons"
-                                                   FontSize="18"
-                                                   Foreground="#6ab0f3"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0 0 10 0"/>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{loc:Loc ModelPreviewPage.AudioAttributionTitle}"
-                                                       FontSize="13"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="#9ccff0"
-                                                       Margin="0 0 2 0"/>
-                                            <TextBlock Text="{loc:Loc ModelPreviewPage.AudioAttributionDesc}"
-                                                       TextWrapping="Wrap"
-                                                       FontSize="12"
-                                                       Foreground="#8abce8"
-                                                       LineHeight="18"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="2"
-                                                Command="{Binding DismissAudioAttributionBannerCommand}"
-                                                Style="{StaticResource FluentIconButton}"
-                                                ToolTip="{loc:Loc CreatePage.CloseHint}"
-                                                Padding="4"
-                                                VerticalAlignment="Top">
-                                            <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="12" Foreground="#6a9fd8"/>
-                                        </Button>
-                                    </Grid>
-                                </Border>
-                                <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
                                 <TextBlock Text="&#xE8D6;" FontFamily="Segoe Fluent Icons" FontSize="40" HorizontalAlignment="Center" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
                                 <TextBlock Text="{Binding AudioCurrentEntryText}" FontSize="18" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0 10 0 0"/>
                                 <Slider Minimum="0"
@@ -376,7 +327,6 @@
                                            Margin="0 14 0 0"
                                            TextWrapping="Wrap"/>
                             </StackPanel>
-                            </Grid>
                         </Border>
                     </Grid>
                 </Border>
@@ -553,7 +503,6 @@
                             <Grid Margin="4">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
 
@@ -622,52 +571,7 @@
                                              ToolTip="{loc:Loc ModelPreviewPage.AudioFilterTip}"/>
                                 </Grid>
 
-                                <!-- 音频出处声明横幅（hd2-audio-modder 为无许可证/ARR 项目，保留出处） -->
-                                <Border Grid.Row="1"
-                                        Background="#1a3a5c"
-                                        CornerRadius="8"
-                                        Padding="14 12"
-                                        Margin="2 0 2 6"
-                                        BorderBrush="#2a5a8c"
-                                        BorderThickness="1"
-                                        Visibility="{Binding ShowAudioAttributionBanner, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0"
-                                                   Text="&#xE946;"
-                                                   FontFamily="Segoe Fluent Icons"
-                                                   FontSize="18"
-                                                   Foreground="#6ab0f3"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0 0 10 0"/>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{loc:Loc ModelPreviewPage.AudioAttributionTitle}"
-                                                       FontSize="13"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="#9ccff0"
-                                                       Margin="0 0 2 0"/>
-                                            <TextBlock Text="{loc:Loc ModelPreviewPage.AudioAttributionDesc}"
-                                                       TextWrapping="Wrap"
-                                                       FontSize="12"
-                                                       Foreground="#8abce8"
-                                                       LineHeight="18"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="2"
-                                                Command="{Binding DismissAudioAttributionBannerCommand}"
-                                                Style="{StaticResource FluentIconButton}"
-                                                ToolTip="{loc:Loc CreatePage.CloseHint}"
-                                                Padding="4"
-                                                VerticalAlignment="Top">
-                                            <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons" FontSize="12" Foreground="#6a9fd8"/>
-                                        </Button>
-                                    </Grid>
-                                </Border>
-
-                                <Grid Grid.Row="2" Margin="2 0 2 0">
+                                <Grid Grid.Row="1" Margin="2 0 2 0">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="*"/>

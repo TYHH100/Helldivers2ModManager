@@ -1018,8 +1018,6 @@
     "CreatePage.AutoGenerateOptions": "已从目录结构自动生成 {count} 个选项",
     "CreatePage.JsonParseError": "JSON 解析失败，切换到可视化编辑模式",
     "ModelPreviewPage.AudioTab": "音频",
-    "ModelPreviewPage.AudioAttributionTitle": "音频解析出处声明",
-    "ModelPreviewPage.AudioAttributionDesc": "音频补丁（Wwise bank/WEM）的结构解析参考自 hd2-audio-modder。该项目未附带任何开源许可证、保留所有权利（ARR）；本工具仅参考其公开的格式结构与常量定义，未复制其源代码。",
     "ModelPreviewPage.AudioEntryCount": "{count} 个音频条目 · {banks} 个音频库",
     "ModelPreviewPage.AudioLoadedStatus": "已加载 {count} 个音频条目（{banks} 个音频库），来自 {patches} 个 Patch。",
     "ModelPreviewPage.AudioLooseStreamsGroup": "独立音频流",
