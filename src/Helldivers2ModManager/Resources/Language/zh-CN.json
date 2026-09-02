@@ -295,7 +295,6 @@
     "DashboardPage.NoManifestFoundInfer": "目录中未找到清单文件!\n\t\t\t执行操作: 从目录推断(Inferring from directory)",
     "DashboardPage.EmptyOptions": "清单包含空选项! 此模组可能不会产生任何效果.",
     "DashboardPage.EmptySubOptions": "清单包含空的子选项！此模组可能无法按预期运行.",
-    "DashboardPage.EmptyIncludes": "清单包含空的包含列表！此模组可能不会产生任何作用.",
     "DashboardPage.MissingIncludePathPrefix": "包含路径 \"",
     "DashboardPage.MissingIncludePathSuffix": "\" 不存在，将作为空开关跳过。",
     "DashboardPage.MissingIncludePath": "包含路径不存在，将作为空开关跳过。",
@@ -1040,6 +1039,20 @@
     "ModelPreviewPage.AudioOriginalTag": "原版",
     "ModelPreviewPage.AudioModifiedCount": "已替换 {modified} / {total} 条",
     "ModelPreviewPage.AudioUncomparedHint": "另有 {count} 条超出比对预算，未与游戏原版比对",
-    "ModelPreviewPage.AudioMultiOptionSkipped": "该模组包含多个音频选项，音频预览已跳过；部署后在游戏内体验即可。"
+    "ModelPreviewPage.AudioMultiOptionSkipped": "该模组包含多个音频选项，音频预览已跳过；部署后在游戏内体验即可。",
+    "ModelPreviewPage.TextTab": "字幕文本",
+    "ModelPreviewPage.TextEntryCount": "{count} 条文本 · {banks} 个文本库",
+    "ModelPreviewPage.TextFilterTip": "按文本内容、ID 或补丁路径过滤",
+    "ModelPreviewPage.TextOnlyShowModified": "只看已替换",
+    "ModelPreviewPage.TextOnlyShowModifiedTip": "仅显示与游戏原版文本不同的条目",
+    "ModelPreviewPage.TextModifiedCount": "已替换 {modified} / {total} 条",
+    "ModelPreviewPage.TextModifiedTag": "已替换",
+    "ModelPreviewPage.TextOriginalTag": "原版",
+    "ModelPreviewPage.TextNewTag": "新增",
+    "ModelPreviewPage.TextOriginalTooltip": "原版: {text}",
+    "ModelPreviewPage.TextBankGroup": "文本库 {id}（语言 {language}）",
+    "ModelPreviewPage.TextLoadedStatus": "已加载 {count} 条文本（{banks} 个文本库），来自 {patches} 个 Patch。",
+    "ModelPreviewPage.TextLoadFailed": "文本解析失败: {message}",
+    "ModelPreviewPage.GameTextureSource": "游戏原版"
   }
 }

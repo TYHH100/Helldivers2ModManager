@@ -224,13 +224,32 @@ internal sealed class PatchResourceInspectionService
                 patchResults[patchOrder] = patchResult;
             });
 
-        foreach (var patchResult in patchResults)
+        // 部署把选中的补丁按选项顺序重排为连续补丁链，游戏逐链应用；同一 Unit FileID 被
+        // 多个选中补丁修改时，链中靠后的补丁才是生效版本。"移除/摘下"类选项依赖该语义：
+        // 选项补丁用空壳或精简 Unit 覆盖本体补丁里的完整网格，覆盖后的旧网格必须丢弃，
+        // 否则被移除的部件在预览里永远消失不了（含空壳补丁解码不出网格的情况）。
+        var effectiveUnitPatchOrders = new Dictionary<ulong, int>();
+        foreach (var entry in inspection.TocEntries)
         {
+            if (entry.TypeId != UnitTypeId)
+                continue;
+            if (!effectiveUnitPatchOrders.TryGetValue(entry.FileId, out var currentOrder) || entry.PatchOrder > currentOrder)
+                effectiveUnitPatchOrders[entry.FileId] = entry.PatchOrder;
+        }
+
+        for (var patchOrder = 0; patchOrder < patchResults.Length; patchOrder++)
+        {
+            var patchResult = patchResults[patchOrder];
             cancellationToken.ThrowIfCancellationRequested();
             result.SkippedStreams += patchResult.SkippedStreams;
             result.Error ??= patchResult.Error;
+            // 补丁链覆盖判定：本补丁的 Unit 已被更靠后的补丁覆盖时，其网格不再参与合并。
+            var effectiveMeshes = patchResult.Meshes
+                .Where(mesh => !effectiveUnitPatchOrders.TryGetValue(mesh.UnitId, out var effectiveOrder) ||
+                               effectiveOrder == patchOrder)
+                .ToList();
             var preferredMeshes = ModelPreviewMaterialVariantSelector.SelectPreferredVariants(
-                patchResult.Meshes,
+                effectiveMeshes,
                 textureId => result.Textures.FirstOrDefault(texture => texture.TextureId == textureId) is { } texture
                     ? (long)texture.Width * texture.Height
                     : 0);
@@ -476,6 +495,84 @@ internal sealed class PatchResourceInspectionService
         };
     }
 
+    /// <summary>DDS DXGI 格式 → BCn 解码格式；模组补丁与游戏归档共用同一套贴图资源格式。</summary>
+    internal static CompressionFormat GetCompressionFormat(int dxgiFormat) => dxgiFormat switch
+    {
+        28 or 29 => CompressionFormat.Rgba,
+        71 or 72 => CompressionFormat.Bc1WithAlpha,
+        77 or 78 => CompressionFormat.Bc3,
+        83 or 84 => CompressionFormat.Bc5,
+        98 or 99 => CompressionFormat.Bc7,
+        _ => CompressionFormat.Unknown
+    };
+
+    internal static long GetTopMipByteSize(CompressionFormat format, int width, int height) =>
+        GetTopMipByteCount(format, width, height);
+
+    internal readonly record struct TextureMipPlan(
+        int Width,
+        int Height,
+        int MipLevel,
+        ulong SkipBytes,
+        long ByteCount);
+
+    /// <summary>按预览像素上限选定 mip；调用方据此只读取所选 mip 的字节，绝不整体载入。</summary>
+    internal static TextureMipPlan? PlanTopMip(
+        CompressionFormat format,
+        int sourceWidth,
+        int sourceHeight,
+        int sourceMipCount,
+        int maxPreviewPixels)
+    {
+        var previewWidth = sourceWidth;
+        var previewHeight = sourceHeight;
+        ulong skipBytes = 0;
+        var mipLevel = 0;
+        while ((long)previewWidth * previewHeight > maxPreviewPixels && mipLevel + 1 < sourceMipCount)
+        {
+            var previousMipSize = GetTopMipByteCount(format, previewWidth, previewHeight);
+            if (previousMipSize <= 0)
+                return null;
+            skipBytes += (ulong)previousMipSize;
+            previewWidth = Math.Max(1, previewWidth / 2);
+            previewHeight = Math.Max(1, previewHeight / 2);
+            mipLevel++;
+        }
+
+        var byteCount = GetTopMipByteCount(format, previewWidth, previewHeight);
+        return byteCount > 0
+            ? new TextureMipPlan(previewWidth, previewHeight, mipLevel, skipBytes, byteCount)
+            : null;
+    }
+
+    /// <summary>把从所选 mip 起点读出的负载解码为 BGRA 像素。</summary>
+    internal static TexturePreviewData? DecodeMipPayload(
+        byte[] mipPayload,
+        TextureMipPlan plan,
+        int dxgiFormat)
+    {
+        if (mipPayload.Length < plan.ByteCount)
+            return null;
+
+        var pixels = new BcDecoder().DecodeRaw(mipPayload, plan.Width, plan.Height, GetCompressionFormat(dxgiFormat));
+        var bgra = new byte[pixels.Length * 4];
+        for (var i = 0; i < pixels.Length; i++)
+        {
+            bgra[i * 4] = pixels[i].b;
+            bgra[i * 4 + 1] = pixels[i].g;
+            bgra[i * 4 + 2] = pixels[i].r;
+            bgra[i * 4 + 3] = pixels[i].a;
+        }
+
+        return new TexturePreviewData
+        {
+            Width = plan.Width,
+            Height = plan.Height,
+            BgraPixels = bgra,
+            Description = $"DXGI {dxgiFormat}, mip {plan.MipLevel}"
+        };
+    }
+
     private static async Task InspectPatchAsync(
         FileInfo patchFile,
         string displayName,
@@ -674,9 +771,6 @@ internal sealed class PatchResourceInspectionService
     private static async Task<IReadOnlyDictionary<(string PatchPath, ulong UnitId), ModelPreviewMaterialLayout>>
         BuildUnitMaterialLayoutsAsync(PatchResourceInspectionResult inspection, CancellationToken cancellationToken)
     {
-        var textureIds = inspection.Textures
-            .Select(static texture => texture.TextureId)
-            .ToHashSet();
         var materialTextures = new Dictionary<ulong, ModelPreviewMaterialTextures>();
         var resourceEntries = inspection.TocEntries
             .Where(entry => entry.TypeId == MaterialTypeId)
@@ -689,7 +783,7 @@ internal sealed class PatchResourceInspectionService
             if (data is null)
                 continue;
 
-            var referencedTextures = TryReadMaterialTextures(data, textureIds);
+            var referencedTextures = TryReadMaterialTextures(data);
             if (referencedTextures is not null)
                 materialTextures[entry.FileId] = referencedTextures;
         }
@@ -972,13 +1066,17 @@ internal sealed class PatchResourceInspectionService
     /// by resource IDs. Keeping that pairing lets the preview choose the actual albedo
     /// input instead of guessing between same-sized normal, mask and color textures.
     /// </summary>
+    /// <summary>
+    /// 解析材质的语义贴图表。模组补丁里没有的贴图 ID（引用游戏原版资源）也必须保留：
+    /// 它们是材质的权威输入，缺失时预览只能整段灰显或错拿 Normal/Mask 当 Albedo；
+    /// 模型预览会再尝试从游戏包里解析这些外部引用。
+    /// </summary>
     internal static ModelPreviewMaterialTextures? TryReadMaterialTextures(
-        byte[] data,
-        IReadOnlySet<ulong> availableTextureIds)
+        byte[] data)
     {
         const int textureCountOffset = 0x40;
         const int textureTableOffset = 0x88;
-        if (data.Length < textureTableOffset || availableTextureIds.Count == 0)
+        if (data.Length < textureTableOffset)
             return null;
 
         var textureCount = ReadInt32(data, textureCountOffset);
@@ -999,7 +1097,7 @@ internal sealed class PatchResourceInspectionService
         {
             var semanticId = ReadUInt32(data, textureTableOffset + index * sizeof(uint));
             var textureId = ReadUInt64(data, checked((int)(textureIdsOffset + index * sizeof(ulong))));
-            if (!availableTextureIds.Contains(textureId))
+            if (textureId == 0)
                 continue;
 
             textureIds.Add(textureId);
@@ -1008,7 +1106,10 @@ internal sealed class PatchResourceInspectionService
             if (!texturesByRole.TryGetValue(role, out var roleIds))
                 texturesByRole[role] = roleIds = [];
             roleIds.Add(textureId);
-            if (colorTextureId is null && role == ModelPreviewTextureRole.BaseColor)
+            // Iridescence 输入也是颜色贴图：它必须占据 ColorTextureId，保证既有消费者
+            // （自动贴图选择、首选贴图解析）仍然把流光材质解析到正确的颜色输入。
+            if (colorTextureId is null &&
+                (role == ModelPreviewTextureRole.BaseColor || role == ModelPreviewTextureRole.Iridescence))
                 colorTextureId = textureId;
         }
 
@@ -1031,7 +1132,6 @@ internal sealed class PatchResourceInspectionService
         0x604318CD or // BaseColor
         0x608D8147 or // BaseColorEmissiveMap
         0x848BA63B or // BaseColorMetalMap
-        0xFF2C91CC or // AlbedoIridescence (the character-material color input)
         0x3AA8B87E => ModelPreviewTextureRole.BaseColor,
         // Common semantic hashes from the Stingray material tables. Unknown semantic
         // values stay Unknown so forward-compatible materials are still visible through
@@ -1044,6 +1144,11 @@ internal sealed class PatchResourceInspectionService
         0xCBDE381B => ModelPreviewTextureRole.Mask, // OpacityClipMap
         0x12A0F5C0 or 0x4DC19F08 or 0x3E6E30E7 or
         0xCA6F2CF1 => ModelPreviewTextureRole.Emissive, // EmissiveFStop10IntensityMap
+        // AlbedoIridescence（流光/油光材质的颜色输入）。RGB 仍是颜色贴图，因此继续参与
+        // BaseColor 回退链并写入 ColorTextureId；单独的 Iridescence 角色让预览给这些
+        // 材质叠加流光高光层（实测其 Alpha 承载流光强度：未开启流光的同款贴图 Alpha≈0，
+        // 开启后为 255，见"油光材质"选项实测）。
+        0xFF2C91CC => ModelPreviewTextureRole.Iridescence,
         _ => ModelPreviewTextureRole.Unknown
     };
 

@@ -13,6 +13,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Media3D;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -111,6 +112,8 @@ internal sealed partial class ModelPreviewPageViewModel
                 return;
 
             ModelGroup = CreateLiveModelGroup(build.Group, meshes, _liveMeshGeometries);
+            // 动画材质（流光扫过/自发光呼吸）必须在 UI 线程创建，见 AttachAnimatedMaterials。
+            AttachAnimatedMaterials(ModelGroup, meshes, previews, useAutomaticMaterials, selectedTextureId);
             if (resetCamera)
             {
                 if (selectedAnimation is null)
@@ -444,7 +447,9 @@ internal sealed partial class ModelPreviewPageViewModel
         _decodedTextureOrder.Clear();
         _modelResultCache.Clear();
         _modelResultOrder.Clear();
+        _vanillaTextureRecords.Clear();
         ClearAudioInventoryCache();
+        ClearTextInventoryCache();
         // ConditionalWeakTable has no Clear API. Replacing it removes this page's
         // strong cache root so old WPF MeshGeometry3D instances can be collected.
         _geometryCache = new ConditionalWeakTable<ModelPreviewMesh, CachedMeshGeometry>();
@@ -497,6 +502,12 @@ internal sealed partial class ModelPreviewPageViewModel
         if (semanticColorId != 0)
             return semanticColorId;
 
+        semanticColorId = mesh.MaterialTextures
+            .Get(ModelPreviewTextureRole.Iridescence)
+            .FirstOrDefault(texturePreviews.ContainsKey);
+        if (semanticColorId != 0)
+            return semanticColorId;
+
         if (mesh.ColorTextureId is ulong colorTextureId &&
             texturePreviews.ContainsKey(colorTextureId))
             return colorTextureId;
@@ -522,77 +533,25 @@ internal sealed partial class ModelPreviewPageViewModel
 
     internal static Material CreateMaterial(ImageSource? image)
     {
-        Brush brush = image is null
-            ? new SolidColorBrush(Color.FromRgb(184, 193, 202))
-            : new ImageBrush(image)
-            {
-                Stretch = Stretch.Fill,
-                Viewbox = new Rect(0, 0, 1, 1),
-                ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
-                Viewport = new Rect(0, 0, 1, 1),
-                ViewportUnits = BrushMappingMode.Absolute,
-                TileMode = TileMode.Tile
-            };
-
-        brush.Freeze();
+        var brush = CreateTilingImageBrush(image) ?? CreateFallbackBrush();
         var material = new DiffuseMaterial(brush);
         material.Freeze();
         return material;
     }
 
-    internal static Material CreateMaterial(
-        ModelPreviewMesh mesh,
-        IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews,
-        bool useAutomaticMaterials,
-        ulong? selectedTextureId)
+    private static Brush CreateFallbackBrush()
     {
-        var textureIds = useAutomaticMaterials
-            ? GetAutomaticMaterialTextureIds(mesh)
-            : (GetSelectedTextureIdForMesh(mesh, selectedTextureId) is ulong selected
-                ? [selected]
-                : []);
+        var brush = new SolidColorBrush(Color.FromRgb(184, 193, 202));
+        brush.Freeze();
+        return brush;
+    }
 
-        var semanticBaseColorIds = mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor)
-            .Concat(mesh.ColorTextureId is ulong color ? [color] : [])
-            .Distinct()
-            .ToArray();
-        var baseColor = !useAutomaticMaterials
-            ? textureIds.FirstOrDefault(texturePreviews.ContainsKey)
-            : semanticBaseColorIds.Length > 0
-                ? semanticBaseColorIds.FirstOrDefault(texturePreviews.ContainsKey)
-                : textureIds.FirstOrDefault(texturePreviews.ContainsKey);
-        var baseImage = baseColor != 0 && texturePreviews.TryGetValue(baseColor, out var basePreview)
-            ? basePreview.Image
-            : null;
+    internal static Brush? CreateTilingImageBrush(ImageSource? image, bool freeze = true)
+    {
+        if (image is null)
+            return null;
 
-        if (baseImage is null)
-            return CreateMaterial(null);
-
-        var emissiveImages = useAutomaticMaterials
-            ? mesh.MaterialTextures.Get(ModelPreviewTextureRole.Emissive)
-                .Where(texturePreviews.ContainsKey)
-                .Select(textureId => texturePreviews[textureId].Image)
-                .ToArray()
-            : [];
-        if (emissiveImages.Length == 0)
-            return CreateMaterial(baseImage);
-
-        // WPF's fixed-function 3D material has one Brush slot. Compose the material's
-        // base color and emissive inputs into one DrawingBrush so every referenced
-        // texture remains visible in the preview without pretending a normal map is an
-        // albedo. The normal and mask inputs are still loaded and exposed in the asset
-        // graph for future shader-backed rendering.
-        var drawingGroup = new DrawingGroup();
-        drawingGroup.Children.Add(new ImageDrawing(baseImage, new Rect(0, 0, 1, 1)));
-        foreach (var emissiveImage in emissiveImages)
-        {
-            var emissiveGroup = new DrawingGroup { Opacity = 0.22 };
-            emissiveGroup.Children.Add(new ImageDrawing(emissiveImage, new Rect(0, 0, 1, 1)));
-            drawingGroup.Children.Add(emissiveGroup);
-        }
-
-        drawingGroup.Freeze();
-        var brush = new DrawingBrush(drawingGroup)
+        var brush = new ImageBrush(image)
         {
             Stretch = Stretch.Fill,
             Viewbox = new Rect(0, 0, 1, 1),
@@ -601,10 +560,224 @@ internal sealed partial class ModelPreviewPageViewModel
             ViewportUnits = BrushMappingMode.Absolute,
             TileMode = TileMode.Tile
         };
-        brush.Freeze();
-        var material = new DiffuseMaterial(brush);
+        if (freeze)
+            brush.Freeze();
+        return brush;
+    }
+
+    internal static Material CreateMaterial(
+        ModelPreviewMesh mesh,
+        IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews,
+        bool useAutomaticMaterials,
+        ulong? selectedTextureId)
+    {
+        var inputs = ResolveMaterialInputs(mesh, texturePreviews, useAutomaticMaterials, selectedTextureId);
+        return ComposeMaterial(inputs, texturePreviews);
+    }
+
+    /// <summary>
+    /// 一个材质 section 在预览里的最终渲染输入。解析与组合分离，材质缓存键与
+    /// 实际材质共用同一份解析结果，避免两者规则漂移。
+    /// </summary>
+    internal readonly record struct ResolvedMaterialInputs(
+        ulong? BaseColorTextureId,
+        IReadOnlyList<ulong> EmissiveTextureIds,
+        double IridescenceStrength);
+
+    internal static ResolvedMaterialInputs ResolveMaterialInputs(
+        ModelPreviewMesh mesh,
+        IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews,
+        bool useAutomaticMaterials,
+        ulong? selectedTextureId)
+    {
+        if (!useAutomaticMaterials)
+        {
+            var selected = GetSelectedTextureIdForMesh(mesh, selectedTextureId);
+            return new(
+                selected is ulong textureId && texturePreviews.ContainsKey(textureId) ? textureId : null,
+                [],
+                0);
+        }
+
+        // 流光输入（AlbedoIridescence）与 ColorTextureId 一样是颜色贴图，参与 BaseColor
+        // 选择链；语义绑定为空的老材质仍按原回退链取第一个可读输入。
+        var semanticColorIds = mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor)
+            .Concat(mesh.MaterialTextures.Get(ModelPreviewTextureRole.Iridescence))
+            .Concat(mesh.ColorTextureId is ulong color ? [color] : [])
+            .Distinct()
+            .ToArray();
+        var automaticIds = GetAutomaticMaterialTextureIds(mesh);
+        var baseColorCandidates = semanticColorIds.Length > 0 ? semanticColorIds : automaticIds;
+        var baseColorId = baseColorCandidates.FirstOrDefault(texturePreviews.ContainsKey);
+
+        var emissiveIds = mesh.MaterialTextures.Get(ModelPreviewTextureRole.Emissive)
+            .Where(texturePreviews.ContainsKey)
+            .Distinct()
+            .ToArray();
+        var iridescenceStrength = mesh.MaterialTextures.Get(ModelPreviewTextureRole.Iridescence)
+            .Where(texturePreviews.ContainsKey)
+            .Select(textureId => texturePreviews[textureId].IridescenceStrength)
+            .DefaultIfEmpty(0)
+            .Max();
+        return new(baseColorId != 0 ? baseColorId : null, emissiveIds, iridescenceStrength);
+    }
+
+    private static Material ComposeMaterial(
+        ResolvedMaterialInputs inputs,
+        IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews)
+    {
+        var baseImage = inputs.BaseColorTextureId is ulong baseColorId
+            ? texturePreviews[baseColorId].Image
+            : null;
+        var hasEmissive = inputs.EmissiveTextureIds.Count > 0;
+        if (baseImage is null && !hasEmissive)
+            return CreateMaterial(null);
+
+        var group = new MaterialGroup();
+        if (baseImage is not null)
+        {
+            group.Children.Add(Freeze(new DiffuseMaterial(CreateTilingImageBrush(baseImage))));
+            // 流光（油光）材质：AlbedoIridescence 的 Alpha 强度>0 时叠加一层高光，
+            // 让流光部件与哑光布料在预览里可区分。WPF 固定管线没有流光着色器，
+            // 镜面高光是静态近似；强度取真实贴图 Alpha 统计，不开流光就不加。
+            if (inputs.IridescenceStrength >= IridescenceSheenMinimumStrength)
+                group.Children.Add(CreateSheenMaterial(inputs.IridescenceStrength));
+        }
+
+        foreach (var emissiveTextureId in inputs.EmissiveTextureIds)
+        {
+            var emissiveBrush = CreateTilingImageBrush(texturePreviews[emissiveTextureId].Image);
+            if (emissiveBrush is null)
+                continue;
+            if (baseImage is null)
+            {
+                // 只有自发光输入的材质（无 BaseColor）：Diffuse 提供形体明暗，
+                // Emissive 提供不受灯光影响的自发光亮度，避免把发光部件渲染成哑光塑料。
+                group.Children.Add(Freeze(new DiffuseMaterial(emissiveBrush)));
+            }
+            group.Children.Add(Freeze(new EmissiveMaterial(emissiveBrush)));
+        }
+
+        group.Freeze();
+        return group;
+    }
+
+    private static T Freeze<T>(T freezable) where T : Freezable
+    {
+        freezable.Freeze();
+        return freezable;
+    }
+
+    private const double IridescenceSheenMinimumStrength = 0.05;
+    private const double IridescenceSheenIntensity = 0.7;
+    private const double IridescenceSpecularPower = 24;
+    private const double EmissivePulseMinimum = 0.4;
+    private const double EmissivePulseSeconds = 1.6;
+    // 仅自发光材质的 Diffuse 亮度：压低环境光影，让呼吸脉冲可读（全亮 Diffuse 会让
+    // Emissive 一直饱和成纯白，与普通白色布料无从区分）。
+    internal static readonly Color EmissiveOnlyDiffuseColor = Color.FromRgb(0x40, 0x40, 0x40);
+
+    internal static SpecularMaterial CreateSheenMaterial(double strength)
+    {
+        var sheenBrush = new SolidColorBrush(Color.FromArgb(
+            (byte)Math.Round(byte.MaxValue * IridescenceSheenIntensity * strength),
+            255, 255, 255));
+        sheenBrush.Freeze();
+        var material = new SpecularMaterial(sheenBrush, IridescenceSpecularPower);
         material.Freeze();
         return material;
+    }
+
+    /// <summary>
+    /// 仅自发光材质（无 BaseColor，或 BaseColor 回退链落到了 Emissive 贴图上——
+    /// 发光饰条/眼睛等部件）：Diffuse 压暗提供形体，Emissive 用呼吸脉冲表达
+    /// "自发光"，否则渲染结果与普通哑光白色布料无法区分。
+    /// </summary>
+    internal static bool IsEmissiveOnlyMaterial(ResolvedMaterialInputs inputs) =>
+        inputs.EmissiveTextureIds.Count > 0 &&
+        (inputs.BaseColorTextureId is null ||
+         inputs.EmissiveTextureIds.Contains(inputs.BaseColorTextureId.Value));
+
+    /// <summary>
+    /// 构建带动画的材质：仅自发光部件叠加呼吸脉冲表达"自发光"。
+    /// 必须在 UI 线程调用（动画画刷保持未冻结，跨线程使用会抛 InvalidOperationException）；
+    /// 静态构建的材质随后会被本材质整体替换。
+    /// 流光材质不做动态扫光（用户决策：流光材质≠油性材质，扫光动画已撤销），
+    /// 流光的油光差异由 ComposeMaterial 的静态高光层表达。
+    /// </summary>
+    internal static Material CreateAnimatedMaterial(
+        ResolvedMaterialInputs inputs,
+        IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews)
+    {
+        var emissiveOnly = IsEmissiveOnlyMaterial(inputs);
+        var baseImage = !emissiveOnly && inputs.BaseColorTextureId is ulong baseColorId
+            ? texturePreviews[baseColorId].Image
+            : null;
+        var group = new MaterialGroup();
+        if (baseImage is not null)
+        {
+            group.Children.Add(new DiffuseMaterial(CreateTilingImageBrush(baseImage)));
+            if (inputs.IridescenceStrength >= IridescenceSheenMinimumStrength)
+                group.Children.Add(CreateSheenMaterial(inputs.IridescenceStrength));
+        }
+
+        foreach (var emissiveTextureId in inputs.EmissiveTextureIds)
+        {
+            var image = texturePreviews[emissiveTextureId].Image;
+            var emissiveBrush = CreateTilingImageBrush(image);
+            if (emissiveBrush is null)
+                continue;
+            if (emissiveOnly)
+            {
+                group.Children.Add(new DiffuseMaterial(CreateTilingImageBrush(image))
+                {
+                    Color = EmissiveOnlyDiffuseColor
+                });
+                var pulsingBrush = CreateTilingImageBrush(image, freeze: false);
+                var pulse = new DoubleAnimation(
+                    1, EmissivePulseMinimum,
+                    new Duration(TimeSpan.FromSeconds(EmissivePulseSeconds)))
+                {
+                    AutoReverse = true,
+                    RepeatBehavior = RepeatBehavior.Forever
+                };
+                pulsingBrush.BeginAnimation(Brush.OpacityProperty, pulse);
+                emissiveBrush = pulsingBrush;
+            }
+            group.Children.Add(new EmissiveMaterial(emissiveBrush));
+        }
+
+        return group;
+    }
+
+    /// <summary>
+    /// 重建后在 UI 线程为需要动画的材质换上动态版本（仅自发光呼吸脉冲）。
+    /// 构建发生在后台线程，材质只能在那里冻结；动画画刷必须在 UI 线程创建，
+    /// 因此在 live 模型组装完之后整体替换，children[i] 与 meshes[i] 一一对应。
+    /// </summary>
+    private static void AttachAnimatedMaterials(
+        Model3DGroup group,
+        IReadOnlyList<ModelPreviewMesh> meshes,
+        IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews,
+        bool useAutomaticMaterials,
+        ulong? selectedTextureId)
+    {
+        if (!useAutomaticMaterials)
+            return;
+        var animatedMaterials = new Dictionary<string, Material>(StringComparer.Ordinal);
+        for (var index = 0; index < group.Children.Count && index < meshes.Count; index++)
+        {
+            if (group.Children[index] is not GeometryModel3D model)
+                continue;
+            var inputs = ResolveMaterialInputs(meshes[index], texturePreviews, true, selectedTextureId);
+            if (!IsEmissiveOnlyMaterial(inputs))
+                continue;
+            var materialKey = CreateMaterialKey(meshes[index], true, selectedTextureId, texturePreviews);
+            if (!animatedMaterials.TryGetValue(materialKey, out var material))
+                animatedMaterials[materialKey] = material = CreateAnimatedMaterial(inputs, texturePreviews);
+            model.Material = material;
+            model.BackMaterial = material;
+        }
     }
 
     private static string CreateMaterialKey(
@@ -613,18 +786,19 @@ internal sealed partial class ModelPreviewPageViewModel
         ulong? selectedTextureId,
         IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews)
     {
-        var ids = useAutomaticMaterials
-            ? GetAutomaticMaterialTextureIds(mesh)
-                .Where(texturePreviews.ContainsKey)
-            : (GetSelectedTextureIdForMesh(mesh, selectedTextureId) is ulong selected
-                ? [selected]
-                : Enumerable.Empty<ulong>());
-        return string.Join(",", ids.OrderBy(static id => id));
+        var inputs = ResolveMaterialInputs(mesh, texturePreviews, useAutomaticMaterials, selectedTextureId);
+        var key = new System.Text.StringBuilder(96);
+        key.Append(inputs.BaseColorTextureId?.ToString("X16") ?? "-").Append("|E:");
+        foreach (var emissiveTextureId in inputs.EmissiveTextureIds)
+            key.Append(emissiveTextureId.ToString("X16")).Append(',');
+        key.Append("|S:").Append(inputs.IridescenceStrength.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+        return key.ToString();
     }
 
     private static IReadOnlyList<ulong> GetAutomaticMaterialTextureIds(ModelPreviewMesh mesh)
     {
         var semanticBaseColorIds = mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor)
+            .Concat(mesh.MaterialTextures.Get(ModelPreviewTextureRole.Iridescence))
             .Concat(mesh.ColorTextureId is ulong color ? [color] : [])
             .Distinct()
             .ToArray();

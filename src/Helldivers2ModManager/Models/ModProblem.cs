@@ -9,7 +9,6 @@ internal enum ModProblemKind
 	MissingIncludePath = 7,
 	EmptyImagePath = 6,
 	InvalidImagePath = 5,
-	EmptyIncludes = 4,
 	EmptySubOptions = 3,
 	EmptyOptions = 2,
 	NoManifestFound = 1,

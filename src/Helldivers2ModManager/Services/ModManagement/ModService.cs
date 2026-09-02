@@ -867,13 +867,13 @@ internal sealed partial class ModService
 			{
 				if (opts.Count == 0)
 				{
+					// 清单内容类问题只警告，不阻止导入。
 					_logger.LogWarning("Empty Options found in manifest \"{}\"", manifestFile.FullName);
 					problems.Add(new ModProblem
 					{
 						Directory = dir,
 						Kind = ModProblemKind.EmptyOptions,
 					});
-					error = true;
 				}
 
 				if (man.IconPath is not null)
@@ -930,13 +930,13 @@ internal sealed partial class ModService
 			{
 				if (opts.Count == 0)
 				{
+					// 清单内容类问题只警告，不阻止导入。
 					_logger.LogWarning("Empty Options found in manifest \"{}\"", manifestFile.FullName);
 					problems.Add(new ModProblem
 					{
 						Directory = dir,
 						Kind = ModProblemKind.EmptyOptions,
 					});
-					error = true;
 				}
 
 				if (opts.Any(static opt => opt.SubOptions is { Count: 0 }))
@@ -947,19 +947,10 @@ internal sealed partial class ModService
 						Directory = dir,
 						Kind = ModProblemKind.EmptySubOptions,
 					});
-					error = true;
 				}
 
-				if (opts.Any(static opt => opt.SubOptions?.Any(static sub => sub.Include.Count == 0) ?? false))
-				{
-					_logger.LogWarning("Empty includes found in manifest \"{}\"", manifestFile.FullName);
-					problems.Add(new ModProblem
-					{
-						Directory = dir,
-						Kind = ModProblemKind.EmptyIncludes,
-					});
-					error = true;
-				}
+				// 空 Include 列表（或空 include 路径）是模组作者故意留出的“关闭”占位
+				// 选项，属于合法清单；不报告问题，也不阻止导入。
 
 				if (man.IconPath is not null)
 				{

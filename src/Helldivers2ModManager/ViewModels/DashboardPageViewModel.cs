@@ -658,7 +658,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                         : _localizationService["DashboardPage.NoManifestFoundInfer"],
                     ModProblemKind.EmptyOptions => _localizationService["DashboardPage.EmptyOptions"],
                     ModProblemKind.EmptySubOptions => _localizationService["DashboardPage.EmptySubOptions"],
-                    ModProblemKind.EmptyIncludes => _localizationService["DashboardPage.EmptyIncludes"],
                     ModProblemKind.MissingIncludePath => w.ExtraData is not null
                         ? $"{_localizationService["DashboardPage.MissingIncludePathPrefix"]}{w.ExtraData}{_localizationService["DashboardPage.MissingIncludePathSuffix"]}"
                         : _localizationService["DashboardPage.MissingIncludePath"],

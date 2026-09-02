@@ -46,6 +46,9 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     private readonly LocalizationService _localizationService;
     private readonly Dictionary<ulong, LoadedTexturePreview> _texturePreviews = [];
     private readonly HashSet<ulong> _automaticTexturePreviewIds = [];
+    // 模组材质引用的原版贴图（按需从游戏归档解析）。只驻留条目元数据与解码后的预览
+    // 位图（_texturePreviews），绝不缓存整段 mip 负载；换模型（resetView）时整体清空。
+    private readonly Dictionary<ulong, TextureInspectionItem> _vanillaTextureRecords = [];
     private readonly Dictionary<TexturePreviewCacheKey, LoadedTexturePreview> _decodedTexturePreviews = [];
     private readonly Queue<TexturePreviewCacheKey> _decodedTextureOrder = [];
     private readonly Dictionary<string, ModelPreviewResult> _modelResultCache = new(StringComparer.OrdinalIgnoreCase);
@@ -198,7 +201,8 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         LocalizationService localizationService,
         AudioBankInspectionService audioInspectionService,
         AudioPlaybackService audioPlaybackService,
-        ModTypeDetectionService modTypeDetectionService)
+        ModTypeDetectionService modTypeDetectionService,
+        TextBankInspectionService textInspectionService)
     {
         _logger = logger;
         _navigationStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
@@ -210,6 +214,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _audioInspectionService = audioInspectionService;
         _audioPlaybackService = audioPlaybackService;
         _modTypeDetectionService = modTypeDetectionService;
+        _textInspectionService = textInspectionService;
         _localizationService.PropertyChanged += LocalizationServiceOnPropertyChanged;
         _animationTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -223,6 +228,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _audioPositionTimer.Tick += AudioPositionTimerOnTick;
         _audioPlaybackService.PlaybackEnded += AudioPlaybackServiceOnPlaybackEnded;
         InitializeAudioView();
+        InitializeTextView();
 
         _ = RefreshModsAsync();
     }
@@ -254,7 +260,9 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     internal sealed record LoadedTexturePreview(
         ImageSource Image,
         TexturePreviewRole Role,
-        long SourcePixelCount);
+        long SourcePixelCount,
+        // AlbedoIridescence 的 Alpha 强度（0..1）：>0 时预览给材质叠加流光高光层。
+        double IridescenceStrength = 0);
     private sealed record LoadedTextureResult(ulong TextureId, TextureInspectionItem Texture, LoadedTexturePreview Preview);
     private sealed record TexturePreviewCacheKey(
         string PatchPath,

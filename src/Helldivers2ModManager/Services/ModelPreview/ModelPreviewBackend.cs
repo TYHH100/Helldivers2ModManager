@@ -50,6 +50,37 @@ internal sealed class ModelPreviewBackend
         return result;
     }
 
+    /// <summary>
+    /// 从游戏归档按需解析原版贴图（模组材质引用模组未携带的贴图资源时使用）。
+    /// 定位表与 Unit 索引共用同一次全库扫描；游戏未配置或单张贴图失败都不抛出——
+    /// 原版解析是增强，不是前提。
+    /// </summary>
+    public async Task<IReadOnlyDictionary<ulong, GameUnitReferenceReader.GameOriginalTexture>> ReadOriginalTexturesAsync(
+        IReadOnlyList<ulong> textureFileIds,
+        int maxPreviewPixels,
+        CancellationToken cancellationToken = default)
+    {
+        if (textureFileIds.Count == 0)
+            return new Dictionary<ulong, GameUnitReferenceReader.GameOriginalTexture>();
+
+        try
+        {
+            return await _versionCheckService.ReadOriginalTexturesAsync(
+                textureFileIds,
+                maxPreviewPixels,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Unable to resolve original textures from the game archive for model preview");
+            return new Dictionary<ulong, GameUnitReferenceReader.GameOriginalTexture>();
+        }
+    }
+
     private async Task AttachAnimationLibrariesAsync(
         ModelPreviewResult result,
         CancellationToken cancellationToken)

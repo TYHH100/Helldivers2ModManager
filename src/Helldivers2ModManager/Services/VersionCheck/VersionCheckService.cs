@@ -477,6 +477,16 @@ internal sealed partial class VersionCheckService
         return result;
     }
 
+    /// <summary>
+    /// 按需从游戏归档解析原版贴图（模型预览的材质引用了模组未携带的贴图时使用）。
+    /// 游戏目录未配置或解析失败时返回空表，不影响预览主流程。
+    /// </summary>
+    public Task<IReadOnlyDictionary<ulong, GameUnitReferenceReader.GameOriginalTexture>> ReadOriginalTexturesAsync(
+        IReadOnlyList<ulong> textureFileIds,
+        int maxPreviewPixels,
+        CancellationToken cancellationToken = default)
+        => _unitReader.ReadOriginalTexturesAsync(textureFileIds, maxPreviewPixels, cancellationToken);
+
     private async Task<List<PatchUnitInfo>> ExtractUnitVersionsFromPatchFileStreamAsync(FileInfo patchFile)
     {
         var result = new List<PatchUnitInfo>();

@@ -101,4 +101,31 @@ public sealed class ModelPreviewTextureBrushTests
         bitmap.CopyPixels(pixels, 8, 0);
         CollectionAssert.AreEqual(preview.BgraPixels, pixels);
     }
+
+    [TestMethod]
+    public void CreateModelBitmapSource_CutoutAlphaMask_PreservesTransparency()
+    {
+        // 50% 全透 + 50% 全不透：接近二值的真实裁切遮罩，必须保留 Alpha 通道。
+        var preview = new TexturePreviewData
+        {
+            Width = 2,
+            Height = 1,
+            BgraPixels =
+            [
+                0x11, 0x22, 0x33, 0xFF,
+                0x44, 0x55, 0x66, 0x00
+            ],
+            Description = "Albedo with cutout opacity mask"
+        };
+
+        var image = ModelPreviewPageViewModel.CreateModelBitmapSource(preview);
+
+        Assert.IsInstanceOfType(image, typeof(BitmapSource));
+        var bitmap = (BitmapSource)image;
+        Assert.AreEqual(PixelFormats.Bgra32, bitmap.Format);
+        var decoded = new byte[8];
+        bitmap.CopyPixels(decoded, 8, 0);
+        Assert.AreEqual(0xFF, decoded[3]);
+        Assert.AreEqual(0x00, decoded[7]);
+    }
 }

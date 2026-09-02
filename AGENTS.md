@@ -131,6 +131,15 @@ internal sealed class MyService
 - **多选项全音频模组（V1 manifest，Options.Count > 1 且 ModTypeDetectionService 检测主类型为 Audio）直接跳过音频预览**（用户决策，`ShouldSkipAudioPreviewCore`）：逐选项解析 + 基线比对的代价在该场景不可控，状态栏提示部署后游戏内体验。不要"优化"掉这个跳过。
 - "已替换/原版"标记来自与游戏原版同 FileID 包的比对（`GameAudioBaseline`：legacy 平铺文件与 slim DSAR bundle 两种读取路径，复用 `GameUnitReferenceReader` 的静态读取器；bundle 索引按 data 目录缓存，包名查找为字节级比较）。比对层有硬性的内存/IO 红线——**基线只驻留 TOC 元数据与每媒体 32 字节 SHA-256，绝不缓存媒体字节数组**（曾因整 bank DATA 常驻 + 逐条目开关文件随机读，在万条目语音包上占 1GB+ 内存并造成系统级卡顿）；比对顺序为"原版尺寸先行（零 IO 快速路径）→ 流式哈希（64KB 分块）"，并有单包预算上限（条数 + 字节数，耗尽后一律回答"未知"并在 UI 提示，绝不继续读）；legacy 布局持有常开只读句柄（基线缓存逐出时 Dispose），stream 条目按偏移排序使游戏侧读取近似顺序 IO；非可播放条目（截断/非 RIFF）不参与比对，避免把截断误判为已替换。
 
+### 字幕/文本模组预览（TEXT_BANK）
+
+模型预览页同时承载字幕/文本模组的预览（`Services/Text/TextBankInspectionService` + `Services/Text/TextBankFormat`，UI 在 `ModelPreviewPageViewModel.Text.cs` partial 与 `ModelPreviewPageView.xaml` 的文本 Tab）。关键约定：
+
+- 格式来源与音频相同：hd2-audio-modder（ARR，只参考结构/常量，禁止复制源码）。TEXT_BANK 类型 ID `0x0D972BAB10B40FD3`；toc_data **没有** 16 字节前缀（与 WWISE_BANK 不同）：magic `0x3E85F3AE` + version 1 + 条目数 + 语言 ID + uint32 ID 表 + uint32 绝对偏移表 + UTF-8 NUL 结尾文本。
+- 游戏文本绝大多数在包 `9ba626afa44a3aa3`，slim 布局下按语言一个文本库（单库实测 ~4300 条，允许 0 条空库；字符串 ID 是 7 位数，不是从 1 顺序编号）。
+- “已替换/原版/新增”标记复用 `GameAudioBaseline`（`EntryKind.TextBank` + `TryGetTextEntry`）：文本库惰性整库解析并缓存（单库 1-2MB 文本，远小于音频媒体红线）；`Found` 比对文本、`ResourceMissing` = 新增条目。
+- 文本列表必须是虚拟化 ListBox + ListCollectionView（与音频列表同一约束）。
+
 ### 材质变体去重与纯黑占位材质（特例模型黑色预览问题）
 
 某些特例模型（如角色装甲"白银之城-侦探-CW9"）在预览中整体显示为黑色，但游戏内显示正常。根因是模型同时包含高分辨率正常材质和低分辨率纯黑占位材质，预览工具渲染了全部变体导致纯黑覆盖。修复分两层：
@@ -144,6 +153,17 @@ internal sealed class MyService
 4. **稀疏 section 的预览容量**：section 的顶点窗口可能覆盖共享缓冲中的大量未引用顶点。全局预览容量统计前，必须按三角形实际引用的索引压缩 position/UV；局部高精度 section 的限制可以高于普通部件，但仍由全模型的顶点和索引总上限兜底。不能把完整顶点窗口直接计入容量，否则角色主体或附件会被错误跳过。
 
 排查类似问题的步骤：先用诊断测试输出每个 mesh 的 `UnitId`/`StreamIndex`/`MeshInfoIndex`/`VertexCount`/`TriangleCount`/`ColorTextureId`；找出相同 Unit/St/MI 但不同 ColorTexId 的成对 mesh；在 `TryReadUnitMaterialSections` 去重逻辑处添加临时 `Console.WriteLine` 输出 section 的 `(VertexOffset, VertexCount, IndexOffset, IndexCount)`，确认变体的 IndexOffset 是否不同；解码关键纹理统计平均颜色确认是否纯黑。
+
+### 流光（油光）与发光材质的预览显示
+
+WPF 固定管线只有 Diffuse/Specular/Emissive 三种材质，预览按语义输入组合渲染（`ModelPreviewPageViewModel.Rebuild.cs` 的 `ResolveMaterialInputs`/`ComposeMaterial`）：
+
+- **流光/油光**：语义 `0xFF2C91CC`（AlbedoIridescence）归类为 `ModelPreviewTextureRole.Iridescence`，但它仍是颜色贴图——必须继续参与 BaseColor 回退链并写入 `ColorTextureId`，否则流光材质会错拿其它输入当 Albedo。其实测 Alpha 承载流光强度（同一材质未开流光 Alpha≈0，开油光后=255，见 Milltina TG-8"油光材质"选项）；`MeasureIridescenceStrength` 统计解码预览的平均 Alpha，>阈值时叠加 `SpecularMaterial` 静态高光层，强度为 0 就不加，不要改成"有该语义就一律加高光"。**不要给流光加动态扫光动画**（用户决策：流光材质≠油性材质，扫光动画实现过一版后被明确撤销，测试 `CreateAnimatedMaterial_Iridescent_KeepsStaticSheenWithoutSweepBand` 守护）。
+- **发光**：Emissive 语义输入用 `EmissiveMaterial` 自发光 pass 渲染（替代旧的 0.22 透明度 Diffuse 叠加）。**只有 Emissive、没有 BaseColor 的材质**（发光饰条/眼睛等，含 BaseColor 回退链落到 Emissive 贴图的情形，用 `IsEmissiveOnlyMaterial` 判定）必须 Diffuse 压暗（`EmissiveOnlyDiffuseColor`）+ Emissive 呼吸脉冲渲染为自发光——全亮 Diffuse 会让白色 Emissive 一直饱和，与普通白色布料无从区分。
+- **动画材质的线程约束**（目前仅自发光呼吸脉冲使用）：动画画刷不能冻结（含活动动画的 Freezable 无法 Freeze），必须在 **UI 线程**创建并只挂到未冻结的 live 模型上（`AttachAnimatedMaterials` 在 `CreateLiveModelGroup` 之后整体替换 children[i]↔meshes[i]）。无头测试环境没有驱动画刷时钟的渲染循环（无 composition target），动画时钟不走，动画的视觉效果只能靠结构断言验证。
+- **悬空贴图引用是常态**：模组材质可能引用不存在的贴图 ID（Milltina TG-8 帘子材质 0xD28C 的 5 个贴图在模组、用户模组库、游戏归档 17k 贴图定位表三处都不存在，其 parent 是特殊着色器模板，观感由材质常量驱动）——预览只能灰模回退，不要猜测贴图内容或解码未知常量表。
+- 材质缓存键 `CreateMaterialKey` 必须包含组合形态（Base/Emissive/流光强度），因为相同贴图 ID 在不同材质里可能带不同角色。
+- 手动选中单张贴图的材质模式保持只显示该贴图，不叠加高光/自发光/动画。
 
 ## 6. 长任务、日志和设置
 
@@ -240,6 +260,7 @@ catch (Exception ex)
 | 构建报 CS2001 找不到 `obj\...\*.g.cs`，且同时出现多个随机后缀 `_wpftmp.csproj` | obj 目录残留了旧 WPF 临时编译产物（多个随机后缀 wpftmp 项目交错），删除 `Helldivers2ModManager\obj\Debug` 目录及其中 `*wpftmp*` 文件后重新**串行**构建（`/m:1`）即可恢复；正常构建后留下的 wpftmp 残留属于成功产物，无需清理。 |
 | 用 Ww2Ogg 的 Default codebook 转换 HD2 WEM 并以为成功 | Default 转换不会抛异常，但产物 NVorbis 解码在 `Residue0.Init` 报错（HD2 用 aoTuV 编码）。转换必须 AoTuV 优先、Default 兜底，并以 `VorbisReader` 构造成功作为"可播放"判据；不要只看 `GenerateOgg` 是否抛异常。 |
 | 把 Wwise bank 的 DATA chunk 或整个音频补丁读入内存做清单 | 音频检查只读 TOC、chunk 头、DIDX 和每条目 128 字节头探针；语音包单 patch 可有数千条目（如超级中配 6343 条/117ms），媒体数据一律按需切片读取。 |
+| 把 V1 manifest 的 `"Options": []`（空数组）当成会展开出补丁 | 空选项列表与无选项等同：`GetSelectedPatchFiles` 与 `DeployAsync` 都必须回退模组根目录补丁（纯文本模组导入即产生 `Options: []`，此前部署/覆盖扫描/预览全部拿到 0 个补丁）。注意与"关闭"占位选项（`Options.Count>1` 但某选项 Include 为空）区分，后者仍按占位处理。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
 

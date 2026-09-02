@@ -69,12 +69,32 @@ internal partial class DashboardPageView : Page
 		return null;
 	}
 
-	private void ModIcon_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	private async void ModIcon_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 	{
-		if (sender is Image image && image.Source != null)
+		// 卡片绑定的是 128px 缩略图，直接放大显示会模糊；
+		// 点击时按需解码高分辨率图标（上限 1024px）再交给预览覆盖层。
+		if (sender is Image image && image.DataContext is ModViewModel vm && vm.Icon != null
+			&& DataContext is DashboardPageViewModel viewModel)
 		{
-			var viewModel = DataContext as DashboardPageViewModel;
-			viewModel?.ShowImagePreviewCommand.Execute(image.Source);
+			e.Handled = true;
+			var fullIcon = await vm.LoadFullIconAsync();
+			if (fullIcon != null)
+				viewModel.ShowImagePreviewCommand.Execute(fullIcon);
+		}
+	}
+
+	private void ModIcon_ToolTipOpening(object sender, ToolTipEventArgs e)
+	{
+		// 悬停提示同样基于 128px 缩略图，打开时懒加载高分辨率图标替换，
+		// 避免每次为所有卡片提前解码大图。
+		if (sender is Image { DataContext: ModViewModel vm, ToolTip: ToolTip { Content: Image tipImage } }
+			&& ReferenceEquals(tipImage.Source, vm.Icon))
+		{
+			_ = vm.LoadFullIconAsync().ContinueWith(t =>
+			{
+				if (t.Result is { } full)
+					tipImage.Source = full;
+			}, TaskScheduler.FromCurrentSynchronizationContext());
 		}
 	}
 

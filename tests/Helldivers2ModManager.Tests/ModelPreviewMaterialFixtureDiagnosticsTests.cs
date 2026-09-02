@@ -52,8 +52,8 @@ public sealed class ModelPreviewMaterialFixtureDiagnosticsTests
         {
             Assert.IsTrue(result.Meshes
                 .SelectMany(mesh => mesh.MaterialTextures.Inputs ?? [])
-                .Any(input => input.SemanticId == 0xFF2C91CC && input.Role == ModelPreviewTextureRole.BaseColor),
-                "Character material AlbedoIridescence must be selected as a BaseColor input, not an unknown fallback.");
+                .Any(input => input.SemanticId == 0xFF2C91CC && input.Role == ModelPreviewTextureRole.Iridescence),
+                "Character material AlbedoIridescence must be classified as an Iridescence input for the sheen layer.");
         }
         foreach (var variant in variants)
         {
@@ -96,6 +96,52 @@ public sealed class ModelPreviewMaterialFixtureDiagnosticsTests
             $"{modDirectory.Name}: materialVariants={variants.Length}, materialBoundMeshes={result.Meshes.Count(mesh => mesh.MaterialId.HasValue)}, " +
             $"visibleMeshes={visibleMeshes.Count}, slots=[{string.Join(",", visibleMeshes.Select(mesh => mesh.CustomizationSlot).Distinct())}], " +
             $"presentationRotation={presentationRotation}");
+    }
+
+    [TestMethod]
+    public async Task PreviewModelAsync_MilltinaOilOption_ClassifiesIridescenceAndEmissiveOnlyMaterials()
+    {
+        // 流光（油光材质选项）与发光是模型预览显式支持的效果：
+        // ① AlbedoIridescence 输入必须归入 Iridescence 角色，其 Alpha 承载流光强度；
+        // ② 发光部件只有 Emissive 语义输入、没有 BaseColor，不得退回灰模。
+        var modDirectory = new DirectoryInfo(Path.Combine(
+            FindRepositoryRoot().FullName,
+            "Test", "Mods", "Mods", "Milltina替换TG-8"));
+        var patchFiles = new[]
+        {
+            new FileInfo(Path.Combine(modDirectory.FullName, "本体", "9ba626afa44a3aa3.patch_0")),
+            new FileInfo(Path.Combine(modDirectory.FullName, "油光材质", "9ba626afa44a3aa3.patch_2")),
+        };
+        var service = new PatchResourceInspectionService();
+
+        var result = await service.PreviewModelAsync(modDirectory, patchFiles);
+
+        Assert.IsNull(result.Error, result.Error);
+        Assert.IsTrue(result.Meshes.Count > 0);
+
+        var iridescenceTextureIds = result.Meshes
+            .SelectMany(static mesh => mesh.MaterialTextures.Inputs ?? [])
+            .Where(static input => input.SemanticId == 0xFF2C91CC)
+            .Select(static input => input.TextureId)
+            .Distinct()
+            .ToArray();
+        Assert.IsTrue(iridescenceTextureIds.Length > 0, "The oil-sheen material must reference an AlbedoIridescence input.");
+        var strengths = new Dictionary<ulong, double>();
+        foreach (var textureId in iridescenceTextureIds)
+        {
+            var texture = result.Textures.Single(candidate => candidate.TextureId == textureId);
+            var preview = await service.PreviewTextureAsync(modDirectory, texture, maxPreviewPixels: 256);
+            strengths[textureId] = ModelPreviewTextureAnalysis.MeasureIridescenceStrength(preview);
+        }
+        // 油光选项的流光强度写在 Alpha 里（实测=255）；同模组衣服材质的同语义贴图
+        // Alpha≈0（流光关闭），因此只要求存在一个高强度流光贴图。
+        Assert.IsTrue(strengths.Any(static pair => pair.Value > 0.5),
+            $"The oil-sheen albedo alpha must carry a high iridescence strength, got: [{string.Join(", ", strengths.Select(static pair => $"0x{pair.Key:X16}={pair.Value:0.##}"))}]");
+
+        Assert.IsTrue(result.Meshes.Any(static mesh =>
+            mesh.MaterialTextures.Get(ModelPreviewTextureRole.Emissive).Count > 0 &&
+            mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor).Count == 0 &&
+            mesh.ColorTextureId is null), "The emissive-only glow part must stay decodable with its emissive input.");
     }
 
     private static string GetAverageRgb(TexturePreviewData? preview)

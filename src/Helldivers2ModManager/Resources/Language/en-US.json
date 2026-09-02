@@ -295,7 +295,6 @@
     "DashboardPage.NoManifestFoundInfer": "No manifest file found in directory!\n\t\t\tAction: Inferring from directory",
     "DashboardPage.EmptyOptions": "Manifest contains empty options! This mod may not have any effect.",
     "DashboardPage.EmptySubOptions": "Manifest contains empty sub-options! This mod may not work as expected.",
-    "DashboardPage.EmptyIncludes": "Manifest contains empty include lists! This mod may not have any effect.",
     "DashboardPage.MissingIncludePathPrefix": "Include path \"",
     "DashboardPage.MissingIncludePathSuffix": "\" does not exist and will be skipped as an empty switch.",
     "DashboardPage.MissingIncludePath": "An include path does not exist and will be skipped as an empty switch.",
@@ -1040,6 +1039,20 @@
     "ModelPreviewPage.AudioOriginalTag": "Original",
     "ModelPreviewPage.AudioModifiedCount": "{modified} / {total} replaced",
     "ModelPreviewPage.AudioUncomparedHint": "{count} entries exceeded the comparison budget and were not compared",
-    "ModelPreviewPage.AudioMultiOptionSkipped": "This mod has multiple audio options; audio preview is skipped. Deploy it and enjoy in game."
+    "ModelPreviewPage.AudioMultiOptionSkipped": "This mod has multiple audio options; audio preview is skipped. Deploy it and enjoy in game.",
+    "ModelPreviewPage.TextTab": "Text & Subtitles",
+    "ModelPreviewPage.TextEntryCount": "{count} entries · {banks} text banks",
+    "ModelPreviewPage.TextFilterTip": "Filter by text content, id, or patch path",
+    "ModelPreviewPage.TextOnlyShowModified": "Show modified only",
+    "ModelPreviewPage.TextOnlyShowModifiedTip": "Only show entries that differ from the game's original text",
+    "ModelPreviewPage.TextModifiedCount": "{modified} / {total} replaced",
+    "ModelPreviewPage.TextModifiedTag": "Modified",
+    "ModelPreviewPage.TextOriginalTag": "Original",
+    "ModelPreviewPage.TextNewTag": "New",
+    "ModelPreviewPage.TextOriginalTooltip": "Original: {text}",
+    "ModelPreviewPage.TextBankGroup": "Text bank {id} (language {language})",
+    "ModelPreviewPage.TextLoadedStatus": "Loaded {count} text entries ({banks} text banks) from {patches} patches.",
+    "ModelPreviewPage.TextLoadFailed": "Text parsing failed: {message}",
+    "ModelPreviewPage.GameTextureSource": "Game archive"
   }
 }

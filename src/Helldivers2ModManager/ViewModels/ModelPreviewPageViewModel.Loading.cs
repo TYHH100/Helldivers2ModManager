@@ -216,6 +216,7 @@ internal sealed partial class ModelPreviewPageViewModel
             SuggestedCameraYaw = 0;
             StopAudioPlayback(clearCurrent: true);
             ClearAudioCollections();
+            ClearTextCollections();
         }
 
         try
@@ -313,18 +314,35 @@ internal sealed partial class ModelPreviewPageViewModel
                 if (!IsCurrentLoad(mod, loadGeneration))
                     return;
                 ApplyAudioInventory(audioResult);
-                if (Meshes.Count == 0)
+                if (Meshes.Count == 0 && HasAudioEntries)
                 {
                     // Audio-only mods have no 3D preview to describe; the audio summary replaces
                     // the "no geometry" status and the audio tab becomes the landing tab.
                     UpdateAudioSummaryStatus(audioResult.PatchCount, audioResult.Error);
-                    if (HasAudioEntries && resetView)
+                    if (resetView)
                         SelectedPreviewTabIndex = AudioPreviewTabIndex;
                 }
-                else if (resetView)
-                {
-                    SelectedPreviewTabIndex = 0;
-                }
+            }
+
+            // 字幕/文本预览与音频独立加载（文本模组通常不含音频资源；多选项音频跳过分支里文本仍要预览）。
+            var textResult = await LoadTextInventoryAsync(
+                mod,
+                selectedPatchFiles,
+                patchSetKey,
+                loadGeneration,
+                cancellationToken);
+            if (!IsCurrentLoad(mod, loadGeneration))
+                return;
+            ApplyTextInventory(textResult);
+            if (Meshes.Count == 0 && !HasAudioEntries && HasTextEntries)
+            {
+                UpdateTextSummaryStatus(textResult.PatchCount, textResult.Error);
+                if (resetView)
+                    SelectedPreviewTabIndex = TextPreviewTabIndex;
+            }
+            else if (Meshes.Count > 0 && resetView)
+            {
+                SelectedPreviewTabIndex = 0;
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

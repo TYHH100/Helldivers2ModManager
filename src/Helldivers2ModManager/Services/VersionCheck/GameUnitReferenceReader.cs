@@ -41,6 +41,9 @@ internal sealed class GameUnitReferenceReader
     private const int MaxAnimationsPerPreview = 256;
     private readonly SemaphoreSlim _gameReferenceSemaphore = new(1, 1);
     private GameUnitReferenceIndex? _gameReferenceIndex;
+    // 原版贴图有界读取的最近 item 解码缓存（起始 chunk uoff → 解码字节）。
+    // 仅在 _gameReferenceSemaphore 持有期间读写；与音频基线的 last-item 缓存同策略。
+    private (ulong BundleOffset, byte[] Data)? _lastSliceItemCache;
 
     internal sealed record DsarChunk(
         ulong UncompressedOffset,
@@ -100,6 +103,9 @@ internal sealed class GameUnitReferenceReader
         public required BundleInfo[] Bundles { get; init; }
         public required IReadOnlyDictionary<long, List<GameUnitLocator>> UnitLocators { get; init; }
         public required IReadOnlyDictionary<(long FileId, long TypeId), List<GameUnitLocator>> AnimationResourceLocators { get; init; }
+        /// <summary>全量贴图定位表（实测单游戏归档 8 万+ 条，按 FileID 首见者收录）。
+        /// 模型预览解析"模组未携带的原版贴图"时查询；与 Unit 定位表共用同一次扫描。</summary>
+        public required IReadOnlyDictionary<long, GameTextureLocator> TextureLocators { get; init; }
         public Dictionary<long, GameUnitReferenceData> ResolvedReferences { get; } = [];
         public Dictionary<long, IReadOnlyList<string>> PackageNames { get; } = [];
         public HashSet<long> AmbiguousUnitIds { get; } = [];
@@ -155,27 +161,15 @@ internal sealed class GameUnitReferenceReader
             };
         }
 
-        var bundleFiles = dataDirectory.GetFiles("bundles*.nxa", SearchOption.TopDirectoryOnly)
-            .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var cacheKey = dataDirectory.FullName + "|" + string.Join(
-            "|",
-            bundleFiles.Select(f => $"{f.Name}:{f.Length}:{f.LastWriteTimeUtc.Ticks}"));
+        var cacheKey = GetBundleIndexCacheKey(dataDirectory);
 
         await _gameReferenceSemaphore.WaitAsync(cancellationToken);
         try
         {
-            if (_gameReferenceIndex is null ||
-                !string.Equals(_gameReferenceIndex.CacheKey, cacheKey, StringComparison.Ordinal))
-            {
-                var newIndex = await Task.Run(
-                    () => BuildGameUnitReferenceIndex(dataDirectory, cacheKey),
-                    cancellationToken);
-                var oldIndex = _gameReferenceIndex;
-                _gameReferenceIndex = newIndex;
-                // 旧索引的 Bundle 流不再被引用（semaphore 保护下无并发读取者），立即释放
-                oldIndex?.Dispose();
-            }
+            // 索引构建是数十秒级的 LZ4 扫描，必须在后台线程执行（continuation 可能回到 UI 线程）。
+            await Task.Run(
+                () => EnsureReferenceIndexCore(dataDirectory, cacheKey),
+                cancellationToken);
 
             // 解析 Unit 引用包含 LZ4 解码（CPU 密集），放到后台线程执行，避免阻塞调用线程（UI）。
             return await Task.Run(
@@ -472,6 +466,7 @@ internal sealed class GameUnitReferenceReader
 
         var locators = new Dictionary<long, List<GameUnitLocator>>();
         var animationResourceLocators = new Dictionary<(long FileId, long TypeId), List<GameUnitLocator>>();
+        var textureLocators = new Dictionary<long, GameTextureLocator>();
         for (var packageIndex = 0; packageIndex < packageCount; packageIndex++)
         {
             var recordOffset = checked(0x18 + packageIndex * 0x18);
@@ -534,7 +529,8 @@ internal sealed class GameUnitReferenceReader
                 items,
                 tocData,
                 locators,
-                animationResourceLocators);
+                animationResourceLocators,
+                textureLocators);
             if (packageIndex > 0 && packageIndex % 1000 == 0)
             {
                 _logger.LogInformation(
@@ -555,7 +551,8 @@ internal sealed class GameUnitReferenceReader
             CacheKey = cacheKey,
             Bundles = bundles,
             UnitLocators = locators.ToFrozenDictionary(),
-            AnimationResourceLocators = animationResourceLocators.ToFrozenDictionary()
+            AnimationResourceLocators = animationResourceLocators.ToFrozenDictionary(),
+            TextureLocators = textureLocators.ToFrozenDictionary()
         };
     }
 
@@ -564,7 +561,8 @@ internal sealed class GameUnitReferenceReader
         PackageItem[] items,
         byte[] tocData,
         Dictionary<long, List<GameUnitLocator>> locators,
-        Dictionary<(long FileId, long TypeId), List<GameUnitLocator>> animationResourceLocators)
+        Dictionary<(long FileId, long TypeId), List<GameUnitLocator>> animationResourceLocators,
+        Dictionary<long, GameTextureLocator> textureLocators)
     {
         if (tocData.Length < HeaderSize ||
             BinaryPrimitives.ReadInt32LittleEndian(tocData.AsSpan(0, 4)) != PatchHeaderMagic)
@@ -613,6 +611,21 @@ internal sealed class GameUnitReferenceReader
                     animationResourceLocators[key] = entries;
                 }
                 entries.Add(locator);
+            }
+            else if (typeId == TextureTypeId)
+            {
+                // 全量贴图定位表：同一 FileID 可能被多个共享包收录，按首见者收录
+                // （同 ID 贴图内容一致，无需消歧）。附带完整伴生偏移，读取时按
+                // base/.gpu_resources/.stream 三组包 item 寻址。
+                textureLocators.TryAdd(fileId, new GameTextureLocator(
+                    packageName,
+                    i + 1,
+                    resourceOffset,
+                    resourceSize,
+                    BinaryPrimitives.ReadUInt64LittleEndian(tocData.AsSpan(entryOffset + 32, 8)),
+                    gpuSize,
+                    BinaryPrimitives.ReadUInt64LittleEndian(tocData.AsSpan(entryOffset + 24, 8)),
+                    BinaryPrimitives.ReadUInt32LittleEndian(tocData.AsSpan(entryOffset + 60, 4))));
             }
         }
     }
@@ -864,5 +877,297 @@ internal sealed class GameUnitReferenceReader
         return end < 0
             ? string.Empty
             : Encoding.UTF8.GetString(data, checked((int)offset), end - checked((int)offset));
+    }
+
+    private const long TextureTypeId = unchecked((long)0xCD4238C6A0C69E32UL);
+    private const int TextureHeaderOffset = 0xC0;
+    private const int TextureHeaderSize = 148;
+
+    /// <summary>游戏包内一条贴图资源的寻址信息（与模组补丁 TOC 条目同构）。
+    /// 在 BuildGameUnitReferenceIndex 的既有扫描中顺带收集，查询零额外扫描。</summary>
+    internal sealed record GameTextureLocator(
+        string PackageName,
+        int TocEntryIndex,
+        ulong MainOffset,
+        uint MainSize,
+        ulong GpuOffset,
+        uint GpuSize,
+        ulong StreamOffset,
+        uint StreamSize);
+
+    internal sealed record GameOriginalTexture(
+        TexturePreviewData Preview,
+        GameTextureLocator Locator,
+        int Width,
+        int Height,
+        int MipCount,
+        int DxgiFormat);
+
+    /// <summary>
+    /// 从游戏归档按需解析原版贴图。模组材质引用模组未携带的贴图时，这些 ID 分散在
+    /// 共享基础包与其他装备包里（实测同名包只能解析少数），因此按全量贴图定位表
+    /// （在 Unit 索引扫描中顺带构建）查找。只做有界读取：DDS 头 + 所选 mip 的字节，
+    /// 任何条目都不整体载入；解析失败按"无法解析"降级，不影响预览主流程。
+    /// </summary>
+    internal async Task<IReadOnlyDictionary<ulong, GameOriginalTexture>> ReadOriginalTexturesAsync(
+        IReadOnlyList<ulong> textureFileIds,
+        int maxPreviewPixels,
+        CancellationToken cancellationToken = default)
+    {
+        var results = new Dictionary<ulong, GameOriginalTexture>();
+        var dataDirectory = GetConfiguredGameDataDirectory();
+        if (dataDirectory is null || textureFileIds.Count == 0)
+            return results;
+
+        // LZ4 解码与 BCn 解码都是 CPU 密集工作，统一放到后台线程（调用方在 UI 线程 await）。
+        return await Task.Run(async () =>
+        {
+            try
+            {
+                var cacheKey = GetBundleIndexCacheKey(dataDirectory);
+                await _gameReferenceSemaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    // 信号量持有期间读取：索引重建与 Dispose（Bundle 流）同样在该信号量下进行。
+                    var index = EnsureReferenceIndexCore(dataDirectory, cacheKey);
+                    foreach (var fileId in textureFileIds.Distinct())
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (!index.TextureLocators.TryGetValue(unchecked((long)fileId), out var locator))
+                            continue;
+                        var preview = TryDecodeOriginalTexture(dataDirectory, locator, maxPreviewPixels, cancellationToken);
+                        if (preview is not null)
+                            results[fileId] = preview;
+                    }
+                }
+                finally
+                {
+                    _gameReferenceSemaphore.Release();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to read original textures from the game archive");
+            }
+
+            return results;
+        }, cancellationToken);
+    }
+
+    private string GetBundleIndexCacheKey(DirectoryInfo dataDirectory)
+    {
+        var bundleFiles = dataDirectory.GetFiles("bundles*.nxa", SearchOption.TopDirectoryOnly)
+            .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return dataDirectory.FullName + "|" + string.Join(
+            "|",
+            bundleFiles.Select(f => string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "{0}:{1}:{2}", f.Name, f.Length, f.LastWriteTimeUtc.Ticks)));
+    }
+
+    /// <summary>必须在持有 _gameReferenceSemaphore 时调用（索引重建与 Dispose 都在该信号量下）。</summary>
+    private GameUnitReferenceIndex EnsureReferenceIndexCore(DirectoryInfo dataDirectory, string cacheKey)
+    {
+        if (_gameReferenceIndex is null ||
+            !string.Equals(_gameReferenceIndex.CacheKey, cacheKey, StringComparison.Ordinal))
+        {
+            var newIndex = BuildGameUnitReferenceIndex(dataDirectory, cacheKey);
+            var oldIndex = _gameReferenceIndex;
+            _gameReferenceIndex = newIndex;
+            // 旧索引的 Bundle 流不再被引用（semaphore 保护下无并发读取者），立即释放
+            oldIndex?.Dispose();
+        }
+
+        return _gameReferenceIndex!;
+    }
+
+    private GameOriginalTexture? TryDecodeOriginalTexture(
+        DirectoryInfo dataDirectory,
+        GameTextureLocator locator,
+        int maxPreviewPixels,
+        CancellationToken cancellationToken)
+    {
+        if (locator.MainSize < TextureHeaderOffset + TextureHeaderSize)
+            return null;
+
+        var bundlesPath = Path.Combine(dataDirectory.FullName, "bundles.nxa");
+        if (!File.Exists(bundlesPath))
+            return null;
+        var bundleIndex = GameBundleIndexCache.GetOrCreate(dataDirectory, bundlesPath, _logger);
+        if (!bundleIndex.TryGetPackage(locator.PackageName, out var tocItems) || tocItems is not { Length: > 0 })
+            return null;
+
+        // TOC 条目的 MainOffset 指向 base 包的地址空间；DDS 头位于主资源 0xC0 处。
+        var header = TryReadPackageRange(bundleIndex, tocItems, checked((long)locator.MainOffset + TextureHeaderOffset), TextureHeaderSize);
+        if (header is null || header.Length < TextureHeaderSize ||
+            !header.AsSpan(0, 4).SequenceEqual("DDS "u8))
+        {
+            return null;
+        }
+
+        var height = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(12, 4));
+        var width = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(16, 4));
+        var mipCount = Math.Max(BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(28, 4)), 1);
+        var dxgiFormat = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(128, 4));
+        if (width <= 0 || height <= 0)
+            return null;
+
+        var format = PatchResourceInspectionService.GetCompressionFormat(dxgiFormat);
+        if (format == BCnEncoder.Shared.CompressionFormat.Unknown)
+            return null;
+
+        // 游戏贴图可能不声明 mip 数（实测存在 mipCount=0 的条目）；按物理 mip 链上限
+        // 走查，最终由伴生 declaredSize 的边界校验兜底，防止读出链外数据。
+        var effectiveMipCount = Math.Max(
+            mipCount,
+            System.Numerics.BitOperations.Log2((uint)Math.Max(width, height)) + 1);
+        var plan = PatchResourceInspectionService.PlanTopMip(format, width, height, effectiveMipCount, maxPreviewPixels);
+        if (plan is not { } mipPlan)
+            return null;
+
+        var useStream = locator.StreamSize > 0;
+        if (!bundleIndex.TryGetPackage(locator.PackageName + (useStream ? ".stream" : ".gpu_resources"), out var payloadItems) ||
+            payloadItems is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        // 只读所选 mip 的字节；声明的伴生尺寸必须覆盖 mip 范围（与模组补丁路径同一校验）。
+        var declaredSize = useStream ? locator.StreamSize : locator.GpuSize;
+        var payloadOffset = useStream ? locator.StreamOffset : locator.GpuOffset;
+        if ((ulong)mipPlan.SkipBytes + (ulong)mipPlan.ByteCount > declaredSize)
+            return null;
+
+        var payload = TryReadPackageRange(
+            bundleIndex,
+            payloadItems,
+            checked((long)(payloadOffset + mipPlan.SkipBytes)),
+            checked((int)mipPlan.ByteCount));
+        if (payload is null)
+            return null;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return PatchResourceInspectionService.DecodeMipPayload(payload, mipPlan, dxgiFormat) is { } preview
+            ? new GameOriginalTexture(preview, locator, width, height, mipCount, dxgiFormat)
+            : null;
+    }
+
+    /// <summary>
+    /// 读取包地址空间的一段字节；偏移可横跨包内的多个 bundle item（与音频基线的
+    /// 跨 item 连续读取同一寻址模型）。失败返回 null，不抛出。
+    /// </summary>
+    private byte[]? TryReadPackageRange(
+        GameBundleIndex bundleIndex,
+        PackageItem[] items,
+        long offset,
+        int length)
+    {
+        if (offset < 0 || length <= 0 || length > MaxBundleResourceBytes)
+            return null;
+
+        var result = new byte[length];
+        var filled = 0;
+        while (filled < length)
+        {
+            var position = offset + filled;
+            PackageItem? containing = null;
+            var containingIndex = -1;
+            for (var i = items.Length - 1; i >= 0; i--)
+            {
+                if (items[i].ArchiveOffset <= (ulong)position)
+                {
+                    containing = items[i];
+                    containingIndex = i;
+                    break;
+                }
+            }
+            if (containing is null)
+                return null;
+
+            var itemStart = (long)containing.ArchiveOffset;
+            var intraOffset = (int)(position - itemStart);
+            var needBytes = length - filled;
+            var bundle = bundleIndex.Bundles[containing.BundleIndex];
+            if (!bundle.ChunkByOffset.TryGetValue(containing.BundleOffset, out var chunkIndex))
+                return null;
+            var nextItemBundleOffset = containingIndex + 1 < items.Length
+                ? items[containingIndex + 1].BundleOffset
+                : ulong.MaxValue;
+
+            // 包内一个 item 可承载多个资源：资源按 chunk 对齐，以 Start 标记（flags&2）
+            // chunk 分界（实测数据验证）。先定位 intra 落在的 chunk，再从该 chunk 起连续
+            // 解码到覆盖 intra+need——不能在 Start 标记处截断，否则 item 内后继资源的
+            // 读取会落空。边界取下一个 item 的 BundleOffset（同 bundle 的 chunk 起点）。
+            long startIntra = 0;
+            var reachedEnd = false;
+            while (startIntra + bundle.Chunks[chunkIndex].UncompressedSize <= intraOffset)
+            {
+                if (bundle.Chunks[chunkIndex].UncompressedOffset == nextItemBundleOffset)
+                {
+                    reachedEnd = true;
+                    break;
+                }
+                startIntra += bundle.Chunks[chunkIndex].UncompressedSize;
+                chunkIndex++;
+                if (chunkIndex >= bundle.Chunks.Length)
+                {
+                    reachedEnd = true;
+                    break;
+                }
+            }
+            if (reachedEnd)
+                return null;
+
+            var startChunkUoff = bundle.Chunks[chunkIndex].UncompressedOffset;
+            var required = intraOffset - (int)startIntra + needBytes;
+            byte[] itemData;
+            if (_lastSliceItemCache is { } cache && cache.BundleOffset == startChunkUoff)
+            {
+                itemData = cache.Data;
+            }
+            else
+            {
+                try
+                {
+                    // 复用 BundleInfo 缓存的只读流（不要释放——流属于索引生命周期）
+                    var stream = bundle.OpenReadStream();
+                    using var output = new MemoryStream();
+                    while (output.Length < required && chunkIndex < bundle.Chunks.Length)
+                    {
+                        var chunk = bundle.Chunks[chunkIndex];
+                        if (output.Length > 0 && chunk.UncompressedOffset == nextItemBundleOffset)
+                            break;
+                        var decoded = DecodeDsarChunk(stream, chunk);
+                        output.Write(decoded);
+                        if (output.Length > MaxBundleResourceBytes)
+                            return null;
+                        chunkIndex++;
+                    }
+
+                    itemData = output.ToArray();
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+
+                _lastSliceItemCache = (startChunkUoff, itemData);
+            }
+
+            var intraInData = intraOffset - (int)startIntra;
+            if (itemData.Length <= intraInData)
+                return null;
+            var take = Math.Min(itemData.Length - intraInData, needBytes);
+            if (take <= 0)
+                return null;
+            Buffer.BlockCopy(itemData, intraInData, result, filled, take);
+            filled += take;
+        }
+
+        return result;
     }
 }

@@ -18,7 +18,7 @@ public sealed class ModelPreviewPageStructureTests
         var tabControl = tabControls[0];
         var tabs = tabControl.Elements().Where(element => element.Name.LocalName == "TabItem").ToArray();
 
-        Assert.AreEqual(3, tabs.Length);
+        Assert.AreEqual(4, tabs.Length);
         Assert.AreEqual("{loc:Loc ModelPreviewPage.PartsAndVariants}", tabs[0].Attribute("Header")?.Value);
         Assert.AreEqual("{loc:Loc ModelPreviewPage.Meshes}", tabs[1].Attribute("Header")?.Value);
         Assert.AreEqual("{loc:Loc ModelPreviewPage.AudioTab}", tabs[2].Attribute("Header")?.Value);
@@ -39,7 +39,16 @@ public sealed class ModelPreviewPageStructureTests
             element.Attribute("Command")?.Value.Contains("ToggleAudioEntryPlaybackCommand") == true));
         Assert.IsTrue(tabs[2].Descendants().Any(element => element.Name.LocalName == "GroupStyle"));
 
-        var bodyShapeOptions = document
+                // 字幕文本 Tab 仅在模组确有文本条目时可见，且列表必须虚拟化。
+        Assert.AreEqual("{loc:Loc ModelPreviewPage.TextTab}", tabs[3].Attribute("Header")?.Value);
+        Assert.IsTrue(tabs[3].Attribute("Visibility")?.Value == "{Binding HasTextEntries, Converter={StaticResource BoolToVisibilityConverter}}");
+        var textList = tabs[3].Descendants().Single(element =>
+            element.Name.LocalName == "ListBox" &&
+            element.Attribute("ItemsSource")?.Value == "{Binding TextEntriesView}");
+        Assert.AreEqual("True", textList.Attribute(VirtualizingIsVirtualizing)?.Value ?? textList.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
+        Assert.IsTrue(tabs[3].Descendants().Any(element => element.Name.LocalName == "GroupStyle"));
+
+var bodyShapeOptions = document
             .Descendants()
             .Where(element => element.Name.LocalName == "RadioButton" &&
                               element.Attribute("GroupName")?.Value == "ModelPreviewBodyShape")

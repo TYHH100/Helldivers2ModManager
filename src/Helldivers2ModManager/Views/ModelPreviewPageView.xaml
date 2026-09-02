@@ -100,8 +100,8 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="10"/>
-                    <RowDefinition Height="230"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="230" MinHeight="120"/>
                 </Grid.RowDefinitions>
 
                 <Border Grid.Row="0" Style="{StaticResource FluentSettingsCard}" Padding="12" Margin="0 0 0 8">
@@ -330,6 +330,17 @@
                         </Border>
                     </Grid>
                 </Border>
+
+                <!-- 拖动调整预览视口与下方 Tab 区域的高度分配 -->
+                <GridSplitter Grid.Row="2"
+                              Height="10"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Center"
+                              ResizeBehavior="PreviousAndNext"
+                              ResizeDirection="Rows"
+                              ShowsPreview="False"
+                              Background="Transparent"
+                              Cursor="SizeNS"/>
 
                 <Border Grid.Row="3" Style="{StaticResource FluentSettingsCard}" Padding="6">
                     <TabControl Background="{StaticResource NeutralBackgroundBrush}"
@@ -705,6 +716,134 @@
                                 </Grid>
                             </Grid>
                                                 </TabItem>
+
+                        <TabItem Header="{loc:Loc ModelPreviewPage.TextTab}"
+                                 Visibility="{Binding HasTextEntries, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid Margin="4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <DockPanel Grid.Row="0" Margin="2 0 2 4">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                                Visibility="{Binding HasTextOriginalComparison, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Text="{Binding TextModifiedCountText}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0 0 10 0"/>
+                                        <CheckBox Content="{loc:Loc ModelPreviewPage.TextOnlyShowModified}"
+                                                  IsChecked="{Binding OnlyShowTextModified, Mode=TwoWay}"
+                                                  VerticalAlignment="Center"
+                                                  ToolTip="{loc:Loc ModelPreviewPage.TextOnlyShowModifiedTip}"/>
+                                    </StackPanel>
+                                    <TextBox DockPanel.Dock="Left"
+                                             Text="{Binding TextFilterText, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource FluentTextBox}"
+                                             MinWidth="160"
+                                             MaxWidth="260"
+                                             Height="30"
+                                             Width="Auto"
+                                             HorizontalAlignment="Left"
+                                             VerticalAlignment="Center"
+                                             Margin="0 0 10 0"
+                                             ToolTip="{loc:Loc ModelPreviewPage.TextFilterTip}"/>
+                                    <TextBlock Text="{Binding TextCountText}"
+                                               FontSize="11"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+
+                                <!-- 虚拟化 ListBox：文本库可达数千条目，禁止改回 ItemsControl+ScrollViewer。 -->
+                                <ListBox Grid.Row="1"
+                                         ItemsSource="{Binding TextEntriesView}"
+                                         VirtualizingPanel.IsVirtualizing="True"
+                                         VirtualizingPanel.VirtualizationMode="Recycling"
+                                         VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                                         VirtualizingPanel.ScrollUnit="Pixel"
+                                         ScrollViewer.CanContentScroll="True"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         HorizontalContentAlignment="Stretch">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="Margin" Value="0"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <ContentPresenter/>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.GroupStyle>
+                                        <GroupStyle>
+                                            <GroupStyle.HeaderTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{StaticResource NeutralBackgroundFillBrush}"
+                                                            BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="4"
+                                                            Padding="6 3"
+                                                            Margin="0 2 0 4">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding Name.Header}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name.Header}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Name.PatchPath}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name.PatchPath}"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </GroupStyle.HeaderTemplate>
+                                        </GroupStyle>
+                                    </ListBox.GroupStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="TextEntryRow"
+                                                    Background="Transparent"
+                                                    Padding="6 3"
+                                                    ToolTip="{Binding OriginalToolTip}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding IdText}" FontFamily="Consolas" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" VerticalAlignment="Top" Margin="0 0 10 0"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding ModifiedText}" FontSize="11" VerticalAlignment="Top" Margin="0 0 10 0" Visibility="{Binding ModifiedText, Converter={StaticResource StringToVisibilityConverter}}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Model.MatchesOriginal}" Value="False">
+                                                                        <Setter Property="Foreground" Value="{StaticResource SystemAccentBrush}"/>
+                                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Model.Text}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="TextEntryRow" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+                                                </Trigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </TabItem>
                     </TabControl>
                 </Border>
             </Grid>

@@ -382,6 +382,13 @@ internal sealed class TextureInspectionItem : System.ComponentModel.INotifyPrope
     public required int DxgiFormat { get; init; }
     public required string PayloadKind { get; init; }
     public required string PayloadSource { get; init; }
+    /// <summary>
+    /// 该贴图解析自游戏归档（模组材质引用了模组未携带的原版资源），而不是模组补丁。
+    /// 这类条目的偏移指向游戏包地址空间，预览读取走游戏归档链路而非补丁伴生文件。
+    /// </summary>
+    public bool IsFromGameArchive { get; init; }
+    /// <summary>IsFromGameArchive 时为该贴图所在的游戏包名（模组补丁的 16 位前缀）。</summary>
+    public string? GamePackageBaseName { get; init; }
     public string TextureIdText => $"0x{TextureId:X16}";
     public string SizeText => $"{Width:N0} × {Height:N0}";
     public string FormatText => PayloadKind == "PNG" ? "PNG" : $"DXGI {DxgiFormat}";

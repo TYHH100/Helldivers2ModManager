@@ -133,6 +133,7 @@ internal sealed record ModelPreviewMaterialTextureSet(
         {
             ModelPreviewTextureRole.BaseColor,
             ModelPreviewTextureRole.Emissive,
+            ModelPreviewTextureRole.Iridescence,
             ModelPreviewTextureRole.Mask,
             ModelPreviewTextureRole.Normal
         })
@@ -149,7 +150,8 @@ internal enum ModelPreviewTextureRole
     BaseColor,
     Normal,
     Mask,
-    Emissive
+    Emissive,
+    Iridescence
 }
 
 internal sealed record ModelPreviewMaterialSection(

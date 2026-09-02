@@ -616,6 +616,47 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         }, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
+    /// <summary>
+    /// 点击放大/悬停提示用的高分辨率图标：按需解码，上限 1024px，
+    /// 避免列表卡片图标（128px 缩略图）放大后模糊，同时不为每张卡片常驻大图。
+    /// </summary>
+    public async Task<ImageSource?> LoadFullIconAsync()
+    {
+        var path = _mod.Manifest.IconPath;
+        string? iconFullPath = null;
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            var candidate = Path.Combine(_mod.Directory.FullName, path);
+            if (File.Exists(candidate))
+                iconFullPath = candidate;
+        }
+
+        if (iconFullPath is null)
+            return Icon;
+
+        await s_iconDecodeGate.WaitAsync();
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource = new Uri(iconFullPath);
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = 1024;
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load full-resolution icon for mod \"{Name}\", falling back to card icon", _mod.Manifest.Name);
+            return Icon;
+        }
+        finally
+        {
+            s_iconDecodeGate.Release();
+        }
+    }
+
     private void SetDefaultIcon()
     {
         try

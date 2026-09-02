@@ -257,7 +257,8 @@ internal sealed partial class ModService
 					var enabled = mod.EnabledOptions;
 					var selected = mod.SelectedOptions;
 
-					if (man.Options is not null)
+					// 空选项列表与无选项等同（根目录补丁），与 GetSelectedPatchFiles 保持一致。
+					if (man.Options is { Count: > 0 })
 					{
 						if (selected is not int[] { Length: 1 })
 						{
@@ -281,7 +282,8 @@ internal sealed partial class ModService
 					var enabled = mod.EnabledOptions;
 					var selected = mod.SelectedOptions;
 
-					if (man.Options is not null)
+					// 空选项列表与无选项等同（根目录补丁），与 GetSelectedPatchFiles 保持一致。
+					if (man.Options is { Count: > 0 })
 					{
 						if (enabled.Length != man.Options.Count)
 						{
@@ -594,25 +596,27 @@ internal sealed partial class ModService
 				directories.Add(directory);
 		}
 
-		switch (mod.Manifest)
-		{
-			case LegacyModManifest legacy:
-				if (legacy.Options is { } legacyOptions)
+			switch (mod.Manifest)
 			{
-					var selected = selectedOptions.Count > 0 ? selectedOptions[0] : 0;
-					if (selected >= 0 && selected < legacyOptions.Count)
-						AddDirectory(legacyOptions[selected]);
-				}
-				else
-					directories.Add(mod.Directory);
-				break;
-
-			case V1ModManifest v1:
-				if (v1.Options is not { } options)
+				case LegacyModManifest legacy:
+					// 空选项列表与无选项等同：模组根目录的补丁就是全部内容
+					//（与预览页"此模组没有提供可切换的清单选项，将按当前配置预览"同语义）。
+					if (legacy.Options is { Count: > 0 } legacyOptions)
 				{
-					directories.Add(mod.Directory);
+						var selected = selectedOptions.Count > 0 ? selectedOptions[0] : 0;
+						if (selected >= 0 && selected < legacyOptions.Count)
+							AddDirectory(legacyOptions[selected]);
+					}
+					else
+						directories.Add(mod.Directory);
 					break;
-				}
+
+				case V1ModManifest v1:
+					if (v1.Options is not { Count: > 0 } options)
+					{
+						directories.Add(mod.Directory);
+						break;
+					}
 
 				for (var i = 0; i < options.Count; i++)
 				{

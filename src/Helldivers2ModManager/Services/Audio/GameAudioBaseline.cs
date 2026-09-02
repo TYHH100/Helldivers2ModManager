@@ -59,6 +59,7 @@ internal sealed class GameAudioBaseline : IDisposable
     {
         Bank,
         Stream,
+        TextBank,
     }
 
     private readonly record struct TocRecord(ulong FileId, EntryKind Kind, long TocDataOffset, uint TocDataSize, long StreamOffset, uint StreamSize);
@@ -182,6 +183,56 @@ internal sealed class GameAudioBaseline : IDisposable
             return null;
         var slice = _readStreamRange(record.StreamOffset, (int)record.StreamSize);
         return slice is null ? null : SHA256.HashData(slice);
+    }
+
+    private readonly Dictionary<ulong, IReadOnlyDictionary<uint, string>?> _textBanks = [];
+
+    /// <summary>包内 TEXT_BANK 资源的 file id（文本预览与诊断用）。</summary>
+    internal IEnumerable<ulong> TextBankFileIds =>
+        _tocEntries.Values.Where(static record => record.Kind == EntryKind.TextBank).Select(static record => record.FileId);
+
+    /// <summary>解析并返回指定文本库的全部字符串 id（诊断用）。</summary>
+    internal IReadOnlyCollection<uint> GetTextBankIds(ulong fileId)
+    {
+        if (!_tocEntries.TryGetValue(fileId, out var record))
+            return [];
+        return LoadTextBank(record)?.Keys.ToArray() ?? [];
+    }
+
+    /// <summary>查询原版文本条目（惰性整库解析并缓存；文本库远小于音频媒体，驻留代价可接受）。
+    /// 返回 Found 时 <paramref name="text"/> 为原版文本；ResourceMissing = 文本库存在但缺该 ID（新增条目）。</summary>
+    public GameAudioOriginalLookup TryGetTextEntry(ulong textBankFileId, uint stringId, out string? text)
+    {
+        text = null;
+        if (!_tocEntries.TryGetValue(textBankFileId, out var record) || record.Kind != EntryKind.TextBank)
+            return GameAudioOriginalLookup.Unavailable;
+
+        if (!_textBanks.TryGetValue(textBankFileId, out var entries))
+        {
+            entries = LoadTextBank(record);
+            _textBanks[textBankFileId] = entries;
+        }
+        if (entries is null)
+            return GameAudioOriginalLookup.Unavailable;
+        if (entries.TryGetValue(stringId, out var original))
+        {
+            text = original;
+            return GameAudioOriginalLookup.Found;
+        }
+        return GameAudioOriginalLookup.ResourceMissing;
+    }
+
+    private IReadOnlyDictionary<uint, string>? LoadTextBank(TocRecord record)
+    {
+        if (record.TocDataSize < TextBankFormat.MinHeaderBytes ||
+            record.TocDataSize > TextBankFormat.MaxBankBytes ||
+            record.TocDataOffset < 0)
+            return null;
+        // 文本库没有 16 字节前缀，toc_data 就是完整格式。
+        var data = _readTocRange(record.TocDataOffset, (int)record.TocDataSize);
+        if (data is null)
+            return null;
+        return TextBankFormat.TryParse(data, out _, out var entries) ? entries : null;
     }
 
     private bool TryAcquireBudget(uint size)
@@ -369,6 +420,7 @@ internal sealed class GameAudioBaseline : IDisposable
             {
                 AudioBankInspectionService.WwiseBankTypeId => EntryKind.Bank,
                 AudioBankInspectionService.WwiseStreamTypeId => EntryKind.Stream,
+                TextBankInspectionService.TextBankTypeId => EntryKind.TextBank,
                 _ => null,
             };
             if (kind is not { } parsedKind)
