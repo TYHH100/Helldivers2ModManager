@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services;
 using Helldivers2ModManager.Services.Infrastructure;
@@ -142,6 +143,13 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
             // 立即展示结果摘要；时间戳枚举与数据库保存放到后台完成，避免整体模组规模越大越慢
             UpdateSummaryText();
 
+            // 整体检查结果是"需要及时看到"的信息：任务中心记录之外，气泡提示一次并自动消失。
+            // 单模组深度检查（RefreshAfterSingleModCheckAsync）不走这里——详情弹窗已展示结果，不再弹气泡。
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(
+                new Components.ToastMessage(
+                    _localizationService["Toast.VersionCheckTitle"],
+                    VersionCheckSummary));
+
             await _backgroundTaskService.RunAsync(
                 _localizationService["SettingsPage.VersionCheck"],
                 VersionCheckSummary,
@@ -160,6 +168,11 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
         {
             _logger.LogError(ex, "版本兼容性检查失败");
             VersionCheckSummary = _localizationService["VersionCheck.CheckFailed"];
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(
+                new Components.ToastMessage(
+                    _localizationService["Toast.VersionCheckTitle"],
+                    _localizationService["VersionCheck.CheckFailed"],
+                    IsError: true));
         }
         finally
         {
@@ -225,6 +238,10 @@ internal sealed partial class VersionCheckViewModel : ObservableObject
                     ? $"{_localizationService["VersionCheck.IncompatibleFound"]}{mod.Manifest.Name}"
                     : $"{_localizationService["VersionCheck.NewModPrefix"]}{mod.Manifest.Name}{_localizationService["VersionCheck.NewModSuffix"]}";
                 OnPropertyChanged(nameof(HasVersionCheckResult));
+                CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(
+                    new Components.ToastMessage(
+                        _localizationService["Toast.VersionCheckTitle"],
+                        VersionCheckSummary));
             }
         }
         catch (Exception ex)

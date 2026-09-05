@@ -17,7 +17,6 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Compression;
-using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -158,16 +157,16 @@ internal sealed partial class DashboardPageViewModel
 
         ClearConflictStatuses();
         IsScanningConflicts = true;
-        ConflictSummary = _localizationService["DashboardPage.ConflictScanning"];
+        var scanningText = _localizationService["DashboardPage.ConflictScanning"];
 
         try
         {
             // 扫描在后台线程执行（BackgroundTaskService 统一管理状态），结果回 UI 线程应用
             var result = await _backgroundTaskService.RunAsync(
                 _localizationService["BackgroundTasksPage.TaskTypeConflictScan"],
-                ConflictSummary,
+                scanningText,
                 (_, _) => _modConflictService.AnalyzeAsync(deploymentMods),
-                ConflictSummary);
+                scanningText);
 
             _conflictCache[cacheKey] = result;
             if (!_settingsService.IsReadonly)
@@ -179,12 +178,11 @@ internal sealed partial class DashboardPageViewModel
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to scan mod conflicts");
-            ConflictSummary = _localizationService["DashboardPage.ConflictScanFailed"];
             if (showReport)
             {
                 WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage
                 {
-                    Message = $"{ConflictSummary}\n{ex.Message}"
+                    Message = $"{_localizationService["DashboardPage.ConflictScanFailed"]}\n{ex.Message}"
                 });
             }
         }
@@ -199,56 +197,11 @@ internal sealed partial class DashboardPageViewModel
         }
     }
 
-    private string FormatConflictReport(ModConflictAnalysisResult result, IReadOnlyList<ModConflictRecord> visibleConflicts)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine(_localizationService["DashboardPage.ConflictReportTitle"]);
-        sb.AppendLine(_localizationService["DashboardPage.ConflictReportScanned"]
-            .Replace("{mods}", result.ScannedModCount.ToString())
-            .Replace("{patches}", result.ScannedPatchCount.ToString())
-            .Replace("{units}", result.ScannedUnitCount.ToString()));
-
-        if (visibleConflicts.Count == 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine(_localizationService["DashboardPage.ConflictNone"]);
-            return sb.ToString();
-        }
-
-        sb.AppendLine(_localizationService["DashboardPage.ConflictReportCount"]
-            .Replace("{count}", visibleConflicts.Count.ToString())
-            .Replace("{definite}", visibleConflicts.Count(static conflict => conflict.IsDefiniteConflict).ToString()));
-
-        foreach (var conflict in visibleConflicts.Take(50))
-        {
-            var winner = conflict.Winner;
-            var names = string.Join(", ", conflict.Participants
-                .Select(static p => p.ModName)
-                .Distinct(StringComparer.OrdinalIgnoreCase));
-            sb.AppendLine();
-            sb.AppendLine(_localizationService["DashboardPage.ConflictReportItem"]
-                .Replace("{resource}", conflict.FriendlyName)
-                .Replace("{kind}", conflict.IsDefiniteConflict
-                    ? _localizationService["ConflictDetail.Definite"]
-                    : _localizationService["DashboardPage.ConflictPotential"])
-                .Replace("{mods}", names)
-                .Replace("{winner}", winner.ModName));
-        }
-
-        if (visibleConflicts.Count > 50)
-            sb.AppendLine(_localizationService["DashboardPage.ConflictReportTruncated"]
-                .Replace("{count}", (visibleConflicts.Count - 50).ToString()));
-
-        return sb.ToString();
-    }
-
     private void VersionCheckVm_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         OnPropertyChanged(nameof(IsCheckingVersion));
-        OnPropertyChanged(nameof(VersionCheckSummary));
         OnPropertyChanged(nameof(CompatibleModCount));
         OnPropertyChanged(nameof(IncompatibleModCount));
         OnPropertyChanged(nameof(HasIncompatibleMods));
-        OnPropertyChanged(nameof(HasVersionCheckResult));
     }
 }

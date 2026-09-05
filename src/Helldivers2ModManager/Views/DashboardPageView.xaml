@@ -21,9 +21,13 @@
 	<Page.Resources>
 		<local:DashboardItemTemplateSelector x:Key="DashboardItemTemplateSelector">
 			<local:DashboardItemTemplateSelector.ModTemplate>
-				<DataTemplate DataType="vms:ModViewModel">
-					<Border Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
-							MouseLeftButtonDown="ModCard_MouseLeftButtonDown">
+					<DataTemplate DataType="vms:ModViewModel">
+						<!-- UseLayoutRounding + Display 文本模式：卡片挂 DropShadowEffect 后子树经中间纹理渲染，
+							 布局落在半像素时整卡文字发糊（加标签后时隐时现的"变糊"即此因），取整后消除 -->
+						<Border Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
+								MouseLeftButtonDown="ModCard_MouseLeftButtonDown"
+								UseLayoutRounding="True"
+								TextOptions.TextFormattingMode="Display">
 						<Border.Style>
 							<Style TargetType="Border" BasedOn="{StaticResource FluentModCard}">
 								<Setter Property="BorderBrush" Value="Transparent"/>
@@ -39,41 +43,85 @@
 							<ContextMenu>
 								<MenuItem Header="{loc:Loc DashboardPage.PreviewModel}"
 										  Command="{Binding PlacementTarget.Tag.PreviewModelCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE890;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<Separator/>
 								<MenuItem Header="{loc:Loc DashboardPage.MoveToTop}"
 										  Command="{Binding PlacementTarget.Tag.MoveToTopCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE74A;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<MenuItem Header="{loc:Loc DashboardPage.MoveToBottom}"
 										  Command="{Binding PlacementTarget.Tag.MoveToBottomCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE74B;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<MenuItem Header="{loc:Loc DashboardPage.MoveToPosition}"
 										  Command="{Binding PlacementTarget.Tag.MoveToPositionCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE8CB;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<Separator/>
 								<MenuItem Header="{loc:Loc DashboardPage.OpenFileLocation}"
 										  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE838;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<Separator/>
 								<MenuItem Header="{loc:Loc DashboardPage.SetTags}"
 										  Command="{Binding PlacementTarget.Tag.EditModTagsCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE8EC;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<MenuItem Header="{loc:Loc ModGroup.AddToGroup}"
 										  Command="{Binding PlacementTarget.Tag.AddModsToGroupCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<MenuItem Header="{loc:Loc DashboardPage.EditLink}"
 										  Command="{Binding EditLinkCommand}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE71B;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<Separator/>
 								<MenuItem Header="{loc:Loc DashboardPage.EditManifest}"
 										  Command="{Binding PlacementTarget.Tag.EditManifestCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE70F;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<MenuItem Header="{loc:Loc DashboardPage.PackageExport}"
 										  Command="{Binding PlacementTarget.Tag.ExportModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xF012;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<MenuItem Header="{loc:Loc DashboardPage.UpdateMod}"
 										  Command="{Binding PlacementTarget.Tag.UpdateModCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 							</ContextMenu>
 						</Border.ContextMenu>
 						<Grid>
@@ -142,25 +190,36 @@
 										</ItemsControl.ItemsPanel>
 										<ItemsControl.ItemTemplate>
 											<DataTemplate>
-												<Border Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}"
-														CornerRadius="4"
-														Padding="6 2"
-														Margin="0 0 4 0">
-													<TextBlock Text="{Binding Name}"
-															   FontSize="11"
-															   Foreground="{Binding Foreground}"/>
+												<Border Background="#1AFFFFFF"
+														BorderBrush="#12FFFFFF"
+														BorderThickness="1"
+														CornerRadius="10"
+														Padding="8 3"
+														Margin="0 0 6 0">
+													<StackPanel Orientation="Horizontal">
+														<Ellipse Width="7"
+																 Height="7"
+																 Fill="{Binding Brush}"
+																 Margin="0 0 5 0"
+																 VerticalAlignment="Center"/>
+														<TextBlock Text="{Binding Name}"
+																   FontSize="11"
+																   Foreground="#CCFFFFFF"/>
+													</StackPanel>
 												</Border>
 											</DataTemplate>
 										</ItemsControl.ItemTemplate>
 									</ItemsControl>
-									<Border Background="#FF6B7280"
-											CornerRadius="4"
-											Padding="6 2"
-									Margin="0,-4,-6,0"
+									<Border Background="#1AFFFFFF"
+											BorderBrush="#12FFFFFF"
+											BorderThickness="1"
+											CornerRadius="10"
+											Padding="8 3"
+											Margin="0,-4,-6,0"
 											Visibility="{Binding HasHiddenTags, Converter={StaticResource BoolToVisibilityConverter}}">
 										<TextBlock Text="{Binding HiddenTagCount, StringFormat='+{0}'}"
 												   FontSize="11"
-												   Foreground="White"/>
+												   Foreground="#CCFFFFFF"/>
 										<Border.ToolTip>
 											<ToolTip>
 												<StackPanel>
@@ -173,13 +232,22 @@
 														</ItemsControl.ItemsPanel>
 														<ItemsControl.ItemTemplate>
 															<DataTemplate>
-																<Border Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}"
-																		CornerRadius="4"
-																		Padding="6 2"
+																<Border Background="#1AFFFFFF"
+																		BorderBrush="#12FFFFFF"
+																		BorderThickness="1"
+																		CornerRadius="10"
+																		Padding="8 3"
 																		Margin="0 0 4 4">
-																	<TextBlock Text="{Binding Name}"
-																			   FontSize="11"
-																			   Foreground="{Binding Foreground}"/>
+																	<StackPanel Orientation="Horizontal">
+																		<Ellipse Width="7"
+																				 Height="7"
+																				 Fill="{Binding Brush}"
+																				 Margin="0 0 5 0"
+																				 VerticalAlignment="Center"/>
+																		<TextBlock Text="{Binding Name}"
+																				   FontSize="11"
+																				   Foreground="#CCFFFFFF"/>
+																	</StackPanel>
 																</Border>
 															</DataTemplate>
 														</ItemsControl.ItemTemplate>
@@ -251,13 +319,15 @@
 									HorizontalAlignment="Right"
 									VerticalAlignment="Top"
 									Margin="0 0 4 0"
-									Background="#FF6B7280"
-									CornerRadius="4"
-									Padding="5 1"
+									Background="#1AFFFFFF"
+									BorderBrush="#12FFFFFF"
+									BorderThickness="1"
+									CornerRadius="10"
+									Padding="7 1"
 									ToolTip="{loc:Loc DashboardPage.PositionNumberHint}">
 								<TextBlock Text="{Binding PositionNumber}"
 										   FontSize="11"
-										   Foreground="White"/>
+										   Foreground="#99FFFFFF"/>
 							</Border>
 
 							<!-- 版本状态指示器 -->
@@ -367,6 +437,8 @@
 					<Border Padding="8 4"
 							Margin="0 2"
 							CornerRadius="6"
+							UseLayoutRounding="True"
+							TextOptions.TextFormattingMode="Display"
 							Tag="{Binding DataContext, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Page}}"
 							Background="{Binding Color, Converter={StaticResource StringToColorBrushConverter}}">
 						<Border.Style>
@@ -382,14 +454,26 @@
 							<ContextMenu>
 								<MenuItem Header="{loc:Loc DashboardPage.Rename}"
 										  Command="{Binding PlacementTarget.Tag.RenameSeparatorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE8AC;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<MenuItem Header="{loc:Loc DashboardPage.ChangeColor}"
 										  Command="{Binding PlacementTarget.Tag.ChangeSeparatorColorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 								<Separator/>
 								<MenuItem Header="{loc:Loc Common.Delete}"
 										  Command="{Binding PlacementTarget.Tag.DeleteSeparatorCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
-										  CommandParameter="{Binding}"/>
+										  CommandParameter="{Binding}">
+									<MenuItem.Icon>
+										<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource DangerSubtleForegroundBrush}"/>
+									</MenuItem.Icon>
+								</MenuItem>
 							</ContextMenu>
 						</Border.ContextMenu>
 						<Grid>
@@ -579,9 +663,17 @@
                             <Button.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="{loc:Loc DashboardPage.OriginalRepo}"
-                                              Command="{Binding GithubCommand}"/>
+                                              Command="{Binding GithubCommand}">
+                                        <MenuItem.Icon>
+                                            <TextBlock Text="&#xE8A7;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                        </MenuItem.Icon>
+                                    </MenuItem>
                                     <MenuItem Header="{loc:Loc DashboardPage.ForkedRepo}"
-                                              Command="{Binding GithubForkCommand}"/>
+                                              Command="{Binding GithubForkCommand}">
+                                        <MenuItem.Icon>
+                                            <TextBlock Text="&#xE71B;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                        </MenuItem.Icon>
+                                    </MenuItem>
                                 </ContextMenu>
                             </Button.ContextMenu>
                         </Button>
@@ -669,29 +761,48 @@
 							   VerticalAlignment="Center"
 							   Margin="0 0 8 0"/>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="{loc:Loc DashboardPage.SelectAll}"
 							Command="{Binding SelectAllCommand}"
 							Padding="12 6">
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="&#xE8B3;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="{loc:Loc DashboardPage.SelectAll}" VerticalAlignment="Center"/>
+							</StackPanel>
 						<Button.ToolTip>
 							<ToolTip Content="{loc:Loc DashboardPage.SelectAllHint}"/>
 						</Button.ToolTip>
 					</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="{loc:Loc DashboardPage.DeselectAll}"
 							Command="{Binding DeselectAllCommand}"
-							Padding="12 6"/>
+							Padding="12 6">
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="&#xE738;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="{loc:Loc DashboardPage.DeselectAll}" VerticalAlignment="Center"/>
+							</StackPanel>
+						</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="{loc:Loc DashboardPage.InvertSelection}"
 							Command="{Binding InvertSelectionCommand}"
-							Padding="12 6"/>
+							Padding="12 6">
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="&#xE8B1;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="{loc:Loc DashboardPage.InvertSelection}" VerticalAlignment="Center"/>
+							</StackPanel>
+						</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="{loc:Loc DashboardPage.BatchEnable}"
 							Command="{Binding BatchEnableCommand}"
-							Padding="12 6"/>
+							Padding="12 6">
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="&#xE73A;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="{loc:Loc DashboardPage.BatchEnable}" VerticalAlignment="Center"/>
+							</StackPanel>
+						</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="{loc:Loc DashboardPage.BatchDisable}"
 							Command="{Binding BatchDisableCommand}"
-							Padding="12 6"/>
+							Padding="12 6">
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="&#xE739;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="{loc:Loc DashboardPage.BatchDisable}" VerticalAlignment="Center"/>
+							</StackPanel>
+						</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
 							Content="{loc:Loc DashboardPage.BatchTag}"
 							Command="{Binding BatchAddTagsCommand}"
@@ -701,13 +812,21 @@
 						</Button.ToolTip>
 					</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="{loc:Loc ModGroup.AddToGroup}"
 							Command="{Binding AddModsToGroupCommand}"
-							Padding="12 6"/>
+							Padding="12 6">
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="{loc:Loc ModGroup.AddToGroup}" VerticalAlignment="Center"/>
+							</StackPanel>
+						</Button>
 					<Button Style="{StaticResource FluentDangerButton}"
-							Content="{loc:Loc Common.Delete}"
 							Command="{Binding BatchDeleteCommand}"
-							Padding="12 6"/>
+							Padding="12 6">
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="{loc:Loc Common.Delete}" VerticalAlignment="Center"/>
+							</StackPanel>
+						</Button>
 				</StackPanel>
 			</Grid>
 		</Border>
@@ -733,7 +852,11 @@
 			<ItemsControl.ContextMenu>
 				<ContextMenu Visibility="{Binding ShowSeparator, Converter={StaticResource BoolToVisibilityConverter}}">
 					<MenuItem Header="{loc:Loc DashboardPage.CreateSeparator}"
-							  Command="{Binding CreateSeparatorCommand}"/>
+							  Command="{Binding CreateSeparatorCommand}">
+						<MenuItem.Icon>
+							<TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+						</MenuItem.Icon>
+					</MenuItem>
 				</ContextMenu>
 			</ItemsControl.ContextMenu>
 			<ItemsControl.Style>
@@ -852,38 +975,9 @@
 					<ColumnDefinition Width="Auto"/>
 				</Grid.ColumnDefinitions>
 
-				<!-- Version Check Status & Hash Migration (左侧) -->
-				<!-- 使用 Grid 替代 StackPanel，使 * 列能正确约束 TextBlock 宽度，避免长文本溢出覆盖右侧按钮 -->
-				<Grid Grid.Column="0"
-					  VerticalAlignment="Center">
-					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="Auto"/>
-						<ColumnDefinition Width="*"/>
-					</Grid.ColumnDefinitions>
-					<Border Grid.Column="0"
-							Width="12"
-							Height="12"
-							CornerRadius="6"
-							Background="{StaticResource SystemAccentBrush}"
-							Visibility="{Binding IsCheckingVersion, Converter={StaticResource BoolToVisibilityConverter}}"/>
-					<TextBlock Grid.Column="1"
-							   Text="{Binding VersionCheckSummary}"
-							   FontSize="12"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   VerticalAlignment="Center"
-							   Margin="8 0 0 0"
-							   TextTrimming="CharacterEllipsis"
-							   Visibility="{Binding HasVersionCheckResult, Converter={StaticResource BoolToVisibilityConverter}}"/>
-					<!-- 哈希迁移状态（版本升级后后台计算文件指纹的进度提示） -->
-					<TextBlock Grid.Column="1"
-							   Text="{Binding HashMigrationStatusText}"
-							   FontSize="12"
-							   Foreground="{StaticResource SystemAccentBrush}"
-							   VerticalAlignment="Center"
-							   Margin="8 0 0 0"
-							   TextTrimming="CharacterEllipsis"
-							   Visibility="{Binding HashMigrationStatusText, Converter={StaticResource StringToVisibilityConverter}}"/>
-				</Grid>
+				<!-- 左侧动态状态文字已移除：版本检查/冲突检查/哈希迁移的结果均改为右下角气泡通知（ToastOverlay），
+					 进行中进度在任务中心查看 -->
+				<Grid Grid.Column="0"/>
 
 				<!-- Action Buttons (右侧) -->
 				<StackPanel x:Name="BottomActionButtons" Grid.Column="1"
@@ -900,37 +994,49 @@
                         </StackPanel>
                     </Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="{loc:Loc DashboardPage.RescanMods}"
 							Command="{Binding RescanModsCommand}"
 							IsEnabled="{Binding Initialized}"
 							Padding="20 10">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xE895;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+							<TextBlock Text="{loc:Loc DashboardPage.RescanMods}" VerticalAlignment="Center"/>
+						</StackPanel>
 						<Button.ToolTip>
 							<ToolTip Content="{loc:Loc DashboardPage.RescanModsHint}"/>
 						</Button.ToolTip>
 					</Button>
-					<Button Style="{StaticResource FluentDangerButton}"
-							Content="{loc:Loc DashboardPage.CleanMods}"
+					<Button Style="{StaticResource FluentDangerSubtleButton}"
 							Command="{Binding PurgeCommand}"
 							IsEnabled="{Binding Initialized}"
 							Padding="20 10">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xEA99;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+							<TextBlock Text="{loc:Loc DashboardPage.CleanMods}" VerticalAlignment="Center"/>
+						</StackPanel>
 						<Button.ToolTip>
 							<ToolTip Content="{loc:Loc DashboardPage.CleanModsHint}"/>
 						</Button.ToolTip>
 					</Button>
-					<Button x:Name="DeployModsButton" Style="{StaticResource FluentConfirmButton}"
-							Content="{loc:Loc DashboardPage.DeployMods}"
+					<Button x:Name="DeployModsButton" Style="{StaticResource FluentPrimaryButton}"
 							Command="{Binding DeployCommand}"
 							IsEnabled="{Binding Initialized}"
 							Padding="20 10">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xE7B8;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+							<TextBlock Text="{loc:Loc DashboardPage.DeployMods}" VerticalAlignment="Center"/>
+						</StackPanel>
 						<Button.ToolTip>
 							<ToolTip Content="{loc:Loc DashboardPage.DeployModsHint}"/>
 						</Button.ToolTip>
 					</Button>
-					<Button Style="{StaticResource FluentPrimaryButton}"
-							Content="{loc:Loc DashboardPage.LaunchGame}"
+					<Button Style="{StaticResource FluentSecondaryButton}"
 							Command="{Binding RunCommand}"
 							IsEnabled="{Binding Initialized}"
 							Padding="20 10">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="&#xE768;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+							<TextBlock Text="{loc:Loc DashboardPage.LaunchGame}" VerticalAlignment="Center"/>
+						</StackPanel>
 						<Button.ToolTip>
 							<ToolTip Content="{loc:Loc DashboardPage.LaunchGameHint}"/>
 						</Button.ToolTip>

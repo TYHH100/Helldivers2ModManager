@@ -1404,7 +1404,7 @@ internal sealed class PatchResourceInspectionService
 
         var candidates = textures
             .Where(texture => referencedColorTextureIds.Contains(texture.TextureId) &&
-                texture.PayloadKind == "DDS" && texture.DxgiFormat is 98 or 99)
+                texture.PayloadKind == "DDS" && texture.DxgiFormat is 71 or 72 or 98 or 99)
             .GroupBy(static texture => texture.TextureId)
             .Select(static group => group.First())
             .ToArray();
@@ -1429,9 +1429,10 @@ internal sealed class PatchResourceInspectionService
         TextureInspectionItem texture,
         CancellationToken cancellationToken)
     {
-        const int blockSize = 16;
+        // BC1 块 8 字节，BC3/BC7 块 16 字节；采样以块为粒度对齐。
+        var blockBytes = texture.DxgiFormat is 71 or 72 ? 8 : 16;
         const int blocksPerSample = 4;
-        const int sampleByteCount = blockSize * blocksPerSample;
+        var sampleByteCount = blockBytes * blocksPerSample;
         var patchPath = Path.IsPathFullyQualified(texture.PatchPath)
             ? texture.PatchPath
             : Path.Combine(modDirectory.FullName, texture.PatchPath);
@@ -1448,7 +1449,7 @@ internal sealed class PatchResourceInspectionService
             ? texture.StreamSize
             : texture.GpuSize;
         var blockCount = (long)Math.Max(1, (texture.Width + 3) / 4) * Math.Max(1, (texture.Height + 3) / 4);
-        if (blockCount < blocksPerSample || payloadSize < sampleByteCount)
+        if (blockCount < blocksPerSample || payloadSize < (ulong)sampleByteCount)
             return false;
 
         var lastSampleStart = blockCount - blocksPerSample;
@@ -1469,8 +1470,8 @@ internal sealed class PatchResourceInspectionService
         for (var sampleIndex = 0; sampleIndex < sampleStarts.Length; sampleIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var sampleOffset = sampleStarts[sampleIndex] * blockSize;
-            if (sampleOffset > payloadSize - sampleByteCount ||
+            var sampleOffset = sampleStarts[sampleIndex] * blockBytes;
+            if (sampleOffset > (long)payloadSize - sampleByteCount ||
                 payloadOffset > (ulong)long.MaxValue - (ulong)sampleOffset ||
                 !await ReadAtAsync(
                     stream,

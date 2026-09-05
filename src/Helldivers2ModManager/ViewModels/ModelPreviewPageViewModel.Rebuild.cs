@@ -9,6 +9,7 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows;
@@ -344,14 +345,343 @@ internal sealed partial class ModelPreviewPageViewModel
                 geometry.Normals.Add(new Vector3D(normals[index], normals[index + 1], normals[index + 2]));
 
         if (hasCoordinates && source.TextureCoordinates is { } coordinates)
+        {
             for (var index = 0; index < coordinates.Length; index += 2)
                 geometry.TextureCoordinates.Add(new System.Windows.Point(coordinates[index], coordinates[index + 1]));
 
-        foreach (var index in source.TriangleIndices)
-            geometry.TriangleIndices.Add(index);
+            var keptTriangles = FilterZeroUvAreaTriangles(source.TriangleIndices, coordinates, positions);
+            foreach (var index in keptTriangles)
+                geometry.TriangleIndices.Add(index);
+        }
+        else
+        {
+            foreach (var index in source.TriangleIndices)
+                geometry.TriangleIndices.Add(index);
+        }
 
         geometry.Freeze();
         return new CachedMeshGeometry(geometry, minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    /// <summary>
+    /// 部分模组工具输出的网格带有"死亡覆盖层"：纯色区域的三角形 UV 塌缩成同一个点
+    /// （位级完全相同的零面积，或跨度不足一个纹素的次纹素）。WPF 的派生式采样把
+    /// 这类三角形渲染成黑块；若它们只是叠在正常几何上方的复制皮肤（z-fighting），
+    /// 黑块会盖住真实表面。但另一些模组（如 maya 民主中甲）的纯色部件——帽子、
+    /// 裙摆、袜面——本身就把 UV 塌缩到图集纯色区，且是该区域唯一的曲面；一律丢弃
+    /// 会让帽子消失、裙摆残缺、袜边撕裂。
+    /// 因此按"是否与正常曲面重复"逐三角形判定：退化三角形的中心若落在某个
+    /// 非相邻、近共面的正常三角形内部（复制皮肤特征），丢弃；否则保留——黑色是
+    /// 该区域唯一可用的预览近似（游戏按塌缩点纹素着色，这类部件多为深色纯色件）。
+    /// 返回保留三角形的索引序列（顺序与输入一致）。
+    /// </summary>
+    internal static int[] FilterZeroUvAreaTriangles(int[] triangleIndices, float[] coordinates, float[] positions)
+    {
+        // 一个纹素按 1024 预览贴图估算；跨度不足半个纹素的三角形只能采样到单一纹素。
+        const float subTexelSpan = 1f / 2048;
+
+        var total = triangleIndices.Length / 3;
+        if (total == 0 || positions.Length < triangleIndices[^1] * 3 + 3)
+            return triangleIndices;
+
+        // 0 = 正常，1 = 零面积，2 = 次纹素。
+        var kinds = new byte[total];
+        var degenerateCount = 0;
+        for (var triangle = 0; triangle < total; triangle++)
+        {
+            var cornerA = triangleIndices[triangle * 3];
+            var cornerB = triangleIndices[triangle * 3 + 1];
+            var cornerC = triangleIndices[triangle * 3 + 2];
+            var ax = coordinates[cornerA * 2];
+            var ay = coordinates[cornerA * 2 + 1];
+            var span = Math.Max(
+                Math.Max(
+                    Math.Abs(coordinates[cornerB * 2] - ax),
+                    Math.Abs(coordinates[cornerC * 2] - ax)),
+                Math.Max(
+                    Math.Abs(coordinates[cornerB * 2 + 1] - ay),
+                    Math.Abs(coordinates[cornerC * 2 + 1] - ay)));
+            if (span == 0f)
+            {
+                kinds[triangle] = 1;
+                degenerateCount++;
+            }
+            else if (span <= subTexelSpan)
+            {
+                kinds[triangle] = 2;
+                degenerateCount++;
+            }
+        }
+
+        if (degenerateCount == 0)
+            return triangleIndices;
+
+        var covered = FindCoplanarCoveredDegenerateTriangles(positions, triangleIndices, kinds);
+        if (covered is null || covered.Count == 0)
+            return triangleIndices;
+
+        List<int>? kept = null;
+        for (var triangle = 0; triangle < total; triangle++)
+        {
+            if (covered.Contains(triangle))
+            {
+                kept ??= CopyTrianglePrefix(triangleIndices, triangle * 3);
+                continue;
+            }
+
+            kept?.Add(triangleIndices[triangle * 3]);
+            kept?.Add(triangleIndices[triangle * 3 + 1]);
+            kept?.Add(triangleIndices[triangle * 3 + 2]);
+        }
+
+        return kept?.ToArray() ?? triangleIndices;
+    }
+
+    /// <summary>
+    /// 找出中心落在"非相邻、近共面正常三角形内部"的退化三角形（复制皮肤覆盖层）。
+    /// 覆盖参考集只含 UV 跨度大于 0 的三角形——零面积三角形自身渲染为黑块，
+    /// 不能作为合法表面的证据。返回 null 表示无法判定（几何退化或没有参考曲面），
+    /// 调用方应保留全部三角形。
+    /// </summary>
+    private static HashSet<int>? FindCoplanarCoveredDegenerateTriangles(float[] positions, int[] triangleIndices, byte[] kinds)
+    {
+        var total = kinds.Length;
+        float minX = float.PositiveInfinity, minY = float.PositiveInfinity, minZ = float.PositiveInfinity;
+        float maxX = float.NegativeInfinity, maxY = float.NegativeInfinity, maxZ = float.NegativeInfinity;
+        var hasReference = false;
+        for (var triangle = 0; triangle < total; triangle++)
+        {
+            if (kinds[triangle] == 1)
+                continue;
+            hasReference = true;
+            for (var corner = 0; corner < 3; corner++)
+            {
+                var vi = triangleIndices[triangle * 3 + corner] * 3;
+                minX = Math.Min(minX, positions[vi]);
+                minY = Math.Min(minY, positions[vi + 1]);
+                minZ = Math.Min(minZ, positions[vi + 2]);
+                maxX = Math.Max(maxX, positions[vi]);
+                maxY = Math.Max(maxY, positions[vi + 1]);
+                maxZ = Math.Max(maxZ, positions[vi + 2]);
+            }
+        }
+
+        if (!hasReference)
+            return null;
+
+        var diagonal = Math.Sqrt(
+            (maxX - minX) * (maxX - minX) +
+            (maxY - minY) * (maxY - minY) +
+            (maxZ - minZ) * (maxZ - minZ));
+        if (!(diagonal > 0f) || !double.IsFinite(diagonal))
+            return null;
+
+        // 共面距离容差取对角线的 0.4%，重心坐标边界容差 1%：覆盖层与被覆盖曲面
+        // 几乎重合，而纯色部件自身曲面的邻接三角形（共享顶点索引）不参与判定。
+        var coplanarDistance = (float)(diagonal * 0.004);
+        var coplanarDistanceSquared = coplanarDistance * coplanarDistance;
+        const float insideEpsilon = 0.01f;
+
+        // 预计算顶点数组：内层候选测试避免 positions/triangleIndices 双重间接寻址。
+        var vertices = new Vector3[positions.Length / 3];
+        for (var i = 0; i < vertices.Length; i++)
+            vertices[i] = new Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+
+        // 空间哈希网格。cell 索引一律相对参考几何 bbox 原点——fs-37 实测有 29.7 万
+        // 三角形的网格，若直接用世界坐标除以 cellSize，远离原点或解码异常的顶点会把
+        // (int)Math.Floor 结果推入整型溢出，循环失控直至内存耗尽（应用卡死在
+        // "正在解码几何体"且 _rebuildGate 永久占用，只能重启）。相对索引上界
+        // ≤ 对角线/cellSize + 常数，天然有界。
+        var cellSize = (float)(diagonal / 32);
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        List<int>? wideTriangles = null;
+        var gridEntries = 0L;
+        for (var triangle = 0; triangle < total; triangle++)
+        {
+            if (kinds[triangle] == 1)
+                continue;
+            var a = vertices[triangleIndices[triangle * 3]];
+            var b = vertices[triangleIndices[triangle * 3 + 1]];
+            var c = vertices[triangleIndices[triangle * 3 + 2]];
+            var min = Vector3.Min(a, Vector3.Min(b, c));
+            var max = Vector3.Max(a, Vector3.Max(b, c));
+            // AABB 向外扩共面容差后注册：保证中心点落在三角形上（含容差）时，
+            // 该三角形一定注册在中心点所在 cell，查找只需单 cell。
+            var loX = (int)Math.Floor((min.X - coplanarDistance - minX) / cellSize);
+            var loY = (int)Math.Floor((min.Y - coplanarDistance - minY) / cellSize);
+            var loZ = (int)Math.Floor((min.Z - coplanarDistance - minZ) / cellSize);
+            var hiX = (int)Math.Floor((max.X + coplanarDistance - minX) / cellSize);
+            var hiY = (int)Math.Floor((max.Y + coplanarDistance - minY) / cellSize);
+            var hiZ = (int)Math.Floor((max.Z + coplanarDistance - minZ) / cellSize);
+            var span = (long)(hiX - loX + 1) * (hiY - loY + 1) * (hiZ - loZ + 1);
+            if (span > 4096)
+            {
+                // 跨越大量 cell 的超宽三角形（细长绑带/垃圾几何）：放入线性候选表，
+                // 不允许单个三角形撑爆网格内存。
+                wideTriangles ??= new List<int>();
+                wideTriangles.Add(triangle);
+                if (wideTriangles.Count > 256)
+                    return null;
+                continue;
+            }
+
+            gridEntries += span;
+            if (gridEntries > 8_000_000)
+                return null;
+            for (var x = loX; x <= hiX; x++)
+                for (var y = loY; y <= hiY; y++)
+                    for (var z = loZ; z <= hiZ; z++)
+                    {
+                        if (!grid.TryGetValue((x, y, z), out var list))
+                            grid[(x, y, z)] = list = new List<int>();
+                        list.Add(triangle);
+                    }
+        }
+
+        // 点测试预算：单网格最坏情况必须有硬上限，否则大网格会让重建线程在持有
+        // _rebuildGate 时卡死数分钟。超限放弃判定并保留全部三角形（fail-open）。
+        var pointTestBudget = 32_000_000L;
+
+        var covered = new HashSet<int>();
+        for (var triangle = 0; triangle < total; triangle++)
+        {
+            if (kinds[triangle] == 0)
+                continue;
+            var cornerA = triangleIndices[triangle * 3];
+            var cornerB = triangleIndices[triangle * 3 + 1];
+            var cornerC = triangleIndices[triangle * 3 + 2];
+            var center = (
+                vertices[cornerA] +
+                vertices[cornerB] +
+                vertices[cornerC]) / 3f;
+            // 中心在参考几何 bbox（扩容差）之外：不可能被任何参考三角形覆盖。
+            // NaN 顶点的中心在所有比较中为 false，同样按未覆盖处理。
+            if (center.X < minX - coplanarDistance || center.X > maxX + coplanarDistance ||
+                center.Y < minY - coplanarDistance || center.Y > maxY + coplanarDistance ||
+                center.Z < minZ - coplanarDistance || center.Z > maxZ + coplanarDistance)
+                continue;
+            var key = (
+                (int)Math.Floor((center.X - minX) / cellSize),
+                (int)Math.Floor((center.Y - minY) / cellSize),
+                (int)Math.Floor((center.Z - minZ) / cellSize));
+            if (grid.TryGetValue(key, out var candidates))
+            {
+                foreach (var candidate in candidates)
+                {
+                    var a = triangleIndices[candidate * 3];
+                    var b = triangleIndices[candidate * 3 + 1];
+                    var c = triangleIndices[candidate * 3 + 2];
+                    // 相邻三角形（共享顶点索引）属于同一连续曲面，不构成"覆盖"。
+                    if (a == cornerA || a == cornerB || a == cornerC ||
+                        b == cornerA || b == cornerB || b == cornerC ||
+                        c == cornerA || c == cornerB || c == cornerC)
+                        continue;
+                    if (pointTestBudget-- == 0)
+                        return null;
+                    var pa = vertices[a];
+                    var pb = vertices[b];
+                    var pc = vertices[c];
+                    if (PointTriangleDistanceSquared(center, pa, pb, pc) > coplanarDistanceSquared)
+                        continue;
+                    if (!IsPointInsideTriangle(center, pa, pb, pc, insideEpsilon))
+                        continue;
+                    covered.Add(triangle);
+                    goto nextTriangle;
+                }
+            }
+
+            if (wideTriangles is not null)
+            {
+                foreach (var candidate in wideTriangles)
+                {
+                    var a = triangleIndices[candidate * 3];
+                    var b = triangleIndices[candidate * 3 + 1];
+                    var c = triangleIndices[candidate * 3 + 2];
+                    if (a == cornerA || a == cornerB || a == cornerC ||
+                        b == cornerA || b == cornerB || b == cornerC ||
+                        c == cornerA || c == cornerB || c == cornerC)
+                        continue;
+                    if (pointTestBudget-- == 0)
+                        return null;
+                    var pa = vertices[a];
+                    var pb = vertices[b];
+                    var pc = vertices[c];
+                    if (PointTriangleDistanceSquared(center, pa, pb, pc) > coplanarDistanceSquared)
+                        continue;
+                    if (!IsPointInsideTriangle(center, pa, pb, pc, insideEpsilon))
+                        continue;
+                    covered.Add(triangle);
+                    goto nextTriangle;
+                }
+            }
+
+            nextTriangle: ;
+        }
+
+        return covered;
+    }
+
+    private static float PointTriangleDistanceSquared(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+    {
+        var ab = b - a;
+        var ac = c - a;
+        var ap = p - a;
+        var d1 = Vector3.Dot(ab, ap);
+        var d2 = Vector3.Dot(ac, ap);
+        if (d1 <= 0f && d2 <= 0f)
+            return Vector3.DistanceSquared(p, a);
+        var bp = p - b;
+        var d3 = Vector3.Dot(ab, bp);
+        var d4 = Vector3.Dot(ac, bp);
+        if (d3 >= 0f && d4 <= d3)
+            return Vector3.DistanceSquared(p, b);
+        var vc = d1 * d4 - d3 * d2;
+        if (vc <= 0f && d1 >= 0f && d3 <= 0f)
+            return Vector3.DistanceSquared(p, a + ab * (d1 / (d1 - d3)));
+        var cp = p - c;
+        var d5 = Vector3.Dot(ab, cp);
+        var d6 = Vector3.Dot(ac, cp);
+        if (d6 >= 0f && d5 <= d6)
+            return Vector3.DistanceSquared(p, c);
+        var vb = d5 * d2 - d1 * d6;
+        if (vb <= 0f && d2 >= 0f && d6 <= 0f)
+            return Vector3.DistanceSquared(p, a + ac * (d2 / (d2 - d6)));
+        var va = d3 * d6 - d5 * d4;
+        if (va <= 0f && d4 - d3 >= 0f && d5 - d6 >= 0f)
+            return Vector3.DistanceSquared(p, b + (c - b) * ((d4 - d3) / (d4 - d3 + d5 - d6)));
+        var denom = Vector3.Dot(ab, ab) * Vector3.Dot(ac, ac) - Vector3.Dot(ab, ac) * Vector3.Dot(ab, ac);
+        if (Math.Abs(denom) < 1e-20f)
+            return Vector3.DistanceSquared(p, a);
+        var v = (Vector3.Dot(ac, ac) * Vector3.Dot(ap, ab) - Vector3.Dot(ab, ac) * Vector3.Dot(ap, ac)) / denom;
+        var w = (Vector3.Dot(ab, ab) * Vector3.Dot(ap, ac) - Vector3.Dot(ab, ac) * Vector3.Dot(ap, ab)) / denom;
+        return Vector3.DistanceSquared(p, a + ab * v + ac * w);
+    }
+
+    private static bool IsPointInsideTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c, float epsilon)
+    {
+        var v0 = b - a;
+        var v1 = c - a;
+        var v2 = p - a;
+        var d00 = Vector3.Dot(v0, v0);
+        var d01 = Vector3.Dot(v0, v1);
+        var d11 = Vector3.Dot(v1, v1);
+        var d20 = Vector3.Dot(v2, v0);
+        var d21 = Vector3.Dot(v2, v1);
+        var denom = d00 * d11 - d01 * d01;
+        if (Math.Abs(denom) < 1e-20f)
+            return false;
+        var v = (d11 * d20 - d01 * d21) / denom;
+        var w = (d00 * d21 - d01 * d20) / denom;
+        var u = 1f - v - w;
+        return u >= -epsilon && v >= -epsilon && w >= -epsilon;
+    }
+
+    private static List<int> CopyTrianglePrefix(int[] triangleIndices, int upto)
+    {
+        var kept = new List<int>(triangleIndices.Length);
+        for (var index = 0; index < upto; index++)
+            kept.Add(triangleIndices[index]);
+        return kept;
     }
 
     private static TexturePreviewCacheKey CreateTextureCacheKey(
@@ -607,8 +937,7 @@ internal sealed partial class ModelPreviewPageViewModel
             .Distinct()
             .ToArray();
         var automaticIds = GetAutomaticMaterialTextureIds(mesh);
-        var baseColorCandidates = semanticColorIds.Length > 0 ? semanticColorIds : automaticIds;
-        var baseColorId = baseColorCandidates.FirstOrDefault(texturePreviews.ContainsKey);
+        var baseColorId = SelectBaseColorTextureId(semanticColorIds, automaticIds, texturePreviews);
 
         var emissiveIds = mesh.MaterialTextures.Get(ModelPreviewTextureRole.Emissive)
             .Where(texturePreviews.ContainsKey)
@@ -620,6 +949,46 @@ internal sealed partial class ModelPreviewPageViewModel
             .DefaultIfEmpty(0)
             .Max();
         return new(baseColorId != 0 ? baseColorId : null, emissiveIds, iridescenceStrength);
+    }
+
+    /// <summary>
+    /// 选择材质的 Albedo 贴图。已识别语义（BaseColor/Iridescence）按语义顺序取第一个
+    /// 可读输入——这是模组的权威绑定；但内容评分为 0 的候选（法线贴图、纯黑占位）
+    /// 永远不会是合法 Albedo，跳过后进入内容评分回退。语义候选一个都没解码成功
+    /// （贴图未加载/解码失败）时不做任何回退——不能拿缓存里无关的输入（法线/遮罩）
+    /// 当 Albedo，按灰色模回退。语义无法识别的材质（预览未收录的着色器家族，实测
+    /// 其贴图表排列为 [黑遮罩, 法线, …, MRA, 真正的 Albedo]）按
+    /// <see cref="ModelPreviewTextureAnalysis.ComputeAlbedoScore"/> 的内容评分排序，
+    /// 避免按表顺序选中黑色遮罩或法线贴图当 Albedo。
+    /// </summary>
+    internal static ulong SelectBaseColorTextureId(
+        IReadOnlyList<ulong> semanticColorIds,
+        IReadOnlyList<ulong> automaticIds,
+        IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews)
+    {
+        var hasSemanticCandidate = false;
+        var hasDecodedSemantic = false;
+        foreach (var textureId in semanticColorIds)
+        {
+            if (textureId == 0)
+                continue;
+            hasSemanticCandidate = true;
+            if (!texturePreviews.TryGetValue(textureId, out var bound))
+                continue;
+            hasDecodedSemantic = true;
+            if (bound.AlbedoScore > 0.0)
+                return textureId;
+        }
+
+        // 语义候选存在但没有任何一个进入过解码结果：权威绑定失效，保持灰色回退。
+        if (hasSemanticCandidate && !hasDecodedSemantic)
+            return 0;
+
+        return automaticIds
+            .Where(textureId => textureId != 0 && texturePreviews.ContainsKey(textureId))
+            .OrderByDescending(textureId => texturePreviews[textureId].AlbedoScore)
+            .ThenByDescending(textureId => texturePreviews[textureId].SourcePixelCount)
+            .FirstOrDefault();
     }
 
     private static Material ComposeMaterial(

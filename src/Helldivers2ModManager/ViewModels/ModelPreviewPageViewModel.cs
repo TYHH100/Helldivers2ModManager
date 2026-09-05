@@ -262,7 +262,9 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         TexturePreviewRole Role,
         long SourcePixelCount,
         // AlbedoIridescence 的 Alpha 强度（0..1）：>0 时预览给材质叠加流光高光层。
-        double IridescenceStrength = 0);
+        double IridescenceStrength = 0,
+        // 贴图内容"像不像 Albedo"的评分（0..1）：语义无法识别的材质按它排序候选。
+        double AlbedoScore = 0.5);
     private sealed record LoadedTextureResult(ulong TextureId, TextureInspectionItem Texture, LoadedTexturePreview Preview);
     private sealed record TexturePreviewCacheKey(
         string PatchPath,

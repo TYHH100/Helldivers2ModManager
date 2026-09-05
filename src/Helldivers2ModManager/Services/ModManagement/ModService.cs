@@ -51,6 +51,7 @@ internal sealed partial class ModService
 	private readonly ModLinkRepository _modLinkRepository;
 	private readonly GameProcessService _gameProcessService;
 	private SettingsService? _settingsService;
+	private ManifestParseCache? _manifestCache;
 
 	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService, LocalizationService localizationService, VersionCheckService versionCheckService, ModLinkRepository modLinkRepository, GameProcessService gameProcessService)
 	{
@@ -104,16 +105,22 @@ internal sealed partial class ModService
 		var dirs = modsDir.GetDirectories();
 		_logger.LogInformation("Found {} folders in \"Mods\" directory", dirs.Length);
 
+		// 解析缓存：以目录文件树指纹为键，命中时跳过 manifest 反序列化与 CheckPaths 的
+		// 大量存在性检查；任何文件变动都会改变指纹，保证结果不陈旧。
+		_manifestCache = ManifestParseCache.Load(_settingsService.StorageDirectory, _logger);
+
 		// 每个目录的解析（manifest 读取/反序列化 + 路径校验）互不依赖且以磁盘 IO 为主，
 		// 并行执行显著缩短启动加载时间；结果按目录顺序存放，汇总阶段保持确定性顺序。
-		var parsedResults = new (DirectoryInfo Dir, ModData? Mod, ModProblem[] Problems)[dirs.Length];
-		Parallel.For(0, dirs.Length, index =>
+		// 并发度与文件复制约定一致，无界并发会让磁盘队列过深反而降吞吐。
+		var parsedResults = new ParsedModDirectory[dirs.Length];
+		Parallel.For(0, dirs.Length, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4) }, index =>
 		{
-			parsedResults[index] = ParseModDirectory(dirs[index]);
+			parsedResults[index] = ParseModDirectoryCached(dirs[index]);
 		});
 
-		foreach (var (dir, mod, dirProblems) in parsedResults)
+		foreach (var parsed in parsedResults)
 		{
+			var (dir, mod, dirProblems) = (parsed.Dir, parsed.Mod, parsed.Problems);
 			problems.AddRange(dirProblems);
 
 			// 重复 GUID 是跨目录检查，必须放在汇总（单线程）阶段进行
@@ -142,16 +149,101 @@ internal sealed partial class ModService
 
 		// 初始化哈希管理服务并触发版本迁移（为新版用户自动计算所有现有模组的文件哈希值）
 		_modHashService.Init(_settingsService);
+
+		// 缓存写入放后台，不阻塞初始化返回
+		var storageDirectory = _settingsService.StorageDirectory;
+		_ = Task.Run(() => _manifestCache.Save(storageDirectory));
 		// 哈希迁移是 CPU/IO 密集操作，放到后台线程执行，避免阻塞 UI 线程
 		_ = Task.Run(async () => await _modHashService.MigrateExistingModsAsync(_mods));
 
 		return problems.ToArray();
 	}
 
+	/// <summary>单个模组目录的解析结果。ManifestJson 用于缓存回写（清单已解析但路径校验失败时也要保留）。</summary>
+	private sealed record ParsedModDirectory(DirectoryInfo Dir, ModData? Mod, ModProblem[] Problems, string? ManifestJson, int? FailureKind);
+
+	/// <summary>
+	/// 带缓存的单目录解析：先算目录指纹，命中缓存时从缓存重建清单与问题列表，
+	/// 未命中走完整解析并回写缓存。
+	/// </summary>
+	private ParsedModDirectory ParseModDirectoryCached(DirectoryInfo dir, bool deleteWhenManifestMissing = true)
+	{
+		var cache = _manifestCache;
+		if (cache is null)
+			return ParseModDirectory(dir, deleteWhenManifestMissing);
+
+		string fingerprint;
+		try
+		{
+			fingerprint = ManifestParseCache.ComputeFingerprint(dir);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to compute fingerprint for \"{}\", falling back to full parse", dir.FullName);
+			return ParseModDirectory(dir, deleteWhenManifestMissing);
+		}
+
+		if (cache.TryGet(dir.Name, fingerprint, out var entry))
+		{
+			_logger.LogDebug("Manifest cache hit for \"{}\"", dir.FullName);
+			return RebuildFromCache(dir, entry);
+		}
+
+		var parsed = ParseModDirectory(dir, deleteWhenManifestMissing);
+
+		// 清单缺失时目录已被删除（启动路径），不缓存该状态
+		if (deleteWhenManifestMissing && parsed.Mod is null && parsed.ManifestJson is null && parsed.FailureKind is null)
+			return parsed;
+
+		cache.Store(dir.Name, new CachedModEntry
+		{
+			Fingerprint = fingerprint,
+			ManifestJson = parsed.ManifestJson,
+			Succeeded = parsed.Mod is not null,
+			FailureKind = parsed.FailureKind,
+			Problems = parsed.Problems.Select(static p => new CachedModProblem
+			{
+				Kind = (int)p.Kind,
+				ExtraData = p.ExtraData as string,
+			}).ToList(),
+		});
+
+		return parsed;
+	}
+
+	/// <summary>从缓存条目重建解析结果；缓存清单损坏时回退完整解析。</summary>
+	private ParsedModDirectory RebuildFromCache(DirectoryInfo dir, CachedModEntry entry)
+	{
+		var problems = entry.Problems
+			.Select(p => new ModProblem
+			{
+				Directory = dir,
+				Kind = (ModProblemKind)p.Kind,
+				ExtraData = p.ExtraData,
+			})
+			.ToArray();
+
+		if (entry.ManifestJson is null)
+			return new ParsedModDirectory(dir, null, problems, null, entry.FailureKind);
+
+		try
+		{
+			using var doc = JsonDocument.Parse(entry.ManifestJson);
+			var manifest = ModManifest.DeserializeFromDocument(doc);
+			var mod = entry.Succeeded ? new ModData(dir, manifest) : null;
+			return new ParsedModDirectory(dir, mod, problems, entry.ManifestJson, null);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Cached manifest for \"{}\" is no longer deserializable, reparsing", dir.FullName);
+			return ParseModDirectory(dir);
+		}
+	}
+
 	/// <summary>
 	/// 解析单个模组目录的清单并校验路径（仅在后台并行加载阶段调用）。
 	/// </summary>
-	private (DirectoryInfo Dir, ModData? Mod, ModProblem[] Problems) ParseModDirectory(DirectoryInfo dir)
+	private ParsedModDirectory ParseModDirectory(DirectoryInfo dir, bool deleteWhenManifestMissing = true)
 	{
 		var problems = new List<ModProblem>();
 
@@ -176,7 +268,7 @@ internal sealed partial class ModService
 					Directory = dir,
 					Kind = ModProblemKind.UnknownManifestVersion,
 				});
-				return (dir, null, problems.ToArray());
+				return new ParsedModDirectory(dir, null, problems.ToArray(), null, (int)ModProblemKind.UnknownManifestVersion);
 			}
 			catch (EndOfLifeException)
 			{
@@ -186,7 +278,7 @@ internal sealed partial class ModService
 					Directory = dir,
 					Kind = ModProblemKind.OutOfSupportManifest,
 				});
-				return (dir, null, problems.ToArray());
+				return new ParsedModDirectory(dir, null, problems.ToArray(), null, (int)ModProblemKind.OutOfSupportManifest);
 			}
 			catch (Exception ex)
 			{
@@ -196,13 +288,24 @@ internal sealed partial class ModService
 					Directory = dir,
 					Kind = ModProblemKind.CantParseManifest,
 				});
-				return (dir, null, problems.ToArray());
+				return new ParsedModDirectory(dir, null, problems.ToArray(), null, (int)ModProblemKind.CantParseManifest);
 			}
 
 			if (!CheckPaths(manifest, problems, dir, manifestFile))
-				return (dir, null, problems.ToArray());
+				return new ParsedModDirectory(dir, null, problems.ToArray(), SerializeCanonical(manifest), null);
 
-			return (dir, new ModData(dir, manifest), problems.ToArray());
+			return new ParsedModDirectory(dir, new ModData(dir, manifest), problems.ToArray(), SerializeCanonical(manifest), null);
+		}
+
+		if (!deleteWhenManifestMissing)
+		{
+			_logger.LogWarning("No manifest found in \"{}\"", dir.FullName);
+			problems.Add(new ModProblem
+			{
+				Directory = dir,
+				Kind = ModProblemKind.NoManifestFound,
+			});
+			return new ParsedModDirectory(dir, null, problems.ToArray(), null, (int)ModProblemKind.NoManifestFound);
 		}
 
 		_logger.LogWarning("No manifest found in \"{}\", deleting", dir.FullName);
@@ -212,7 +315,7 @@ internal sealed partial class ModService
 			Kind = ModProblemKind.NoManifestFound,
 		});
 		dir.Delete(true);
-		return (dir, null, problems.ToArray());
+		return new ParsedModDirectory(dir, null, problems.ToArray(), null, null);
 	}
 	
 	public async Task RemoveAsync(ModData mod)
@@ -462,6 +565,34 @@ internal sealed partial class ModService
 		_logger.LogInformation("Found {} folders in Mods directory", dirs.Length);
 		var loadedDirs = new HashSet<string>(dirs.Select(static d => d.FullName), StringComparer.OrdinalIgnoreCase);
 
+		// 指纹预计算（只读，可安全并行）：无变更的模组在后面的对账循环里直接跳过
+		// "重新反序列化 + 规范化 JSON 全文比较"，Rescan 在未改动库上接近秒级完成。
+		var cache = _manifestCache;
+		var fingerprints = new Dictionary<string, string>(dirs.Length, StringComparer.OrdinalIgnoreCase);
+		if (cache is not null && dirs.Length > 0)
+		{
+			await Task.Run(() =>
+			{
+				Parallel.For(0, dirs.Length, new ParallelOptions
+				{
+					MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4),
+					CancellationToken = cancellationToken,
+				}, index =>
+				{
+					try
+					{
+						var fingerprint = ManifestParseCache.ComputeFingerprint(dirs[index]);
+						lock (fingerprints)
+							fingerprints[dirs[index].FullName] = fingerprint;
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Failed to compute fingerprint for \"{}\"", dirs[index].FullName);
+					}
+				});
+			}, cancellationToken);
+		}
+
 		// 1) 移除目录已消失的模组。只做内存/缓存清理与事件通知：
 		//    部署文件清理属于 RemoveAsync（针对"卸载"），目录都没了无需也无法执行。
 		for (var index = _mods.Count - 1; index >= 0; index--)
@@ -475,6 +606,7 @@ internal sealed partial class ModService
 			_mods.RemoveAt(index);
 			_modsByGuid.Remove(mod.Manifest.Guid);
 			_modsByPath.Remove(mod.Directory.FullName);
+			cache?.Remove(mod.Directory.Name);
 			ModRemoved?.Invoke(mod);
 			removedCount++;
 
@@ -494,11 +626,21 @@ internal sealed partial class ModService
 
 			if (_modsByPath.TryGetValue(dir.FullName, out var existingMod))
 			{
-				// 2) 已加载：检测 manifest 是否变化
+				// 2) 已加载：指纹未变（且有缓存条目佐证）时清单必然未变，直接跳过重解析
+				if (cache is not null
+					&& fingerprints.TryGetValue(dir.FullName, out var fingerprint)
+					&& cache.TryGet(dir.Name, fingerprint, out _))
+				{
+					continue;
+				}
+
 				switch (await ReloadManifestIfChangedAsync(existingMod, dir, problems, cancellationToken))
 				{
 					case ModReloadOutcome.Updated:
 						updatedCount++;
+						// 丢弃缓存条目：问题列表由本次 Reload 产出、未单独缓存，
+						// 下次启动重新解析一次并按真实结果重建缓存
+						cache?.Remove(dir.Name);
 						break;
 					case ModReloadOutcome.GuidChanged:
 						// 目录被替换成另一个模组：旧条目已移除，新清单走新增流程
@@ -512,6 +654,8 @@ internal sealed partial class ModService
 			if (TryAddModDirectory(dir, problems, cancellationToken))
 				addedCount++;
 		}
+
+		cache?.Save(_settingsService.StorageDirectory);
 
 		_logger.LogInformation("Refresh complete: {} added, {} updated, {} removed", addedCount, updatedCount, removedCount);
 		return new RefreshModsResult(problems.ToArray(), addedCount, updatedCount, removedCount);
@@ -612,54 +756,14 @@ internal sealed partial class ModService
 
 		_logger.LogDebug("Processing new folder \"{}\"", dir.FullName);
 
-		var manifestFile = new FileInfo(Path.Combine(dir.FullName, "manifest.json"));
-		if (!manifestFile.Exists)
-		{
-			_logger.LogWarning("No manifest found in \"{}\"", dir.FullName);
-			problems.Add(new ModProblem
-			{
-				Directory = dir,
-				Kind = ModProblemKind.NoManifestFound,
-			});
-			return false;
-		}
+		// 与启动加载共享同一套解析/校验/缓存逻辑；刷新路径不删除缺失清单的目录
+		var parsed = ParseModDirectoryCached(dir, deleteWhenManifestMissing: false);
+		problems.AddRange(parsed.Problems);
 
-		IModManifest manifest;
+		if (parsed.Mod is null)
+			return false;
 
-		try
-		{
-			manifest = ModManifest.DeserializeFromFile(manifestFile);
-		}
-		catch (UnknownManifestVersionException)
-		{
-			_logger.LogError("Manifest \"{}\" has unknown version", manifestFile.FullName);
-			problems.Add(new ModProblem
-			{
-				Directory = dir,
-				Kind = ModProblemKind.UnknownManifestVersion,
-			});
-			return false;
-		}
-		catch (EndOfLifeException)
-		{
-			_logger.LogError("Manifest \"{}\" is unsupported version 2", manifestFile.FullName);
-			problems.Add(new ModProblem
-			{
-				Directory = dir,
-				Kind = ModProblemKind.OutOfSupportManifest,
-			});
-			return false;
-		}
-		catch (Exception ex)
-		{
-			_logger.LogError(ex, "Unable to parse manifest \"{}\"", manifestFile.FullName);
-			problems.Add(new ModProblem
-			{
-				Directory = dir,
-				Kind = ModProblemKind.CantParseManifest,
-			});
-			return false;
-		}
+		var manifest = parsed.Mod.Manifest;
 
 		if (_modsByGuid.ContainsKey(manifest.Guid))
 		{
@@ -672,18 +776,14 @@ internal sealed partial class ModService
 			return false;
 		}
 
-		if (!CheckPaths(manifest, problems, dir, manifestFile))
-			return false;
-
-		var mod = new ModData(dir, manifest);
-		_mods.Add(mod);
-		_modsByGuid[mod.Manifest.Guid] = mod;
-		_modsByPath[mod.Directory.FullName] = mod;
-		ModAdded?.Invoke(mod);
+		_mods.Add(parsed.Mod);
+		_modsByGuid[manifest.Guid] = parsed.Mod;
+		_modsByPath[parsed.Mod.Directory.FullName] = parsed.Mod;
+		ModAdded?.Invoke(parsed.Mod);
 
 		_logger.LogInformation("Added mod \"{}\" ({})", manifest.Name, manifest.Guid);
 
-		_modHashService.ComputeAndStoreForModAsync(mod);
+		_modHashService.ComputeAndStoreForModAsync(parsed.Mod);
 		return true;
 	}
 

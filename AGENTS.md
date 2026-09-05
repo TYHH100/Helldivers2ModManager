@@ -146,7 +146,7 @@ internal sealed class MyService
 
 1. **材质变体去重（同一几何体的不同材质）**：同一 MeshInfo 内，`VertexOffset`/`VertexCount`/`IndexCount` 相同但 `IndexOffset` 不同的 section 引用的是不同索引存储位置但同一组三角形（材质变体）。去重分组键必须使用 `(MeshInfoIndex, VertexOffset, VertexCount, IndexCount)`，**不能包含 `IndexOffset`**，否则变体不会被分到同一组。同组内保留 Albedo 纹理像素数最大的变体（高分辨率正常材质 > 低分辨率纯黑占位）。
 
-2. **纯黑占位材质检测（独立几何体区域的纯黑材质）**：部分 section 使用 BC7 编码的纯黑占位材质（所有块解码后像素为 `(0,0,0,255)`），几何体与正常 section 不同，去重无法处理。先从顶层纹理的开头、四分位、中间和末尾等至少 5 个位置有界采样 BC7 块；再解码受限尺寸的缩略图，只有每个 BGRA 像素都是 `(0,0,0,255)` 才能判为纯黑。**不能只检查前 64 字节**：真实贴图的起始块可能稀疏或空白，而脸部等有效内容在后续区域。跳过纯黑 section 时，**只在 stream 中存在非纯黑 section 时才跳过**，避免移除该 stream 的全部几何体导致模型缺少部分。
+2. **纯黑占位材质检测（独立几何体区域的纯黑材质）**：部分 section 使用 BC7 或 BC1 编码的纯黑占位材质（所有块解码后像素为 `(0,0,0,255)`；索米圣诞装用的是 128x128 BC1，format 71），几何体与正常 section 不同，去重无法处理。先从顶层纹理的开头、四分位、中间和末尾等至少 5 个位置有界采样压缩块（BC1 块 8 字节、BC7 块 16 字节）；再解码受限尺寸的缩略图，只有每个 BGRA 像素都是 `(0,0,0,255)` 才能判为纯黑。**不能只检查前 64 字节**：真实贴图的起始块可能稀疏或空白，而脸部等有效内容在后续区域。跳过纯黑 section 时，**只在 stream 中存在非纯黑 section 时才跳过**，避免移除该 stream 的全部几何体导致模型缺少部分。
 
 3. **语义 hash 识别**：纹理语义 hash 使用 murmur64 高 32 位算法（`h32(name.lower())`）。`0xCAED6CD6` = h32("normal")，`0x756F6FA6` = h32("mra")，需在 `GetTextureRole` 中正确分类为 `Normal` 和 `Mask`，否则材质贴图匹配会失败。
 
@@ -154,11 +154,17 @@ internal sealed class MyService
 
 排查类似问题的步骤：先用诊断测试输出每个 mesh 的 `UnitId`/`StreamIndex`/`MeshInfoIndex`/`VertexCount`/`TriangleCount`/`ColorTextureId`；找出相同 Unit/St/MI 但不同 ColorTexId 的成对 mesh；在 `TryReadUnitMaterialSections` 去重逻辑处添加临时 `Console.WriteLine` 输出 section 的 `(VertexOffset, VertexCount, IndexOffset, IndexCount)`，确认变体的 IndexOffset 是否不同；解码关键纹理统计平均颜色确认是否纯黑。
 
+### 零面积 UV 三角形（模组预览整体变黑的另一根因）
+
+部分模组工具输出的网格带有"死亡覆盖层"：纯色区域的三角形 UV 塌缩成同一点，分两级——**位级完全相同**（零面积，B08/715 占 30%-36%）与**次纹素级**（跨度过小、全部挤进图集某个黑色角点，715 头部死亡层 7796 个三角形挤在 (1,1) 角点）。游戏按显式 LOD 采样不受影响；WPF 光栅化器对零面积 UV 插值输出黑块，死亡层则 z-fighting 盖住正常几何（715 头部马赛克）。**但塌缩 UV 不全是垃圾**：maya 民主中甲（DP-40+DP-11）等模组的纯色部件（帽、裙摆、袜面、饰带）本身就以塌缩 UV 为唯一曲面，实测该模裙摆网格 83% 三角形零面积——曾用"零面积一律跳过 + 退化占比 ≥15% 时跳过次纹素"的网格级规则，导致帽子消失、下半身残缺、袜边撕裂。现行修复：`FilterZeroUvAreaTriangles` 做**逐三角形覆盖判定**——退化三角形中心若落在某个非相邻、近共面（对角线 0.4% 容差）的正常三角形内部（复制皮肤特征），丢弃；否则保留（黑色是该区域唯一可用的预览近似）。判定需要 positions，参考集只含 UV 跨度 >0 的三角形，共享顶点索引的相邻三角形不构成"覆盖"。**性能红线（fs-37 实测教训）**：该网格有 29.7 万三角形，首版实现（27 邻域 cell 查找 + 世界坐标 cell 索引）单网格跑 80 秒且后续网格内存爆掉，重建线程持 `_rebuildGate` 卡死 → 状态永远停在"正在解码几何体"、整个预览报废只能重启。现行实现必须保持：cell 索引相对参考 bbox 原点（防远离原点/垃圾顶点导致整型溢出失控循环）、插入 AABB 外扩共面容差后单 cell 查找（覆盖三角形必然注册在中心所在 cell）、超宽三角形走线性候选表、网格插入条目 >800 万或点测试 >3200 万次即放弃判定保留全部三角形（fail-open，fs-37 本就无需过滤）。注意这不是"材质变体去重"：死亡层不是位置重复副本（实测 0/7796 匹配），不能按几何键去重；"顶点到正常表面的距离"也无法区分（同一连续曲面上的退化三角形距离同为 0），必须用"点在三角形内部"这一严格判定。
+
+排查方法：导出网格 UV 三角形统计每三角形的 UV 跨度（`max(u-span, v-span)`），统计"跨度恰为 0"的占比；用离屏 `RenderTargetBitmap` 复现黑色渲染后，逐项替换画刷配置/UV 数据做二分。
+
 ### 流光（油光）与发光材质的预览显示
 
 WPF 固定管线只有 Diffuse/Specular/Emissive 三种材质，预览按语义输入组合渲染（`ModelPreviewPageViewModel.Rebuild.cs` 的 `ResolveMaterialInputs`/`ComposeMaterial`）：
 
-- **流光/油光**：语义 `0xFF2C91CC`（AlbedoIridescence）归类为 `ModelPreviewTextureRole.Iridescence`，但它仍是颜色贴图——必须继续参与 BaseColor 回退链并写入 `ColorTextureId`，否则流光材质会错拿其它输入当 Albedo。其实测 Alpha 承载流光强度（同一材质未开流光 Alpha≈0，开油光后=255，见 Milltina TG-8"油光材质"选项）；`MeasureIridescenceStrength` 统计解码预览的平均 Alpha，>阈值时叠加 `SpecularMaterial` 静态高光层，强度为 0 就不加，不要改成"有该语义就一律加高光"。**不要给流光加动态扫光动画**（用户决策：流光材质≠油性材质，扫光动画实现过一版后被明确撤销，测试 `CreateAnimatedMaterial_Iridescent_KeepsStaticSheenWithoutSweepBand` 守护）。
+- **流光/油光**：语义 `0xFF2C91CC`（AlbedoIridescence）归类为 `ModelPreviewTextureRole.Iridescence`，但它仍是颜色贴图——必须继续参与 BaseColor 回退链并写入 `ColorTextureId`，否则流光材质会错拿其它输入当 Albedo。其实测 Alpha 承载流光强度（同一材质未开流光 Alpha≈0，开油光后=255，见 Milltina TG-8"油光材质"选项）；`MeasureIridescenceStrength` 统计解码预览的平均 Alpha，>阈值时叠加 `SpecularMaterial` 静态高光层，强度为 0 就不加，不要改成"有该语义就一律加高光"。**Alpha 非均匀（标准差 > 0.15）时必须返回 0**：大量角色模组（安德莉亚、瑞希等）把同一张贴图同时绑定到 Albedo 与 AlbedoIridescence 语义，此时 Alpha 是镂空/覆盖遮罩（透明+不透明混合），不是流光强度，按强度解释会让整模错误叠加高光。**不要给流光加动态扫光动画**（用户决策：流光材质≠油性材质，扫光动画实现过一版后被明确撤销，测试 `CreateAnimatedMaterial_Iridescent_KeepsStaticSheenWithoutSweepBand` 守护）。
 - **发光**：Emissive 语义输入用 `EmissiveMaterial` 自发光 pass 渲染（替代旧的 0.22 透明度 Diffuse 叠加）。**只有 Emissive、没有 BaseColor 的材质**（发光饰条/眼睛等，含 BaseColor 回退链落到 Emissive 贴图的情形，用 `IsEmissiveOnlyMaterial` 判定）必须 Diffuse 压暗（`EmissiveOnlyDiffuseColor`）+ Emissive 呼吸脉冲渲染为自发光——全亮 Diffuse 会让白色 Emissive 一直饱和，与普通白色布料无从区分。
 - **动画材质的线程约束**（目前仅自发光呼吸脉冲使用）：动画画刷不能冻结（含活动动画的 Freezable 无法 Freeze），必须在 **UI 线程**创建并只挂到未冻结的 live 模型上（`AttachAnimatedMaterials` 在 `CreateLiveModelGroup` 之后整体替换 children[i]↔meshes[i]）。无头测试环境没有驱动画刷时钟的渲染循环（无 composition target），动画时钟不走，动画的视觉效果只能靠结构断言验证。
 - **悬空贴图引用是常态**：模组材质可能引用不存在的贴图 ID（Milltina TG-8 帘子材质 0xD28C 的 5 个贴图在模组、用户模组库、游戏归档 17k 贴图定位表三处都不存在，其 parent 是特殊着色器模板，观感由材质常量驱动）——预览只能灰模回退，不要猜测贴图内容或解码未知常量表。

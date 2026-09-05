@@ -94,7 +94,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     // ===== 版本兼容性检测属性（委托给 VersionCheckViewModel） =====
 
     public bool IsCheckingVersion => _versionCheckVm.IsCheckingVersion;
-    public string VersionCheckSummary => _versionCheckVm.VersionCheckSummary;
     public int CompatibleModCount => _versionCheckVm.CompatibleModCount;
     public int IncompatibleModCount => _versionCheckVm.IncompatibleModCount;
 
@@ -103,23 +102,8 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     /// </summary>
     public bool HasIncompatibleMods => _versionCheckVm.HasIncompatibleMods;
 
-    /// <summary>
-    /// 是否已完成版本检查
-    /// </summary>
-    public bool HasVersionCheckResult => _versionCheckVm.HasVersionCheckResult;
-
-    /// <summary>
-    /// 哈希迁移状态文本，显示在底部状态栏中。
-    /// 后台哈希计算（版本升级迁移）进行中时显示进度，完成后显示结果摘要。
-    /// </summary>
-    [ObservableProperty]
-    private string _hashMigrationStatusText = string.Empty;
-
     [ObservableProperty]
     private bool _isScanningConflicts;
-
-    [ObservableProperty]
-    private string _conflictSummary = string.Empty;
 
     private bool _conflictScanPending;
     private string? _appliedConflictCacheKey;
@@ -177,12 +161,18 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             OnPropertyChanged(nameof(Title));
         };
 
-        // 订阅哈希迁移进度事件，将后台计算状态同步到 UI
+        // 订阅哈希迁移进度事件：迁移完成后弹气泡提示（进行中的进度由任务中心的哈希任务展示，
+        // 底部状态栏不再显示动态文字）
         _modHashService.MigrationProgressChanged += (progress) =>
         {
+            if (!progress.IsCompleted)
+                return;
+
             Application.Current.Dispatcher.Invoke(() =>
             {
-                HashMigrationStatusText = progress.Message ?? string.Empty;
+                WeakReferenceMessenger.Default.Send(new ToastMessage(
+                    _localizationService["BackgroundTasksPage.TaskTypeHash"],
+                    progress.Message ?? _localizationService["BackgroundTasksPage.TaskTypeHash"]));
             });
         };
         _mods = [];
@@ -708,9 +698,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         await Application.Current.Dispatcher.InvokeAsync(async () =>
         {
             await _versionCheckVm.CheckSingleModOnAddAsync(mod, _mods);
-            // 通知 UI 属性变更
-            OnPropertyChanged(nameof(VersionCheckSummary));
-            OnPropertyChanged(nameof(HasVersionCheckResult));
         });
     }
 
@@ -765,7 +752,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
         }
 
         _appliedConflictCacheKey = null;
-        ConflictSummary = string.Empty;
         return false;
     }
 
@@ -812,20 +798,22 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
                 : []);
         }
 
-        ConflictSummary = visibleConflicts.Length > 0
-            ? _localizationService["DashboardPage.ConflictFound"]
-                .Replace("{count}", visibleConflicts.Length.ToString())
-            : _localizationService["DashboardPage.ConflictNone"];
-
         _conflictCache[cacheKey] = result;
         _appliedConflictCacheKey = cacheKey;
 
         if (showReport)
         {
-            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
-            {
-                Message = FormatConflictReport(result, visibleConflicts)
-            });
+            // 手动刷新冲突检查：详细报告改为简化气泡（数量摘要，自动消失）；
+            // 逐条冲突明细仍可点击模组卡片上的覆盖状态指示器查看
+            WeakReferenceMessenger.Default.Send(new ToastMessage(
+                _localizationService["BackgroundTasksPage.TaskTypeConflictScan"],
+                visibleConflicts.Length > 0
+                    ? _localizationService["Toast.ConflictScanSummary"]
+                        .Replace("{mods}", result.ScannedModCount.ToString())
+                        .Replace("{conflicts}", visibleConflicts.Length.ToString())
+                    : _localizationService["Toast.ConflictScanClean"]
+                        .Replace("{mods}", result.ScannedModCount.ToString()),
+                IsError: false));
         }
     }
 

@@ -28,10 +28,11 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	private readonly ModHashService _modHashService;
 	private readonly ModService _modService;
 	private readonly LocalizationService _localizationService;
+	private readonly Services.BackgroundTaskService _backgroundTaskService;
 	[ObservableProperty]
 	private int _selectedOrgFolder = -1;
 
-	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService, ModHashService modHashService, ModService modService, LocalizationService localizationService)
+	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService, ModHashService modHashService, ModService modService, LocalizationService localizationService, Services.BackgroundTaskService backgroundTaskService)
 	{
 		_logger = logger;
 		_navStore = navStore;
@@ -40,6 +41,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		_modHashService = modHashService;
 		_modService = modService;
 		_localizationService = localizationService;
+		_backgroundTaskService = backgroundTaskService;
 
 		OrganizationalFolderNames.CollectionChanged += OrgFolderNames_CollectionChanged;
 
@@ -396,47 +398,62 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	}
 
 	[RelayCommand]
-	void HardPurge()
+	async Task HardPurge()
 	{
 		_logger.LogInformation("Hard purging patch files");
-		
-		try
-		{
-			var path = Path.Combine(_settingsService.StorageDirectory, "installed.txt");
-			if (File.Exists(path))
-				File.Delete(path);
-		}
-		catch (Exception ex)
-		{
-			_logger.LogWarning(ex, "删除 installed.txt 失败");
-		}
 
-		try
-		{
-			var dataDir = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data"));
-
-			var files = dataDir.EnumerateFiles("*.patch_*").ToArray();
-			_logger.LogDebug("Found {} patch files", files.Length);
-
-			foreach (var file in files)
+		// 补丁文件删除（可能上千个文件）移到后台线程，任务页可见进度
+		await _backgroundTaskService.RunAsync(
+			_localizationService["SettingsPage.ForceCleanPatches"],
+			_localizationService["SettingsPage.ForceCleanPatchesDesc"],
+			async (context, cancellationToken) =>
 			{
 				try
 				{
-					_logger.LogTrace("Deleting \"{}\"", file.Name);
-					file.Delete();
+					var path = Path.Combine(_settingsService.StorageDirectory, "installed.txt");
+					if (File.Exists(path))
+						File.Delete(path);
 				}
 				catch (Exception ex)
 				{
-					_logger.LogWarning(ex, "删除补丁文件失败: {File}", file.Name);
+					_logger.LogWarning(ex, "删除 installed.txt 失败");
 				}
-			}
-		}
-		catch (Exception ex)
-		{
-			_logger.LogWarning(ex, "枚举补丁文件失败");
-		}
 
-		_logger.LogInformation("Hard purge complete");
+				try
+				{
+					var dataDir = new DirectoryInfo(Path.Combine(_settingsService.GameDirectory, "data"));
+
+					var files = dataDir.EnumerateFiles("*.patch_*").ToArray();
+					_logger.LogDebug("Found {} patch files", files.Length);
+
+					for (var i = 0; i < files.Length; i++)
+					{
+						cancellationToken.ThrowIfCancellationRequested();
+						var file = files[i];
+						try
+						{
+							_logger.LogTrace("Deleting \"{}\"", file.Name);
+							file.Delete();
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "删除补丁文件失败: {File}", file.Name);
+						}
+					if (i % 50 == 0)
+						context.Report(progress: (double)(i + 1) / files.Length);
+					}
+				}
+				catch (OperationCanceledException)
+				{
+					throw;
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "枚举补丁文件失败");
+				}
+
+				_logger.LogInformation("Hard purge complete");
+			});
 	}
 
 	[RelayCommand]

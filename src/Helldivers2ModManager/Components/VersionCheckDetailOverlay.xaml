@@ -408,7 +408,7 @@
                         </StackPanel>
                     </Button>
                     <Button x:Name="repairButton"
-                            Style="{StaticResource FluentConfirmButton}"
+                            Style="{StaticResource FluentPrimaryButton}"
                             Padding="14 8"
                             Margin="0 0 8 0"
                             Visibility="Collapsed"

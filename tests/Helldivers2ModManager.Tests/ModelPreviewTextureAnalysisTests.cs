@@ -27,45 +27,6 @@ public sealed class ModelPreviewTextureAnalysisTests
     }
 
     [TestMethod]
-    public void IsOpacityMask_CutoutDistribution_UsesAlphaBlending()
-    {
-        // 70% 不透明 + 30% 全透：典型头发/面纱裁切遮罩。
-        Span<byte> pixels = stackalloc byte[100 * 4];
-        for (var i = 0; i < 100; i++)
-        {
-            pixels[i * 4] = 0x20;
-            pixels[i * 4 + 1] = 0x40;
-            pixels[i * 4 + 2] = 0x60;
-            pixels[i * 4 + 3] = i < 70 ? (byte)255 : (byte)0;
-        }
-
-        Assert.IsTrue(ModelPreviewTextureAnalysis.IsOpacityMask(pixels));
-    }
-
-    [TestMethod]
-    public void IsOpacityMask_PackedGradientAlpha_StaysOpaque()
-    {
-        // 平滑渐变（打包数据常见分布）不满足接近二值的判定。
-        Span<byte> pixels = stackalloc byte[64 * 4];
-        for (var i = 0; i < 64; i++)
-            pixels[i * 4 + 3] = (byte)(i * 4);
-
-        Assert.IsFalse(ModelPreviewTextureAnalysis.IsOpacityMask(pixels));
-    }
-
-    [TestMethod]
-    public void IsOpacityMask_UniformAlpha_StaysOpaque()
-    {
-        // 全不透明：没有可混合内容；全透明：按透明渲染等于让模型消失。
-        Span<byte> opaquePixels = stackalloc byte[8 * 4];
-        opaquePixels.Fill(255);
-        Assert.IsFalse(ModelPreviewTextureAnalysis.IsOpacityMask(opaquePixels));
-
-        Span<byte> transparentPixels = stackalloc byte[8 * 4];
-        Assert.IsFalse(ModelPreviewTextureAnalysis.IsOpacityMask(transparentPixels));
-    }
-
-    [TestMethod]
     public void MeasureIridescenceStrength_OpaqueAlpha_IsFullStrength()
     {
         // 油光材质实测：AlbedoIridescence 的 Alpha 全为 255。
@@ -93,6 +54,44 @@ public sealed class ModelPreviewTextureAnalysisTests
         };
 
         Assert.AreEqual(0.0, ModelPreviewTextureAnalysis.MeasureIridescenceStrength(preview), 0.01);
+    }
+
+    [TestMethod]
+    public void MeasureIridescenceStrength_MixedCutoutAlpha_IsZero()
+    {
+        // 大量角色模组把同一张贴图同时绑定为 Albedo 与 AlbedoIridescence，
+        // 此时 Alpha 是镂空遮罩（透明+不透明混合分布），不是流光强度：
+        // 按强度解释会让整模错误叠加高光，非均匀 Alpha 必须返回 0。
+        var pixels = new byte[64 * 4];
+        for (var i = 0; i < 64; i++)
+        {
+            pixels[i * 4] = 30;
+            pixels[i * 4 + 1] = 40;
+            pixels[i * 4 + 2] = 50;
+            pixels[i * 4 + 3] = i < 32 ? (byte)255 : (byte)0;
+        }
+
+        var preview = new TexturePreviewData { Width = 8, Height = 8, BgraPixels = pixels, Description = "test" };
+
+        Assert.AreEqual(0.0, ModelPreviewTextureAnalysis.MeasureIridescenceStrength(preview), 0.001);
+    }
+
+    [TestMethod]
+    public void MeasureIridescenceStrength_UniformMidAlpha_IsMeanStrength()
+    {
+        // 均匀的部分强度 Alpha（如半开油光）仍按均值解释。
+        var pixels = new byte[16 * 4];
+        for (var i = 0; i < 16; i++)
+        {
+            pixels[i * 4] = 10;
+            pixels[i * 4 + 1] = 20;
+            pixels[i * 4 + 2] = 30;
+            pixels[i * 4 + 3] = 128;
+        }
+
+        var preview = new TexturePreviewData { Width = 4, Height = 4, BgraPixels = pixels, Description = "test" };
+
+        Assert.AreEqual(128 / 255.0, ModelPreviewTextureAnalysis.MeasureIridescenceStrength(preview), 0.001);
     }
 
     [TestMethod]

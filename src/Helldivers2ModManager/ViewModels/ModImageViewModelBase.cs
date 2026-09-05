@@ -47,7 +47,7 @@ internal abstract partial class ModImageViewModelBase : ObservableObject
 	/// </summary>
 	public string SourceDirectory { get; set; } = string.Empty;
 
-	/// <summary>图片预览，支持绝对路径和相对路径（从 SourceDirectory 解析）</summary>
+	/// <summary>图片预览，支持绝对路径和相对路径（从 SourceDirectory 解析）。按解析后的完整路径缓存解码结果。</summary>
 	public ImageSource? ImagePreview
 	{
 		get
@@ -56,42 +56,44 @@ internal abstract partial class ModImageViewModelBase : ObservableObject
 				return null;
 
 			// 尝试从绝对路径加载（浏览选择的外部文件）
+			string? fullPath = null;
 			if (Path.IsPathRooted(ImagePath) && File.Exists(ImagePath))
-			{
-				try
-				{
-					var bmp = new BitmapImage();
-					bmp.BeginInit();
-					bmp.UriSource = new Uri(ImagePath);
-					bmp.CacheOption = BitmapCacheOption.OnLoad;
-					bmp.EndInit();
-					return bmp;
-				}
-				catch { return null; }
-			}
-
+				fullPath = ImagePath;
 			// 尝试从 SourceDirectory 解析相对路径
-			if (!string.IsNullOrWhiteSpace(SourceDirectory))
+			else if (!string.IsNullOrWhiteSpace(SourceDirectory))
 			{
-				var fullPath = Path.Combine(SourceDirectory, ImagePath);
-				if (File.Exists(fullPath))
-				{
-					try
-					{
-						var bmp = new BitmapImage();
-						bmp.BeginInit();
-						bmp.UriSource = new Uri(fullPath);
-						bmp.CacheOption = BitmapCacheOption.OnLoad;
-						bmp.EndInit();
-						return bmp;
-					}
-					catch { }
-				}
+				var candidate = Path.Combine(SourceDirectory, ImagePath);
+				if (File.Exists(candidate))
+					fullPath = candidate;
 			}
 
-			return null;
+			if (fullPath is null)
+				return null;
+
+			if (_previewCache is not null && _previewCachePath == fullPath)
+				return _previewCache;
+
+			try
+			{
+				var bmp = new BitmapImage();
+				bmp.BeginInit();
+				bmp.UriSource = new Uri(fullPath);
+				bmp.CacheOption = BitmapCacheOption.OnLoad;
+				bmp.EndInit();
+				bmp.Freeze();
+				_previewCache = bmp;
+				_previewCachePath = fullPath;
+				return bmp;
+			}
+			catch
+			{
+				return null;
+			}
 		}
 	}
+
+	private BitmapSource? _previewCache;
+	private string? _previewCachePath;
 
 	/// <summary>浏览选择图片文件</summary>
 	[RelayCommand]

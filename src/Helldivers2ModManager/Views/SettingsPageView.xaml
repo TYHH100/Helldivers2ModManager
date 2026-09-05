@@ -51,9 +51,13 @@
                 Margin="0 0 0 0">
             <StackPanel Orientation="Horizontal">
                 <!-- 路径 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabPaths}"
+                <Button
                         Command="{Binding SetTabCommand}"
                         CommandParameter="0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE838;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 1 7 0"/>
+                        <TextBlock Text="{loc:Loc SettingsPage.TabPaths}" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
@@ -67,9 +71,13 @@
                     </Button.Style>
                 </Button>
                 <!-- 部署 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabDeploy}"
+                <Button
                         Command="{Binding SetTabCommand}"
                         CommandParameter="1">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE7B8;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 1 7 0"/>
+                        <TextBlock Text="{loc:Loc SettingsPage.TabDeploy}" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
@@ -83,9 +91,13 @@
                     </Button.Style>
                 </Button>
                 <!-- 模组 选项卡 -->
-                <Button Content="{loc:Loc ModelPreviewPage.Mods}"
+                <Button
                         Command="{Binding SetTabCommand}"
                         CommandParameter="2">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8F1;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 1 7 0"/>
+                        <TextBlock Text="{loc:Loc ModelPreviewPage.Mods}" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
@@ -99,9 +111,13 @@
                     </Button.Style>
                 </Button>
                 <!-- 日志 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabLogs}"
+                <Button
                         Command="{Binding SetTabCommand}"
                         CommandParameter="3">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE9A4;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 1 7 0"/>
+                        <TextBlock Text="{loc:Loc SettingsPage.TabLogs}" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
@@ -115,9 +131,13 @@
                     </Button.Style>
                 </Button>
                 <!-- 工具 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.Tools}"
+                <Button
                         Command="{Binding SetTabCommand}"
                         CommandParameter="4">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE90F;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 1 7 0"/>
+                        <TextBlock Text="{loc:Loc SettingsPage.Tools}" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
@@ -131,9 +151,13 @@
                     </Button.Style>
                 </Button>
                 <!-- 主页 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabHome}"
+                <Button
                         Command="{Binding SetTabCommand}"
                         CommandParameter="5">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE80F;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 1 7 0"/>
+                        <TextBlock Text="{loc:Loc SettingsPage.TabHome}" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
@@ -147,9 +171,13 @@
                     </Button.Style>
                 </Button>
                 <!-- 外观 选项卡 -->
-                <Button Content="{loc:Loc SettingsPage.TabAppearance}"
+                <Button
                         Command="{Binding SetTabCommand}"
                         CommandParameter="6">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 1 7 0"/>
+                        <TextBlock Text="{loc:Loc SettingsPage.TabAppearance}" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource FluentSettingsTabButton}">
                             <Style.Triggers>
@@ -328,7 +356,7 @@
                                         </StackPanel>
                                     </Button>
                                     <Button Command="{Binding RemoveOrgFolderCommand}"
-                                            Style="{StaticResource FluentDangerButton}"
+                                            Style="{StaticResource FluentDangerSubtleButton}"
                                             Padding="12 6">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"/>
@@ -685,7 +713,7 @@
 
                                 <!-- 重置所有设置 -->
                                 <Button Content="{loc:Loc SettingsPage.ResetSettings}"
-                                        Style="{StaticResource FluentDangerButton}"
+                                        Style="{StaticResource FluentDangerSubtleButton}"
                                         Command="{Binding ResetCommand}"
                                         HorizontalAlignment="Left"
                                         Padding="16 10"

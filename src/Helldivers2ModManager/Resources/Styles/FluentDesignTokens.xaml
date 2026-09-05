@@ -84,6 +84,12 @@
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}"/>
 
+    <!-- Danger Subtle Button Tokens（危险操作的低调变体：常态融入深色底，hover 才显红） -->
+    <SolidColorBrush x:Key="DangerSubtleBackgroundBrush" Color="#14C42B1C"/>
+    <SolidColorBrush x:Key="DangerSubtleBorderBrush" Color="#54C42B1C"/>
+    <SolidColorBrush x:Key="DangerSubtleForegroundBrush" Color="#E8695A"/>
+    <SolidColorBrush x:Key="DangerHoverBackgroundBrush" Color="#33C42B1C"/>
+
     <!-- Gradient Brushes for Depth Effects -->
     <LinearGradientBrush x:Key="MicaTopHintGradient" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="#20FFFFFF" Offset="0"/>

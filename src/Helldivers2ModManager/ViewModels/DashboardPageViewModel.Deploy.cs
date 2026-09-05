@@ -123,8 +123,11 @@ internal sealed partial class DashboardPageViewModel
                 _localizationService["BackgroundTasksPage.PurgeComplete"],
                 isForeground: true);
 
-            // 成功：隐藏进度弹窗。不放 finally——失败时错误弹窗要替换进度弹窗并保留给用户
+            // 成功：隐藏进度弹窗，改为气泡提示并自动消失（失败仍用错误弹窗保留给用户）
             WeakReferenceMessenger.Default.Send(new MessageBoxHideMessage());
+            WeakReferenceMessenger.Default.Send(new ToastMessage(
+                _localizationService["BackgroundTasksPage.TaskTypePurge"],
+                _localizationService["BackgroundTasksPage.PurgeComplete"]));
         }
         catch (Exception ex)
         {
@@ -246,13 +249,13 @@ internal sealed partial class DashboardPageViewModel
                 }
             }
 
-            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage()
-            {
-                Message = _localizationService["DashboardPage.RescanSummary"]
+            // 完成提示改为气泡（自动消失）；有问题时仍用弹窗展示详情
+            WeakReferenceMessenger.Default.Send(new ToastMessage(
+                _localizationService["DashboardPage.RescanMods"],
+                _localizationService["DashboardPage.RescanSummary"]
                     .Replace("{added}", result.AddedCount.ToString())
                     .Replace("{updated}", result.UpdatedCount.ToString())
-                    .Replace("{removed}", result.RemovedCount.ToString())
-            });
+                    .Replace("{removed}", result.RemovedCount.ToString())));
         }
         catch (Exception ex)
         {

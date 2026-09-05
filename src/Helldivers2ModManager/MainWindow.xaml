@@ -82,7 +82,8 @@
 						<Border Name="border"
 								BorderBrush="{TemplateBinding BorderBrush}"
 								BorderThickness="{TemplateBinding BorderThickness}"
-								Background="{TemplateBinding Background}">
+								Background="{TemplateBinding Background}"
+								UseLayoutRounding="True">
 							<Grid>
 								<Grid.RowDefinitions>
 									<RowDefinition Height="48"/>
@@ -186,6 +187,7 @@
 								<cmp:ModConflictDetailOverlay Grid.Row="1"/>
 								<cmp:MessageBox Grid.Row="1"/>
 								<cmp:FirstRunTutorialOverlay Grid.Row="1"/>
+							<cmp:ToastOverlay Grid.Row="1"/>
 
 								<!-- 拖拽导入提示覆盖层：拖入压缩包时提示松开导入（模板内元素，code-behind 经 Template.FindName 访问） -->
 								<Border x:Name="dropHintOverlay"

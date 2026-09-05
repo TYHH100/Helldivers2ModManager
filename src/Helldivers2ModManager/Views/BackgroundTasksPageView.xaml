@@ -16,6 +16,9 @@
                         <MenuItem Header="{loc:Loc BackgroundTasksPage.RemoveTask}"
                                   Command="{Binding PlacementTarget.Tag.RemoveTaskCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}">
+                            <MenuItem.Icon>
+                                <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="16" Foreground="{StaticResource DangerSubtleForegroundBrush}"/>
+                            </MenuItem.Icon>
                             <MenuItem.Style>
                                 <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
                                     <Setter Property="Visibility" Value="Collapsed"/>

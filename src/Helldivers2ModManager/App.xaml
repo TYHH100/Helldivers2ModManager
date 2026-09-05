@@ -58,7 +58,6 @@
 
 			<Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource FluentPrimaryButton}"/>
 
-			<Style x:Key="ConfirmButton" TargetType="Button" BasedOn="{StaticResource FluentConfirmButton}"/>
 
 			<Style x:Key="CancelButton" TargetType="Button" BasedOn="{StaticResource FluentDangerButton}"/>
 
@@ -88,31 +87,50 @@
 				<Setter Property="FontSize" Value="14"/>
 			</Style>
 
-			<!-- ContextMenu -->
+			<!-- ContextMenu：半透明深色浮层 + 大圆角 + 高层阴影，Fluent 飞出层观感 -->
 			<Style TargetType="ContextMenu">
 				<Setter Property="OverridesDefaultStyle" Value="True"/>
 				<Setter Property="SnapsToDevicePixels" Value="True"/>
-				<Setter Property="Background" Value="{StaticResource NeutralBackgroundAltBrush}"/>
-				<Setter Property="BorderBrush" Value="{StaticResource NeutralBorderBrush}"/>
+				<Setter Property="Background" Value="#F01E1E1E"/>
+				<Setter Property="BorderBrush" Value="#1FFFFFFF"/>
 				<Setter Property="BorderThickness" Value="1"/>
-				<Setter Property="Padding" Value="4"/>
+				<Setter Property="Padding" Value="5"/>
 				<Setter Property="Template">
 					<Setter.Value>
 						<ControlTemplate TargetType="ContextMenu">
 							<Border Background="{TemplateBinding Background}"
 									BorderBrush="{TemplateBinding BorderBrush}"
 									BorderThickness="{TemplateBinding BorderThickness}"
-									CornerRadius="4"
-									Effect="{StaticResource ShadowElevationLevel2}"
+									CornerRadius="8"
+									Effect="{StaticResource ShadowElevationLevel3}"
 									Padding="{TemplateBinding Padding}">
-								<StackPanel IsItemsHost="True"/>
+								<StackPanel IsItemsHost="True"
+											KeyboardNavigation.DirectionalNavigation="Cycle"/>
 							</Border>
 						</ControlTemplate>
 					</Setter.Value>
 				</Setter>
 			</Style>
 
-			<!-- MenuItem -->
+			<!-- 菜单内分隔线：细弱的中性线，两端留出内距 -->
+			<Style TargetType="Separator">
+				<Setter Property="OverridesDefaultStyle" Value="True"/>
+				<Setter Property="Height" Value="1"/>
+				<Setter Property="Margin" Value="9 5"/>
+				<Setter Property="Background" Value="#16FFFFFF"/>
+				<Setter Property="Template">
+					<Setter.Value>
+						<ControlTemplate TargetType="Separator">
+							<Border Background="{TemplateBinding Background}"
+									Height="{TemplateBinding Height}"
+									Margin="{TemplateBinding Margin}"
+									SnapsToDevicePixels="True"/>
+						</ControlTemplate>
+					</Setter.Value>
+				</Setter>
+			</Style>
+
+			<!-- MenuItem：图标列固定宽度对齐，悬停为圆角 pill -->
 			<Style TargetType="MenuItem">
 				<Setter Property="OverridesDefaultStyle" Value="True"/>
 				<Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -120,7 +138,7 @@
 				<Setter Property="Foreground" Value="{StaticResource NeutralForegroundBrush}"/>
 				<Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Arial"/>
 				<Setter Property="FontSize" Value="14"/>
-				<Setter Property="Padding" Value="12 8"/>
+				<Setter Property="Padding" Value="9 7"/>
 				<Setter Property="Cursor" Value="Hand"/>
 				<Setter Property="Template">
 					<Setter.Value>
@@ -128,10 +146,10 @@
 							<Border x:Name="BackgroundBorder"
 									Background="{TemplateBinding Background}"
 									Padding="{TemplateBinding Padding}"
-									CornerRadius="2">
+									CornerRadius="4">
 								<Grid>
 									<Grid.ColumnDefinitions>
-										<ColumnDefinition Width="Auto" SharedSizeGroup="Icon"/>
+										<ColumnDefinition Width="20"/>
 										<ColumnDefinition Width="*"/>
 										<ColumnDefinition Width="Auto" SharedSizeGroup="Shortcut"/>
 										<ColumnDefinition Width="Auto"/>
@@ -139,8 +157,8 @@
 									<ContentPresenter x:Name="Icon"
 													  Grid.Column="0"
 													  ContentSource="Icon"
-													  Margin="0 0 8 0"
-													  VerticalAlignment="Center"/>
+													  VerticalAlignment="Center"
+													  HorizontalAlignment="Left"/>
 									<TextBlock x:Name="InputGestureText"
 											   Grid.Column="2"
 											   Text="{TemplateBinding InputGestureText}"
@@ -161,18 +179,19 @@
 										   AllowsTransparency="True"
 										   Focusable="False"
 										   PopupAnimation="Fade">
-										<Border Background="{StaticResource NeutralBackgroundAltBrush}"
-												BorderBrush="{StaticResource NeutralBorderBrush}"
+										<Border Background="#F01E1E1E"
+												BorderBrush="#1FFFFFFF"
 												BorderThickness="1"
-												CornerRadius="4"
+												CornerRadius="8"
 												Effect="{StaticResource ShadowElevationLevel3}"
-												Padding="4">
+												Padding="5">
 											<StackPanel IsItemsHost="True"/>
 										</Border>
 									</Popup>
 									<ContentPresenter Grid.Column="1"
 													  ContentSource="Header"
-													  VerticalAlignment="Center"/>
+													  VerticalAlignment="Center"
+													  Margin="10 0 0 0"/>
 								</Grid>
 							</Border>
 							<ControlTemplate.Triggers>
@@ -183,7 +202,7 @@
 									<Setter TargetName="SubMenuArrow" Property="Visibility" Value="Visible"/>
 								</Trigger>
 								<Trigger Property="IsMouseOver" Value="True">
-									<Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource NeutralBackgroundFillBrush}"/>
+									<Setter TargetName="BackgroundBorder" Property="Background" Value="#1AFFFFFF"/>
 								</Trigger>
 								<Trigger Property="IsEnabled" Value="False">
 									<Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>

@@ -194,11 +194,11 @@
         </Setter>
     </Style>
 
-    <!-- Success/Confirm Button -->
-    <Style x:Key="FluentConfirmButton" TargetType="Button" BasedOn="{StaticResource FluentButtonBase}">
-        <Setter Property="Background" Value="#107C10"/>
-        <Setter Property="BorderBrush" Value="#107C10"/>
-        <Setter Property="Foreground" Value="White"/>
+    <!-- Danger Subtle Button：深色底 + 危险色文字/描边，hover 才加深填充，用于非主视觉的危险操作 -->
+    <Style x:Key="FluentDangerSubtleButton" TargetType="Button" BasedOn="{StaticResource FluentButtonBase}">
+        <Setter Property="Background" Value="{StaticResource DangerSubtleBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource DangerSubtleBorderBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource DangerSubtleForegroundBrush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -207,29 +207,24 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
-                            <Border.Effect>
-                                <DropShadowEffect Color="#107C10"
-                                                  Direction="270"
-                                                  ShadowDepth="0"
-                                                  BlurRadius="10"
-                                                  Opacity="0.4"/>
-                            </Border.Effect>
-                        </Border>
+                                CornerRadius="4"/>
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                           Margin="{TemplateBinding Padding}"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="#108C10"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource DangerHoverBackgroundBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+                            <Setter Property="Foreground" Value="#F87171"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="#0D6F0D"/>
+                            <Setter TargetName="BackgroundLayer" Property="Background" Value="{StaticResource DangerBrush}"/>
+                            <Setter Property="Foreground" Value="White"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="#7D7D7D"/>
-                            <Setter TargetName="BackgroundLayer" Property="Background" Value="#4D4D4D"/>
+                            <Setter Property="Foreground" Value="{StaticResource NeutralForegroundDisabledBrush}"/>
+                            <Setter TargetName="BackgroundLayer" Property="Opacity" Value="0.5"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

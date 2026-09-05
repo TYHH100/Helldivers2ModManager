@@ -103,8 +103,10 @@ internal sealed class ProfileService
 		if (remainder > 0)
 		{
 			_logger.LogInformation("{Count} mods were not recorded, added with default config", remainder);
+			// HashSet 判重，避免 5000+ 模组规模下 List.Contains 的 O(N²) 比较
+			var recorded = new HashSet<ModData>(mods);
 			foreach (var elm in modService.Mods)
-				if (!mods.Contains(elm))
+				if (recorded.Add(elm))
 					mods.Add(elm);
 		}
 
