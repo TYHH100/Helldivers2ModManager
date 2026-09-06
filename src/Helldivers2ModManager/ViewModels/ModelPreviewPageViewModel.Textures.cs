@@ -359,7 +359,8 @@ internal sealed partial class ModelPreviewPageViewModel
     /// otherwise interpret that channel as opacity and make an otherwise valid model
     /// disappear, so packed or uniform alpha keeps rendering as opaque RGB. A near-binary
     /// alpha distribution (hair, veils, cutout geometry) is a real opacity mask and is
-    /// preserved so transparent parts no longer render as solid panels.
+    /// disappear, so textures always render as opaque RGB.（曾试过按"接近二值的
+    /// Alpha 分布"识别真裁切遮罩并保留透明，但误判会让正常模型整体透明，已撤销。）
     /// </summary>
     internal static ImageSource? CreateModelBitmapSource(
         TexturePreviewData? preview,
@@ -370,14 +371,12 @@ internal sealed partial class ModelPreviewPageViewModel
 
         if (preview.BgraPixels is not null)
         {
-            // 遮罩样 Alpha 才保留透明通道；打包数据/全值 Alpha 仍按不透明 RGB 渲染。
-            var hasOpacityMask = ModelPreviewTextureAnalysis.IsOpacityMask(preview.BgraPixels);
             var bitmap = BitmapSource.Create(
                 preview.Width,
                 preview.Height,
                 96,
                 96,
-                hasOpacityMask ? PixelFormats.Bgra32 : PixelFormats.Bgr32,
+                PixelFormats.Bgr32,
                 null,
                 preview.BgraPixels,
                 preview.Width * 4);
@@ -397,20 +396,9 @@ internal sealed partial class ModelPreviewPageViewModel
         png.StreamSource = stream;
         png.EndInit();
         png.Freeze();
-        var pixels = new byte[png.PixelWidth * png.PixelHeight * 4];
-        // 先统一转换到 Bgra32 再按 Alpha 分布决定最终格式；PNG 是内嵌图标/贴图的少见路径，
-        // 解码像素宽度已被限制在 2048 内，缓冲规模可控。
-        new FormatConvertedBitmap(png, PixelFormats.Bgra32, null, 0).CopyPixels(pixels, png.PixelWidth * 4, 0);
-        var pngHasOpacityMask = ModelPreviewTextureAnalysis.IsOpacityMask(pixels);
-        var opaque = BitmapSource.Create(
-            png.PixelWidth,
-            png.PixelHeight,
-            96,
-            96,
-            pngHasOpacityMask ? PixelFormats.Bgra32 : PixelFormats.Bgr32,
-            null,
-            pixels,
-            png.PixelWidth * 4);
+        // PNG 是内嵌图标/贴图的少见路径，解码像素宽度已被限制在 2048 内，缓冲规模可控；
+        // 一律转不透明 Bgr32，Alpha 不参与渲染。
+        var opaque = new FormatConvertedBitmap(png, PixelFormats.Bgr32, null, 0);
         opaque.Freeze();
         return opaque;
     }
