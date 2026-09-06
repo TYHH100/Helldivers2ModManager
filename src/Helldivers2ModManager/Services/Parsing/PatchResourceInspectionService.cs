@@ -246,6 +246,17 @@ internal sealed class PatchResourceInspectionService
                 effectiveUnitPatchOrders[entry.FileId] = entry.PatchOrder;
         }
 
+        // 动画家族资源按补丁链覆盖语义合并：同一 (FileId, TypeId) 由多个选中补丁修改时，
+        // 靠后的补丁是生效版本，模组“修改动作”的解析必须用覆盖后的资源。
+        foreach (var patchResult in patchResults)
+        {
+            foreach (var (key, data) in patchResult.PatchAnimationResources)
+            {
+                if (!result.TryAddAnimationResource(key.FileId, key.TypeId, data))
+                    result.SkippedAnimationResources++;
+            }
+        }
+
         for (var patchOrder = 0; patchOrder < patchResults.Length; patchOrder++)
         {
             var patchResult = patchResults[patchOrder];
@@ -649,7 +660,15 @@ internal sealed class PatchResourceInspectionService
                 });
             }
 
-            if (typeId == UnitTypeId && IsRangeInBounds(mainOffset, mainSize, patchStream.Length))
+            if (modelPreview is not null &&
+                (typeId == PatchResourceTypeIds.Bones ||
+                 typeId == PatchResourceTypeIds.StateMachine ||
+                 typeId == PatchResourceTypeIds.Animation))
+            {
+                await CaptureAnimationResourceAsync(
+                    patchStream, modelPreview, fileId, typeId, mainOffset, mainSize, cancellationToken);
+            }
+            else if (typeId == UnitTypeId && IsRangeInBounds(mainOffset, mainSize, patchStream.Length))
             {
                 if (modelPreview is not null || includeGpuStreams)
                 {
@@ -686,6 +705,32 @@ internal sealed class PatchResourceInspectionService
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Captures one mod-bundled Bones/StateMachine/Animation payload for the model
+    /// preview. Weapon mods ship these resources for added or modified actions; they are
+    /// small metadata payloads (kilobytes to a few megabytes), still bounded per resource
+    /// and in total by <see cref="ModelPreviewResult.TryAddAnimationResource"/>.
+    /// </summary>
+    private static async Task CaptureAnimationResourceAsync(
+        FileStream patchStream,
+        ModelPreviewResult modelPreview,
+        ulong fileId,
+        ulong typeId,
+        ulong mainOffset,
+        uint mainSize,
+        CancellationToken cancellationToken)
+    {
+        if (mainSize == 0 || !IsRangeInBounds(mainOffset, mainSize, patchStream.Length))
+            return;
+
+        var data = new byte[mainSize];
+        if (!await ReadAtAsync(patchStream, (long)mainOffset, data, cancellationToken))
+            return;
+
+        if (!modelPreview.TryAddAnimationResource(fileId, typeId, data))
+            modelPreview.SkippedAnimationResources++;
     }
 
     private static async Task<TextureInspectionItem?> ReadTextureMetadataAsync(

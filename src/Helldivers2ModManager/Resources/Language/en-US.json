@@ -185,6 +185,7 @@
     "ModelPreviewPage.StockyBody": "Stocky",
     "ModelPreviewPage.Armor": "Armor",
     "ModelPreviewPage.Animation": "Animation",
+    "ModelPreviewPage.ModAnimationSource": " (mod action)",
     "ModelPreviewPage.PlayAnimation": "Play animation",
     "ModelPreviewPage.PauseAnimation": "Pause animation",
     "ModelPreviewPage.ResetAnimation": "Restore bind pose",

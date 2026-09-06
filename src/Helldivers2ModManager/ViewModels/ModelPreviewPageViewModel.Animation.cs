@@ -134,8 +134,8 @@ internal sealed partial class ModelPreviewPageViewModel
             {
                 Interlocked.Exchange(ref _animationFrameRequested, 0);
                 await ApplyAnimationFrameAsync(_pageLifetimeCancellation.Token);
-                if (IsAnimationPlaying && Volatile.Read(ref _animationFrameRequested) != 0)
-                    await Task.Delay(10, _pageLifetimeCancellation.Token);
+                // 播放中不做额外延时：请求由 15ms 时间轴定时器节流，循环在无待处理
+                // 帧时自然退出；逐帧按当前时钟采样，抖动只影响节奏不影响动作速度。
             }
             while (Volatile.Read(ref _animationFrameRequested) != 0);
         }
@@ -201,8 +201,7 @@ internal sealed partial class ModelPreviewPageViewModel
 
             var sample = GetAnimationFrameSample(
                 selectedAnimation.Option.Clip.LengthSeconds,
-                animationTimeSeconds,
-                meshes);
+                animationTimeSeconds);
             if (!_animationFrameCache.TryGetValue(sample.FrameIndex, out var updates))
             {
                 updates = await Task.Run(
@@ -217,7 +216,7 @@ internal sealed partial class ModelPreviewPageViewModel
                 if (renderGeneration == _renderGeneration &&
                     ReferenceEquals(_animationFrameCacheChoice, selectedAnimation))
                 {
-                    _animationFrameCache[sample.FrameIndex] = updates;
+                    AddAnimationFrameCacheEntry(sample.FrameIndex, updates);
                 }
             }
             if (Volatile.Read(ref _isDisposed) != 0 ||
@@ -290,32 +289,43 @@ internal sealed partial class ModelPreviewPageViewModel
 
     private static AnimationFrameSample GetAnimationFrameSample(
         float durationSeconds,
-        float timeSeconds,
-        IReadOnlyList<ModelPreviewMesh> meshes)
+        float timeSeconds)
     {
-        var bytesPerFrame = meshes.Sum(static mesh => (long)mesh.VertexCount * 3 * sizeof(double));
-        var memoryBound = bytesPerFrame <= 0
-            ? 1
-            : (int)Math.Clamp(MaxAnimationFrameCacheBytes / bytesPerFrame, 1, MaxCachedAnimationFrames);
-        var desiredFrames = durationSeconds > 0
-            ? Math.Max(1, (int)Math.Ceiling(durationSeconds * AnimationFramesPerSecond))
-            : 1;
-        var frameCount = Math.Min(desiredFrames, memoryBound);
-        var normalizedTime = durationSeconds > 0
-            ? Math.Clamp(timeSeconds % durationSeconds, 0, durationSeconds)
-            : 0;
-        var frameIndex = durationSeconds > 0
-            ? Math.Min((int)(normalizedTime / durationSeconds * frameCount), frameCount - 1)
-            : 0;
-        var sampleTime = durationSeconds > 0
-            ? frameIndex * durationSeconds / frameCount
-            : 0;
-        return new AnimationFrameSample(frameIndex, sampleTime);
+        if (durationSeconds <= 0)
+            return new AnimationFrameSample(0, 0);
+
+        // 帧索引空间覆盖整段 clip 的 1/60s 步进；缓存内存不在此处压缩 clip——
+        // 那会把长动画压到每秒几个离散姿势。内存有界性由缓存插入时的淘汰保证。
+        var frameCount = Math.Max(1, (int)Math.Ceiling(durationSeconds * AnimationFramesPerSecond));
+        var normalizedTime = Math.Clamp(timeSeconds % durationSeconds, 0, durationSeconds);
+        var frameIndex = Math.Min((int)(normalizedTime / durationSeconds * frameCount), frameCount - 1);
+        return new AnimationFrameSample(frameIndex, frameIndex * durationSeconds / frameCount);
+    }
+
+    /// <summary>
+    /// 缓存只服务拖动回放与循环回绕的帧复用；顺序播放每帧都是新时间点。写入超出字节
+    /// 预算或条目上限时整体清空，保证缓存内存有界，而不限制可播放的动画长度。
+    /// </summary>
+    private void AddAnimationFrameCacheEntry(int frameIndex, AnimationGeometryUpdate[] updates)
+    {
+        var bytes = 0L;
+        foreach (var update in updates)
+            bytes += update.Positions.Count * sizeof(double) * 3 +
+                     (update.Normals?.Count ?? 0) * sizeof(double) * 3;
+        if (_animationFrameCache.Count >= MaxCachedAnimationFrames ||
+            _animationFrameCacheBytes + bytes > MaxAnimationFrameCacheBytes)
+        {
+            ClearAnimationFrameCache();
+        }
+
+        _animationFrameCache[frameIndex] = updates;
+        _animationFrameCacheBytes += bytes;
     }
 
     private void ClearAnimationFrameCache()
     {
         _animationFrameCache.Clear();
+        _animationFrameCacheBytes = 0;
         _animationFrameCacheChoice = null;
         _animationFrameCacheRenderGeneration = -1;
     }

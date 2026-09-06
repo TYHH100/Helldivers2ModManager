@@ -10,6 +10,11 @@ internal sealed class ModelPreviewAnimationLibrary
     public required ulong StateMachineId { get; init; }
     public required IReadOnlyList<uint> BoneHashes { get; init; }
     public required IReadOnlyList<ModelPreviewAnimationOption> Animations { get; init; }
+    /// <summary>
+    /// True when the library was built from resources bundled in the mod patch itself
+    /// (added or modified actions) rather than resolved from the game archive.
+    /// </summary>
+    public bool IsFromMod { get; init; }
 }
 
 internal sealed class ModelPreviewAnimationOption

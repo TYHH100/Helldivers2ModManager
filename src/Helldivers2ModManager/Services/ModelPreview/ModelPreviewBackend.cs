@@ -63,6 +63,45 @@ internal sealed class ModelPreviewBackend
             .Select(static skeleton => skeleton!)
             .Distinct()
             .ToArray();
+
+        // Mod bundles may carry their own Bones/StateMachine/Animation resources for
+        // added or modified actions (weapon mods commonly do). They are matched by exact
+        // resource id and listed before the game library; a mod clip sharing an id with a
+        // game clip is the overriding version after deployment.
+        foreach (var skeleton in skeletons)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (result.AnimationLibraries.Any(library =>
+                    library.IsFromMod &&
+                    library.BonesId == skeleton.BonesId &&
+                    library.StateMachineId == skeleton.StateMachineId))
+            {
+                continue;
+            }
+
+            try
+            {
+                var modLibrary = ModelPreviewModAnimationLibraryBuilder.TryBuild(
+                    result.PatchAnimationResources,
+                    skeleton.BonesId,
+                    skeleton.StateMachineId);
+                if (modLibrary is not null)
+                    result.AnimationLibraries.Add(modLibrary);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Unable to build the mod-bundled animation library");
+            }
+        }
+
+        // The raw payloads are only needed to build the libraries above; cached preview
+        // results must not retain them.
+        result.PatchAnimationResources.Clear();
+
         foreach (var skeleton in skeletons)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -77,6 +116,7 @@ internal sealed class ModelPreviewBackend
                     cancellationToken);
                 if (playerLibrary is not null &&
                     result.AnimationLibraries.All(library =>
+                        library.IsFromMod ||
                         library.BonesId != playerLibrary.BonesId ||
                         library.StateMachineId != playerLibrary.StateMachineId))
                 {

@@ -34,8 +34,10 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     private const int MaxActiveTexturePreviewEntries = MaxAutomaticTexturePreviews + 1;
     private const int MaxDecodedTextureCacheEntries = 12;
     private const int MaxModelResultCacheEntries = 1;
-    private const int AnimationFramesPerSecond = 20;
-    private const int MaxCachedAnimationFrames = 60;
+    // 播放目标 ≥60fps：帧网格 1/60s、时间轴定时器 15ms。缓存按字节预算在插入时有界淘汰，
+    // 不再按整段 clip 压缩离散帧数——那会把长动画压到每秒几个姿势的幻灯片。
+    private const int AnimationFramesPerSecond = 60;
+    private const int MaxCachedAnimationFrames = 240;
     private const long MaxAnimationFrameCacheBytes = 96L * 1024 * 1024;
     private readonly ILogger<ModelPreviewPageViewModel> _logger;
     private readonly Lazy<NavigationStore> _navigationStore;
@@ -57,6 +59,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     private readonly ConcurrentDictionary<AnimationBindingCacheKey, ModelPreviewAnimationBinding> _animationBindings = [];
     private readonly Dictionary<ModelPreviewMesh, MeshGeometry3D> _liveMeshGeometries = [];
     private readonly Dictionary<int, AnimationGeometryUpdate[]> _animationFrameCache = [];
+    private long _animationFrameCacheBytes;
     private readonly SemaphoreSlim _rebuildGate = new(1, 1);
     private readonly DispatcherTimer _animationTimer;
     private readonly Stopwatch _animationClock = new();
@@ -218,7 +221,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _localizationService.PropertyChanged += LocalizationServiceOnPropertyChanged;
         _animationTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromMilliseconds(50)
+            Interval = TimeSpan.FromMilliseconds(15)
         };
         _animationTimer.Tick += AnimationTimerOnTick;
         _audioPositionTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -252,9 +255,10 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
 
     internal sealed record ModelPreviewAnimationChoice(
         ModelPreviewAnimationLibrary Library,
-        ModelPreviewAnimationOption Option)
+        ModelPreviewAnimationOption Option,
+        string SourceMarker = "")
     {
-        public string DisplayName => Option.DisplayName;
+        public string DisplayName => Option.DisplayName + SourceMarker;
     }
 
     internal sealed record LoadedTexturePreview(

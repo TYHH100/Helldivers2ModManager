@@ -260,8 +260,13 @@ internal sealed partial class ModelPreviewPageViewModel
                 Armors.Add(armor);
             }
             foreach (var library in result.AnimationLibraries)
+            {
+                var sourceMarker = library.IsFromMod
+                    ? _localizationService["ModelPreviewPage.ModAnimationSource"]
+                    : string.Empty;
                 foreach (var animation in library.Animations)
-                    Animations.Add(new ModelPreviewAnimationChoice(library, animation));
+                    Animations.Add(new ModelPreviewAnimationChoice(library, animation, sourceMarker));
+            }
             SelectedAnimation = Animations.FirstOrDefault();
             SelectedArmor = Armors.FirstOrDefault(static armor => armor.IsAll) ?? Armors.FirstOrDefault();
 

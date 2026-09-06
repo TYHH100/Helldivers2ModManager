@@ -185,6 +185,7 @@
     "ModelPreviewPage.StockyBody": "壮",
     "ModelPreviewPage.Armor": "盔甲",
     "ModelPreviewPage.Animation": "动画",
+    "ModelPreviewPage.ModAnimationSource": "（模组动作）",
     "ModelPreviewPage.PlayAnimation": "播放动画",
     "ModelPreviewPage.PauseAnimation": "暂停动画",
     "ModelPreviewPage.ResetAnimation": "恢复绑定姿势",

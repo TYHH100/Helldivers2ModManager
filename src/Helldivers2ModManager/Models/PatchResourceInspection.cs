@@ -15,6 +15,9 @@ internal sealed class PatchResourceInspectionResult
 
 internal sealed class ModelPreviewResult
 {
+    private const long MaxAnimationResourceBytes = 32 * 1024 * 1024;
+    private const long MaxTotalAnimationResourceBytes = 64 * 1024 * 1024;
+
     public List<ModelPreviewMesh> Meshes { get; } = [];
     public List<TextureInspectionItem> Textures { get; } = [];
     /// <summary>
@@ -24,9 +27,42 @@ internal sealed class ModelPreviewResult
     /// </summary>
     public List<ModelPreviewArmorOption> Armors { get; } = [];
     public List<ModelPreviewAnimationLibrary> AnimationLibraries { get; } = [];
+    /// <summary>
+    /// Bones/StateMachine/Animation payloads bundled in the mod patches, keyed by the
+    /// (file id, type id) resource address. Later patches override earlier ones exactly
+    /// like deployment. The preview backend clears this after the animation libraries
+    /// are parsed so cached results never retain the raw payload bytes.
+    /// </summary>
+    public Dictionary<(ulong FileId, ulong TypeId), byte[]> PatchAnimationResources { get; } = [];
+    public int SkippedAnimationResources { get; internal set; }
+    internal long PatchAnimationResourceBytes { get; private set; }
     public int PatchFileCount { get; set; }
     public int SkippedStreams { get; set; }
     public string? Error { get; set; }
+
+    /// <summary>
+    /// Stores one animation-family resource under the bounded payload budgets. A single
+    /// resource larger than <see cref="MaxAnimationResourceBytes"/> is rejected, and the
+    /// combined payload size can never exceed <see cref="MaxTotalAnimationResourceBytes"/>
+    /// (an override that would exceed the total keeps the previous payload).
+    /// </summary>
+    public bool TryAddAnimationResource(ulong fileId, ulong typeId, byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        if (data.Length == 0 || data.Length > MaxAnimationResourceBytes)
+            return false;
+
+        var key = (fileId, typeId);
+        var projectedBytes = PatchAnimationResourceBytes -
+                             (PatchAnimationResources.TryGetValue(key, out var existing) ? existing.Length : 0) +
+                             data.Length;
+        if (projectedBytes > MaxTotalAnimationResourceBytes)
+            return false;
+
+        PatchAnimationResourceBytes = projectedBytes;
+        PatchAnimationResources[key] = data;
+        return true;
+    }
 
     /// <summary>
     /// Explicit user opt-in ("force decode oversized streams" checkbox on the mesh tab).
