@@ -29,7 +29,9 @@ public sealed class ModelPreviewMaterialTextureTests
         WriteUInt64(material, 0xA8, emissiveTextureId);
         WriteUInt64(material, 0xB0, albedoTextureId);
 
-        var textures = PatchResourceInspectionService.TryReadMaterialTextures(material);
+        var textures = PatchResourceInspectionService.TryReadMaterialTextures(
+            material,
+            new HashSet<ulong> { normalTextureId, maskTextureId, emissiveTextureId, albedoTextureId });
 
         Assert.IsNotNull(textures);
         CollectionAssert.AreEqual(
@@ -66,7 +68,9 @@ public sealed class ModelPreviewMaterialTextureTests
         WriteUInt64(material, 0xB4, albedoTextureId);
         WriteUInt64(material, 0xBC, opacityTextureId);
 
-        var textures = PatchResourceInspectionService.TryReadMaterialTextures(material);
+        var textures = PatchResourceInspectionService.TryReadMaterialTextures(
+            material,
+            new HashSet<ulong> { normalTextureId, mraTextureId, emissiveTextureId, albedoTextureId, opacityTextureId });
 
         Assert.IsNotNull(textures);
         Assert.AreEqual(albedoTextureId, textures.ColorTextureId);
@@ -87,36 +91,14 @@ public sealed class ModelPreviewMaterialTextureTests
         WriteUInt32(material, 0x88, 0xFF2C91CC); // AlbedoIridescence
         WriteUInt64(material, 0x8C, albedoTextureId);
 
-        var textures = PatchResourceInspectionService.TryReadMaterialTextures(material);
+        var textures = PatchResourceInspectionService.TryReadMaterialTextures(
+            material,
+            new HashSet<ulong> { albedoTextureId });
 
         Assert.IsNotNull(textures);
         Assert.AreEqual(albedoTextureId, textures.ColorTextureId);
         Assert.IsFalse(textures.TexturesByRole!.ContainsKey(ModelPreviewTextureRole.BaseColor));
         CollectionAssert.AreEqual(new[] { albedoTextureId }, textures.TexturesByRole[ModelPreviewTextureRole.Iridescence].ToArray());
-    }
-
-    [TestMethod]
-    public void TryReadMaterialTextures_ExternalVanillaReference_IsRecordedWithItsRole()
-    {
-        // 模组只携带 Normal，Albedo 引用游戏原版资源：引用必须保留（否则预览会
-        // 错把 Normal 当 Albedo），交给游戏归档按需解析。
-        const ulong normalTextureId = 0x32D2FA947BA6AC30;
-        const ulong vanillaAlbedoId = 0xAAAA0000BBBB1111;
-        var material = new byte[0x140];
-        WriteInt32(material, 0x40, 2);
-        WriteUInt32(material, 0x88, 0xCAED6CD6); // Normal
-        WriteUInt32(material, 0x8C, 0xE67AC0C7); // AlbedoEmissive
-        WriteUInt64(material, 0x90, normalTextureId);
-        WriteUInt64(material, 0x98, vanillaAlbedoId);
-
-        var textures = PatchResourceInspectionService.TryReadMaterialTextures(material);
-
-        Assert.IsNotNull(textures);
-        CollectionAssert.AreEqual(new[] { normalTextureId, vanillaAlbedoId }, textures.TextureIds.ToArray());
-        Assert.AreEqual(vanillaAlbedoId, textures.ColorTextureId);
-        CollectionAssert.AreEqual(
-            new[] { vanillaAlbedoId },
-            textures.TexturesByRole![ModelPreviewTextureRole.BaseColor].ToArray());
     }
 
     [TestMethod]

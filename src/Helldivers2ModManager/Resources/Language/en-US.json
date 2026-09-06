@@ -207,6 +207,8 @@
     "ModelPreviewPage.GizmoAxisTip": "Click an X, Y, or Z dot for its axis view; click it again for the opposite view.",
     "ModelPreviewPage.OriginalTextureResolution": "Original texture resolution",
     "ModelPreviewPage.OriginalTextureResolutionTip": "Reads the selected texture's source top mip; uses more memory.",
+    "ModelPreviewPage.ForceDecodeOversizedStreams": "Force decode oversized streams",
+    "ModelPreviewPage.ForceDecodeOversizedStreamsTip": "Relaxes the preview capacity limits to decode previously skipped large meshes; big models use more memory and may reduce framerate. Streams whose vertex/index formats are unsupported still cannot be shown.",
     "ModelPreviewPage.Status": "Preview status",
     "ModelPreviewPage.AutomaticallyHiddenSummary": "{count} auto-hidden",
     "ModelPreviewPage.PreviewVisible": "Shown by default",
@@ -557,7 +559,9 @@
     "CreatePage.BrowseSourceDialog": "Select the directory containing mod files",
     "CreatePage.BrowseIconDialog": "Select mod icon",
     "ManifestEditPage.BasicInfo": "Basic Info",
-    "ManifestEditPage.LegacyUpgradeHint": "This mod is in legacy format: option names are the mod folder names, use folder picking to add options. Configuring descriptions, Include paths, icons or sub-options will automatically upgrade it to V1 format on save.",
+    "ManifestEditPage.ManifestFormatDesc": "Choose the manifest format for this mod (applied on save).",
+    "ManifestEditPage.LegacyUpgradeHint": "This mod is in legacy format: option names are the deployed folder names, use folder picking to add options. For option descriptions, Include paths, icons or sub-options, switch the manifest format to V1 above.",
+    "ManifestEditPage.SwitchLegacyWarning": "Switched to legacy format: option descriptions, icons, sub-options and custom Include paths will be discarded, and option names become the deployed folder names.",
     "ManifestEditPage.SetSourceDirFirst": "Cannot read the mod directory. Make sure the mod folder exists before adding options.",
     "EditPage.Title": "Mod Options",
     "EditPage.PreviewHint": "Hover over option images for a larger preview; dropdown lists need to be opened first to preview",
@@ -1047,7 +1051,6 @@
     "ModelPreviewPage.TextOriginalTooltip": "Original: {text}",
     "ModelPreviewPage.TextBankGroup": "Text bank {id} (language {language})",
     "ModelPreviewPage.TextLoadedStatus": "Loaded {count} text entries ({banks} text banks) from {patches} patches.",
-    "ModelPreviewPage.TextLoadFailed": "Text parsing failed: {message}",
-    "ModelPreviewPage.GameTextureSource": "Game archive"
+    "ModelPreviewPage.TextLoadFailed": "Text parsing failed: {message}"
   }
 }

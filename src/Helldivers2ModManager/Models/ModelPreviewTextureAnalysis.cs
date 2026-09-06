@@ -81,49 +81,49 @@ internal static class ModelPreviewTextureAnalysis
     }
 
     /// <summary>
-    /// 按贴图内容评估"这张贴图像不像 Albedo"（0..1，越大越像）。部分模组材质使用
-    /// 预览未收录的着色器家族，或把法线/遮罩错绑到颜色语义上；按内容评分可以
-    /// 通用地把这些候选排后。评分规则：法线贴图（蓝主导）0；纯黑且无细节的
-    /// 占位贴图 0；近黑但有细节的贴图给小分（合法的深色装备）；其余按色度
-    /// （饱和度）+ 亮度 + 明暗变化加权——角色 Albedo 通常色彩丰富且明亮。
+    /// 判定 BGRA 像素的 Alpha 通道是否是真实的透明遮罩（头发/面纱等裁切几何），而不是
+    /// Albedo 里打包的无关数据。只有"接近二值"的分布——几乎全不透与几乎全透的像素合计
+    /// 占绝对多数、且两侧都真实存在——才启用 Alpha 混合：HD2 的 Albedo Alpha 常打包平滑
+    /// 渐变或噪声类数据，按透明渲染会让模型整片消失；反之真正的裁切遮罩不会被误判。
     /// </summary>
-    public static double ComputeAlbedoScore(TexturePreviewData? preview)
+    public static bool IsOpacityMask(ReadOnlySpan<byte> bgraPixels)
     {
-        if (preview?.BgraPixels is not { Length: >= 4 } pixels)
-            return 0.5;
+        const int bytesPerPixel = 4;
+        const byte transparentThreshold = 64;
+        const byte opaqueThreshold = 224;
+        // 采样上限与 Classify 一致：4K 纹理全量扫描也只是线性统计，但预览热路径
+        // 保持与角色分析相同的成本级别。
+        const int maxSamples = 16_384;
+        const double minimumMaskedFraction = 0.02;
+        const double minimumBinaryFraction = 0.85;
 
-        if (Classify(preview) == TexturePreviewRole.LikelyNormalMap)
-            return 0.0;
+        var pixelCount = bgraPixels.Length / bytesPerPixel;
+        if (pixelCount == 0)
+            return false;
 
-        var sampleCount = Math.Min(pixels.Length / 4, 16_384);
-        var step = Math.Max(1, pixels.Length / 4 / sampleCount);
-        double luminanceSum = 0;
-        double chromaSum = 0;
-        double luminanceSquareSum = 0;
+        var sampleCount = Math.Min(pixelCount, maxSamples);
+        var step = Math.Max(1, pixelCount / sampleCount);
+        var transparent = 0;
+        var opaque = 0;
         var sampled = 0;
-        for (var offset = 0; offset + 3 < pixels.Length && sampled < sampleCount; offset += step * 4, sampled++)
+        for (var pixel = 0; pixel < pixelCount && sampled < sampleCount; pixel += step, sampled++)
         {
-            var blue = pixels[offset];
-            var green = pixels[offset + 1];
-            var red = pixels[offset + 2];
-            var max = Math.Max(red, Math.Max(green, blue));
-            var min = Math.Min(red, Math.Min(green, blue));
-            var luminance = (red * 0.299 + green * 0.587 + blue * 0.114) / 255.0;
-            luminanceSum += luminance;
-            luminanceSquareSum += luminance * luminance;
-            chromaSum += (max - min) / 255.0;
+            var alpha = bgraPixels[pixel * bytesPerPixel + 3];
+            if (alpha <= transparentThreshold)
+                transparent++;
+            else if (alpha >= opaqueThreshold)
+                opaque++;
         }
 
         if (sampled == 0)
-            return 0.5;
+            return false;
 
-        var meanLuminance = luminanceSum / sampled;
-        var luminanceStd = Math.Sqrt(Math.Max(0, luminanceSquareSum / sampled - meanLuminance * meanLuminance));
-        // 纯黑且无细节的贴图（黑遮罩/占位）不能当 Albedo；近黑但有细节的是合法深色装备。
-        if (meanLuminance < 0.06 && luminanceStd < 0.02)
-            return 0.0;
-
-        var chroma = chromaSum / sampled;
-        return Math.Max(0.05, Math.Min(1.0, chroma * 1.5 + meanLuminance * 0.5 + Math.Min(luminanceStd * 2.0, 0.3)));
+        var transparentFraction = transparent / (double)sampled;
+        var opaqueFraction = opaque / (double)sampled;
+        // 全透明（无任何不透锚点）与全不透明（无变化）都不算遮罩：
+        // 前者按透明渲染等于让模型消失，后者没有可混合的内容。
+        return transparentFraction >= minimumMaskedFraction &&
+               opaqueFraction >= minimumMaskedFraction &&
+               transparentFraction + opaqueFraction >= minimumBinaryFraction;
     }
 }

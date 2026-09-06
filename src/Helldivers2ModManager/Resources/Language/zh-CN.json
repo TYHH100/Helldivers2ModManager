@@ -207,6 +207,8 @@
     "ModelPreviewPage.GizmoAxisTip": "点击 X、Y、Z 圆点切换轴向视图；再次点击同一圆点切换反向视图。",
     "ModelPreviewPage.OriginalTextureResolution": "原始纹理分辨率",
     "ModelPreviewPage.OriginalTextureResolutionTip": "仅对当前选中纹理读取源文件顶层 mip；会占用更多内存。",
+    "ModelPreviewPage.ForceDecodeOversizedStreams": "强制解码超限 Stream",
+    "ModelPreviewPage.ForceDecodeOversizedStreamsTip": "放宽预览容量限制，解码此前被跳过的大网格；大模型会占用更多内存并可能降低渲染帧率，顶点/索引格式不受支持的 Stream 仍无法显示。",
     "ModelPreviewPage.Status": "预览状态",
     "ModelPreviewPage.AutomaticallyHiddenSummary": "自动隐藏 {count} 个",
     "ModelPreviewPage.PreviewVisible": "默认显示",
@@ -557,7 +559,9 @@
     "CreatePage.BrowseSourceDialog": "选择模组文件所在的目录",
     "CreatePage.BrowseIconDialog": "选择模组图标",
     "ManifestEditPage.BasicInfo": "基本信息",
-    "ManifestEditPage.LegacyUpgradeHint": "此模组为旧版格式：选项名称即模组目录名，请使用文件夹选择添加选项。若为选项配置描述、Include、图标或子选项，保存时将自动升级为 V1 格式。",
+    "ManifestEditPage.ManifestFormatDesc": "选择此模组的清单格式（保存时生效）。",
+    "ManifestEditPage.LegacyUpgradeHint": "此模组为旧版（Legacy）格式：选项名称即部署目录名，添加选项时请使用文件夹选择。如需选项描述、Include 路径、图标或子选项，请在上方将清单格式切换为 V1。",
+    "ManifestEditPage.SwitchLegacyWarning": "已切换为旧版（Legacy）格式：选项描述、图标、子选项和自定义 Include 路径将被丢弃，选项名称即为部署目录名。",
     "ManifestEditPage.SetSourceDirFirst": "无法读取模组目录，请确认模组文件夹存在后再添加选项。",
     "EditPage.Title": "模组选项",
     "EditPage.PreviewHint": "悬停选项图片可查看大图预览，但是下拉列表需要点开后才能预览",
@@ -1047,7 +1051,6 @@
     "ModelPreviewPage.TextOriginalTooltip": "原版: {text}",
     "ModelPreviewPage.TextBankGroup": "文本库 {id}（语言 {language}）",
     "ModelPreviewPage.TextLoadedStatus": "已加载 {count} 条文本（{banks} 个文本库），来自 {patches} 个 Patch。",
-    "ModelPreviewPage.TextLoadFailed": "文本解析失败: {message}",
-    "ModelPreviewPage.GameTextureSource": "游戏原版"
+    "ModelPreviewPage.TextLoadFailed": "文本解析失败: {message}"
   }
 }

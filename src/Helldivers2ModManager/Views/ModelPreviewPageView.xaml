@@ -422,6 +422,7 @@
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -453,6 +454,8 @@
                                     <CheckBox Grid.Row="2" Grid.Column="0" Content="{loc:Loc ModelPreviewPage.ShowFilteredMeshes}" IsChecked="{Binding ShowFilteredMeshes}" VerticalAlignment="Center" Margin="0 6 12 0"/>
                                     <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding AutomaticallyHiddenMeshSummary}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="11" VerticalAlignment="Center" Margin="0 6 8 0"/>
                                     <CheckBox Grid.Row="2" Grid.Column="3" Content="{loc:Loc ModelPreviewPage.IsolateMesh}" IsChecked="{Binding IsolateSelectedMesh}" IsEnabled="{Binding SelectedMesh, Converter={StaticResource NullToBoolConverter}}" VerticalAlignment="Center" Margin="8 6 0 0"/>
+                                    <CheckBox Grid.Row="3" Grid.Column="0" Content="{loc:Loc ModelPreviewPage.ForceDecodeOversizedStreams}" IsChecked="{Binding ForceDecodeOversizedStreams}" VerticalAlignment="Center" Margin="0 6 12 0"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" Text="{loc:Loc ModelPreviewPage.ForceDecodeOversizedStreamsTip}" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" FontSize="11" VerticalAlignment="Center" Margin="0 6 0 0" TextTrimming="CharacterEllipsis" ToolTip="{loc:Loc ModelPreviewPage.ForceDecodeOversizedStreamsTip}"/>
                                 </Grid>
                                 <DataGrid Grid.Row="1"
                                   ItemsSource="{Binding Meshes}"

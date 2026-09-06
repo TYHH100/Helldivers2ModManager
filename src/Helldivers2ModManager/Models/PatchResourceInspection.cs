@@ -28,18 +28,26 @@ internal sealed class ModelPreviewResult
     public int SkippedStreams { get; set; }
     public string? Error { get; set; }
 
+    /// <summary>
+    /// Explicit user opt-in ("force decode oversized streams" checkbox on the mesh tab).
+    /// It raises the budgets below instead of removing them: admission control remains so
+    /// a single toggle can never turn into an unbounded multi-gigabyte decode.
+    /// </summary>
+    internal bool ForceDecodeOversizedStreams { get; init; }
+
+    private int MaxMeshes => ForceDecodeOversizedStreams ? 4_096 : 512;
+    private int MaxVertices => ForceDecodeOversizedStreams ? 8_000_000 : 1_000_000;
+    private int MaxIndices => ForceDecodeOversizedStreams ? 24_000_000 : 3_000_000;
+
     internal int PreviewVertexCount { get; private set; }
     internal int PreviewIndexCount { get; private set; }
-    internal bool IsAtCapacity => Meshes.Count >= 512 || PreviewVertexCount >= 1_000_000 || PreviewIndexCount >= 3_000_000;
+    internal bool IsAtCapacity => Meshes.Count >= MaxMeshes || PreviewVertexCount >= MaxVertices || PreviewIndexCount >= MaxIndices;
 
     internal bool TryAddMesh(ModelPreviewMesh mesh)
     {
-        const int maxMeshes = 512;
-        const int maxVertices = 1_000_000;
-        const int maxIndices = 3_000_000;
-        if (Meshes.Count >= maxMeshes ||
-            PreviewVertexCount > maxVertices - mesh.VertexCount ||
-            PreviewIndexCount > maxIndices - mesh.TriangleIndices.Length)
+        if (Meshes.Count >= MaxMeshes ||
+            PreviewVertexCount > MaxVertices - mesh.VertexCount ||
+            PreviewIndexCount > MaxIndices - mesh.TriangleIndices.Length)
             return false;
 
         Meshes.Add(mesh);
@@ -382,13 +390,6 @@ internal sealed class TextureInspectionItem : System.ComponentModel.INotifyPrope
     public required int DxgiFormat { get; init; }
     public required string PayloadKind { get; init; }
     public required string PayloadSource { get; init; }
-    /// <summary>
-    /// 该贴图解析自游戏归档（模组材质引用了模组未携带的原版资源），而不是模组补丁。
-    /// 这类条目的偏移指向游戏包地址空间，预览读取走游戏归档链路而非补丁伴生文件。
-    /// </summary>
-    public bool IsFromGameArchive { get; init; }
-    /// <summary>IsFromGameArchive 时为该贴图所在的游戏包名（模组补丁的 16 位前缀）。</summary>
-    public string? GamePackageBaseName { get; init; }
     public string TextureIdText => $"0x{TextureId:X16}";
     public string SizeText => $"{Width:N0} × {Height:N0}";
     public string FormatText => PayloadKind == "PNG" ? "PNG" : $"DXGI {DxgiFormat}";

@@ -27,11 +27,16 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 	/// <summary>当前编辑的模组 ViewModel</summary>
 	public ModViewModel? EditMod => _editModStore.CurrentMod;
 
-	/// <summary>是否为 V1 格式清单</summary>
-	public bool IsV1Manifest => (_draftManifest ?? EditMod?.Data.Manifest)?.Version == ManifestVersion.V1;
+	/// <summary>是否为 V1 格式清单（可通过清单格式单选切换，保存时按此选择写入对应格式）</summary>
+	[ObservableProperty]
+	private bool _isV1Manifest;
 
-	/// <summary>是否为 Legacy 格式清单（旧版，无 Version 字段）</summary>
-	public bool IsLegacyManifest => (_draftManifest ?? EditMod?.Data.Manifest)?.Version == ManifestVersion.Legacy;
+	/// <summary>是否为 Legacy 格式清单（旧版，无 Version 字段；IsV1Manifest 的反向，用于单选 UI 的双向绑定）</summary>
+	public bool IsLegacyManifest
+	{
+		get => !IsV1Manifest;
+		set => IsV1Manifest = !value;
+	}
 
 	/// <summary>
 	/// 是否显示选项编辑区域。
@@ -132,12 +137,50 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 			return;
 
 		_draftManifest = EditMod.Data.Manifest;
+		IsV1Manifest = _draftManifest?.Version == ManifestVersion.V1;
 		LoadVisualFields(_draftManifest);
 
 		OnPropertyChanged(nameof(IconPreview));
-		OnPropertyChanged(nameof(IsV1Manifest));
+		OnPropertyChanged(nameof(ShowOptionEditing));
+	}
+
+	partial void OnIsV1ManifestChanged(bool value)
+	{
 		OnPropertyChanged(nameof(IsLegacyManifest));
 		OnPropertyChanged(nameof(ShowOptionEditing));
+
+		if (EditMod is null)
+			return;
+
+		if (value)
+		{
+			// 切回 V1：旧版选项名即目录名，补齐 Include 路径避免部署为空
+			foreach (var opt in EditOptions)
+			{
+				if (string.IsNullOrWhiteSpace(opt.IncludePaths))
+					opt.IncludePaths = opt.Name;
+			}
+		}
+		else
+		{
+			// 切到旧版：选项名即目录名，丢弃 V1 特有字段（描述/图标/子选项/自定义 Include）
+			foreach (var opt in EditOptions)
+			{
+				var dirName = opt.IncludePaths.Split(';', StringSplitOptions.RemoveEmptyEntries)
+					.Select(p => p.Trim())
+					.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p)) ?? opt.Name;
+				opt.Name = dirName;
+				opt.IncludePaths = dirName;
+				opt.Description = string.Empty;
+				opt.ImagePath = string.Empty;
+				opt.SubOptions.Clear();
+			}
+
+			WeakReferenceMessenger.Default.Send(new MessageBoxWarningMessage
+			{
+				Message = _localizationService["ManifestEditPage.SwitchLegacyWarning"]
+			});
+		}
 	}
 
 	private void LoadVisualFields(IModManifest manifest)
@@ -272,28 +315,6 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		}
 	}
 
-	/// <summary>
-	/// 判断选项是否需要升级为 V1 格式。
-	/// 只有选项使用了 V1 特有能力（描述、自定义 Include 路径、图标、子选项）时才需要升级；
-	/// Legacy 模式下通过文件夹选择的选项（名称即目录）保持 Legacy 格式不变。
-	/// </summary>
-	/// <returns>选项包含 V1 特有结构时返回 true</returns>
-	private bool OptionsRequireV1Upgrade()
-	{
-		foreach (var option in EditOptions)
-		{
-			if (!string.IsNullOrWhiteSpace(option.Description))
-				return true;
-			if (!string.IsNullOrWhiteSpace(option.ImagePath))
-				return true;
-			if (option.SubOptions.Count > 0)
-				return true;
-			if (!string.IsNullOrWhiteSpace(option.IncludePaths) && option.IncludePaths != option.Name)
-				return true;
-		}
-		return false;
-	}
-
 	private void SaveVisualManifest()
 	{
 		if (EditMod is null)
@@ -303,7 +324,7 @@ internal sealed partial class ManifestEditPageViewModel : PageViewModelBase
 		var modDir = EditMod.Data.Directory.FullName;
 		var iconPath = ResolveAndCopyIconPath(modDir);
 
-		if (currentManifest is LegacyModManifest && !OptionsRequireV1Upgrade())
+		if (!IsV1Manifest)
 		{
 			EditMod.Data.Manifest = new LegacyModManifest
 			{

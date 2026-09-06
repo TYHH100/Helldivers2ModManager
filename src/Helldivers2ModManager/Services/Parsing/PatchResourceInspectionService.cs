@@ -42,6 +42,12 @@ internal sealed class PatchResourceInspectionService
     private const uint MaxPreviewVerticesPerStream = 500_000;
     private const uint MaxPreviewIndicesPerStream = 1_500_000;
     private const long MaxPreviewVertexBytes = 64 * 1024 * 1024;
+    // Raised limits for the explicit "force decode oversized streams" opt-in. The global
+    // ModelPreviewResult budgets still bound the whole preview, so these only stop a
+    // single legitimate high-detail stream from being discarded before admission control.
+    private const uint MaxForcedPreviewVerticesPerStream = 4_000_000;
+    private const uint MaxForcedPreviewIndicesPerStream = 12_000_000;
+    private const long MaxForcedPreviewVertexBytes = 256 * 1024 * 1024;
     private const long MaxReferenceScanBytes = 32 * 1024 * 1024;
     private static readonly int MaxPatchReadParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4);
     public PatchResourceInspectionService()
@@ -139,7 +145,7 @@ internal sealed class PatchResourceInspectionService
         DirectoryInfo modDirectory,
         CancellationToken cancellationToken = default)
         => Task.Run(
-            () => PreviewModelCoreAsync(modDirectory, GetAllPatchFiles(modDirectory), cancellationToken),
+            () => PreviewModelCoreAsync(modDirectory, GetAllPatchFiles(modDirectory), forceDecodeOversizedStreams: false, cancellationToken),
             cancellationToken);
 
     /// <summary>
@@ -149,19 +155,21 @@ internal sealed class PatchResourceInspectionService
     public Task<ModelPreviewResult> PreviewModelAsync(
         DirectoryInfo modDirectory,
         IReadOnlyList<FileInfo> patchFiles,
+        bool forceDecodeOversizedStreams = false,
         CancellationToken cancellationToken = default)
         => Task.Run(
-            () => PreviewModelCoreAsync(modDirectory, patchFiles, cancellationToken),
+            () => PreviewModelCoreAsync(modDirectory, patchFiles, forceDecodeOversizedStreams, cancellationToken),
             cancellationToken);
 
     private async Task<ModelPreviewResult> PreviewModelCoreAsync(
         DirectoryInfo modDirectory,
         IReadOnlyList<FileInfo> patchFiles,
+        bool forceDecodeOversizedStreams,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(modDirectory);
         ArgumentNullException.ThrowIfNull(patchFiles);
-        var result = new ModelPreviewResult();
+        var result = new ModelPreviewResult { ForceDecodeOversizedStreams = forceDecodeOversizedStreams };
         if (!RefreshDirectoryExists(modDirectory))
         {
             result.Error = "Mod directory no longer exists.";
@@ -202,7 +210,7 @@ internal sealed class PatchResourceInspectionService
             },
             async (patchOrder, token) =>
             {
-                var patchResult = new ModelPreviewResult();
+                var patchResult = new ModelPreviewResult { ForceDecodeOversizedStreams = forceDecodeOversizedStreams };
                 var patchFile = patchFiles[patchOrder];
                 try
                 {
@@ -214,7 +222,8 @@ internal sealed class PatchResourceInspectionService
                         patchResult,
                         unitMaterialLayouts,
                         cancellationToken: token,
-                        includeGpuStreams: true);
+                        includeGpuStreams: true,
+                        forceDecodeOversizedStreams: forceDecodeOversizedStreams);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -581,7 +590,8 @@ internal sealed class PatchResourceInspectionService
         ModelPreviewResult? modelPreview = null,
         IReadOnlyDictionary<(string PatchPath, ulong UnitId), ModelPreviewMaterialLayout>? unitMaterialLayouts = null,
         CancellationToken cancellationToken = default,
-        bool includeGpuStreams = true)
+        bool includeGpuStreams = true,
+        bool forceDecodeOversizedStreams = false)
     {
         await using var patchStream = OpenRead(patchFile);
         if (patchStream.Length < HeaderSize)
@@ -649,7 +659,8 @@ internal sealed class PatchResourceInspectionService
                         unitMaterialLayouts is not null && unitMaterialLayouts.TryGetValue((patchFile.FullName, fileId), out var materialLayout)
                             ? materialLayout
                             : null,
-                        cancellationToken);
+                        cancellationToken,
+                        forceDecodeOversizedStreams);
                 }
             }
             else if (modelPreview is null)
@@ -771,6 +782,9 @@ internal sealed class PatchResourceInspectionService
     private static async Task<IReadOnlyDictionary<(string PatchPath, ulong UnitId), ModelPreviewMaterialLayout>>
         BuildUnitMaterialLayoutsAsync(PatchResourceInspectionResult inspection, CancellationToken cancellationToken)
     {
+        var textureIds = inspection.Textures
+            .Select(static texture => texture.TextureId)
+            .ToHashSet();
         var materialTextures = new Dictionary<ulong, ModelPreviewMaterialTextures>();
         var resourceEntries = inspection.TocEntries
             .Where(entry => entry.TypeId == MaterialTypeId)
@@ -783,7 +797,7 @@ internal sealed class PatchResourceInspectionService
             if (data is null)
                 continue;
 
-            var referencedTextures = TryReadMaterialTextures(data);
+            var referencedTextures = TryReadMaterialTextures(data, textureIds);
             if (referencedTextures is not null)
                 materialTextures[entry.FileId] = referencedTextures;
         }
@@ -1066,17 +1080,13 @@ internal sealed class PatchResourceInspectionService
     /// by resource IDs. Keeping that pairing lets the preview choose the actual albedo
     /// input instead of guessing between same-sized normal, mask and color textures.
     /// </summary>
-    /// <summary>
-    /// 解析材质的语义贴图表。模组补丁里没有的贴图 ID（引用游戏原版资源）也必须保留：
-    /// 它们是材质的权威输入，缺失时预览只能整段灰显或错拿 Normal/Mask 当 Albedo；
-    /// 模型预览会再尝试从游戏包里解析这些外部引用。
-    /// </summary>
     internal static ModelPreviewMaterialTextures? TryReadMaterialTextures(
-        byte[] data)
+        byte[] data,
+        IReadOnlySet<ulong> availableTextureIds)
     {
         const int textureCountOffset = 0x40;
         const int textureTableOffset = 0x88;
-        if (data.Length < textureTableOffset)
+        if (data.Length < textureTableOffset || availableTextureIds.Count == 0)
             return null;
 
         var textureCount = ReadInt32(data, textureCountOffset);
@@ -1097,7 +1107,7 @@ internal sealed class PatchResourceInspectionService
         {
             var semanticId = ReadUInt32(data, textureTableOffset + index * sizeof(uint));
             var textureId = ReadUInt64(data, checked((int)(textureIdsOffset + index * sizeof(ulong))));
-            if (textureId == 0)
+            if (!availableTextureIds.Contains(textureId))
                 continue;
 
             textureIds.Add(textureId);
@@ -1515,7 +1525,8 @@ internal sealed class PatchResourceInspectionService
         ulong mainOffset, uint mainSize, ulong gpuOffset, uint gpuSize, List<GpuStreamInspectionItem> output,
         ModelPreviewResult? modelPreview = null,
         ModelPreviewMaterialLayout? materialLayout = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool forceDecodeOversizedStreams = false)
     {
         if (mainSize < 0x68)
             return;
@@ -1654,7 +1665,7 @@ internal sealed class PatchResourceInspectionService
                             materialLayout?.BodyShape ?? ModelPreviewBodyShape.Unknown,
                             materialLayout?.CustomizationSlot ?? ModelPreviewCustomizationSlot.Unknown,
                             materialLayout?.FallbackTextureIds ?? [], materialLayout?.FallbackColorTextureId,
-                            materialLayout?.Rig, section, cancellationToken);
+                            materialLayout?.Rig, section, cancellationToken, forceDecodeOversizedStreams);
                         if (sectionMesh is null)
                             continue;
 
@@ -1674,7 +1685,8 @@ internal sealed class PatchResourceInspectionService
                     indexOffset, indexSize, components, canSample,
                     materialLayout?.BodyShape ?? ModelPreviewBodyShape.Unknown,
                     materialLayout?.CustomizationSlot ?? ModelPreviewCustomizationSlot.Unknown,
-                    materialLayout?.FallbackTextureIds ?? [], materialLayout?.FallbackColorTextureId, cancellationToken);
+                    materialLayout?.FallbackTextureIds ?? [], materialLayout?.FallbackColorTextureId, cancellationToken,
+                    forceDecodeOversizedStreams);
                 if (mesh is null)
                 {
                     modelPreview.SkippedStreams++;
@@ -1715,8 +1727,12 @@ internal sealed class PatchResourceInspectionService
         ulong? fallbackColorTextureId,
         ModelPreviewUnitRig? rig,
         ModelPreviewMaterialSection section,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forceDecodeOversizedStreams = false)
     {
+        var maxPreviewIndicesPerStream = forceDecodeOversizedStreams ? MaxForcedPreviewIndicesPerStream : MaxPreviewIndicesPerStream;
+        var maxPreviewVerticesPerStream = forceDecodeOversizedStreams ? MaxForcedPreviewVerticesPerStream : MaxPreviewVerticesPerStream;
+        var maxPreviewVertexBytes = forceDecodeOversizedStreams ? MaxForcedPreviewVertexBytes : MaxPreviewVertexBytes;
         if (!canDecode || gpuStream is null || vertexStride == 0 || vertexStride > 4096 || indexType is not (0 or 1) ||
             section.VertexOffset > streamVertexCount || section.VertexCount == 0 ||
             section.VertexCount > streamVertexCount - section.VertexOffset ||
@@ -1737,7 +1753,7 @@ internal sealed class PatchResourceInspectionService
         var canDecodeSkinning = palette is not null && boneIndex.Type == 6 && boneWeight.Type == 7;
         var indexElementSize = indexType == 0 ? 2u : 4u;
         var triangleIndexCount = section.IndexCount - section.IndexCount % 3;
-        if (triangleIndexCount > MaxPreviewIndicesPerStream)
+        if (triangleIndexCount > maxPreviewIndicesPerStream)
             return null;
 
         var indexByteOffset = (long)section.IndexOffset * indexElementSize;
@@ -1778,13 +1794,13 @@ internal sealed class PatchResourceInspectionService
         var requiredVertexCount = indicesAreStreamRelative
             ? maximumIndex - section.VertexOffset + 1
             : maximumIndex + 1;
-        if (requiredVertexCount == 0 || requiredVertexCount > MaxPreviewVerticesPerStream ||
+        if (requiredVertexCount == 0 || requiredVertexCount > maxPreviewVerticesPerStream ||
             requiredVertexCount > streamVertexCount - section.VertexOffset)
             return null;
 
         var vertexByteOffset = (long)section.VertexOffset * vertexStride;
         var vertexByteCount = (long)requiredVertexCount * vertexStride;
-        if (vertexByteCount <= 0 || vertexByteCount > MaxPreviewVertexBytes || vertexByteCount > int.MaxValue ||
+        if (vertexByteCount <= 0 || vertexByteCount > maxPreviewVertexBytes || vertexByteCount > int.MaxValue ||
             vertexByteOffset > vertexSize || vertexByteCount > vertexSize - vertexByteOffset ||
             vertexOffset > (ulong)long.MaxValue - (ulong)vertexByteOffset ||
             !IsRangeInBounds(vertexOffset + (ulong)vertexByteOffset, (uint)vertexByteCount, gpuSize) ||
@@ -2059,10 +2075,14 @@ internal sealed class PatchResourceInspectionService
         ModelPreviewCustomizationSlot customizationSlot,
         IReadOnlyList<ulong> textureIds,
         ulong? colorTextureId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forceDecodeOversizedStreams = false)
     {
+        var maxPreviewVerticesPerStream = forceDecodeOversizedStreams ? MaxForcedPreviewVerticesPerStream : MaxPreviewVerticesPerStream;
+        var maxPreviewIndicesPerStream = forceDecodeOversizedStreams ? MaxForcedPreviewIndicesPerStream : MaxPreviewIndicesPerStream;
+        var maxPreviewVertexBytes = forceDecodeOversizedStreams ? MaxForcedPreviewVertexBytes : MaxPreviewVertexBytes;
         if (!canDecode || gpuStream is null ||
-            vertexCount > MaxPreviewVerticesPerStream || indexCount > MaxPreviewIndicesPerStream ||
+            vertexCount > maxPreviewVerticesPerStream || indexCount > maxPreviewIndicesPerStream ||
             vertexStride == 0 || vertexStride > 4096 ||
             indexType is not (0 or 1))
             return null;
@@ -2076,7 +2096,7 @@ internal sealed class PatchResourceInspectionService
         var indexElementSize = indexType == 0 ? 2u : 4u;
         var vertexByteCount = (long)vertexCount * vertexStride;
         var indexByteCount = (long)indexCount * indexElementSize;
-        if (vertexByteCount <= 0 || vertexByteCount > MaxPreviewVertexBytes ||
+        if (vertexByteCount <= 0 || vertexByteCount > maxPreviewVertexBytes ||
             indexByteCount <= 0 || indexByteCount > int.MaxValue ||
             vertexByteCount > vertexSize || indexByteCount != indexSize ||
             !IsRangeInBounds(vertexOffset, (uint)vertexByteCount, gpuSize) ||

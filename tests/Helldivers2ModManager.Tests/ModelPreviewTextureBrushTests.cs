@@ -103,10 +103,9 @@ public sealed class ModelPreviewTextureBrushTests
     }
 
     [TestMethod]
-    public void CreateModelBitmapSource_CutoutAlphaMask_RendersOpaque()
+    public void CreateModelBitmapSource_CutoutAlphaMask_PreservesTransparency()
     {
-        // 用户决策：按"接近二值 Alpha"识别裁切遮罩并保留透明的做法曾让正常模型
-        // 整体透明，已撤销——所有贴图一律按不透明 Bgr32 渲染，Alpha 不参与。
+        // 50% 全透 + 50% 全不透：接近二值的真实裁切遮罩，必须保留 Alpha 通道。
         var preview = new TexturePreviewData
         {
             Width = 2,
@@ -123,12 +122,10 @@ public sealed class ModelPreviewTextureBrushTests
 
         Assert.IsInstanceOfType(image, typeof(BitmapSource));
         var bitmap = (BitmapSource)image;
-        Assert.AreEqual(PixelFormats.Bgr32, bitmap.Format);
-        Assert.AreEqual(3, bitmap.Format.Masks.Count,
-            "Bgr32 must expose only 3 channel masks so alpha never participates in rendering.");
+        Assert.AreEqual(PixelFormats.Bgra32, bitmap.Format);
         var decoded = new byte[8];
         bitmap.CopyPixels(decoded, 8, 0);
-        // 第 4 字节是未定义填充（原样保留缓冲值、不渲染），RGB 字节必须原样通过。
-        CollectionAssert.AreEqual(preview.BgraPixels, decoded);
+        Assert.AreEqual(0xFF, decoded[3]);
+        Assert.AreEqual(0x00, decoded[7]);
     }
 }

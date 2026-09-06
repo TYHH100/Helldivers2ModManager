@@ -56,6 +56,14 @@ internal sealed partial class ModelPreviewPageViewModel
 
     partial void OnIsolateSelectedMeshChanged(bool value) => QueueRebuild();
 
+    partial void OnForceDecodeOversizedStreamsChanged(bool value)
+    {
+        // 强制解码开关改变解码集合本身（此前被预算拦下的 Stream 现在会出现在网格列表里），
+        // 因此需要整次重载而不是局部重建；与选项切换一致保留当前视图状态。
+        if (SelectedMod is { } mod)
+            _ = LoadSelectedModAsync(mod, resetView: false);
+    }
+
     partial void OnShowFilteredMeshesChanged(bool value) => QueueRebuild();
 
     partial void OnShowStockyBodyChanged(bool value)
@@ -226,11 +234,14 @@ internal sealed partial class ModelPreviewPageViewModel
             // variant instead of recursively loading every patch beneath the mod folder.
             var selectedPatchFiles = GetPreviewPatchFiles(mod);
             var patchSetKey = CreatePatchSetCacheKey(selectedPatchFiles);
-            if (!_modelResultCache.TryGetValue(patchSetKey, out var result))
+            // 强制解码与普通解码是两份不同的网格集合，缓存键必须区分，避免用过少网格的旧结果。
+            var modelCacheKey = ForceDecodeOversizedStreams ? patchSetKey + "|force" : patchSetKey;
+            if (!_modelResultCache.TryGetValue(modelCacheKey, out var result))
             {
-                result = await _previewBackend.PreviewModelAsync(mod.Directory, selectedPatchFiles, cancellationToken);
+                result = await _previewBackend.PreviewModelAsync(
+                    mod.Directory, selectedPatchFiles, ForceDecodeOversizedStreams, cancellationToken);
                 if (!cancellationToken.IsCancellationRequested)
-                    CacheModelResult(patchSetKey, result);
+                    CacheModelResult(modelCacheKey, result);
             }
             cancellationToken.ThrowIfCancellationRequested();
             if (!IsCurrentLoad(mod, loadGeneration))

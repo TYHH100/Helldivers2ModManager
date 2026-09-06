@@ -154,12 +154,6 @@ internal sealed class MyService
 
 排查类似问题的步骤：先用诊断测试输出每个 mesh 的 `UnitId`/`StreamIndex`/`MeshInfoIndex`/`VertexCount`/`TriangleCount`/`ColorTextureId`；找出相同 Unit/St/MI 但不同 ColorTexId 的成对 mesh；在 `TryReadUnitMaterialSections` 去重逻辑处添加临时 `Console.WriteLine` 输出 section 的 `(VertexOffset, VertexCount, IndexOffset, IndexCount)`，确认变体的 IndexOffset 是否不同；解码关键纹理统计平均颜色确认是否纯黑。
 
-### 零面积 UV 三角形（模组预览整体变黑的另一根因）
-
-部分模组工具输出的网格带有"死亡覆盖层"：纯色区域的三角形 UV 塌缩成同一点，分两级——**位级完全相同**（零面积，B08/715 占 30%-36%）与**次纹素级**（跨度过小、全部挤进图集某个黑色角点，715 头部死亡层 7796 个三角形挤在 (1,1) 角点）。游戏按显式 LOD 采样不受影响；WPF 光栅化器对零面积 UV 插值输出黑块，死亡层则 z-fighting 盖住正常几何（715 头部马赛克）。**但塌缩 UV 不全是垃圾**：maya 民主中甲（DP-40+DP-11）等模组的纯色部件（帽、裙摆、袜面、饰带）本身就以塌缩 UV 为唯一曲面，实测该模裙摆网格 83% 三角形零面积——曾用"零面积一律跳过 + 退化占比 ≥15% 时跳过次纹素"的网格级规则，导致帽子消失、下半身残缺、袜边撕裂。现行修复：`FilterZeroUvAreaTriangles` 做**逐三角形覆盖判定**——退化三角形中心若落在某个非相邻、近共面（对角线 0.4% 容差）的正常三角形内部（复制皮肤特征），丢弃；否则保留（黑色是该区域唯一可用的预览近似）。判定需要 positions，参考集只含 UV 跨度 >0 的三角形，共享顶点索引的相邻三角形不构成"覆盖"。**性能红线（fs-37 实测教训）**：该网格有 29.7 万三角形，首版实现（27 邻域 cell 查找 + 世界坐标 cell 索引）单网格跑 80 秒且后续网格内存爆掉，重建线程持 `_rebuildGate` 卡死 → 状态永远停在"正在解码几何体"、整个预览报废只能重启。现行实现必须保持：cell 索引相对参考 bbox 原点（防远离原点/垃圾顶点导致整型溢出失控循环）、插入 AABB 外扩共面容差后单 cell 查找（覆盖三角形必然注册在中心所在 cell）、超宽三角形走线性候选表、网格插入条目 >800 万或点测试 >3200 万次即放弃判定保留全部三角形（fail-open，fs-37 本就无需过滤）。注意这不是"材质变体去重"：死亡层不是位置重复副本（实测 0/7796 匹配），不能按几何键去重；"顶点到正常表面的距离"也无法区分（同一连续曲面上的退化三角形距离同为 0），必须用"点在三角形内部"这一严格判定。
-
-排查方法：导出网格 UV 三角形统计每三角形的 UV 跨度（`max(u-span, v-span)`），统计"跨度恰为 0"的占比；用离屏 `RenderTargetBitmap` 复现黑色渲染后，逐项替换画刷配置/UV 数据做二分。
-
 ### 流光（油光）与发光材质的预览显示
 
 WPF 固定管线只有 Diffuse/Specular/Emissive 三种材质，预览按语义输入组合渲染（`ModelPreviewPageViewModel.Rebuild.cs` 的 `ResolveMaterialInputs`/`ComposeMaterial`）：

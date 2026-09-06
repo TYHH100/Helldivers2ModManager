@@ -114,6 +114,34 @@
 						</StackPanel>
 					</Border>
 
+					<!-- 清单格式切换 -->
+					<StackPanel Margin="16 0 16 12">
+						<TextBlock Text="{loc:Loc CreatePage.ManifestFormat}"
+								   FontSize="16"
+								   FontWeight="SemiBold"
+								   Foreground="{StaticResource NeutralForegroundBrush}"
+								   Margin="0 0 0 4"/>
+						<TextBlock Text="{loc:Loc ManifestEditPage.ManifestFormatDesc}"
+								   FontSize="13"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   Margin="0 0 0 8"/>
+						<StackPanel Orientation="Horizontal">
+							<RadioButton GroupName="ManifestFormatEdit"
+										 IsChecked="{Binding IsV1Manifest}"
+										 VerticalContentAlignment="Center"
+										 Style="{StaticResource FluentRadioButton}"
+										 Margin="0 0 24 0">
+								<TextBlock Text="{loc:Loc CreatePage.ManifestFormatV1}" FontSize="14"/>
+							</RadioButton>
+							<RadioButton GroupName="ManifestFormatEdit"
+										 IsChecked="{Binding IsLegacyManifest}"
+										 VerticalContentAlignment="Center"
+										 Style="{StaticResource FluentRadioButton}">
+								<TextBlock Text="{loc:Loc CreatePage.ManifestFormatLegacy}" FontSize="14"/>
+							</RadioButton>
+						</StackPanel>
+					</StackPanel>
+
 					<!-- 选项管理区域 -->
 					<Border Style="{StaticResource FluentCard}"
 							CornerRadius="8"

@@ -165,35 +165,16 @@ internal sealed partial class ModelPreviewPageViewModel
         // WPF composes BaseColor and Emissive only. Normal and mask maps stay available
         // through the texture list, but pre-decoding them consumes memory without
         // affecting the rendered model.
-        // 材质语义引用的贴图 ID 可能不在模组补丁里（原版资源）；这些 ID 不参与模组
-        // 解码，改走游戏归档按需解析（见 LoadOriginalTexturePreviewsAsync）。
-        var referencedIds = SelectAutomaticTextureIds(meshes, maxPreviewCount);
-
-        // 语义无法识别的材质（预览未收录的着色器家族）的贴图表排列通常是
-        // [黑遮罩, 法线, …, MRA, 真正的 Albedo]：先用 256² 缩略解码给整张表按内容
-        // 打分，挑出每材质的 Albedo 冠军进入全质量解码——表内其它贴图不再占用
-        // 解码预算，冠军也不会因预算截断而缺席。
-        var (albedoWinners, albedoLosers) = await SelectUnknownSemanticAlbedoWinnersAsync(
-            mod, meshes, textureMap, referencedIds, loadGeneration, cancellationToken);
-        if (!IsCurrentLoad(mod, loadGeneration))
-            return;
-        if (albedoLosers.Count > 0 || albedoWinners.Count > 0)
-        {
-            var kept = referencedIds.Where(id => !albedoLosers.Contains(id)).ToList();
-            foreach (var winner in albedoWinners)
-                if (!kept.Contains(winner))
-                    kept.Add(winner);
-            referencedIds = kept;
-        }
-
-        var modTextureIds = referencedIds.Where(textureMap.ContainsKey).ToArray();
+        var referencedIds = SelectAutomaticTextureIds(meshes, maxPreviewCount)
+            .Where(textureMap.ContainsKey)
+            .ToArray();
 
         // The gate is disposed explicitly after every decode task has finished. Task.WhenAll
         // returns early on cancellation while sibling tasks are still unwinding; disposing
         // the gate too early would make their Release() throw ObjectDisposedException and
         // leave an unobserved faulted task behind.
         var decodeGate = new SemaphoreSlim(concurrency, concurrency);
-        var decodeTasks = modTextureIds.Select(async textureId =>
+        var decodeTasks = referencedIds.Select(async textureId =>
         {
             if (!textureMap.TryGetValue(textureId, out var texture))
                 return null;
@@ -223,8 +204,7 @@ internal sealed partial class ModelPreviewPageViewModel
                         bitmap,
                         role,
                         (long)texture.Width * texture.Height,
-                        ModelPreviewTextureAnalysis.MeasureIridescenceStrength(preview),
-                        ModelPreviewTextureAnalysis.ComputeAlbedoScore(preview));
+                        ModelPreviewTextureAnalysis.MeasureIridescenceStrength(preview));
                     return new LoadedTextureResult(textureId, texture, loaded);
                 }
                 finally
@@ -273,316 +253,6 @@ internal sealed partial class ModelPreviewPageViewModel
         {
             decodeGate.Dispose();
         }
-
-        // 模组材质引用、但模组未携带的贴图（原版资源）：按需从游戏归档解析。
-        // 候选预算与模组贴图共享（SelectAutomaticTextureIds 已按优先级截断），
-        // 游戏未配置或包内找不到时静默降级，不影响模组自身贴图的展示。
-        var externalTextureIds = referencedIds
-            .Where(textureId => !textureMap.ContainsKey(textureId))
-            .ToArray();
-        if (externalTextureIds.Length > 0)
-        {
-            await LoadOriginalTexturePreviewsAsync(
-                mod,
-                externalTextureIds,
-                maxPixelCount,
-                useOriginalResolution,
-                loadGeneration,
-                cancellationToken);
-        }
-    }
-
-    /// <summary>
-    /// 为语义无法识别的材质挑选 Albedo 冠军（两遍解码的第一遍）。这类材质的贴图表
-    /// 排列通常是 [黑遮罩, 法线, …, MRA, 真正的 Albedo]，按表顺序解码会把黑遮罩当
-    /// Albedo，且真正的 Albedo 排在表尾容易被解码预算截断。用 256² 缩略解码给整张
-    /// 表按内容评分，每材质取最高分者为冠军；落选者从解码预算中移除（不与已识别
-    /// 语义共享的贴图才移除），冠军若因预算被截断则补回。返回（冠军列表, 落选集合）。
-    /// </summary>
-    internal Task<(IReadOnlyList<ulong> Winners, IReadOnlySet<ulong> Losers)> SelectUnknownSemanticAlbedoWinnersAsync(
-        ModData mod,
-        IReadOnlyList<ModelPreviewMesh> meshes,
-        IReadOnlyDictionary<ulong, TextureInspectionItem> textureMap,
-        IReadOnlyList<ulong> referencedIds,
-        int loadGeneration,
-        CancellationToken cancellationToken)
-        => SelectUnknownSemanticAlbedoWinnersCore(
-            meshes,
-            textureMap,
-            referencedIds,
-            (texture, token) => _inspectionService.PreviewTextureAsync(mod.Directory, texture, 256, token),
-            () => IsCurrentLoad(mod, loadGeneration),
-            (exception, texture) => _logger.LogDebug(exception, "Texture {TextureId} could not be scored for albedo selection", texture.TextureIdText),
-            cancellationToken);
-
-    internal static async Task<(IReadOnlyList<ulong> Winners, IReadOnlySet<ulong> Losers)> SelectUnknownSemanticAlbedoWinnersCore(
-        IReadOnlyList<ModelPreviewMesh> meshes,
-        IReadOnlyDictionary<ulong, TextureInspectionItem> textureMap,
-        IReadOnlyList<ulong> referencedIds,
-        Func<TextureInspectionItem, CancellationToken, Task<TexturePreviewData?>> previewThumbnail,
-        Func<bool> isCurrentLoad,
-        Action<Exception, TextureInspectionItem> logScoreFailure,
-        CancellationToken cancellationToken)
-    {
-        var tables = new Dictionary<ulong, IReadOnlyList<ulong>>();
-        foreach (var mesh in meshes)
-        {
-            var hasColorBinding = mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor).Count > 0 ||
-                                  mesh.MaterialTextures.Get(ModelPreviewTextureRole.Iridescence).Count > 0 ||
-                                  mesh.ColorTextureId.HasValue;
-            if (hasColorBinding || mesh.TextureIds.Count == 0)
-                continue;
-            // 同一材质被多个网格共享：保留第一份表即可（同一材质的表内容一致）。
-            tables.TryAdd(mesh.MaterialId ?? 0, mesh.TextureIds);
-        }
-
-        if (tables.Count == 0)
-            return (Array.Empty<ulong>(), new HashSet<ulong>());
-
-        // 已识别语义引用的贴图可能跨材质共享，永远不进落选集合。
-        var semanticReferenced = new HashSet<ulong>();
-        foreach (var mesh in meshes)
-        {
-            foreach (var textureId in mesh.MaterialTextures.Get(ModelPreviewTextureRole.BaseColor))
-                semanticReferenced.Add(textureId);
-            foreach (var textureId in mesh.MaterialTextures.Get(ModelPreviewTextureRole.Iridescence))
-                semanticReferenced.Add(textureId);
-            foreach (var textureId in mesh.MaterialTextures.Get(ModelPreviewTextureRole.Emissive))
-                semanticReferenced.Add(textureId);
-            if (mesh.ColorTextureId is ulong colorTextureId)
-                semanticReferenced.Add(colorTextureId);
-        }
-
-        var scores = new Dictionary<ulong, double>();
-        var gate = new SemaphoreSlim(2, 2);
-        var scoringTasks = tables.Values
-            .SelectMany(static ids => ids)
-            .Distinct()
-            .Where(textureMap.ContainsKey)
-            .Select(async textureId =>
-            {
-                if (!textureMap.TryGetValue(textureId, out var texture))
-                    return;
-                try
-                {
-                    await gate.WaitAsync(cancellationToken);
-                    try
-                    {
-                        // 256² 是解码下限：足够内容评分，单张成本只有全质量解码的约 1/16。
-                        var thumbnail = await previewThumbnail(texture, cancellationToken);
-                        if (!isCurrentLoad())
-                            return;
-                        scores[textureId] = thumbnail is null
-                            ? 0.0
-                            : ModelPreviewTextureAnalysis.ComputeAlbedoScore(thumbnail);
-                    }
-                    finally
-                    {
-                        gate.Release();
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    logScoreFailure(exception, texture);
-                    scores[textureId] = 0.0;
-                }
-            })
-            .ToArray();
-        try
-        {
-            await Task.WhenAll(scoringTasks);
-        }
-        catch
-        {
-            try
-            {
-                await Task.WhenAll(scoringTasks);
-            }
-            catch
-            {
-                // The original exception is rethrown below; this wait only drains the tasks.
-            }
-            throw;
-        }
-        finally
-        {
-            gate.Dispose();
-        }
-
-        if (!isCurrentLoad())
-            return (Array.Empty<ulong>(), new HashSet<ulong>());
-
-        var winners = new List<ulong>();
-        var losers = new HashSet<ulong>();
-        foreach (var table in tables.Values)
-        {
-            var winner = 0ul;
-            var winnerScore = -1.0;
-            foreach (var textureId in table)
-            {
-                if (semanticReferenced.Contains(textureId) || textureId == 0)
-                    continue;
-                // 未进评分的候选（游戏归档贴图）按中性分 0.5 处理，不挡已被评分的冠军。
-                var score = scores.GetValueOrDefault(textureId, 0.5);
-                if (score > winnerScore)
-                {
-                    winnerScore = score;
-                    winner = textureId;
-                }
-            }
-
-            if (winner != 0)
-            {
-                winners.Add(winner);
-                foreach (var textureId in table)
-                    if (textureId != winner && !semanticReferenced.Contains(textureId) && textureId != 0)
-                        losers.Add(textureId);
-            }
-        }
-
-        return (winners, losers);
-    }
-
-    private async Task LoadOriginalTexturePreviewsAsync(
-        ModData mod,
-        IReadOnlyList<ulong> externalTextureIds,
-        int maxPixelCount,
-        bool useOriginalResolution,
-        int loadGeneration,
-        CancellationToken cancellationToken)
-    {
-        // 解码缓存的键来自条目元数据（包名+偏移+尺寸），元数据可跨选项切换复用；
-        // 复用元数据就能直接命中解码缓存，避免同一贴图反复读归档。
-        var missingRecordIds = externalTextureIds
-            .Where(textureId => !_vanillaTextureRecords.ContainsKey(textureId))
-            .ToList();
-        if (missingRecordIds.Count > 0)
-        {
-            var originals = await _previewBackend.ReadOriginalTexturesAsync(
-                missingRecordIds,
-                maxPixelCount,
-                cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!IsCurrentLoad(mod, loadGeneration))
-                return;
-
-            foreach (var (textureId, original) in originals)
-            {
-                var record = CreateGameTextureInspectionItem(textureId, original);
-                _vanillaTextureRecords[textureId] = record;
-                EnsureGameTextureListed(record);
-                // 批次结果已带解码像素，直接入库；后面的逐张回退只服务
-                // "元数据已复用但解码缓存未命中"（如分辨率切换）的少数情况。
-                StoreLoadedGameTexture(record, originals, maxPixelCount, useOriginalResolution);
-            }
-        }
-
-        foreach (var textureId in externalTextureIds)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!_vanillaTextureRecords.TryGetValue(textureId, out var record))
-                continue; // 游戏归档里找不到：按"无法解析"降级，材质回退到灰显/语义回退链
-            EnsureGameTextureListed(record);
-            if (_texturePreviews.ContainsKey(textureId) && _automaticTexturePreviewIds.Contains(textureId))
-                continue;
-            if (TryGetDecodedTexture(record, useOriginalResolution, out var cached))
-            {
-                _texturePreviews[textureId] = cached;
-                _automaticTexturePreviewIds.Add(textureId);
-                record.PreviewRole = cached.Role;
-                record.PreviewRoleText = GetTexturePreviewRoleText(cached.Role);
-                continue;
-            }
-
-            var single = await _previewBackend.ReadOriginalTexturesAsync(
-                [textureId],
-                maxPixelCount,
-                cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!IsCurrentLoad(mod, loadGeneration))
-                return;
-
-            StoreLoadedGameTexture(record, single, maxPixelCount, useOriginalResolution);
-        }
-    }
-
-    private void StoreLoadedGameTexture(
-        TextureInspectionItem record,
-        IReadOnlyDictionary<ulong, GameUnitReferenceReader.GameOriginalTexture> originals,
-        int maxPixelCount,
-        bool useOriginalResolution)
-    {
-        if (!originals.TryGetValue(record.TextureId, out var original))
-            return;
-        var bitmap = CreateModelBitmapSource(original.Preview, useOriginalResolution);
-        if (bitmap is null)
-            return;
-
-        var role = ModelPreviewTextureAnalysis.Classify(original.Preview);
-        var loaded = new LoadedTexturePreview(
-            bitmap,
-            role,
-            (long)original.Width * original.Height,
-            ModelPreviewTextureAnalysis.MeasureIridescenceStrength(original.Preview),
-            ModelPreviewTextureAnalysis.ComputeAlbedoScore(original.Preview));
-        record.PreviewRole = role;
-        record.PreviewRoleText = GetTexturePreviewRoleText(role);
-        _texturePreviews[record.TextureId] = loaded;
-        _automaticTexturePreviewIds.Add(record.TextureId);
-        if (useOriginalResolution)
-        {
-            // 与模组贴图同策略：原始分辨率解码结果单独保留一份，避免大缓冲常驻自动缓存。
-            _selectedOriginalTextureId = record.TextureId;
-            _selectedOriginalTexturePreview = loaded;
-        }
-        else
-        {
-            CacheDecodedTexture(CreateTextureCacheKey(record, useOriginalResolution), loaded);
-        }
-    }
-
-    private TextureInspectionItem CreateGameTextureInspectionItem(
-        ulong textureId,
-        GameUnitReferenceReader.GameOriginalTexture original)
-    {
-        var locator = original.Locator;
-        return new TextureInspectionItem
-        {
-            PatchFile = _localizationService["ModelPreviewPage.GameTextureSource"],
-            PatchPath = $"game://{locator.PackageName}",
-            PatchOrder = 0,
-            TocEntryIndex = locator.TocEntryIndex,
-            TextureId = textureId,
-            MainOffset = locator.MainOffset,
-            MainSize = locator.MainSize,
-            GpuOffset = locator.GpuOffset,
-            GpuSize = locator.GpuSize,
-            StreamOffset = locator.StreamOffset,
-            StreamSize = locator.StreamSize,
-            Width = original.Width,
-            Height = original.Height,
-            MipCount = original.MipCount,
-            DxgiFormat = original.DxgiFormat,
-            PayloadKind = "DDS",
-            PayloadSource = "bundle",
-            IsFromGameArchive = true,
-            GamePackageBaseName = locator.PackageName
-        };
-    }
-
-    private void EnsureGameTextureListed(TextureInspectionItem record)
-    {
-        foreach (var texture in Textures)
-        {
-            if (texture.IsFromGameArchive && texture.TextureId == record.TextureId)
-                return;
-        }
-
-        Textures.Add(record);
     }
 
     private async Task LoadSelectedTextureAsync(TextureInspectionItem? texture)
@@ -622,44 +292,6 @@ internal sealed partial class ModelPreviewPageViewModel
                 return;
             }
 
-            // 游戏归档贴图没有补丁伴生文件，按定位表走归档有界读取；缓存语义与补丁贴图一致。
-            if (texture.IsFromGameArchive)
-            {
-                var originals = await _previewBackend.ReadOriginalTexturesAsync(
-                    [texture.TextureId],
-                    useOriginalResolution ? ModelPreviewOriginalTexturePixels : ModelPreviewMaxTexturePixels,
-                    cancellationToken);
-                if (!IsCurrentTextureRequest(texture, mod, textureGeneration, cancellation) ||
-                    useOriginalResolution != UseOriginalTextureResolution)
-                    return;
-                if (originals.TryGetValue(texture.TextureId, out var gameTexture) &&
-                    CreateModelBitmapSource(gameTexture.Preview, useOriginalResolution) is { } gameBitmap)
-                {
-                    var gameRole = ModelPreviewTextureAnalysis.Classify(gameTexture.Preview);
-                    texture.PreviewRole = gameRole;
-                    texture.PreviewRoleText = GetTexturePreviewRoleText(gameRole);
-                    SelectedTexturePreview = gameBitmap;
-                    var gameLoaded = new LoadedTexturePreview(
-                        gameBitmap,
-                        gameRole,
-                        (long)gameTexture.Width * gameTexture.Height,
-                        ModelPreviewTextureAnalysis.MeasureIridescenceStrength(gameTexture.Preview),
-                        ModelPreviewTextureAnalysis.ComputeAlbedoScore(gameTexture.Preview));
-                    if (useOriginalResolution)
-                    {
-                        _selectedOriginalTextureId = texture.TextureId;
-                        _selectedOriginalTexturePreview = gameLoaded;
-                    }
-                    else
-                    {
-                        StoreManualTexturePreview(texture.TextureId, gameLoaded);
-                        CacheDecodedTexture(CreateTextureCacheKey(texture, useOriginalResolution), gameLoaded);
-                    }
-                    await RebuildModelGroupAsync();
-                }
-                return;
-            }
-
             var preview = await _inspectionService.PreviewTextureAsync(
                 mod.Directory,
                 texture,
@@ -676,7 +308,6 @@ internal sealed partial class ModelPreviewPageViewModel
             var bitmap = CreateModelBitmapSource(preview, useOriginalResolution);
             // Alpha 强度必须在解码结果释放前统计：AlbedoIridescence 的 Alpha 承载流光强度。
             var iridescenceStrength = ModelPreviewTextureAnalysis.MeasureIridescenceStrength(preview);
-            var albedoScore = ModelPreviewTextureAnalysis.ComputeAlbedoScore(preview);
             // The source-resolution decoder can have a 256 MiB managed BGRA buffer.
             // The frozen BitmapSource owns the pixel content needed by WPF; do not let
             // the async state machine retain the decoder result while rebuilding.
@@ -692,8 +323,7 @@ internal sealed partial class ModelPreviewPageViewModel
                     bitmap,
                     role,
                     (long)texture.Width * texture.Height,
-                    iridescenceStrength,
-                    albedoScore);
+                    iridescenceStrength);
                 if (useOriginalResolution)
                 {
                     // A source mip may be very large. Retain exactly one separately
@@ -727,8 +357,9 @@ internal sealed partial class ModelPreviewPageViewModel
     /// <summary>
     /// Model albedo inputs often pack unrelated data into alpha. WPF's ImageBrush would
     /// otherwise interpret that channel as opacity and make an otherwise valid model
-    /// disappear, so textures always render as opaque RGB.（曾试过按"接近二值的
-    /// Alpha 分布"识别真裁切遮罩并保留透明，但误判会让正常模型整体透明，已撤销。）
+    /// disappear, so packed or uniform alpha keeps rendering as opaque RGB. A near-binary
+    /// alpha distribution (hair, veils, cutout geometry) is a real opacity mask and is
+    /// preserved so transparent parts no longer render as solid panels.
     /// </summary>
     internal static ImageSource? CreateModelBitmapSource(
         TexturePreviewData? preview,
@@ -739,12 +370,14 @@ internal sealed partial class ModelPreviewPageViewModel
 
         if (preview.BgraPixels is not null)
         {
+            // 遮罩样 Alpha 才保留透明通道；打包数据/全值 Alpha 仍按不透明 RGB 渲染。
+            var hasOpacityMask = ModelPreviewTextureAnalysis.IsOpacityMask(preview.BgraPixels);
             var bitmap = BitmapSource.Create(
                 preview.Width,
                 preview.Height,
                 96,
                 96,
-                PixelFormats.Bgr32,
+                hasOpacityMask ? PixelFormats.Bgra32 : PixelFormats.Bgr32,
                 null,
                 preview.BgraPixels,
                 preview.Width * 4);
@@ -764,9 +397,20 @@ internal sealed partial class ModelPreviewPageViewModel
         png.StreamSource = stream;
         png.EndInit();
         png.Freeze();
-        // PNG 是内嵌图标/贴图的少见路径，解码像素宽度已被限制在 2048 内，缓冲规模可控；
-        // 一律转不透明 Bgr32，Alpha 不参与渲染。
-        var opaque = new FormatConvertedBitmap(png, PixelFormats.Bgr32, null, 0);
+        var pixels = new byte[png.PixelWidth * png.PixelHeight * 4];
+        // 先统一转换到 Bgra32 再按 Alpha 分布决定最终格式；PNG 是内嵌图标/贴图的少见路径，
+        // 解码像素宽度已被限制在 2048 内，缓冲规模可控。
+        new FormatConvertedBitmap(png, PixelFormats.Bgra32, null, 0).CopyPixels(pixels, png.PixelWidth * 4, 0);
+        var pngHasOpacityMask = ModelPreviewTextureAnalysis.IsOpacityMask(pixels);
+        var opaque = BitmapSource.Create(
+            png.PixelWidth,
+            png.PixelHeight,
+            96,
+            96,
+            pngHasOpacityMask ? PixelFormats.Bgra32 : PixelFormats.Bgr32,
+            null,
+            pixels,
+            png.PixelWidth * 4);
         opaque.Freeze();
         return opaque;
     }
