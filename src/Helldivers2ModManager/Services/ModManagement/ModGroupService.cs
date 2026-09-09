@@ -126,12 +126,16 @@ internal sealed class ModGroupService
 		if (target is null || target.Id == SelectedGroup.Id)
 			return;
 
-		CaptureGroupState(SelectedGroup.Id, currentMods);
-		await SaveGroupStateAsync(SelectedGroup.Id);
+		// 只保存旧分组的成员。将全部模组写入每个分组会让切换成本随模组总数增长，
+		// 也会把不属于分组的状态错误地持久化进去。
+		var previousGroupId = SelectedGroup.Id;
+		CaptureGroupState(previousGroupId, FilterMods(currentMods));
 		SelectedGroup = target;
 		_lastSelectedGroupId = target.Id;
 		ApplyGroupState(target.Id, currentMods);
 		SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
+		// 先完成内存切换，再等待后台持久化，避免 SQLite 写入阻塞用户看到新分组。
+		await SaveGroupStateAsync(previousGroupId);
 	}
 
 	public async Task<ModGroup> CreateGroupAsync(string name)
@@ -320,9 +324,13 @@ internal sealed class ModGroupService
 		if (!_stateCache.TryGetValue(groupId, out var states))
 			states = _stateCache[groupId] = [];
 
+		var memberGuids = Groups.FirstOrDefault(group => group.Id == groupId)?.ModGuids.ToHashSet();
+		if (memberGuids is null || memberGuids.Count == 0)
+			return;
+
 		foreach (var mod in mods)
 		{
-			if (!IsModVisibleInGroup(groupId, mod.Manifest.Guid))
+			if (!memberGuids.Contains(mod.Manifest.Guid))
 				continue;
 
 			if (states.TryGetValue(mod.Manifest.Guid, out var state))
@@ -388,13 +396,11 @@ internal sealed class ModGroupService
 		if (!_stateCache.TryGetValue(groupId, out var states))
 			return;
 
-		await _repository.SaveStatesAsync(_storageDirectory, groupId, states.Values.OrderBy(static state => state.SortOrder));
-	}
-
-	private bool IsModVisibleInGroup(Guid groupId, Guid modGuid)
-	{
-		var group = Groups.FirstOrDefault(group => group.Id == groupId);
-		return group is not null && group.ModGuids.Contains(modGuid);
+		var stateSnapshot = states.Values
+			.OrderBy(static state => state.SortOrder)
+			.ToArray();
+		// SaveStatesAsync 内部包含同步 SQLite 写入；Task 方法本身不会自动离开 UI 线程。
+		await Task.Run(() => _repository.SaveStatesAsync(_storageDirectory, groupId, stateSnapshot));
 	}
 
 	private void CopyDefaultStateToGroup(Guid groupId, ModData mod)

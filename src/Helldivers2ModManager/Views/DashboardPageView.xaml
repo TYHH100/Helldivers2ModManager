@@ -731,7 +731,8 @@
 		</Border>
 
 		<!-- Top Action Bar -->
-		<Border Grid.Row="0"
+		<Border x:Name="TopActionBar"
+				Grid.Row="0"
 				Grid.Column="1"
 				Style="{StaticResource FluentCard}"
 				CornerRadius="8"
@@ -780,23 +781,31 @@
 							Content="{loc:Loc ModGroup.LibraryView}" Width="112" Height="40" Padding="8 4" VerticalAlignment="Center" Margin="6 0 0 0"/>
 				</StackPanel>
 
-				<!-- Batch Action Buttons (第2行，有选中项时显示) -->
-				<StackPanel Grid.Row="1"
-							Grid.Column="0"
-							Grid.ColumnSpan="2"
-							Orientation="Horizontal"
-							Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibilityConverter}}"
-							Margin="0 8 0 0">
-					<TextBlock Text="{Binding SelectionCountText}"
-							   FontSize="13"
-							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-							   VerticalAlignment="Center"
-							   Margin="0 0 8 0"/>
+				<!-- Batch Action Buttons (第2行，有选中项时显示)。使用 WrapPanel，窄窗口时自然换行。 -->
+				<WrapPanel Grid.Row="1"
+						   Grid.Column="0"
+						   Grid.ColumnSpan="2"
+						   Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibilityConverter}}"
+						   Margin="0 8 0 0"
+						   HorizontalAlignment="Stretch">
+					<Border Background="#14FFFFFF"
+							BorderBrush="#20FFFFFF"
+							BorderThickness="1"
+							CornerRadius="4"
+							Padding="10 6"
+							Margin="0 0 6 6"
+							VerticalAlignment="Center">
+						<TextBlock Text="{Binding SelectionCountText}"
+								   FontSize="13"
+								   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+								   VerticalAlignment="Center"/>
+					</Border>
 					<Button Style="{StaticResource FluentSecondaryButton}"
 							Command="{Binding SelectAllCommand}"
-							Padding="12 6">
+							Padding="12 6"
+							Margin="0 0 6 6">
 							<StackPanel Orientation="Horizontal">
-								<TextBlock Text="&#xE8B3;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="&#xE9D5;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
 								<TextBlock Text="{loc:Loc DashboardPage.SelectAll}" VerticalAlignment="Center"/>
 							</StackPanel>
 						<Button.ToolTip>
@@ -805,24 +814,27 @@
 					</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
 							Command="{Binding DeselectAllCommand}"
-							Padding="12 6">
+							Padding="12 6"
+							Margin="0 0 6 6">
 							<StackPanel Orientation="Horizontal">
-								<TextBlock Text="&#xE738;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="&#xE8E6;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
 								<TextBlock Text="{loc:Loc DashboardPage.DeselectAll}" VerticalAlignment="Center"/>
 							</StackPanel>
 						</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
 							Command="{Binding InvertSelectionCommand}"
-							Padding="12 6">
+							Padding="12 6"
+							Margin="0 0 6 6">
 							<StackPanel Orientation="Horizontal">
-								<TextBlock Text="&#xE8B1;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="&#xE8AB;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
 								<TextBlock Text="{loc:Loc DashboardPage.InvertSelection}" VerticalAlignment="Center"/>
 							</StackPanel>
 						</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
 											Command="{Binding BatchEnableCommand}"
 											IsEnabled="{Binding IsWorkspaceView}"
-							Padding="12 6">
+							Padding="12 6"
+							Margin="0 0 6 6">
 							<StackPanel Orientation="Horizontal">
 								<TextBlock Text="&#xE73A;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
 								<TextBlock Text="{loc:Loc DashboardPage.BatchEnable}" VerticalAlignment="Center"/>
@@ -831,23 +843,31 @@
 					<Button Style="{StaticResource FluentSecondaryButton}"
 											Command="{Binding BatchDisableCommand}"
 											IsEnabled="{Binding IsWorkspaceView}"
-							Padding="12 6">
+							Padding="12 6"
+							Margin="0 0 6 6">
 							<StackPanel Orientation="Horizontal">
 								<TextBlock Text="&#xE739;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
 								<TextBlock Text="{loc:Loc DashboardPage.BatchDisable}" VerticalAlignment="Center"/>
 							</StackPanel>
 						</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
-							Content="{loc:Loc DashboardPage.BatchTag}"
 							Command="{Binding BatchAddTagsCommand}"
-							Padding="12 6">
+							Padding="12 6"
+							Margin="0 0 6 6">
+						<Button.Content>
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="&#xE8EC;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
+								<TextBlock Text="{loc:Loc DashboardPage.BatchTag}" VerticalAlignment="Center"/>
+							</StackPanel>
+						</Button.Content>
 						<Button.ToolTip>
 							<ToolTip Content="{loc:Loc DashboardPage.BatchTagHint}"/>
 						</Button.ToolTip>
 					</Button>
 					<Button Style="{StaticResource FluentSecondaryButton}"
 							Command="{Binding AddModsToGroupCommand}"
-							Padding="12 6">
+						Padding="12 6"
+							Margin="0 0 6 6">
 							<StackPanel Orientation="Horizontal">
 								<TextBlock Text="&#xE8B7;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
 								<TextBlock Text="{loc:Loc ModGroup.AddToGroup}" VerticalAlignment="Center"/>
@@ -855,13 +875,14 @@
 						</Button>
 					<Button Style="{StaticResource FluentDangerButton}"
 							Command="{Binding BatchDeleteCommand}"
-							Padding="12 6">
+						Padding="12 6"
+							Margin="0 0 6 6">
 							<StackPanel Orientation="Horizontal">
 								<TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="14" VerticalAlignment="Center" Margin="0 0 7 0"/>
 								<TextBlock Text="{loc:Loc Common.Delete}" VerticalAlignment="Center"/>
 							</StackPanel>
 						</Button>
-				</StackPanel>
+				</WrapPanel>
 			</Grid>
 		</Border>
 

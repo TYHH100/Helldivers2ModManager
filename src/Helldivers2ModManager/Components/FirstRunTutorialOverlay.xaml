@@ -35,11 +35,12 @@
 				IsHitTestVisible="False"
 				Visibility="Collapsed"/>
 		<!-- 引导卡片 -->
-		<Border x:Name="Card"
-				Style="{StaticResource FluentMessageDialog}"
-				MaxWidth="440"
-				MinWidth="320"
-				HorizontalAlignment="Center"
+			<Border x:Name="Card"
+					Style="{StaticResource FluentMessageDialog}"
+					MaxWidth="440"
+					MinWidth="320"
+					MaxHeight="640"
+					HorizontalAlignment="Center"
 				VerticalAlignment="Center"
 				SnapsToDevicePixels="True"
 				UseLayoutRounding="True"
@@ -86,14 +87,18 @@
 						   Margin="0 0 0 8"/>
 
 				<!-- Description -->
-				<TextBlock Grid.Row="1"
-						   Grid.Column="1"
-						   Text="{Binding FirstRunTutorialDescription}"
-						   FontSize="14"
-						   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-						   TextWrapping="Wrap"
-						   LineHeight="22"
-						   Margin="0 0 0 20"/>
+					<ScrollViewer Grid.Row="1"
+								  Grid.Column="1"
+								  MaxHeight="360"
+								  VerticalScrollBarVisibility="Auto"
+								  HorizontalScrollBarVisibility="Disabled"
+								  Margin="0 0 0 20">
+							<TextBlock Text="{Binding FirstRunTutorialDescription}"
+									   FontSize="14"
+									   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+									   TextWrapping="Wrap"
+									   LineHeight="22"/>
+						</ScrollViewer>
 
 				<!-- Step indicator -->
 				<TextBlock Grid.Row="2"

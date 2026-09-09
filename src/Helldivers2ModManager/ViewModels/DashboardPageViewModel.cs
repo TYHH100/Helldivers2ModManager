@@ -332,22 +332,22 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private void RebuildOrderedItems()
     {
-        _orderedItems.Clear();
         var groupedMods = VisibleModViewModels.ToArray();
+        var items = new List<object>(groupedMods.Length + (_settingsService.Initialized ? _settingsService.Separators.Count : 0));
 
         if (!ShowSeparator)
         {
             // 分隔符未启用时，只显示所有模组
-            foreach (var mod in groupedMods)
-                _orderedItems.Add(mod);
+            items.AddRange(groupedMods);
+            _orderedItems = new ObservableCollection<object>(items);
             RefreshPositionNumbers();
+            Mods = _orderedItems;
             OnPropertyChanged(nameof(Mods));
             return;
         }
 
         // 先添加所有模组
-        foreach (var mod in groupedMods)
-            _orderedItems.Add(mod);
+        items.AddRange(groupedMods);
 
         // 按 DisplayIndex 排序后插入分隔符到对应位置
         if (_settingsService.Initialized)
@@ -358,13 +358,16 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             foreach (var sep in sortedSeps)
             {
                 int insertAt = sep.DisplayIndex >= 0
-                    ? Math.Min(sep.DisplayIndex, _orderedItems.Count)
-                    : _orderedItems.Count;
-                _orderedItems.Insert(insertAt, sep);
+                    ? Math.Min(sep.DisplayIndex, items.Count)
+                    : items.Count;
+                items.Insert(insertAt, sep);
             }
         }
 
+        // 一次替换集合，避免 ObservableCollection 在大量模组切换时逐项触发通知和布局。
+        _orderedItems = new ObservableCollection<object>(items);
         RefreshPositionNumbers();
+        Mods = _orderedItems;
         OnPropertyChanged(nameof(Mods));
     }
 
@@ -411,12 +414,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     private async Task SelectGroupAsync(Guid groupId)
     {
-        await _modGroupService.SelectGroupAsync(groupId, _mods.Select(static vm => vm.Data));
+        await _modGroupService.SelectGroupAsync(groupId, _mods.Select(static vm => vm.Data).ToArray());
         foreach (var vm in _mods)
-        {
             vm.IsSelected = false;
-            vm.RefreshGroupStateBindings();
-        }
+        foreach (var vm in _modGroupService.FilterModViewModels(_mods).ToArray())
+            vm.RefreshGroupStateBindings(rebuildOptions: false);
         UpdateGroupedView();
     }
 

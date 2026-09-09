@@ -9,6 +9,12 @@ namespace Helldivers2ModManager.ViewModels;
 
 internal sealed class ModOptionViewModel(ModViewModel vm, int idx) : ObservableObject
 {
+	internal void RefreshStateBindings()
+	{
+		OnPropertyChanged(nameof(Enabled));
+		OnPropertyChanged(nameof(SelectedSubOption));
+	}
+
 	public string Name => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].Name;
 
 	public bool Enabled

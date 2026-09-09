@@ -118,7 +118,7 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable, IRe
 	[
 		string.Empty,
 		"AddCreatePanel",
-		"SearchArea",
+		"TopActionBar",
 		"VersionCheckPanel",
 		"BottomActionButtons",
 		"BackgroundTasksButton",

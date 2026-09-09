@@ -533,10 +533,18 @@ internal sealed partial class ModViewModel : ObservableObject, IDisposable
         }
     }
 
-    public void RefreshGroupStateBindings()
+    public void RefreshGroupStateBindings(bool rebuildOptions = true)
     {
-        OnPropertyChanged(nameof(Enabled));
-        OnPropertyChanged(nameof(LegacySelectedOption));
+		OnPropertyChanged(nameof(Enabled));
+		OnPropertyChanged(nameof(LegacySelectedOption));
+		if (!rebuildOptions)
+		{
+			if (Options is not null)
+				foreach (var option in Options)
+					option.RefreshStateBindings();
+			return;
+		}
+
         if (_mod.Manifest.Version == ManifestVersion.V1)
         {
             var manifest = (V1ModManifest)_mod.Manifest;

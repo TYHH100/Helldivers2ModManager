@@ -232,6 +232,7 @@ catch (Exception ex)
 | XAML 重写后只看页面、不查 code-behind | 删除或重命名控件后立即 `rg` 查找旧 `x:Name`；同时检查共享样式、DataTemplate、深色主题默认箭头和所有导航入口。 |
 | 把取消异常当成崩溃 | `TaskCanceledException` 可能只是防抖或新请求取消；先确认实际使用的功能和取消来源，再判断是否是真故障。 |
 | `await` 长任务或手写 `Add`+`Task.Run`+`Complete/Fail` 样板 | 耗时操作统一走 `BackgroundTaskService.RunAsync(...)`（后台线程 + 状态生命周期一把管，见 §6）；`BackgroundTaskService` 单独用 `Add/Update/Complete` 只管理状态、不提供后台线程，`await` 只让出异步 IO，同步 CPU 密集代码（LZ4 解码、SHA-256、压缩/解压、大文件解析）仍在调用线程（UI）执行。服务内部 CPU 密集解析优先在服务内部后台化（参考 `GameUnitReferenceReader`/`ModService`/`ModHashService`/`PatchResourceInspectionService`），改完后检查所有 UI 入口。 |
+| 切换配置/模组库时逐项改 `ObservableCollection`，或用 `List.Contains` 在全量模组循环内判断分组成员 | 大列表视图先用普通 `List` 构造完再一次替换绑定集合；分组成员判断先建立 `HashSet<Guid>`；SQLite 整组写入不要占用 UI 线程，先完成内存切换再后台持久化。 |
 | 用过时断言或并行构建验证 | 按当前 MSTest 版本使用 `Assert.AreEqual` 等兼容断言；涉及共享 `obj` 时串行构建/测试，验证生成代码时不要使用 `--no-build`。 |
 | 只验证 CLI 发布，不验证 VS 发布 | 修改 `Helldivers2PatchTool` 时复现对应 Publish Profile；独立工具不能直接引用自包含 EXE，且共享主程序构建必须固定 `net10.0-windows` 和 `win-x64`。 |
 | 模型预览整体黑色或局部缺失只查材质引用 | 特例模型同时含高分辨率正常材质和 BC7 纯黑占位材质；先按 `(MeshInfoIndex, VO, VC, IC)` 去重材质变体（不含 IO），再以多点 BC7 采样加解码后的全像素纯黑验证过滤占位，不能只看前 64 字节。对稀疏 section，按三角形引用压缩顶点后再做全局容量判断。详见 §5。 |
