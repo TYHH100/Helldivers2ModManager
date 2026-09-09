@@ -127,6 +127,8 @@ internal sealed partial class DashboardPageViewModel
                 var allProblems = new List<ModProblem>();
                 int successCount = 0;
                 int failCount = 0;
+                string? batchArchivePassword = null;
+                var hasBatchArchivePassword = false;
 
                 for (int i = 0; i < selectedFiles.Count; i++)
                 {
@@ -182,7 +184,25 @@ internal sealed partial class DashboardPageViewModel
 
                     try
                     {
-                        var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(selectedFiles[i]), nestedProgress);
+                        async Task<string?> RequestArchivePasswordAsync()
+                        {
+                            if (hasBatchArchivePassword)
+                                return batchArchivePassword;
+
+                            var password = await RequestArchivePasswordPromptAsync(Path.GetFileName(currentFileName));
+                            if (!string.IsNullOrEmpty(password))
+                            {
+                                batchArchivePassword = password;
+                                hasBatchArchivePassword = true;
+                            }
+
+                            return password;
+                        }
+
+                        var problems = await _modService.TryAddModFromArchiveAsync(
+                            new FileInfo(selectedFiles[i]),
+                            nestedProgress,
+                            RequestArchivePasswordAsync);
                         if (problems.Length > 0)
                         {
                             allProblems.AddRange(problems);
@@ -257,6 +277,22 @@ internal sealed partial class DashboardPageViewModel
                     Message = ex.Message
                 });
             }
+        }
+
+        private Task<string?> RequestArchivePasswordPromptAsync(string archiveName)
+        {
+            var completion = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                WeakReferenceMessenger.Default.Send(new MessageBoxPasswordMessage
+                {
+                    Title = _localizationService["DashboardPage.ArchivePasswordTitle"],
+                    Message = _localizationService["DashboardPage.ArchivePasswordMessage"].Replace("{file}", archiveName),
+                    Confirm = password => completion.TrySetResult(password),
+                    Abort = () => completion.TrySetResult(null),
+                });
+            });
+            return completion.Task;
         }
 
     [RelayCommand(AllowConcurrentExecutions = false)]

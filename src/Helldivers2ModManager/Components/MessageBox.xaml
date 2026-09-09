@@ -93,12 +93,32 @@
 						 Style="{StaticResource FluentTextBox}"
 						 Visibility="Collapsed"/>
 
+				<PasswordBox Grid.Row="1"
+						 x:Name="passwordInput"
+						 Margin="0 0 0 16"
+						 Style="{StaticResource FluentPasswordBox}"
+						 KeyDown="PasswordInput_KeyDown"
+						 Visibility="Collapsed"/>
+
 				<!-- Selection ComboBox -->
 				<ComboBox Grid.Row="2"
 						  x:Name="selectionComboBox"
 						  Margin="0 0 0 16"
 						  FontSize="14"
-						  Visibility="Collapsed"/>
+						 Visibility="Collapsed"/>
+
+				<StackPanel Grid.Row="2" x:Name="exportSettingsPanel" Margin="0 0 0 16" Visibility="Collapsed">
+					<ComboBox x:Name="exportSettingsComboBox" Style="{StaticResource FluentComboBox}" Margin="0 0 0 8" SelectionChanged="ExportSettingsComboBox_OnSelectionChanged"/>
+					<ComboBox x:Name="exportEncryptionComboBox" Style="{StaticResource FluentComboBox}" Margin="0 0 0 4" SelectionChanged="ExportEncryptionComboBox_OnSelectionChanged"/>
+					<TextBlock x:Name="exportEncryptionDescription"
+							FontSize="12"
+							Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+							TextWrapping="Wrap"
+							Margin="0 0 0 8"
+							Visibility="Collapsed"/>
+					<CheckBox x:Name="exportPasswordCheckBox" Content="{loc:Loc DashboardPage.ExportPasswordEnabled}" Checked="ExportPasswordCheckBox_OnChanged" Unchecked="ExportPasswordCheckBox_OnChanged" Margin="0 0 0 8"/>
+					<PasswordBox x:Name="exportPasswordInput" Style="{StaticResource FluentPasswordBox}" IsEnabled="False"/>
+				</StackPanel>
 
 				<!-- Export Progress Info (速度/压缩率) -->
 				<StackPanel Grid.Row="3"

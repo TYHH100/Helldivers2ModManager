@@ -188,7 +188,7 @@ internal sealed partial class DashboardPageViewModel
         var modDir = vm.Data.Directory;
 
         // Step 1: Show format/compression selection dialog (5 gears)
-        WeakReferenceMessenger.Default.Send(new MessageBoxSelectionMessage
+        WeakReferenceMessenger.Default.Send(new MessageBoxExportSettingsMessage
         {
             Title = _localizationService["DashboardPage.ExportTitle"],
             Message = _localizationService["DashboardPage.ExportMsg"],
@@ -200,7 +200,14 @@ internal sealed partial class DashboardPageViewModel
                 _localizationService["DashboardPage.Export7zHigh"],
                 _localizationService["DashboardPage.Export7zUltra"]
             },
-            Confirm = (selectedOption) =>
+            EncryptionOptions = new List<object>
+            {
+                _localizationService["DashboardPage.ExportZipCrypto"],
+                _localizationService["DashboardPage.ExportAes128"],
+                _localizationService["DashboardPage.ExportAes192"],
+                _localizationService["DashboardPage.ExportAes256"]
+            },
+            Confirm = (selectedOption, usePassword, password, encryptionOption) =>
             {
                 var opt = selectedOption.ToString()!;
                 var is7z = opt.StartsWith("7z", StringComparison.OrdinalIgnoreCase);
@@ -269,13 +276,13 @@ internal sealed partial class DashboardPageViewModel
                     {
                         Title = _localizationService["DashboardPage.ExportMemoryWarning"],
                         Message = $"{_localizationService["DashboardPage.ExportMemoryMsgPrefix"]}{sizeText}{_localizationService["DashboardPage.ExportMemoryMsgMid"]}{levelName}{_localizationService["DashboardPage.ExportMemoryMsgCompression"]}{dictDesc}{_localizationService["DashboardPage.ExportMemoryMsgSuffix"]}",
-                        Confirm = () => DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, IsExcludedFile),
+                        Confirm = () => DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, IsExcludedFile, usePassword ? password : null, ParseZipEncryptionMethod(encryptionOption)),
                         Abort = () => { }
                     });
                 }
                 else
                 {
-                    DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, IsExcludedFile);
+                    DoExport(vm, modDir, dialog.FileName, is7z, level, dictSize, levelName, IsExcludedFile, usePassword ? password : null, ParseZipEncryptionMethod(encryptionOption));
                 }
             }
         });
@@ -285,8 +292,20 @@ internal sealed partial class DashboardPageViewModel
     /// Execute the actual export with the chosen format and settings.
     /// Shows a real-time progress dialog with compression speed and ratio.
     /// </summary>
+    private static ZipEncryptionMethod ParseZipEncryptionMethod(object? option)
+    {
+        return option?.ToString() switch
+        {
+            "ZipCrypto" => ZipEncryptionMethod.ZipCrypto,
+            "AES-128" => ZipEncryptionMethod.Aes128,
+            "AES-192" => ZipEncryptionMethod.Aes192,
+            _ => ZipEncryptionMethod.Aes256,
+        };
+    }
+
     private void DoExport(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
-        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, Func<FileInfo, bool> isExcludedFile)
+        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, Func<FileInfo, bool> isExcludedFile,
+        string? password, ZipEncryptionMethod zipEncryptionMethod)
     {
         // Show progress dialog on UI thread
         WeakReferenceMessenger.Default.Send(new MessageBoxExportProgressMessage
@@ -301,14 +320,15 @@ internal sealed partial class DashboardPageViewModel
         _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
 
         // Run export on background thread to keep UI responsive
-        Task.Run(() => DoExportAsync(vm, modDir, outputPath, is7z, level, dictSize, levelName, isExcludedFile, backgroundTask));
+        Task.Run(() => DoExportAsync(vm, modDir, outputPath, is7z, level, dictSize, levelName, isExcludedFile, password, zipEncryptionMethod, backgroundTask));
     }
 
     /// <summary>
     /// Background export with real-time progress reporting.
     /// </summary>
     private void DoExportAsync(ModViewModel vm, DirectoryInfo modDir, string outputPath, bool is7z,
-        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, Func<FileInfo, bool> isExcludedFile, BackgroundTaskItem backgroundTask)
+        SharpSevenZip.CompressionLevel level, string dictSize, string levelName, Func<FileInfo, bool> isExcludedFile,
+        string? password, ZipEncryptionMethod zipEncryptionMethod, BackgroundTaskItem backgroundTask)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         long lastUpdateBytes = 0;
@@ -388,6 +408,8 @@ internal sealed partial class DashboardPageViewModel
                     DirectoryStructure = true,
                     PreserveDirectoryRoot = false,
                 };
+				if (!string.IsNullOrEmpty(password))
+					compressor.EncryptHeaders = true;
 
                 // 根据选择的挡位设置字典大小，控制内存占用
                 //   Fast  → 8MB 字典，内存占用低
@@ -420,7 +442,10 @@ internal sealed partial class DashboardPageViewModel
                 };
 
                 // 直接写文件路径而非 Stream，避免内存缓冲整个归档数据
-                compressor.CompressFiles(outputPath, commonRootLength, files);
+				if (string.IsNullOrEmpty(password))
+					compressor.CompressFiles(outputPath, commonRootLength, files);
+				else
+					compressor.CompressFilesEncrypted(outputPath, commonRootLength, password, files);
                 ReportProgress(1.0, "", totalInputSize);
 
                 _logger.LogInformation("Exported mod \"{Name}\" to {Path} (7z LZMA2 {Level}, dict {Dict})",
@@ -428,31 +453,44 @@ internal sealed partial class DashboardPageViewModel
             }
             else
             {
-                // --- ZIP export with manual byte tracking ---
-                long totalWritten = 0;
-                string currentFile = "";
+				// ZIP 无密码继续使用现有 ZipArchive；带密码时使用 SharpSevenZip 的 ZIP 加密。
+				if (string.IsNullOrEmpty(password))
+				{
+					long totalWritten = 0;
+					string currentFile = "";
+					using var fileStream = new FileStream(outputPath, FileMode.Create);
+					using var archive = new ZipArchive(fileStream, ZipArchiveMode.Create);
+					foreach (var file in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
+					{
+						if (isExcludedFile(file)) continue;
+						currentFile = file.Name;
+						var relativePath = Path.GetRelativePath(modDir.FullName, file.FullName);
+						archive.CreateEntryFromFile(file.FullName, relativePath, System.IO.Compression.CompressionLevel.Optimal);
+						totalWritten += file.Length;
+						ReportProgress(totalInputSize > 0 ? Math.Min((double)totalWritten / totalInputSize, 1.0) : 0, currentFile, totalWritten);
+					}
+					ReportProgress(1.0, "", totalInputSize);
+				}
+				else
+				{
+					var compressor = new SharpSevenZipCompressor
+					{
+						ArchiveFormat = OutArchiveFormat.Zip,
+						CompressionMethod = CompressionMethod.Deflate,
+						DirectoryStructure = true,
+						PreserveDirectoryRoot = false,
+						ZipEncryptionMethod = zipEncryptionMethod,
+					};
+					var files = modDir.EnumerateFiles("*", SearchOption.AllDirectories).Where(f => !isExcludedFile(f)).Select(f => f.FullName).ToArray();
+					var commonRootLength = modDir.FullName.Length + (modDir.FullName.EndsWith(Path.DirectorySeparatorChar) ? 0 : 1);
+					string currentFile = "";
+					compressor.FileCompressionStarted += (_, args) => currentFile = Path.GetFileName(args.FileName);
+					compressor.Compressing += (_, args) => ReportProgress(Math.Clamp((int)args.PercentDone, 0, 100) / 100.0, currentFile, (long)(totalInputSize * args.PercentDone / 100.0));
+					compressor.CompressFilesEncrypted(outputPath, commonRootLength, password, files);
+					ReportProgress(1.0, "", totalInputSize);
+				}
 
-                using var fileStream = new FileStream(outputPath, FileMode.Create);
-                using var archive = new ZipArchive(fileStream, ZipArchiveMode.Create);
-
-                foreach (var file in modDir.EnumerateFiles("*", SearchOption.AllDirectories))
-                {
-                    if (isExcludedFile(file))
-                        continue;
-
-                    currentFile = file.Name;
-                    var relativePath = Path.GetRelativePath(modDir.FullName, file.FullName);
-                    var entry = archive.CreateEntryFromFile(file.FullName, relativePath, System.IO.Compression.CompressionLevel.Optimal);
-                    
-                    // Approximate progress by file count / total input size
-                    totalWritten += file.Length;
-                    var progress = totalInputSize > 0 ? Math.Min((double)totalWritten / totalInputSize, 1.0) : 0;
-                    ReportProgress(progress, currentFile, totalWritten);
-                }
-
-                ReportProgress(1.0, "", totalInputSize);
-
-                _logger.LogInformation("Exported mod \"{Name}\" to {Path} (ZIP standard)", vm.Name, outputPath);
+				_logger.LogInformation("Exported mod \"{Name}\" to {Path} (ZIP standard)", vm.Name, outputPath);
             }
 
             // Signal completion - keep final stats visible with OK button

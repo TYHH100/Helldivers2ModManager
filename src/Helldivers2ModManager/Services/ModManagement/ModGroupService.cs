@@ -47,6 +47,7 @@ internal sealed class ModGroupService
 
 		var persistedDefaultGroup = loadedGroups.FirstOrDefault(static group => group.IsDefault);
 		var defaultGroup = persistedDefaultGroup ?? CreateDefaultGroup();
+		defaultGroup.Name = _localizationService["ModGroup.DefaultName"];
 		if (persistedDefaultGroup is null)
 		{
 			foreach (var mod in mods.Where(static mod => mod.Enabled))

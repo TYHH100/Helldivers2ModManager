@@ -160,7 +160,11 @@ internal sealed partial class ModService
 	/// </summary>
 	/// <param name="file">压缩包文件</param>
 	/// <param name="nestedProgress">嵌套压缩包处理进度回调：(当前序号(0-based), 总数, 当前文件名)，仅在检测到嵌套压缩包时调用</param>
-	public async Task<ModProblem[]> TryAddModFromArchiveAsync(FileInfo file, Action<int, int, string>? nestedProgress = null)
+	public async Task<ModProblem[]> TryAddModFromArchiveAsync(
+		FileInfo file,
+		Action<int, int, string>? nestedProgress = null,
+		Func<Task<string?>>? passwordProvider = null,
+		string? password = null)
 	{
 		GuardInitialized();
 
@@ -178,26 +182,28 @@ internal sealed partial class ModService
 		tmpDir.Create();
 
 		_logger.LogInformation("Extracting archive using SharpSevenZip");
-		try
+		Exception? extractionError = await ExtractArchiveAsync(file, tmpDir, password);
+		if (extractionError is not null && password is null && passwordProvider is not null && IsWrongPassword(extractionError))
 		{
-			await Task.Run(() =>
-			{
-				// SharpSevenZip 通过原生 7z.dll 支持所有压缩格式（7z/zip/rar/tar 等）
-				// 自动通过文件签名检测归档格式，无需手动区分扩展名
-				// 原生 7z.dll 支持大字典 LZMA，解决 SharpCompress 纯托管实现的兼容性问题
-				using var extractor = new SharpSevenZipExtractor(file.FullName);
-				extractor.ExtractArchive(tmpDir.FullName);
-			});
+			// 清理第一次无密码尝试留下的部分文件后，再等待 UI 提供密码。
+			TryDeleteTemporaryDirectory(tmpDir);
+			tmpDir.Create();
+			password = await passwordProvider();
+			if (!string.IsNullOrEmpty(password))
+				extractionError = await ExtractArchiveAsync(file, tmpDir, password);
+			else
+				extractionError = new OperationCanceledException("Archive password input was canceled.");
 		}
-		catch (Exception ex)
+
+		if (extractionError is not null)
 		{
-			_logger.LogError(ex, "Failed to extract archive \"{}\"", file.Name);
-			tmpDir.Delete(true);
+			_logger.LogError(extractionError, "Failed to extract archive \"{}\"", file.Name);
+			TryDeleteTemporaryDirectory(tmpDir);
 			problems.Add(new ModProblem
 			{
 				Directory = tmpDir,
 				Kind = ModProblemKind.CantReadArchive,
-				ExtraData = ex.Message,
+				ExtraData = extractionError.Message,
 			});
 			return problems.ToArray();
 		}
@@ -246,7 +252,7 @@ internal sealed partial class ModService
 					try
 					{
 						// 递归处理嵌套压缩包，传递同一进度回调以支持多层嵌套的进度上报
-						var nestedProblems = await TryAddModFromArchiveAsync(nestedArchive, nestedProgress);
+						var nestedProblems = await TryAddModFromArchiveAsync(nestedArchive, nestedProgress, passwordProvider, password);
 						allNestedProblems.AddRange(nestedProblems);
 					}
 					catch (Exception ex)
@@ -387,7 +393,50 @@ internal sealed partial class ModService
 		// 后台异步计算并存储新模组的文件哈希值（fire-and-forget，不阻塞导入流程）
 		_modHashService.ComputeAndStoreForModAsync(mod);
 
-		tmpDir.Delete(true);
+		 tmpDir.Delete(true);
 		return problems.ToArray();
+	}
+
+	private async Task<Exception?> ExtractArchiveAsync(FileInfo file, DirectoryInfo destination, string? password)
+	{
+		try
+		{
+			await Task.Run(() =>
+			{
+				using var extractor = string.IsNullOrEmpty(password)
+					? new SharpSevenZipExtractor(file.FullName)
+					: new SharpSevenZipExtractor(file.FullName, password);
+				extractor.ExtractArchive(destination.FullName);
+			});
+			return null;
+		}
+		catch (Exception ex)
+		{
+			return ex;
+		}
+	}
+
+	private static bool IsWrongPassword(Exception exception)
+	{
+		for (var current = exception; current is not null; current = current.InnerException)
+		{
+			if (current.Message.Contains("Wrong password", StringComparison.OrdinalIgnoreCase))
+				return true;
+		}
+
+		return false;
+	}
+
+	private void TryDeleteTemporaryDirectory(DirectoryInfo directory)
+	{
+		try
+		{
+			if (directory.Exists)
+				directory.Delete(true);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to clean temporary archive directory \"{Directory}\"", directory.FullName);
+		}
 	}
 }

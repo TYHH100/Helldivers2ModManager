@@ -113,6 +113,24 @@ internal sealed class MessageBoxInputMessage
 	public int MaxLength { get; init; } = -1;
 
 	public string InitialText { get; init; } = string.Empty;
+	public bool IsPassword { get; init; }
+}
+internal sealed class MessageBoxPasswordMessage
+{
+	public required string Title { get; init; }
+	public required string Message { get; init; }
+	public required Action<string> Confirm { get; init; }
+	public Action? Abort { get; init; }
+}
+
+internal sealed class MessageBoxExportSettingsMessage
+{
+	public required string Title { get; init; }
+	public required string Message { get; init; }
+	public required IReadOnlyList<object> Options { get; init; }
+	public required IReadOnlyList<object> EncryptionOptions { get; init; }
+	public required Action<object, bool, string, object> Confirm { get; init; }
+	public Action? Abort { get; init; }
 }
 
 internal sealed class MessageBoxConfirmMessage
@@ -189,7 +207,7 @@ internal sealed class MessageBoxColorPickerMessage
 	public required Action<string> Confirm { get; init; }
 }
 
-internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxExportProgressMessage>, IRecipient<MessageBoxExportProgressUpdateMessage>, IRecipient<MessageBoxUpdateProgressMessage>, IRecipient<MessageBoxUpdateProgressUpdateMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxGroupSelectionMessage>, IRecipient<MessageBoxChecklistMessage>, IRecipient<MessageBoxColorPickerMessage>
+internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessage>, IRecipient<MessageBoxWarningMessage>, IRecipient<MessageBoxErrorMessage>, IRecipient<MessageBoxProgressMessage>, IRecipient<MessageBoxExportProgressMessage>, IRecipient<MessageBoxExportProgressUpdateMessage>, IRecipient<MessageBoxUpdateProgressMessage>, IRecipient<MessageBoxUpdateProgressUpdateMessage>, IRecipient<MessageBoxHideMessage>, IRecipient<MessageBoxInputMessage>, IRecipient<MessageBoxPasswordMessage>, IRecipient<MessageBoxExportSettingsMessage>, IRecipient<MessageBoxConfirmMessage>, IRecipient<MessageBoxSelectionMessage>, IRecipient<MessageBoxTagSelectionMessage>, IRecipient<MessageBoxGroupSelectionMessage>, IRecipient<MessageBoxChecklistMessage>, IRecipient<MessageBoxColorPickerMessage>
 {
 	public static bool IsRegistered { get; private set; }
 
@@ -199,6 +217,10 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	
 	private Action<string>? _inputAction;
 	private Action? _inputAbortAction;
+	private Action<string>? _passwordAction;
+	private Action? _passwordAbortAction;
+	private Action<object, bool, string, object>? _exportSettingsAction;
+	private Action? _exportSettingsAbortAction;
 	private Action? _abortAction;
 	private Action? _confirmAction;
 	private Action<object>? _selectionAction;
@@ -223,6 +245,8 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		WeakReferenceMessenger.Default.Register<MessageBoxUpdateProgressUpdateMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxHideMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxInputMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxPasswordMessage>(this);
+		WeakReferenceMessenger.Default.Register<MessageBoxExportSettingsMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxConfirmMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxSelectionMessage>(this);
 		WeakReferenceMessenger.Default.Register<MessageBoxTagSelectionMessage>(this);
@@ -452,6 +476,43 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		Visibility = Visibility.Visible;
 	}
 
+	public void Receive(MessageBoxPasswordMessage message)
+	{
+		Reset();
+		_passwordAction = message.Confirm;
+		_passwordAbortAction = message.Abort;
+		title.Text = message.Title;
+		this.message.Text = message.Message;
+		passwordInput.Visibility = Visibility.Visible;
+		cancelButton.Visibility = Visibility.Visible;
+		okButton.Visibility = Visibility.Visible;
+		Visibility = Visibility.Visible;
+		passwordInput.Focus();
+		Keyboard.Focus(passwordInput);
+	}
+
+	public void Receive(MessageBoxExportSettingsMessage message)
+	{
+		Reset();
+		_exportSettingsAction = message.Confirm;
+		_exportSettingsAbortAction = message.Abort;
+		title.Text = message.Title;
+		this.message.Text = message.Message;
+		exportSettingsComboBox.ItemsSource = message.Options;
+		exportSettingsComboBox.SelectedIndex = 0;
+		exportEncryptionComboBox.ItemsSource = message.EncryptionOptions;
+		exportEncryptionComboBox.SelectedIndex = message.EncryptionOptions.Count > 0 ? message.EncryptionOptions.Count - 1 : -1;
+		exportPasswordCheckBox.Visibility = Visibility.Visible;
+		exportPasswordInput.Visibility = Visibility.Visible;
+		ExportPasswordCheckBox_OnChanged(exportPasswordCheckBox, new RoutedEventArgs());
+		UpdateExportEncryptionVisibility();
+		UpdateExportEncryptionDescription();
+		exportSettingsPanel.Visibility = Visibility.Visible;
+		cancelButton.Visibility = Visibility.Visible;
+		okButton.Visibility = Visibility.Visible;
+		Visibility = Visibility.Visible;
+	}
+
 	public void Receive(MessageBoxConfirmMessage message)
 	{
 		Reset();
@@ -594,6 +655,10 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 	{
 		_inputAction = null;
 		_inputAbortAction = null;
+		_passwordAction = null;
+		_passwordAbortAction = null;
+		_exportSettingsAction = null;
+		_exportSettingsAbortAction = null;
 		_abortAction = null;
 		_confirmAction = null;
 		_selectionAction = null;
@@ -611,6 +676,16 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		message.TextWrapping = TextWrapping.Wrap;
 		input.Visibility = Visibility.Collapsed;
 		input.Text = string.Empty;
+		passwordInput.Visibility = Visibility.Collapsed;
+		passwordInput.Password = string.Empty;
+		exportSettingsPanel.Visibility = Visibility.Collapsed;
+		exportSettingsComboBox.ItemsSource = null;
+		exportEncryptionComboBox.ItemsSource = null;
+		exportEncryptionDescription.Visibility = Visibility.Collapsed;
+		exportPasswordCheckBox.Visibility = Visibility.Collapsed;
+		exportPasswordCheckBox.IsChecked = false;
+		exportPasswordInput.Visibility = Visibility.Collapsed;
+		exportPasswordInput.Password = string.Empty;
 		selectionComboBox.Visibility = Visibility.Collapsed;
 		tagSelectionList.Visibility = Visibility.Collapsed;
 		tagSelectionList.ItemsSource = null;
@@ -645,28 +720,46 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 
 	private void OkButton_Click(object sender, RoutedEventArgs e)
 	{
-		Receive(new MessageBoxHideMessage());
-
-		if (_inputAction != null)
+		if (_exportSettingsAction != null)
 		{
+			if (exportPasswordCheckBox.IsChecked == true && string.IsNullOrEmpty(exportPasswordInput.Password))
+			{
+				message.Text = LocalizationService?["DashboardPage.ExportPasswordRequired"] ?? "请输入导出密码";
+				return;
+			}
+			Receive(new MessageBoxHideMessage());
+			_exportSettingsAction(exportSettingsComboBox.SelectedItem!, exportPasswordCheckBox.IsChecked == true, exportPasswordInput.Password, exportEncryptionComboBox.SelectedItem!);
+		}
+		else if (_inputAction != null)
+		{
+			Receive(new MessageBoxHideMessage());
 			_inputAction(input.Text);
+		}
+		else if (_passwordAction != null)
+		{
+			Receive(new MessageBoxHideMessage());
+			_passwordAction(passwordInput.Password);
 		}
 		else if (_selectionAction != null)
 		{
+			Receive(new MessageBoxHideMessage());
 			_selectionAction(selectionComboBox.SelectedItem);
 		}
 		else if (_tagSelectionAction != null)
 		{
+			Receive(new MessageBoxHideMessage());
 			var selectedTags = tagSelectionList.ItemsSource.Cast<Models.TagSelectionItem>().Where(t => t.IsSelected).ToList();
 			_tagSelectionAction(selectedTags);
 		}
 		else if (_groupSelectionAction != null)
 		{
+			Receive(new MessageBoxHideMessage());
 			var selectedGroups = groupSelectionList.ItemsSource.Cast<Models.ModGroupSelectionItem>().Where(g => g.IsSelected).ToList();
 			_groupSelectionAction(selectedGroups);
 		}
 		else if (_checklistAction != null)
 		{
+			Receive(new MessageBoxHideMessage());
 			var selectedItems = checklistSelectionList.ItemsSource
 				.Cast<ChecklistSelectionItem>()
 				.Where(item => item.IsSelected)
@@ -675,7 +768,13 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		}
 		else if (_colorPickerAction != null && _selectedColor != null)
 		{
+			Receive(new MessageBoxHideMessage());
 			_colorPickerAction(_selectedColor);
+		}
+		else
+		{
+			// 普通警告/错误提示没有业务回调，确定按钮仍应关闭弹窗。
+			Receive(new MessageBoxHideMessage());
 		}
 	}
 
@@ -698,6 +797,60 @@ internal partial class MessageBox : UserControl, IRecipient<MessageBoxInfoMessag
 		Receive(new MessageBoxHideMessage());
 		_selectionAbortAction?.Invoke();
 		_inputAbortAction?.Invoke();
+		_passwordAbortAction?.Invoke();
+		_exportSettingsAbortAction?.Invoke();
+	}
+
+	private void PasswordInput_KeyDown(object sender, KeyEventArgs e)
+	{
+		if (e.Key == Key.Enter)
+		{
+			e.Handled = true;
+			OkButton_Click(sender, e);
+		}
+	}
+
+	private void ExportPasswordCheckBox_OnChanged(object sender, RoutedEventArgs e)
+	{
+		if (exportPasswordInput is not null)
+			exportPasswordInput.IsEnabled = exportPasswordCheckBox.IsChecked == true;
+	}
+
+	private void ExportSettingsComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		UpdateExportEncryptionVisibility();
+	}
+
+	private void ExportEncryptionComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		UpdateExportEncryptionDescription();
+	}
+
+	private void UpdateExportEncryptionVisibility()
+	{
+		if (exportSettingsComboBox is null || exportEncryptionComboBox is null)
+			return;
+
+		var selected = exportSettingsComboBox.SelectedItem?.ToString();
+		var isSevenZip = selected?.StartsWith("7z", StringComparison.OrdinalIgnoreCase) == true;
+		exportEncryptionComboBox.Visibility = isSevenZip ? Visibility.Collapsed : Visibility.Visible;
+		exportEncryptionDescription.Visibility = isSevenZip ? Visibility.Collapsed : Visibility.Visible;
+	}
+
+	private void UpdateExportEncryptionDescription()
+	{
+		if (exportEncryptionComboBox is null || exportEncryptionDescription is null)
+			return;
+
+		var key = exportEncryptionComboBox.SelectedIndex switch
+		{
+			0 => "DashboardPage.ExportZipCryptoDescription",
+			1 => "DashboardPage.ExportAes128Description",
+			2 => "DashboardPage.ExportAes192Description",
+			3 => "DashboardPage.ExportAes256Description",
+			_ => null,
+		};
+		exportEncryptionDescription.Text = key is null ? string.Empty : LocalizationService?[key] ?? string.Empty;
 	}
 
 	private void ColorBorder_Click(object sender, MouseButtonEventArgs e)
