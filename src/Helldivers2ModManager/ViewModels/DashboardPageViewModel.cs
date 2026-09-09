@@ -29,6 +29,12 @@ namespace Helldivers2ModManager.ViewModels;
 [RegisterService(ServiceLifetime.Transient)]
 internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropTarget
 {
+	public enum ModCatalogViewMode
+	{
+		Workspace,
+		Library,
+	}
+
     public override string Title => _localizationService["DashboardPage.Title"];
 
     public IEnumerable<object> Mods { get; private set; }
@@ -66,18 +72,41 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
 
     [ObservableProperty]
     private string _searchText = string.Empty;
-    [ObservableProperty]
-    private bool _initialized = false;
+	[ObservableProperty]
+	private bool _initialized = false;
+
+	[ObservableProperty]
+	private ModCatalogViewMode _catalogViewMode = ModCatalogViewMode.Workspace;
+
+	public bool IsLibraryView => CatalogViewMode == ModCatalogViewMode.Library;
+	public bool IsWorkspaceView => !IsLibraryView;
+
+	partial void OnCatalogViewModeChanged(ModCatalogViewMode value)
+	{
+		OnPropertyChanged(nameof(IsLibraryView));
+		OnPropertyChanged(nameof(IsWorkspaceView));
+		UpdateView();
+	}
+
+	[RelayCommand]
+	private void ShowLibrary() => CatalogViewMode = ModCatalogViewMode.Library;
+
+	[RelayCommand]
+	private void ShowWorkspace() => CatalogViewMode = ModCatalogViewMode.Workspace;
 
     /// <summary>
     /// 是否有选中的 Mod（用于控制批量操作按钮的可见性）
     /// </summary>
-    public bool HasSelection => _mods is not null && _modGroupService.FilterModViewModels(_mods).Any(static vm => vm.IsSelected);
+    public bool HasSelection => _mods is not null && VisibleModViewModels.Any(static vm => vm.IsSelected);
+
+    private IEnumerable<ModViewModel> VisibleModViewModels => IsLibraryView
+        ? _mods
+        : _modGroupService.FilterModViewModels(_mods);
 
     /// <summary>
     /// 选中数量文本（如 "已选 2 项"）
     /// </summary>
-    public string SelectionCountText => _mods is null ? "" : $"{_localizationService["DashboardPage.SelectedCountPrefix"]}{_modGroupService.FilterModViewModels(_mods).Count(static vm => vm.IsSelected)}{_localizationService["DashboardPage.SelectedCountSuffix"]}";
+    public string SelectionCountText => _mods is null ? "" : $"{_localizationService["DashboardPage.SelectedCountPrefix"]}{VisibleModViewModels.Count(static vm => vm.IsSelected)}{_localizationService["DashboardPage.SelectedCountSuffix"]}";
 
     /// <summary>
     /// 自定义部署顺序功能是否在设置中启用
@@ -304,7 +333,7 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
     private void RebuildOrderedItems()
     {
         _orderedItems.Clear();
-        var groupedMods = _modGroupService.FilterModViewModels(_mods).ToArray();
+        var groupedMods = VisibleModViewModels.ToArray();
 
         if (!ShowSeparator)
         {
@@ -349,9 +378,11 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             vm.PositionNumber = position++;
     }
 
-    private void UpdateView()
-    {
-        IEnumerable<ModViewModel> filteredMods = _modGroupService.FilterModViewModels(_mods);
+	private void UpdateView()
+	{
+		IEnumerable<ModViewModel> filteredMods = IsLibraryView
+			? _mods
+			: _modGroupService.FilterModViewModels(_mods);
 
         // 搜索过滤
         filteredMods = _searchFilterService.ApplySearchFilter(filteredMods, SearchText);
@@ -685,7 +716,6 @@ internal sealed partial class DashboardPageViewModel : PageViewModelBase, IDropT
             vm.VersionCheckRefreshed += ModViewModel_VersionCheckRefreshed;
             _mods.Add(vm);
             SearchText = string.Empty;
-            _modGroupService.CaptureGroupState(ModGroup.DefaultGroupId, _mods.Select(static vm => vm.Data));
             GroupSidebar.RefreshSelectionProperties();
             UpdateView();
             RequestAutomaticConflictScan();

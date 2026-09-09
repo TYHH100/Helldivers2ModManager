@@ -32,9 +32,17 @@ internal sealed partial class DashboardPageViewModel
         try
         {
             var mods = selected.Select(static vm => vm.Data).ToArray();
-            await _modGroupService.RemoveModsFromAllGroupsAsync(selected.Select(static vm => vm.Guid).ToList());
-            foreach (var group in groups)
-                await _modGroupService.AddModsToGroupAsync(group.Id, mods);
+            if (IsLibraryView)
+            {
+                foreach (var group in groups)
+                    await _modGroupService.AddModsToGroupAsync(group.Id, mods);
+            }
+            else
+            {
+                await _modGroupService.RemoveModsFromAllGroupsAsync(selected.Select(static vm => vm.Guid).ToList());
+                foreach (var group in groups)
+                    await _modGroupService.AddModsToGroupAsync(group.Id, mods);
+            }
             GroupSidebar.RefreshSelectionProperties();
             WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
             {

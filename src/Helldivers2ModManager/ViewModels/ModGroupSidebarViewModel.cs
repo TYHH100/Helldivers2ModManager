@@ -33,7 +33,8 @@ internal sealed partial class ModGroupSidebarViewModel : ObservableObject
 
 	public ModGroup SelectedGroup => _modGroupService.SelectedGroup;
 
-	public bool CanModifySelectedGroup => !SelectedGroup.IsDefault;
+	public bool CanModifySelectedGroup => true;
+	public bool CanDeleteSelectedGroup => !SelectedGroup.IsDefault;
 
 	public string SelectedGroupName => SelectedGroup.Name;
 
@@ -63,6 +64,7 @@ internal sealed partial class ModGroupSidebarViewModel : ObservableObject
 		{
 			OnPropertyChanged(nameof(SelectedGroup));
 			OnPropertyChanged(nameof(CanModifySelectedGroup));
+			OnPropertyChanged(nameof(CanDeleteSelectedGroup));
 			OnPropertyChanged(nameof(SelectedGroupName));
 			DeleteGroupCommand.NotifyCanExecuteChanged();
 			RemoveSelectedModsCommand.NotifyCanExecuteChanged();
@@ -133,12 +135,6 @@ internal sealed partial class ModGroupSidebarViewModel : ObservableObject
 	private async Task AddSelectedMods()
 	{
 		var target = SelectedGroup;
-		if (target.IsDefault)
-		{
-			WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["ModGroup.DefaultCannotAdd"] });
-			return;
-		}
-
 		var selectedMods = _getSelectedMods().ToArray();
 		if (selectedMods.Length == 0)
 		{
@@ -150,7 +146,7 @@ internal sealed partial class ModGroupSidebarViewModel : ObservableObject
 		_refresh();
 	}
 
-	[RelayCommand(CanExecute = nameof(CanModifySelectedGroup))]
+	[RelayCommand(CanExecute = nameof(CanDeleteSelectedGroup))]
 	private async Task RemoveSelectedMods()
 	{
 		var selectedMods = _getSelectedMods().ToArray();

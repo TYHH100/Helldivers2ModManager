@@ -30,7 +30,7 @@ internal sealed partial class DashboardPageViewModel
     [RelayCommand]
     void SelectAll()
     {
-        foreach (var vm in _modGroupService.FilterModViewModels(_mods))
+        foreach (var vm in VisibleModViewModels)
             vm.IsSelected = true;
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectionCountText));
@@ -39,7 +39,7 @@ internal sealed partial class DashboardPageViewModel
     [RelayCommand]
     void DeselectAll()
     {
-        foreach (var vm in _modGroupService.FilterModViewModels(_mods))
+        foreach (var vm in VisibleModViewModels)
             vm.IsSelected = false;
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectionCountText));
@@ -54,7 +54,7 @@ internal sealed partial class DashboardPageViewModel
     [RelayCommand]
     void InvertSelection()
     {
-        ApplyInvertSelection(_modGroupService.FilterModViewModels(_mods).ToList());
+        ApplyInvertSelection(VisibleModViewModels.ToList());
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ internal sealed partial class DashboardPageViewModel
     /// </summary>
     internal void SelectRange(ModViewModel anchor, ModViewModel target, bool additive)
     {
-        ApplyRangeSelection(_modGroupService.FilterModViewModels(_mods).ToList(), anchor, target, additive);
+        ApplyRangeSelection(VisibleModViewModels.ToList(), anchor, target, additive);
     }
 
     /// <summary>
@@ -105,9 +105,14 @@ internal sealed partial class DashboardPageViewModel
     [RelayCommand(AllowConcurrentExecutions = false)]
     Task BatchDelete()
     {
-        var selected = _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected).ToArray();
+        var selected = VisibleModViewModels.Where(static vm => vm.IsSelected).ToArray();
         if (selected.Length == 0)
             return Task.CompletedTask;
+
+        if (IsWorkspaceView)
+        {
+            return RemoveSelectedFromCurrentProfileAsync(selected);
+        }
 
         var deleteMessage = _settingsService.DeleteToRecycleBin
             ? _localizationService["DashboardPage.RecycleBinConfirm"]
@@ -164,9 +169,29 @@ internal sealed partial class DashboardPageViewModel
         return Task.CompletedTask;
     }
 
+    private async Task RemoveSelectedFromCurrentProfileAsync(ModViewModel[] selected)
+    {
+        try
+        {
+            await _modGroupService.RemoveModsFromGroupAsync(
+                _modGroupService.SelectedGroup.Id,
+                selected.Select(static vm => vm.Data));
+            foreach (var vm in selected)
+                vm.IsSelected = false;
+            UpdateGroupedView();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "从当前配置文件批量移除模组失败");
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = ex.Message });
+        }
+    }
+
     [RelayCommand]
     void BatchEnable()
     {
+        if (IsLibraryView)
+            return;
         foreach (var vm in _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected))
             vm.Enabled = true;
     }
@@ -174,6 +199,8 @@ internal sealed partial class DashboardPageViewModel
     [RelayCommand]
     void BatchDisable()
     {
+        if (IsLibraryView)
+            return;
         foreach (var vm in _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected))
             vm.Enabled = false;
     }
@@ -224,19 +251,14 @@ internal sealed partial class DashboardPageViewModel
 
         var selected = source is not null && !source.IsSelected
             ? [source]
-            : _modGroupService.FilterModViewModels(_mods).Where(static vm => vm.IsSelected).ToArray();
+            : VisibleModViewModels.Where(static vm => vm.IsSelected).ToArray();
         if (selected.Length == 0)
         {
             WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["ModGroup.NoSelectedMods"] });
             return;
         }
 
-        var groups = _modGroupService.Groups.Where(static group => !group.IsDefault).ToArray();
-        if (groups.Length == 0)
-        {
-            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = _localizationService["ModGroup.NoCustomGroups"] });
-            return;
-        }
+        var groups = _modGroupService.Groups.ToArray();
 
         // 与设置标签一致的多选交互：预勾选所有选中模组都已加入的分组，
         // 确认后按勾选结果覆盖这些模组的分组集合（可一次加入/移出多个分组）。
@@ -256,5 +278,38 @@ internal sealed partial class DashboardPageViewModel
                 _ = SetModsToGroupsAsync(picked, selected);
             }
         });
+    }
+
+    [RelayCommand]
+    void AddSelectedModsToCurrentProfile()
+    {
+        if (!IsLibraryView || !_settingsService.Initialized)
+            return;
+
+        var selected = VisibleModViewModels.Where(static vm => vm.IsSelected).ToArray();
+        if (selected.Length == 0)
+            return;
+
+        _ = AddToProfileAsync(_modGroupService.SelectedGroup, selected);
+    }
+
+    private async Task AddToProfileAsync(ModGroup profile, ModViewModel[] selected)
+    {
+        try
+        {
+            await _modGroupService.AddModsToGroupAsync(profile.Id, selected.Select(static vm => vm.Data));
+            foreach (var vm in selected)
+                vm.IsSelected = false;
+            GroupSidebar.RefreshSelectionProperties();
+            WeakReferenceMessenger.Default.Send(new MessageBoxInfoMessage
+            {
+                Message = $"{_localizationService["ModGroup.AddedToProfile"]}{profile.Name}"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "加入配置文件失败: {ProfileName}", profile.Name);
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = ex.Message });
+        }
     }
 }

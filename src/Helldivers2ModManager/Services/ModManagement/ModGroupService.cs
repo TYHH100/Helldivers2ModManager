@@ -42,13 +42,18 @@ internal sealed class ModGroupService
 		var missingGuids = new HashSet<Guid>();
 
 		var loadedGroups = _repository.LoadGroups(_storageDirectory)
-			.Where(static group => !group.IsDefault)
 			.OrderBy(static group => group.DisplayIndex)
 			.ToList();
 
-		var defaultGroup = CreateDefaultGroup();
+		var persistedDefaultGroup = loadedGroups.FirstOrDefault(static group => group.IsDefault);
+		var defaultGroup = persistedDefaultGroup ?? CreateDefaultGroup();
+		if (persistedDefaultGroup is null)
+		{
+			foreach (var mod in mods.Where(static mod => mod.Enabled))
+				defaultGroup.ModGuids.Add(mod.Manifest.Guid);
+		}
 		Groups.Add(defaultGroup);
-		foreach (var group in loadedGroups)
+		foreach (var group in loadedGroups.Where(static group => !group.IsDefault))
 		{
 			RemoveMissingMembers(group, existingGuids, missingGuids);
 			Groups.Add(group);
@@ -69,7 +74,7 @@ internal sealed class ModGroupService
 
 		// enabled_mods 是默认组的权威来源。每次启动都用已加载的 Profile 刷新默认组缓存，
 		// 避免上次写入中断造成 group_mod_states 反向覆盖较新的主页状态。
-		CaptureGroupState(defaultGroup.Id, mods);
+		CaptureGroupState(defaultGroup.Id, mods.Where(mod => defaultGroup.ModGuids.Contains(mod.Manifest.Guid)));
 		await SaveGroupStateAsync(defaultGroup.Id);
 
 		await SaveGroupsAsync();
@@ -80,9 +85,6 @@ internal sealed class ModGroupService
 	{
 		if (!_initialized)
 			return mods;
-		if (SelectedGroup.IsDefault)
-			return mods;
-
 		var members = GetSelectedMemberSet();
 		return mods.Where(mod => members.Contains(mod.Manifest.Guid));
 	}
@@ -91,9 +93,6 @@ internal sealed class ModGroupService
 	{
 		if (!_initialized)
 			return mods;
-		if (SelectedGroup.IsDefault)
-			return mods;
-
 		var members = GetSelectedMemberSet();
 		return mods.Where(mod => members.Contains(mod.Guid));
 	}
@@ -177,7 +176,7 @@ internal sealed class ModGroupService
 	{
 		GuardInitialized();
 		var group = Groups.FirstOrDefault(group => group.Id == groupId);
-		if (group is null || group.IsDefault)
+		if (group is null)
 			return;
 
 		var added = false;
@@ -209,7 +208,7 @@ internal sealed class ModGroupService
 	{
 		GuardInitialized();
 		var group = Groups.FirstOrDefault(group => group.Id == groupId);
-		if (group is null || group.IsDefault)
+		if (group is null)
 			return;
 
 		var added = false;
@@ -237,7 +236,7 @@ internal sealed class ModGroupService
 	{
 		GuardInitialized();
 		var group = Groups.FirstOrDefault(group => group.Id == groupId);
-		if (group is null || group.IsDefault)
+		if (group is null)
 			return;
 
 		var removed = false;
@@ -380,7 +379,7 @@ internal sealed class ModGroupService
 
 	private async Task SaveGroupsAsync()
 	{
-		await _repository.SaveGroupsAsync(_storageDirectory, Groups.Where(static group => !group.IsDefault));
+		await _repository.SaveGroupsAsync(_storageDirectory, Groups);
 	}
 
 	private async Task SaveGroupStateAsync(Guid groupId)
@@ -393,9 +392,6 @@ internal sealed class ModGroupService
 
 	private bool IsModVisibleInGroup(Guid groupId, Guid modGuid)
 	{
-		if (groupId == ModGroup.DefaultGroupId)
-			return true;
-
 		var group = Groups.FirstOrDefault(group => group.Id == groupId);
 		return group is not null && group.ModGuids.Contains(modGuid);
 	}

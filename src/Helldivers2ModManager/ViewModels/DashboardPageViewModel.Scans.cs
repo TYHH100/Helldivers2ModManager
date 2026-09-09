@@ -29,6 +29,25 @@ internal sealed partial class DashboardPageViewModel
     [RelayCommand]
     void Remove(ModViewModel modVm)
     {
+        if (IsWorkspaceView)
+        {
+            _ = RemoveFromCurrentProfileAsync(modVm);
+            return;
+        }
+
+        DeleteModFile(modVm);
+    }
+
+    [RelayCommand]
+    private void RemoveFromProfile(ModViewModel modVm)
+    {
+        if (IsWorkspaceView)
+            _ = RemoveFromCurrentProfileAsync(modVm);
+    }
+
+    [RelayCommand]
+    private void DeleteModFile(ModViewModel modVm)
+    {
         var deleteMessage = _settingsService.DeleteToRecycleBin
             ? _localizationService["DashboardPage.RecycleBinConfirm"]
             : _localizationService["DashboardPage.PermanentDeleteConfirm"];
@@ -42,6 +61,23 @@ internal sealed partial class DashboardPageViewModel
                 _ = DeleteModAsync(modVm);
             }
         });
+    }
+
+    private async Task RemoveFromCurrentProfileAsync(ModViewModel modVm)
+    {
+        try
+        {
+            await _modGroupService.RemoveModsFromGroupAsync(
+                _modGroupService.SelectedGroup.Id,
+                [modVm.Data]);
+            modVm.IsSelected = false;
+            UpdateGroupedView();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "从当前配置文件移除模组失败: {ModName}", modVm.Name);
+            WeakReferenceMessenger.Default.Send(new MessageBoxErrorMessage { Message = ex.Message });
+        }
     }
 
     private async Task DeleteModAsync(ModViewModel modVm)
