@@ -384,6 +384,9 @@ Complete
 # ZCode
 .zcode/
 
+# WorkBuddy
+.workbuddy
+
 docs/
 settings.json
 Test/
