@@ -96,4 +96,15 @@ public sealed class ModServiceGroupPatchFilesTests
         Assert.AreEqual(1, groups[a].Count);
         Assert.IsNotNull(groups[a][0].Patch);
     }
+
+    [TestMethod]
+    public void ArePathsOnSameVolume_UsesWindowsVolumeRoot()
+    {
+        Assert.IsTrue(ModService.ArePathsOnSameVolume(
+            @"C:\mods\file.patch_0",
+            @"C:\game\data\file.patch_0"));
+        Assert.IsFalse(ModService.ArePathsOnSameVolume(
+            @"C:\mods\file.patch_0",
+            @"D:\game\data\file.patch_0"));
+    }
 }

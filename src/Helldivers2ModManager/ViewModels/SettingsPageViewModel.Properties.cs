@@ -160,6 +160,11 @@ internal sealed partial class SettingsPageViewModel
 		{
 			OnPropertyChanging();
 			_settingsService.UseSymbolicLinks = value;
+			if (value)
+			{
+				_settingsService.UseHardLinks = false;
+				OnPropertyChanged(nameof(UseHardLinks));
+			}
 			OnPropertyChanged();
 
 			// 如果勾选了符号链接但程序未以管理员身份运行，则弹出提示引导用户
@@ -172,6 +177,22 @@ internal sealed partial class SettingsPageViewModel
 					Confirm = static () => System.Windows.Application.Current.Shutdown()
 				});
 			}
+		}
+	}
+
+	public bool UseHardLinks
+	{
+		get => _settingsService.Initialized ? _settingsService.UseHardLinks : false;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.UseHardLinks = value;
+			if (value)
+			{
+				_settingsService.UseSymbolicLinks = false;
+				OnPropertyChanged(nameof(UseSymbolicLinks));
+			}
+			OnPropertyChanged();
 		}
 	}
 

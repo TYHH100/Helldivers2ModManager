@@ -193,6 +193,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(OrganizationalFolderNames));
 		OnPropertyChanged(nameof(CaseSensitiveSearch));
 		OnPropertyChanged(nameof(UseSymbolicLinks));
+		OnPropertyChanged(nameof(UseHardLinks));
 		OnPropertyChanged(nameof(DeployBottomToTop));
 		OnPropertyChanged(nameof(UseDeploymentOrder));
 		OnPropertyChanged(nameof(IsCustomOrderEnabled));

@@ -239,6 +239,25 @@ internal sealed class SettingsService
 		}
 	}
 
+	/// <summary>
+	/// 是否使用硬链接部署。硬链接不需要管理员权限，但源文件与目标文件必须位于同一卷。
+	/// </summary>
+	public bool UseHardLinks
+	{
+		get
+		{
+			GuardInitialized();
+			return _useHardLinks;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_useHardLinks = value;
+		}
+	}
+
 	public bool DeleteToRecycleBin
 	{
 		get
@@ -633,6 +652,8 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private bool _useSymbolicLinks;
 	[JsonInclude]
+	private bool _useHardLinks;
+	[JsonInclude]
 	private bool _deleteToRecycleBin = true;
 	[JsonInclude]
 	private bool _autoRemoveMissingMods;
@@ -904,6 +925,7 @@ internal sealed class SettingsService
 			CaseSensitiveSearch = _caseSensitiveSearch,
 			EnableFuzzySearch = _enableFuzzySearch,
 			UseSymbolicLinks = _useSymbolicLinks,
+			UseHardLinks = _useHardLinks,
 			DeleteToRecycleBin = _deleteToRecycleBin,
 			AutoRemoveMissingMods = _autoRemoveMissingMods,
 			DeployBottomToTop = _deployBottomToTop,
@@ -1002,6 +1024,8 @@ internal sealed class SettingsService
 			_enableFuzzySearch = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(UseSymbolicLinks), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_useSymbolicLinks = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(UseHardLinks), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_useHardLinks = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(DeleteToRecycleBin), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_deleteToRecycleBin = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(AutoRemoveMissingMods), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -1240,6 +1264,7 @@ internal sealed class SettingsService
 		_caseSensitiveSearch = false;
 		_enableFuzzySearch = true;
 		_useSymbolicLinks = false;
+		_useHardLinks = false;
 		_autoRemoveMissingMods = false;
 		_deleteToRecycleBin = true;
 		_autoCheckVersionOnStartup = false;

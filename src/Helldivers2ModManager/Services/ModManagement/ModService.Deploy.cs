@@ -7,8 +7,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.VisualBasic.FileIO;
 using SharpSevenZip;
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -75,7 +77,7 @@ internal sealed partial class ModService
 	}
 
 	/// <summary>
-	/// 部署收尾：把本次部署模组携带的 HD2PhysBone 参数复制到 bin\HD2PhysBone\&lt;目录名&gt;\，
+	/// 部署收尾：把本次部署模组携带的 HD2PhysBone 参数复制到 bin\HD2PhysBone\目录名\，
 	/// 并对账清理带托管标记但不在本次部署集合中的参数目录（模组被取消启用、删除或改名后的残留）——
 	/// add-on 枚举该目录下的所有参数目录即加载，残留 rig 会白白占用资源。
 	/// 管理器之外手动安装的参数目录（无托管标记）不受影响。
@@ -358,6 +360,7 @@ internal sealed partial class ModService
 		// - 占位文件（空 triplet）语义与原实现一致。
 		var copyParallelOptions = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4) };
 		var useSymbolicLinks = _settingsService.UseSymbolicLinks;
+		var useHardLinks = _settingsService.UseHardLinks;
 
 		try
 		{
@@ -404,6 +407,9 @@ internal sealed partial class ModService
 				}
 			}
 
+			if (useHardLinks)
+				ValidateHardLinkVolumes(copyItems);
+
 			// 缺失 triplet 的文件以 0 字节占位（原语义）
 			foreach (var path in placeholderPaths)
 			{
@@ -424,13 +430,15 @@ internal sealed partial class ModService
 			var done = 0;
 			var total = copyItems.Count;
 
-			// 副标题按模式区分：符号链接部署是"创建符号链接"（O(1)），不是复制文件
-			var fileProgressKey = useSymbolicLinks ? "ModService.LinkingFileProgress" : "ModService.CopyingFileProgress";
+			// 副标题按模式区分：链接部署是 O(1)，不是复制文件。
+			var fileProgressKey = useHardLinks
+				? "ModService.HardLinkingFileProgress"
+				: useSymbolicLinks ? "ModService.LinkingFileProgress" : "ModService.CopyingFileProgress";
 
 			// 小文件并行复制（内核态 File.Copy / 符号链接）
 			await Parallel.ForEachAsync(smallItems, copyParallelOptions, (item, _) =>
 			{
-				CopyFile(item.SourcePath, item.DestinationPath, useSymbolicLinks);
+				CopyFile(item.SourcePath, item.DestinationPath, useSymbolicLinks, useHardLinks);
 
 				var d = Interlocked.Increment(ref done);
 				reportStepDetail?.Invoke(_localizationService[fileProgressKey]
@@ -443,9 +451,9 @@ internal sealed partial class ModService
 			// 大文件逐个串行复制（避免并行争抢磁盘带宽），分块上报百分比
 			foreach (var item in largeItems)
 			{
-				if (useSymbolicLinks)
+				if (useSymbolicLinks || useHardLinks)
 				{
-					CopyFile(item.SourcePath, item.DestinationPath, true);
+					CopyFile(item.SourcePath, item.DestinationPath, useSymbolicLinks, useHardLinks);
 					var d = Interlocked.Increment(ref done);
 					reportStepDetail?.Invoke(_localizationService[fileProgressKey]
 						.Replace("{done}", d.ToString())
@@ -654,23 +662,53 @@ internal sealed partial class ModService
 
 	/// <summary>
 	/// 部署用单文件复制（在 Parallel.ForEachAsync 的线程池线程上执行）。
-	/// 符号链接开启时创建符号链接（O(1)），否则用内核态 File.Copy（CopyFile2）。
+	/// 链接模式开启时创建链接（O(1)），否则用内核态 File.Copy（CopyFile2）。
 	/// </summary>
-	private void CopyFile(string sourcePath, string destinationPath, bool useSymbolicLinks)
+	private void CopyFile(string sourcePath, string destinationPath, bool useSymbolicLinks, bool useHardLinks)
 	{
 		GuardInitialized();
 		
-		if (useSymbolicLinks)
+		if (useSymbolicLinks || useHardLinks)
 		{
-			if (File.Exists(destinationPath))
-			{
-				File.Delete(destinationPath);
-			}
-			File.CreateSymbolicLink(destinationPath, sourcePath);
+			File.Delete(destinationPath);
+			if (useHardLinks)
+				CreateHardLink(destinationPath, sourcePath);
+			else
+				File.CreateSymbolicLink(destinationPath, sourcePath);
 		}
 		else
 		{
 			File.Copy(sourcePath, destinationPath, true);
 		}
+	}
+
+	private static void CreateHardLink(string destinationPath, string sourcePath)
+	{
+		if (!CreateHardLinkNative(destinationPath, sourcePath, IntPtr.Zero))
+			throw new Win32Exception(Marshal.GetLastWin32Error(), $"Failed to create hard link: {destinationPath}");
+	}
+
+	[DllImport("Kernel32.dll", EntryPoint = "CreateHardLinkW", CharSet = CharSet.Unicode, SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool CreateHardLinkNative(string fileName, string existingFileName, IntPtr securityAttributes);
+
+	private void ValidateHardLinkVolumes(IEnumerable<(string SourcePath, string DestinationPath, long Size)> copyItems)
+	{
+		foreach (var item in copyItems)
+		{
+			if (ArePathsOnSameVolume(item.SourcePath, item.DestinationPath))
+				continue;
+
+			throw new InvalidOperationException(_localizationService["ModService.HardLinkDifferentVolume"]
+				.Replace("{name}", Path.GetFileName(item.SourcePath)));
+		}
+	}
+
+	internal static bool ArePathsOnSameVolume(string sourcePath, string destinationPath)
+	{
+		var sourceRoot = Path.GetPathRoot(Path.GetFullPath(sourcePath));
+		var destinationRoot = Path.GetPathRoot(Path.GetFullPath(destinationPath));
+		return !string.IsNullOrEmpty(sourceRoot)
+			&& string.Equals(sourceRoot, destinationRoot, StringComparison.OrdinalIgnoreCase);
 	}
 }
