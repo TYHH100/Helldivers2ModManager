@@ -86,16 +86,45 @@ internal sealed class ModGroupService
 	{
 		if (!_initialized)
 			return mods;
+		var selected = SelectedGroup;
 		var members = GetSelectedMemberSet();
-		return mods.Where(mod => members.Contains(mod.Manifest.Guid));
+		// 默认组：显示顺序由 _mods（enabled_mods SortOrder）决定，拖拽时直接重排 _mods，保持现状。
+		if (selected.IsDefault)
+			return mods.Where(mod => members.Contains(mod.Manifest.Guid));
+
+		// 非默认组：以 ModGuids 的持久化顺序为准（拖拽时 SyncModsOrderFromDisplay 只重建
+		// ModGuids、不重排 _mods）。否则任何列表重建（再导入/切视图/清搜索）都会把显示
+		// 顺序弹回 _mods 序，用户拖好的顺序"看起来自己变了"。
+		// ModGuids 是成员表权威（AddModsToGroupAsync/RemoveModsFromGroupAsync 维护），
+		// 与原 members.Contains 过滤语义一致：不在 ModGuids 中的模组不输出。
+		var byGuid = new Dictionary<Guid, ModData>();
+		foreach (var mod in mods)
+			byGuid.TryAdd(mod.Manifest.Guid, mod);
+		var result = new List<ModData>(selected.ModGuids.Count);
+		foreach (var guid in selected.ModGuids)
+			if (byGuid.Remove(guid, out var mod))
+				result.Add(mod);
+		return result;
 	}
 
 	public IEnumerable<ModViewModel> FilterModViewModels(IEnumerable<ModViewModel> mods)
 	{
 		if (!_initialized)
 			return mods;
+		var selected = SelectedGroup;
 		var members = GetSelectedMemberSet();
-		return mods.Where(mod => members.Contains(mod.Guid));
+		if (selected.IsDefault)
+			return mods.Where(mod => members.Contains(mod.Guid));
+
+		// 与 FilterMods 相同的排序规则，保证显示、快照与部署顺序都以分组持久化顺序为准。
+		var byGuid = new Dictionary<Guid, ModViewModel>();
+		foreach (var vm in mods)
+			byGuid.TryAdd(vm.Guid, vm);
+		var result = new List<ModViewModel>(selected.ModGuids.Count);
+		foreach (var guid in selected.ModGuids)
+			if (byGuid.Remove(guid, out var vm))
+				result.Add(vm);
+		return result;
 	}
 
 	/// <summary>
