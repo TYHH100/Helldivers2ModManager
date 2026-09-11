@@ -199,13 +199,28 @@ internal sealed class ModelPreviewBackend
         IReadOnlyList<ModelPreviewMesh> meshes,
         string? armorId)
     {
+        return FilterByArmor(meshes, armorId is null ? null : [armorId]);
+    }
+
+    /// <summary>
+    /// Set-aware overload: a merged armor-set option carries every archive ID of the set
+    /// (body armor + helmet + weight variants); a mesh matches when any of them hits.
+    /// </summary>
+    internal static IReadOnlyList<ModelPreviewMesh> FilterByArmor(
+        IReadOnlyList<ModelPreviewMesh> meshes,
+        IReadOnlyList<string>? armorIds)
+    {
         ArgumentNullException.ThrowIfNull(meshes);
-        if (string.IsNullOrWhiteSpace(armorId) || string.Equals(armorId, ModelPreviewArmorSelection.AllId, StringComparison.OrdinalIgnoreCase))
+        if (armorIds is not { Count: > 0 })
+            return meshes;
+
+        if (armorIds.Any(static id => string.IsNullOrWhiteSpace(id) ||
+                                      string.Equals(id, ModelPreviewArmorSelection.AllId, StringComparison.OrdinalIgnoreCase)))
             return meshes;
 
         return meshes
             .Where(mesh => mesh.ArmorIds.Count == 0 ||
-                          mesh.ArmorIds.Contains(armorId, StringComparer.OrdinalIgnoreCase))
+                           armorIds.Any(id => mesh.ArmorIds.Contains(id, StringComparer.OrdinalIgnoreCase)))
             .ToArray();
     }
 
@@ -242,6 +257,7 @@ internal sealed class ModelPreviewBackend
         result.Armors.Add(new ModelPreviewArmorOption
         {
             Id = ModelPreviewArmorSelection.AllId,
+            Ids = [ModelPreviewArmorSelection.AllId],
             Name = allName,
             IsAll = true,
             MeshCount = result.Meshes.Count
@@ -249,22 +265,35 @@ internal sealed class ModelPreviewBackend
 
         var armors = armorNames ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var helmets = helmetNames ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var armorId in result.Meshes
-                     .SelectMany(static mesh => mesh.ArmorIds)
-                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                     .OrderBy(static id => id, StringComparer.OrdinalIgnoreCase))
+        // 名称解析顺序：护甲表优先，头盔表兜底；两表都未收录时保留原占位格式。
+        // 同一套装的护甲本体与头盔是两个不同 archive ID，但显示名相同——按显示名分组，
+        // 合并为单一"整套护甲"选项（轻重中变体同理归并），过滤时任一 ID 命中即保留。
+        var idGroups = result.Meshes
+            .SelectMany(static mesh => mesh.ArmorIds)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(id => (
+                Id: id,
+                Name: armors.TryGetValue(id, out var armorName)
+                    ? armorName
+                    : helmets.TryGetValue(id, out var helmetName)
+                        ? helmetName
+                        : $"Armor {id}"))
+            .GroupBy(static pair => pair.Name, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static group => group.Key, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var idGroup in idGroups)
         {
-            var meshCount = result.Meshes.Count(mesh => mesh.ArmorIds.Contains(armorId, StringComparer.OrdinalIgnoreCase));
-            // 名称解析顺序：护甲表优先，头盔表兜底；两表都未收录时保留原占位格式
-            var name = armors.TryGetValue(armorId, out var armorName)
-                ? armorName
-                : helmets.TryGetValue(armorId, out var helmetName)
-                    ? helmetName
-                    : $"Armor {armorId}";
+            var ids = idGroup
+                .Select(static pair => pair.Id)
+                .OrderBy(static id => id, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var meshCount = result.Meshes.Count(mesh =>
+                ids.Any(id => mesh.ArmorIds.Contains(id, StringComparer.OrdinalIgnoreCase)));
             result.Armors.Add(new ModelPreviewArmorOption
             {
-                Id = armorId,
-                Name = name,
+                Id = ids[0],
+                Ids = ids,
+                Name = idGroup.Key,
                 MeshCount = meshCount
             });
         }

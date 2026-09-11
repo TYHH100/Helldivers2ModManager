@@ -140,7 +140,8 @@ internal sealed partial class ModelPreviewPageViewModel
     }
 
     private IReadOnlyList<ModelPreviewMesh> GetArmorMeshes() =>
-        ModelPreviewBackend.FilterByArmor(Meshes, SelectedArmor?.Id);
+        // 套装选项携带本体+头盔的全部 archive ID，任一命中即保留，确保整套装备同时渲染
+        ModelPreviewBackend.FilterByArmor(Meshes, SelectedArmor?.Ids);
 
     private async Task LoadAutomaticTexturePreviewsAsync(
         ModData mod,

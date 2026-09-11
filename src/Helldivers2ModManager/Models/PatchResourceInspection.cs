@@ -180,6 +180,11 @@ internal sealed class ModelPreviewMesh : System.ComponentModel.INotifyPropertyCh
 internal sealed class ModelPreviewArmorOption : System.ComponentModel.INotifyPropertyChanged
 {
     public required string Id { get; init; }
+    /// <summary>
+    /// 该选项包含的全部 archive ID。同一套装的护甲本体与头盔（以及轻重中变体）
+    /// 解析出的显示名相同，会被合并为一个选项；此处携带该套装的全部 archive ID。
+    /// </summary>
+    public IReadOnlyList<string> Ids { get; init; } = [];
     private string _name = string.Empty;
     public required string Name
     {

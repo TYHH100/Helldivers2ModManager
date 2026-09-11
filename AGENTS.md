@@ -171,6 +171,15 @@ internal sealed class MyService
 - 纹理预览要根据实际通道统计判断用途，并保留 `RGB`、`RGBA`、`A` 等明确显示模式；不要默认把 Alpha 当作模型不透明度。
 - 预览相关改动至少覆盖：资源边界、MeshInfo/变换、材质贴图匹配、纹理格式/通道、取消和缓存行为。
 
+### 护甲选择（套装选项语义，2026-09-11）
+
+护甲下拉框的选项单位是**整套护甲**，不是单个 archive：同一套装的护甲本体与头盔是两个不同 archive ID（分别收录于 `Resources/Data/armor-names.json` 与 `helmet-names.json`），解析出的显示名相同（轻重中变体同理同名）。约定：
+
+- `ModelPreviewBackend.BuildArmorOptions` 按**解析后的显示名**对 archive ID 分组，同名合并为一个 `ModelPreviewArmorOption`；`Ids` 携带该套装全部 archive ID，`Id` 仅为组内代表 ID（兼容旧签名/字典场景），选项按名称排序。
+- 过滤必须走 `FilterByArmor(meshes, option.Ids)` 重载（任一 ID 命中即保留，`ArmorIds` 为空的未知/共享网格全保留）；用单 `Id` 过滤会丢掉头盔（或本体）独占网格，表现为"选套装少了半个装备"。
+- **默认选中第一个具体套装**，不是"全部模型部件"（`ModelPreviewPageViewModel.Loading.cs`，用户决策 2026-09-11）：多套装替换模组默认全显会把所有替换网格叠在一起；"全部"仍保留为可选项，无命名套装元数据时才回落"全部"。不要把默认值"修"回 All。
+- 选项的 `MeshCount` 是套装内全部 archive 命中网格的并集计数；改名表、排序或过滤逻辑时，`tests/.../ModelPreviewArmorSelectionTests.cs` 的 `ApplyPackageNames_MergesArmorAndHelmetWithSameNameIntoSingleSet` 守护该语义。
+
 ### 音频模组预览（Wwise bank/WEM）
 
 模型预览页同时承载音频模组的试听（`Services/Audio/AudioBankInspectionService` + `AudioPlaybackService`，UI 在 `ModelPreviewPageViewModel.Audio.cs` partial 与 `ModelPreviewPageView.xaml` 的音频 Tab/纯音频覆盖层）。关键约定：
@@ -302,6 +311,7 @@ catch (Exception ex)
 | 用 `TaskCompletionSource` 桥接弹窗后不处理用户点“取消”按钮 | `MessageBoxSelectionMessage` 的取消按钮默认只隐藏覆盖层、不触发任何回调；`MessageBoxConfirmMessage` 的“否”按钮才触发 `Abort`。凡是用 TCS 等待弹窗结果的调用方必须给 `MessageBoxSelectionMessage` 传 `Abort` 回调（如 `Abort = () => tcs.TrySetResult(取消值)`），否则用户点取消后流程永久挂起。 | 
 | 保存分组状态时覆盖了用户的自定义排序 | `SaveAllAsync`/`SaveStatesAsync` 按快照 `Mods` 顺序写 `SortOrder`；在非 Dashboard 页面保存分组状态时，必须保留原分组顺序：优先用 `ProfileSaveCoordinator.GetCurrentOrder()` 过滤出成员后作为 `preferredOrder` 传入 `Capture`（Dashboard 导航前已保存过用户顺序），取不到时退回 ModService 加载顺序。 |
 | 会话结束/取消后仍读取已清空的会话对象 | 结束类方法（如 `FinishAsync`）内部会清空会话（`Current = null`），总结弹窗、结果展示必须在调用结束方法之前捕获会话引用并传入，不能在之后从服务重新读取。 |
+| 把护甲下拉框里同名重复项当成数据错误去"去重名字"，或改护甲过滤时仍用单 `Id` 判断 | 同名两项是同一套装的护甲本体与头盔两个 archive（本来就应合并为一个套装选项）。过滤走 `FilterByArmor(meshes, option.Ids)` 多 ID 重载；单 ID 过滤会丢掉头盔/本体独占网格。详见 §5 护甲选择小节。 |
 | 合并/删除翻译键后不做双向引用验证 | 删除键后必须验证：① 代码中无残留旧键引用（`rg` 旧键名）；② 反向提取代码里所有 `{loc:Loc ...}` 与 `_localizationService["..."]` 引用，逐一确认存在于 zh-CN 和 en-US（能暴露历史拼写错误，如 `NexusDownloadPage.PremiumRequiredMsg` 与 JSON 中的 `NexusDownload.PremiumRequiredMsg` 前缀不一致——本地化服务对缺失键可能静默返回空串，界面只显示空白不会报错）。修改代码引用时，键名必须与 JSON 完全一致，不能凭印象写近似键名。 |
 | 以为拖拽期间滚轮消息会正常到达 WPF | OLE 拖拽循环会吞掉 WM_MOUSEWHEEL（WPF 收不到 PreviewMouseWheel）。拖拽中滚轮必须用 WH_MOUSE_LL 低级钩子，钩子直接装在 UI 线程即可（OLE 循环会泵消息，回调在 UI 线程执行）。钩子回调里处理完滚轮要**返回 1 吞掉消息**，不能让滚轮进入 OLE 循环（可能被当作按键状态变化导致拖拽被意外终止）。钩子回调必须 try/catch 且非滚轮消息原样 CallNextHookEx。 |
 | 合成拖拽事件刷新插入指示线时用 PreviewDragOver | gong 在 ItemsControl 上默认 `EventType.Auto` 只监听**冒泡**的 `DragOver`（非 ItemsControl 才监听 Preview*）。合成指示线刷新必须 raise `DragDrop.DragOverEvent`（冒泡），PreviewDragOver 不会进入 gong 管线，指示线不会刷新。`DragEventArgs` 带坐标的构造函数是 internal，只能用反射创建（有测试守护签名）。 |
