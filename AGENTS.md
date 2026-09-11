@@ -81,6 +81,60 @@ internal sealed class MyService
 - XAML 使用 `Extensions/LocExtension.cs`；代码使用注入的 `LocalizationService`。
 - 新字符串按 `Section.Key` 命名，并同步更新 `zh-CN.json`、`en-US.json`；不要在 View 中硬编码用户可见文本。
 
+### 设置项（SettingsService）扩展约定
+
+新增用户开关时必须四件事齐做，缺一会造成「开关显示正常但运行时不变」或「旧用户升级后行为莫名改变」：
+
+1. `SettingsService` 增加 `[JsonInclude] private` 字段（含默认值）、公开属性（含 `GuardInitialized`/`GuardReadonly`），同步在 `CreateJsonModel`（序列化）、`ReadAsyncFallback`（反序列化，缺失时回落到字段默认值）、`ResetInternal`（重置为默认值）三处登记。
+2. `SettingsPageViewModel.Properties.cs` 增加同名校验 `Initialized` 的双向属性；`SettingsPageViewModel.Update()` 调 `OnPropertyChanged` 通知。
+3. 设置页 XAML（`Views/SettingsPageView.xaml`）放进对应 Tab 的 `FluentSettingsCard` 区块，沿用「CheckBox + TextBlock(标题) + TextBlock(描述)」组合。
+4. `Resources/Language/{zh-CN,en-US}.json` 同步加键；建议新建独立 `SettingsPage.ModXxx` 卡片而不是塞进现有卡片。
+
+**导入时自动加入配置文件**（`AutoAddImportedModsToActiveProfile`，默认 `false`）：
+
+- **默认配置与自定义配置同样生效**：默认组的 `ModGuids` 成员列表同样是动态持久化的（仅首次创建时填充），新导入模组不在其中、工作区视图按 `ModGuids` 过滤——不存在「默认组天然包含全部模组」这回事。
+- 触发点是 `DashboardPageViewModel.Import.cs` 的 `AddFilesCoreAsync`：导入循环前按设置订阅 `_modService.ModAdded` 记录本轮新增 GUID，`finally` 块必须解绑并执行一次 `_modGroupService.AddModsToGroupAsync`。
+- 加入分组后必须补一次 `RequestProfileSave()`：`ModAdded` 先触发的自动保存快照不含新模组（事件订阅顺序上 `trackImported` 在 `ModService_ModAdded` 之后），而默认组的 `enabled_mods` 写入是 DELETE+全量重插，缺了新模组要等下次启动才由 `LoadAsync` 默认状态补录。
+- 提示用 `WeakReferenceMessenger.Default.Send(new ToastMessage(...))`（气泡自动消失），不要弹模态对话框阻塞用户。
+- 失败用 `_logger.LogWarning` 吞掉——导入主流程必须不受该设置故障影响。
+
+**易错点**：
+
+- `ReadAsyncFallback` 漏登记 → 旧用户升级后设置项永远是默认 `false`，看似「开关没生效」。
+- `ResetInternal` 漏登记 → 用户点「重置所有设置」后，JSON 已写入的 `true` 状态被覆盖为字段默认值前看似正常，但下次重置会回到不一致状态。
+- 在 `ModService_ModAdded`（`DashboardPageViewModel.cs`）里直接加入分组 → 该事件还会被「刷新模组库」触发，会把目录里本来不属于该配置文件的旧模组一并加入，违反用户意图；只能在导入窗口内通过临时订阅区分。
+
+### 分组内排序与顺序持久化（2026-09-11 修复）
+
+列表显示顺序的唯一来源是 `ModGroupService.FilterMods/FilterModViewModels` 的输出序，两条路径不同：
+
+- **默认组**：顺序 = `_mods`（`enabled_mods.SortOrder`）。拖拽时 `SyncModsOrderFromDisplay` 直接重排 `_mods` 并经快照持久化，闭环。
+- **非默认组**：拖拽只重建 `SelectedGroup.ModGuids`（不重排 `_mods`）。因此 `FilterMods/FilterModViewModels` 对非默认组**必须按 `ModGuids` 顺序输出成员**（2026-09-11 修复前按 `_mods` 序输出，导致任何列表重建（再导入/切视图/清搜索/切分组）都会把显示顺序弹回 `_mods` 序，用户拖好的顺序"自己变了"）。
+- `ModGuids` 以 JSON 数组整体持久化在 `mod_groups` 表（顺序保真）；它同时是成员表权威，`Filter*` 不得输出不在 `ModGuids` 中的模组（不要加"兜底追加"，会破坏过滤语义）。
+- 部署顺序语义：非默认组的部署序随分组内排序（快照 preferredOrder = 显示序）。改动 `Filter*` 排序时默认组与非默认组语义必须分别验证。
+
+**导入后落盘时机**：导入完成（含自动加入配置文件）后用 `SaveProfileNowAsync(showProgress: false)` 立即落盘，不要依赖 300ms 防抖——崩溃/强杀丢失 pending 快照后，重启时缺记录的模组走 `ProfileService.LoadAsync` 的 remainder 分支，按 `Mods` 目录文件系统枚举序（≈目录名字典序）排在末尾区域，批量导入多个模组时相对顺序会变。
+
+### 当前配置文件（选中状态）持久化（2026-09-11 修复）
+
+**症状**：重新打开软件后总是回到「默认配置文件」，而不是上次关闭前使用的配置文件。
+
+**根因**：当前配置文件只用 `ModGroupService` 的内存字段 `_lastSelectedGroupId` 记录，该字段初值恒为 `ModGroup.DefaultGroupId`；`SelectGroupAsync` 只改内存不落盘，`InitAsync` 又用该字段回落，于是每次启动必然落在默认配置文件。
+
+**正确做法**：
+
+- 新增通用键值表 `app_state (StateKey TEXT PRIMARY KEY, StateValue TEXT)`，由 `DatabaseService.EnsureInitialized` 建表（与 `mod_groups` 同库同目录，按存储目录各初始化一次）。
+- `ModGroupRepository.LoadLastSelectedGroupId` / `SaveLastSelectedGroupIdAsync` 读写键 `last_selected_group_id`（`INSERT OR REPLACE`，只写一行）。
+- `ModGroupService.InitAsync` 读该键恢复选中，记录缺失或指向已删除的配置文件时回落默认配置文件；`SelectGroupAsync`（切换后）与 `DeleteGroupAsync`（删除当前配置文件、回落默认组时）调用 `SaveSelectedGroupIdAsync` 落盘。
+- `SelectedGroup` 是 `private set`，全项目只有 `InitAsync`/`SelectGroupAsync`/`DeleteGroupAsync` 三处赋值——新增任何修改路径都必须同步落盘。
+- 回归测试：`tests/Helldivers2ModManager.Tests/ModGroupServiceLastSelectedGroupTests.cs`（恢复自定义配置文件 / 删除当前配置文件后回落 / 记录指向不存在 Id 时回落）。
+
+**易错点**：
+
+- 不要把这类 UI 会话状态塞进 `SettingsService`：它不应出现在设置页，也不该被「重置所有设置」清空，而且按设置项约定要改 5 处、成本高。库内 kv 状态一律复用 `app_state`，不要再开新表。
+- 不要给 `mod_groups` 加列承载：`SaveGroupsAsync` 是 DELETE + 全量重插，加列会引入读改写竞争。
+- 不要做成防抖或「退出时统一保存」：切换时立即落盘才能覆盖强杀/崩溃场景，见 §6 的落盘时机原则。
+
 ## 4. 数据和文件解析硬约束
 
 ### Mod 清单
@@ -257,11 +311,13 @@ catch (Exception ex)
 | 把需要 code-behind 访问的命名元素放进 Window.Style 的 ControlTemplate | 模板内的 `x:Name` 是模板作用域，Window 类不会生成对应字段（编译报 CS0103 "名称不存在"），用 `OnApplyTemplate` 里 `Template.FindName("name", this)` 获取引用。**不要把 Window.Content 改为 Grid 包裹 ContentControl/ContentPresenter 来容纳覆盖层**：`ContentControl.Content` 和显式设置 Content 的 `ContentPresenter` 都会把页面加为逻辑子（`SetLogicalChild`），而本项目的页面视图是 `Page` 类型，`Page.OnVisualParentChanged` 校验逻辑父必须是 Window/Frame，运行时报 XamlParseException "Page 只能具有 Window 或 Frame 父级"（启动即崩）。模板内裸 `<ContentPresenter>`（未设置 Content，隐式呈现 TemplatedParent.Content）不会触发该校验，这是原结构能正常工作的原因。 |
 | 主窗口接收文件拖拽时直接挂在 Window 的 DragOver/Drop 上或逐页面防 gong | 文件拖拽（FileDrop）必须用 Window 层的 `PreviewDragOver`/`PreviewDrop`（隧道事件最先到达根）并在识别到文件时 `e.Handled = true`，否则 string[] 会被 gong 的 `DefaultDropHandler.CanAcceptData`（`data is IEnumerable && !(data is string)`）当成排序数据，Drop 时插入 ObservableCollection 抛类型异常。内部拖拽（ModViewModel 等）不是 FileDrop，不受影响。防御性上仍应在实现 `IDropTarget` 的 VM（Dashboard/DeploymentOrder）的 DragOver/Drop 开头识别 `string[]` 或含 FileDrop 的 IDataObject 直接 return。提示层显隐用"DragOver 持续刷新时间戳 + DragLeave 后 300ms 复查"避免子元素间移动时闪烁。 |
 | 启动黑闪（LOGO 透明区透出黑底）只查闪屏图片 alpha | WPF 默认 `<SplashScreen>` 项在 `CompositionTarget.Rendering`（**帧渲染前**触发）第一次时就关闭闪屏，此时主窗口首帧还没提交给 DWM，DWM 侧主窗口区域是纯黑的；闪屏 LOGO 透明，黑底就从透明区透出"一闪"。修复：csproj 移除 SplashScreen 项（图片改 `<Resource>`），自实现透明闪屏窗口（`AllowsTransparency` + `Topmost`），在 `MainWindow.ContentRendered`（首帧真正渲染完成后）再 `Close()`。验证：启动进程 + `CopyFromScreen` 连续截屏统计中央区域纯黑帧比例（采样间隔 ≤20ms），修复后应全程为 0。 |
+| 嵌套压缩包导入撞 `IOException` 0x80070020 sharing violation 就以为是「外层还没写完 inner 就在读」 | SharpSevenZip 的 `ExtractArchive` 同步等待所有 native 句柄释放（`using var aec` + `_archive?.Close()` + Dispose 链），外层 `await Task.Run` 也确实等到 lambda 退出，所以"外层没写完 inner 就在读"是误判。真正原因是 **Windows Defender / 其他 AV 的实时扫描会在 SharpSevenZip 刚 `File.Create` 出来的文件上短暂持有独占锁**（minifilter 行为），紧接着的递归解压 / 临时目录清理 / `File.Create` 覆盖都会撞 sharing violation，尤其「外层包 = 内层包同名的单层包装」场景必现。修复：`ModService.ExtractArchiveAsync` 与 `TryDeleteTemporaryDirectory` 仅对 `ERROR_SHARING_VIOLATION (0x80070020)` / `ERROR_LOCK_VIOLATION (0x80070021)` 做线性退避重试（解压 6 次/累计 ≤3s，清理 4 次/累计 ≤0.6s）；其他错误（密码、CRC、文件不存在等）保持原行为不动。日志里反复出现「`_xxx\VRC ...zip` because it is being used by another process」+ Test\Temp\ 残留同名 inner 目录就是这个症状的指纹。 |
 | 用 `ToolGood.Words.WordsHelper` 引用拼音库 | `ToolGood.Words.Pinyin` 包的命名空间是 `ToolGood.Words.Pinyin`（WordsHelper / PinyinMatch 都在其下），不是 `ToolGood.Words`。`GetPinyin(name, false)` 输出无音调、首字母大写，英文/数字原样保留（`Helldivers2` → `Helldivers2`），转匹配串前要 `ToLowerInvariant()`；`GetFirstPinyin(name)` 同。搜索场景应把转换结果按 Mod 名称惰性缓存（名称不变），不要在防抖热路径里重复转换。**进程首次调用会加载 8 万词组字典（实测约 180ms）且发生在调用线程**：上千 Mod 批量转换仅需数毫秒、每次过滤仅需亚毫秒级，真正的成本只在首次字典加载——应在 Mod 列表就绪后在后台线程预热（快照 + `Task.Run` 串行遍历触发缓存构建），避免用户第一次输入搜索时在 UI 线程上卡顿。 |
 | 构建报 CS2001 找不到 `obj\...\*.g.cs`，且同时出现多个随机后缀 `_wpftmp.csproj` | obj 目录残留了旧 WPF 临时编译产物（多个随机后缀 wpftmp 项目交错），删除 `Helldivers2ModManager\obj\Debug` 目录及其中 `*wpftmp*` 文件后重新**串行**构建（`/m:1`）即可恢复；正常构建后留下的 wpftmp 残留属于成功产物，无需清理。 |
 | 用 Ww2Ogg 的 Default codebook 转换 HD2 WEM 并以为成功 | Default 转换不会抛异常，但产物 NVorbis 解码在 `Residue0.Init` 报错（HD2 用 aoTuV 编码）。转换必须 AoTuV 优先、Default 兜底，并以 `VorbisReader` 构造成功作为"可播放"判据；不要只看 `GenerateOgg` 是否抛异常。 |
 | 把 Wwise bank 的 DATA chunk 或整个音频补丁读入内存做清单 | 音频检查只读 TOC、chunk 头、DIDX 和每条目 128 字节头探针；语音包单 patch 可有数千条目（如超级中配 6343 条/117ms），媒体数据一律按需切片读取。 |
 | 把 V1 manifest 的 `"Options": []`（空数组）当成会展开出补丁 | 空选项列表与无选项等同：`GetSelectedPatchFiles` 与 `DeployAsync` 都必须回退模组根目录补丁（纯文本模组导入即产生 `Options: []`，此前部署/覆盖扫描/预览全部拿到 0 个补丁）。注意与"关闭"占位选项（`Options.Count>1` 但某选项 Include 为空）区分，后者仍按占位处理。 |
+| 只在内存里记录「当前配置文件」就以为重启会恢复 | 当前配置文件的选择必须落盘到 `app_state` 表（键 `last_selected_group_id`）：`ModGroupService.InitAsync` 读取恢复，`SelectGroupAsync`/`DeleteGroupAsync` 立即写入。内存字段 `_lastSelectedGroupId` 初值为默认配置文件，只改内存会让重启后静默回落到默认配置文件。不要在设置页或 `mod_groups` 加列承载。详见 §3。 |
 
 这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
 
