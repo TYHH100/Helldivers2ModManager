@@ -130,6 +130,17 @@ internal sealed class DatabaseService : IDisposable
 	private const string CheckModLastWriteTimeColumnSql = "SELECT COUNT(*) FROM pragma_table_info('version_check_results') WHERE name='ModLastWriteTimeUtc';";
 
 	/// <summary>
+	/// 数据库表创建 SQL —— 通用键值存储，保存应用级 UI 会话状态（例如上次选中的配置文件）。
+	/// 与用户设置区分：这类状态不需要暴露在设置页，也不应被「重置所有设置」清空。
+	/// </summary>
+	private const string CreateAppStateTableSql = @"
+		CREATE TABLE IF NOT EXISTS app_state (
+			StateKey TEXT PRIMARY KEY NOT NULL,
+			StateValue TEXT NOT NULL DEFAULT ''
+		);
+	";
+
+	/// <summary>
 	/// 数据库表创建 SQL —— 存储游戏 exe 最后写入时间，用于检测游戏版本变化
 	/// </summary>
 	private const string CreateGameCheckTrackerTableSql = @"
@@ -314,6 +325,13 @@ internal sealed class DatabaseService : IDisposable
 				using (var cmd = initConnection.CreateCommand())
 				{
 					cmd.CommandText = CreateModLinksTableSql;
+					cmd.ExecuteNonQuery();
+				}
+
+				// 创建应用级状态表（UI 会话状态，如上次选中的配置文件）
+				using (var cmd = initConnection.CreateCommand())
+				{
+					cmd.CommandText = CreateAppStateTableSql;
 					cmd.ExecuteNonQuery();
 				}
 

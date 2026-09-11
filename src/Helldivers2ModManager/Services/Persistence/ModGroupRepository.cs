@@ -298,6 +298,56 @@ internal sealed class ModGroupRepository
 		return (long)cmd.ExecuteScalar()! > 0;
 	}
 
+	/// <summary>
+	/// app_state 中记录「上次选中的配置文件」的键名。
+	/// </summary>
+	public const string LastSelectedGroupIdKey = "last_selected_group_id";
+
+	/// <summary>
+	/// 读取上次选中的配置文件 Id。首次运行或记录损坏返回 null，由调用方回落到默认配置文件。
+	/// </summary>
+	public Guid? LoadLastSelectedGroupId(string storageDirectory)
+	{
+		try
+		{
+			using var connection = _databaseService.OpenConnection(storageDirectory);
+			using var cmd = connection.CreateCommand();
+			cmd.CommandText = "SELECT StateValue FROM app_state WHERE StateKey = @StateKey;";
+			cmd.Parameters.AddWithValue("@StateKey", LastSelectedGroupIdKey);
+			var value = cmd.ExecuteScalar() as string;
+			return Guid.TryParse(value, out var guid) ? guid : null;
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "读取上次选中的配置文件失败，将回落到默认配置文件");
+			return null;
+		}
+	}
+
+	/// <summary>
+	/// 持久化上次选中的配置文件 Id，供下次启动恢复。
+	/// </summary>
+	public async Task SaveLastSelectedGroupIdAsync(string storageDirectory, Guid groupId)
+	{
+		await _writeLock.WaitAsync();
+		try
+		{
+			using var connection = _databaseService.OpenConnection(storageDirectory);
+			using var cmd = connection.CreateCommand();
+			cmd.CommandText = @"
+				INSERT OR REPLACE INTO app_state (StateKey, StateValue)
+				VALUES (@StateKey, @StateValue);
+			";
+			cmd.Parameters.AddWithValue("@StateKey", LastSelectedGroupIdKey);
+			cmd.Parameters.AddWithValue("@StateValue", groupId.ToString());
+			cmd.ExecuteNonQuery();
+		}
+		finally
+		{
+			_writeLock.Release();
+		}
+	}
+
 	private List<Guid> ParseGuidList(string json)
 	{
 		try

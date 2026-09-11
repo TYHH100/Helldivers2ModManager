@@ -60,7 +60,13 @@ internal sealed class ModGroupService
 			Groups.Add(group);
 		}
 
-		SelectedGroup = Groups.FirstOrDefault(group => group.Id == _lastSelectedGroupId) ?? defaultGroup;
+		// 恢复上次选中的配置文件：该选择保存在 app_state 表中（SelectGroupAsync/DeleteGroupAsync
+		// 时写入）。记录缺失或指向已被删除的配置文件时回落到默认配置文件。
+		var persistedGroupId = _repository.LoadLastSelectedGroupId(_storageDirectory);
+		SelectedGroup = (persistedGroupId is { } lastId
+			? Groups.FirstOrDefault(group => group.Id == lastId)
+			: null) ?? defaultGroup;
+		_lastSelectedGroupId = SelectedGroup.Id;
 		_stateCache.Clear();
 		foreach (var group in Groups)
 		{
@@ -165,6 +171,7 @@ internal sealed class ModGroupService
 		SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
 		// 先完成内存切换，再等待后台持久化，避免 SQLite 写入阻塞用户看到新分组。
 		await SaveGroupStateAsync(previousGroupId);
+		await SaveSelectedGroupIdAsync();
 	}
 
 	public async Task<ModGroup> CreateGroupAsync(string name)
@@ -203,6 +210,8 @@ internal sealed class ModGroupService
 			SelectedGroup = Groups.First(static group => group.IsDefault);
 			_lastSelectedGroupId = SelectedGroup.Id;
 			SelectedGroupChanged?.Invoke(this, EventArgs.Empty);
+			// 当前配置文件已被删除，同步落盘回落后的默认配置文件，否则下次启动还会去恢复一个不存在的 Id。
+			await SaveSelectedGroupIdAsync();
 		}
 	}
 
@@ -430,6 +439,17 @@ internal sealed class ModGroupService
 			.ToArray();
 		// SaveStatesAsync 内部包含同步 SQLite 写入；Task 方法本身不会自动离开 UI 线程。
 		await Task.Run(() => _repository.SaveStatesAsync(_storageDirectory, groupId, stateSnapshot));
+	}
+
+	/// <summary>
+	/// 持久化「上次选中的配置文件」，供下次启动恢复选中状态。
+	/// 每次切换都会写一行，数据量恒定，不做防抖——避免用户在切换后立即关闭程序时丢失选择。
+	/// </summary>
+	private async Task SaveSelectedGroupIdAsync()
+	{
+		var groupId = _lastSelectedGroupId;
+		// 与 SaveGroupStateAsync 一致：SQLite 写入同步阻塞，放到线程池避免卡 UI 线程。
+		await Task.Run(() => _repository.SaveLastSelectedGroupIdAsync(_storageDirectory, groupId));
 	}
 
 	private void CopyDefaultStateToGroup(Guid groupId, ModData mod)
