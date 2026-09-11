@@ -314,6 +314,21 @@ internal sealed partial class SettingsPageViewModel
 		}
 	}
 
+	/// <summary>
+	/// 导入模组时自动加入当前激活的配置文件（默认与自定义配置同样生效）。
+	/// 关闭时保持原有行为：模组先存放在模组库，需要手动加入配置文件。
+	/// </summary>
+	public bool AutoAddImportedModsToActiveProfile
+	{
+		get => _settingsService.Initialized && _settingsService.AutoAddImportedModsToActiveProfile;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.AutoAddImportedModsToActiveProfile = value;
+			OnPropertyChanged();
+		}
+	}
+
 	public bool EnableAutoTagging
 	{
 		get => _settingsService.Initialized ? _settingsService.EnableAutoTagging : false;

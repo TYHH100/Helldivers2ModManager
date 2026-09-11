@@ -203,6 +203,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(EnableBatchRepair));
 		OnPropertyChanged(nameof(AutoCleanLogs));
 		OnPropertyChanged(nameof(ShowSeparator));
+		OnPropertyChanged(nameof(AutoAddImportedModsToActiveProfile));
 		OnPropertyChanged(nameof(EnableAutoTagging));
 		OnPropertyChanged(nameof(AutoTagCreateMissingTags));
 		OnPropertyChanged(nameof(AutoTagPairingButtonVisible));

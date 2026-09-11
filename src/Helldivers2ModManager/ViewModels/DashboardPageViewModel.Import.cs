@@ -122,6 +122,17 @@ internal sealed partial class DashboardPageViewModel
                 isForeground: true);
             _backgroundTaskService.Update(backgroundTask, progress: 0, isIndeterminate: false);
 
+            // 仅本次导入窗口内订阅 ModAdded：用于「导入时自动加入当前配置文件」设置开启时，
+            // 记录本轮实际新增加的模组 GUID。导入结束（无论成功失败）必须解绑，避免
+            // 把后续 Rescan / 后台异步新增的事件误算到本次导入。
+            var importedGuids = new HashSet<Guid>();
+            Action<ModData>? trackImported = null;
+            if (_settingsService.Initialized && _settingsService.AutoAddImportedModsToActiveProfile)
+            {
+                trackImported = mod => importedGuids.Add(mod.Manifest.Guid);
+                _modService.ModAdded += trackImported;
+            }
+
             try
             {
                 var allProblems = new List<ModProblem>();
@@ -277,6 +288,60 @@ internal sealed partial class DashboardPageViewModel
                     Message = ex.Message
                 });
             }
+            finally
+            {
+                if (trackImported is not null)
+                {
+                    _modService.ModAdded -= trackImported;
+                    if (importedGuids.Count > 0)
+                    {
+                        try
+                        {
+                            await AutoAddImportedModsToActiveProfileAsync(importedGuids);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Auto-adding imported mods to active profile failed");
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 把本次导入实际新增的模组自动加入当前激活的配置文件。
+        /// 默认配置同样生效：其成员列表（ModGuids）是动态持久化的，新导入模组默认不在其中，
+        /// 需显式加入后才会出现在工作区视图。
+        /// </summary>
+        private async Task AutoAddImportedModsToActiveProfileAsync(HashSet<Guid> importedGuids)
+        {
+            var activeProfile = _modGroupService.SelectedGroup;
+
+            var modsToAdd = importedGuids
+                .Select(guid => _modService.GetModByGuid(guid))
+                .OfType<ModData>()
+                .Where(mod => !activeProfile.ModGuids.Contains(mod.Manifest.Guid))
+                .ToArray();
+            if (modsToAdd.Length == 0)
+                return;
+
+            await _modGroupService.AddModsToGroupAsync(activeProfile.Id, modsToAdd);
+            GroupSidebar.RefreshSelectionProperties();
+            UpdateGroupedView();
+            // ModAdded 触发的自动保存早于加入分组，其快照不含新模组；
+            // 此处补一次保存，让更高 Sequence 的完整快照覆盖（默认组 enabled_mods 为全量重写，必须补齐）。
+            // 用 SaveNowAsync 立即落盘而非 300ms 防抖：导入是低频重操作，
+            // 崩溃/强杀时若快照丢失，重启后新模组会按 Mods 目录枚举序（≈字典序）重排。
+            await SaveProfileNowAsync(showProgress: false);
+
+            _logger.LogInformation(
+                "Auto-added {Count} imported mod(s) to active profile \"{Profile}\"",
+                modsToAdd.Length, activeProfile.Name);
+            WeakReferenceMessenger.Default.Send(new ToastMessage(
+                _localizationService["DashboardPage.AddMod"],
+                _localizationService["SettingsPage.AutoAddImportedModsDone"]
+                    .Replace("{count}", modsToAdd.Length.ToString())
+                    .Replace("{profile}", activeProfile.Name)));
         }
 
         private Task<string?> RequestArchivePasswordPromptAsync(string archiveName)

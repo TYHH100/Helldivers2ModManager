@@ -386,7 +386,7 @@ internal sealed class SettingsService
 	}
 
 	/// <summary>
-	/// 在主页导航面板中显示分隔线
+	/// 是否在主页导航面板中显示分隔线
 	/// </summary>
 	public bool ShowSeparator
 	{
@@ -401,6 +401,26 @@ internal sealed class SettingsService
 			GuardInitialized();
 			GuardReadonly();
 			_showSeparator = value;
+		}
+	}
+
+	/// <summary>
+	/// 导入模组时自动加入当前激活的配置文件（默认关闭）。
+	/// 对默认配置与自定义配置同样生效：两者的成员列表均为动态持久化，新导入模组需显式加入。
+	/// </summary>
+	public bool AutoAddImportedModsToActiveProfile
+	{
+		get
+		{
+			GuardInitialized();
+			return _autoAddImportedModsToActiveProfile;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_autoAddImportedModsToActiveProfile = value;
 		}
 	}
 
@@ -672,6 +692,8 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private bool _showSeparator = false;
 	[JsonInclude]
+	private bool _autoAddImportedModsToActiveProfile = false;
+	[JsonInclude]
 	private bool _enableAutoTagging = false;
 	[JsonInclude]
 	private bool _autoTagCreateMissingTags = false;
@@ -935,6 +957,7 @@ internal sealed class SettingsService
 			FirstRunTutorialCompleted = _firstRunTutorialCompleted,
 			AutoCleanLogs = _autoCleanLogs,
 			ShowSeparator = _showSeparator,
+			AutoAddImportedModsToActiveProfile = _autoAddImportedModsToActiveProfile,
 			EnableAutoTagging = _enableAutoTagging,
 			AutoTagCreateMissingTags = _autoTagCreateMissingTags,
 			AutoTagMappings = _autoTagMappings.Select(static m => new
@@ -1097,6 +1120,8 @@ internal sealed class SettingsService
 			_autoCleanLogs = prop.GetBoolean();
 		if (root.TryGetProperty(nameof(ShowSeparator), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 			_showSeparator = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(AutoAddImportedModsToActiveProfile), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_autoAddImportedModsToActiveProfile = prop.GetBoolean();
 	if (root.TryGetProperty(nameof(EnableAutoTagging), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 		_enableAutoTagging = prop.GetBoolean();
 	if (root.TryGetProperty(nameof(AutoTagCreateMissingTags), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -1274,6 +1299,7 @@ internal sealed class SettingsService
 		_autoCleanLogs = true;
 		_maxLogFiles = 20;
 		_showSeparator = false;
+		_autoAddImportedModsToActiveProfile = false;
 		_enableAutoTagging = false;
 		_autoTagCreateMissingTags = false;
 		_autoTagMappings = [];

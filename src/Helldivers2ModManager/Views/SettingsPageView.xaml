@@ -550,6 +550,38 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- 导入行为 -->
+                        <Border Style="{StaticResource FluentSettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="{loc:Loc SettingsPage.ModImport}"
+                                           Style="{StaticResource FluentSubSectionHeader}"
+                                           Margin="0"/>
+                                <TextBlock Style="{StaticResource FluentBodyText}" Margin="0 4 0 4">
+                                    <Run Text="{loc:Loc SettingsPage.ModImportDesc}"/>
+                                </TextBlock>
+                                <Grid Margin="0 8 0 0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Width="24"
+                                              Height="24"
+                                              IsChecked="{Binding AutoAddImportedModsToActiveProfile}"
+                                              Margin="0 0 12 0"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{loc:Loc SettingsPage.AutoAddImportedMods}"
+                                                   FontSize="14"
+                                                   Foreground="{StaticResource NeutralForegroundBrush}"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.AutoAddImportedModsDesc}"
+                                                   Style="{StaticResource FluentBodyText}"
+                                                   Margin="0 2 0 0"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
                         <!-- 版本兼容性检查 -->
                         <Border Style="{StaticResource FluentSettingsCard}">
                             <StackPanel>
