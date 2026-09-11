@@ -267,7 +267,7 @@ internal sealed partial class ModelPreviewPageViewModel
                 foreach (var animation in library.Animations)
                     Animations.Add(new ModelPreviewAnimationChoice(library, animation, sourceMarker));
             }
-            SelectedAnimation = Animations.FirstOrDefault();
+            SelectedAnimation = PickDefaultAnimation();
             // 默认选中第一个具体护甲套装而非"全部模型部件"：多套装替换模组若默认全显，
             // 所有替换网格会叠加在一起（用户决策 2026-09-11）；无命名套装元数据时回落"全部"。
             SelectedArmor = Armors.FirstOrDefault(static armor => !armor.IsAll) ?? Armors.FirstOrDefault();

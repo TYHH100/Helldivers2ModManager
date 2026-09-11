@@ -1252,7 +1252,10 @@ internal sealed class PatchResourceInspectionService
         return transforms;
     }
 
-    private static ModelPreviewUnitRig? TryReadUnitRig(byte[] data)
+    /// <summary>读取 Unit 资源的变换层级（骨骼名哈希 + 父索引 + 绑定矩阵）。
+    /// 动画重定向需要游戏本体骨架作为源参考系，故开放为 internal 供
+    /// GameUnitReferenceReader 复用；调用方须自行校验返回值非 null。</summary>
+    internal static ModelPreviewUnitRig? TryReadUnitRig(byte[] data)
     {
         const int bonesReferenceOffset = 0x08;
         const int stateMachineReferenceOffset = 0x20;

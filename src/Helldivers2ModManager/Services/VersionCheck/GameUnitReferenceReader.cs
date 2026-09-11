@@ -259,6 +259,7 @@ internal sealed class GameUnitReferenceReader
                 index,
                 reference.Value.BonesId,
                 reference.Value.StateMachineId,
+                reference.Value.SourceSkeleton,
                 cancellationToken);
             if (library is not null)
                 index.HelldiverAnimationLibrary = library;
@@ -266,11 +267,8 @@ internal sealed class GameUnitReferenceReader
         if (library is null)
             return null;
 
-        var animationHashes = library.BoneHashes.Where(static hash => hash != 0).ToHashSet();
-        var matchingBones = animationHashes.Count(transformHashes.Contains);
-        return matchingBones >= ModelPreviewAnimationCompatibility.MinimumMatchingBones &&
-               matchingBones >= animationHashes.Count * ModelPreviewAnimationCompatibility.MinimumBoneCoverage &&
-               matchingBones >= transformHashes.Count * ModelPreviewAnimationCompatibility.MinimumBoneCoverage
+        var animationHashes = ModelPreviewAnimationCompatibility.CollectBoneHashes(library.BoneHashes);
+        return ModelPreviewAnimationCompatibility.IsCompatibleHashes(transformHashes, animationHashes)
             ? library
             : null;
     }
@@ -299,7 +297,14 @@ internal sealed class GameUnitReferenceReader
                 if (bonesId == 0 || stateMachineId == 0)
                     continue;
 
-                references[unitId] = new ModelPreviewAnimationResourceReference(bonesId, stateMachineId);
+                // 同一个 Unit 资源携带骨骼变换层级（哈希/父索引/绑定矩阵），
+                // 作为动画重定向的源参考系；解析失败返回 null 不阻断动画库构建。
+                var sourceSkeleton = PatchResourceInspectionService.TryReadUnitRig(unitData)?.Skeleton;
+
+                references[unitId] = new ModelPreviewAnimationResourceReference(bonesId, stateMachineId)
+                {
+                    SourceSkeleton = sourceSkeleton
+                };
                 break;
             }
         }
@@ -310,6 +315,7 @@ internal sealed class GameUnitReferenceReader
         GameUnitReferenceIndex index,
         ulong bonesId,
         ulong stateMachineId,
+        ModelPreviewSkeleton? sourceSkeleton,
         CancellationToken cancellationToken)
     {
         var bonesData = TryReadIndexedGameResource(index, unchecked((long)bonesId), BonesTypeId);
@@ -354,7 +360,8 @@ internal sealed class GameUnitReferenceReader
                 BonesId = bonesId,
                 StateMachineId = stateMachineId,
                 BoneHashes = boneHashes,
-                Animations = animations
+                Animations = animations,
+                SourceSkeleton = sourceSkeleton
             };
     }
 

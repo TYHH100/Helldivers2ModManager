@@ -181,7 +181,7 @@ internal sealed partial class ModelPreviewPageViewModel
                                 key.Skeleton,
                                 key.Library.BoneHashes,
                                 key.Clip,
-                                key.Library.BonesId))
+                                key.Library.SourceSkeleton))
                         .SampleSkinningTransforms(animationTimeSeconds);
                     skinningTransforms[skinning.Skeleton] = transforms;
                 }

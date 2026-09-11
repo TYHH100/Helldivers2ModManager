@@ -180,6 +180,16 @@ internal sealed class MyService
 - **默认选中第一个具体套装**，不是"全部模型部件"（`ModelPreviewPageViewModel.Loading.cs`，用户决策 2026-09-11）：多套装替换模组默认全显会把所有替换网格叠在一起；"全部"仍保留为可选项，无命名套装元数据时才回落"全部"。不要把默认值"修"回 All。
 - 选项的 `MeshCount` 是套装内全部 archive 命中网格的并集计数；改名表、排序或过滤逻辑时，`tests/.../ModelPreviewArmorSelectionTests.cs` 的 `ApplyPackageNames_MergesArmorAndHelmetWithSameNameIntoSingleSet` 守护该语义。
 
+### 动画播放与骨架绑定（2026-09-11）
+
+- **绑定首选世界差量重定向**（`ModelPreviewAnimationBinding`，源骨架可用时自动启用）：clip 轨道局部 TRS 是游戏本体骨架层级内的**绝对局部姿态**（初始姿态即参考系，游戏引擎直接套用，无需差量修正），沿源层级合成世界矩阵 A 后，蒙皮差量取 **G = S⁻¹·A**（S 为源骨骼绑定）。G 与目标骨架的局部轴/父链无关，旋转轨道等价于绕目标骨骼自身位置的纯旋转，直接应用于模组网格即可。**背景**：改模骨架（Blender 重导出）的骨骼局部轴与游戏骨架普遍不一致，且常插入自定义脊骨改变父链——局部差量公式（`rest·initial⁻¹·animated`）在该场景把旋转套到错误的轴上，表现为膝盖反弯、手臂架死（2026-09-11 实测并经真实游戏数据诊断确认）。源骨架来自游戏本体 Unit 资源的变换层级（`GameUnitReferenceReader` 读取并随 `ModelPreviewAnimationLibrary.SourceSkeleton` 下发）；源骨架为 null（如模组自带动作库）时退回局部差量路径。
+- clip **不携带**骨骼哈希表（动画资源头部的 hashesCount/hashes2Count 实测为 0）：轨道 i 与 Bones 资源第 i 项对应的假设经真实数据验证成立（骨盆/肩/腿轨道哈希命中呈解剖学自洽）。但 **clip.BoneCount 可能大于 Bones 资源条目数**（实测武器夹具 25>24），此类 clip 会被"Animation has more bones than its Bones resource"整条跳过——遇到"动画列表缺条目"先查这里。
+- 骨架兼容性判定（`ModelPreviewAnimationCompatibility.IsCompatibleHashes`）是**库挂接（GameUnitReferenceReader）与播放期过滤共用的唯一实现**，改规则只能改这里。除原有"双向 60% 覆盖 + ≥16 骨"外，还有"小部件骨架"规则：≥4 骨且 ≥90% 骨架被动画覆盖即兼容——头盔/头部部件 Unit 可能只带少数骨骼，没有这条规则部件会冻在绑定姿态（播放时与身体错位）。改模骨架 BonesId/StateMachineId 常为 0（不引用骨骼资源），纯靠哈希覆盖规则命中本体动画库。
+- 层级根骨骼固定保持绑定姿态（根位移/旋转由游戏角色控制器消耗，直接套用会移动/旋转整个模型）；additive clip 在两条路径下均以 rest 为基底叠加（源路径先做 initial⁻¹ 门限）。
+- 动画名称主源是 `Resources/Data/animation-names.json`（社区 "Helldivers 2 Archive Labeling" 表的 Animation IDs 页，874 条，键为十进制 Entry ID 转成的 16 位小写十六进制）；中文表 `animation-names-zh.json`（kdocs「地狱老司机Archive ID中文收集表」的 动画ID收集 页，162 条，经金山文档连接器读取，kdocs 页面为 canvas 渲染无法直接抓取、须走连接器 `sheet.get_range_data` 分块拉取）覆盖同名键。加载顺序：英文打底 → 中文覆盖，但中文表中的 "Unknown" 占位不覆盖（`MergeNameTables`）；内置 14 条仅在两个文件都缺失时兜底。非 16-hex 键（含「数据来自」元数据键）被解析器静默跳过。**社区表的 Entry ID 有抄录笔误可能**（同 ID 出现两次、个别格是残缺文本），生成脚本须做 15-20 位纯数字校验；同 ID 多名取先到者。
+- 默认选中的动画是**名称命中 idle/breath（或中文 闲置/待机）且时长 ≥1s 的第一个片段**（`PickDefaultAnimation`），不是状态机枚举序第一个（常是随机过渡片段，与预期呈现严重不符）；无命中回落第一个。不要"优化"回 FirstOrDefault。
+- 游戏库动画条目上限 256（`MaxAnimationsPerPreview`），超出部分不进下拉框；诊断动画问题时先确认目标 clip 是否在库内（**手算十进制↔十六进制极易出错**，用脚本换算）。
+
 ### 音频模组预览（Wwise bank/WEM）
 
 模型预览页同时承载音频模组的试听（`Services/Audio/AudioBankInspectionService` + `AudioPlaybackService`，UI 在 `ModelPreviewPageViewModel.Audio.cs` partial 与 `ModelPreviewPageView.xaml` 的音频 Tab/纯音频覆盖层）。关键约定：

@@ -59,4 +59,10 @@ internal sealed class ModelPreviewSkinningData
 
 internal readonly record struct ModelPreviewAnimationResourceReference(
     ulong BonesId,
-    ulong StateMachineId);
+    ulong StateMachineId)
+{
+    /// <summary>承载该动画引用的 Unit 自带变换层级（哈希/父索引/绑定矩阵）。
+    /// 动画重定向以它为源参考系：clip 局部 TRS 沿此层级摆出游戏姿态后，
+    /// 以世界差量转移到目标（模组）骨架；为 null 时退回局部差量路径。</summary>
+    public ModelPreviewSkeleton? SourceSkeleton { get; init; }
+}

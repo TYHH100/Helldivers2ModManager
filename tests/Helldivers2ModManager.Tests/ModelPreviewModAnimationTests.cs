@@ -183,7 +183,7 @@ public sealed class ModelPreviewModAnimationTests
                 "The mod-bundled library must be compatible with the weapon skeleton by resource id.");
             Assert.IsTrue(library.Animations.All(static animation => animation.Clip.LengthSeconds > 0));
             var binding = new ModelPreviewAnimationBinding(
-                skeleton, library.BoneHashes, library.Animations[0].Clip, library.BonesId);
+                skeleton, library.BoneHashes, library.Animations[0].Clip);
             Assert.AreEqual(skeleton.Bones.Count, binding.SampleSkinningTransforms(0.1f).Length);
             totalAnimations += library.Animations.Count;
         }
