@@ -175,6 +175,13 @@ public sealed class ModelPreviewModAnimationTests
                      .Select(static mesh => mesh.Skinning!.Skeleton)
                      .Distinct())
         {
+            if (skeleton.BonesId == 0 && skeleton.StateMachineId == 0)
+            {
+                // 挂接件/装饰骨架（含新纳入蒙皮的 sprite 网格）没有资源 ID 锚点，
+                // 无法精确匹配模组库；它们由通用哈希兼容路径处理。
+                continue;
+            }
+
             var library = ModelPreviewModAnimationLibraryBuilder.TryBuild(
                 result.PatchAnimationResources, skeleton.BonesId, skeleton.StateMachineId);
             Assert.IsNotNull(library, $"Skeleton 0x{skeleton.BonesId:X16} must resolve a mod-bundled library.");

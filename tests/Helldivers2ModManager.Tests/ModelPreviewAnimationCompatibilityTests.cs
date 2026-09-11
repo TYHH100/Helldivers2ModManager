@@ -33,10 +33,11 @@ public sealed class ModelPreviewAnimationCompatibilityTests
     }
 
     [TestMethod]
-    public void LargeRig_BelowBothCoverageRules_IsRejected()
+    public void PartialRig_MixedWithCustomBones_FollowsAnimation()
     {
-        // 与修复前行为一致：20 根骨骼只命中 10 根，既不满足双向 60%+16 骨规则，
-        // 也不满足小骨架全覆盖规则。
+        // 护甲部件/挂接件骨架是"锚骨 + 自定义骨"混合体：实测 15-21 骨的部件骨架
+        // 对游戏动画哈希命中率只有 40-57%。未匹配的骨骼保持绑定姿态且蒙皮矩阵
+        // 仍携带已动画祖先的变换，因此足够数量的匹配骨即可让部件跟随。
         var skeletonHashes = Enumerable.Range(1, 20).Select(static index => (uint)index).ToArray();
         var animationHashes = Enumerable.Range(1, 10)
             .Select(static index => (uint)index)
@@ -45,9 +46,26 @@ public sealed class ModelPreviewAnimationCompatibilityTests
         var skeleton = CreateSkeleton(skeletonHashes);
         var library = CreateLibrary(animationHashes);
 
+        Assert.IsTrue(
+            ModelPreviewAnimationCompatibility.IsCompatible(skeleton, library),
+            "A partial rig with 10 matching anchor bones must be able to follow the animation.");
+    }
+
+    [TestMethod]
+    public void Rig_WithFewerThanSixMatchingBones_IsRejected()
+    {
+        // 匹配骨少于 6 个的骨架与人物动画基本无关（武器/道具/生物），保持拒绝。
+        var skeletonHashes = Enumerable.Range(1, 20).Select(static index => (uint)index).ToArray();
+        var animationHashes = Enumerable.Range(1, 5)
+            .Select(static index => (uint)index)
+            .Concat(Enumerable.Range(100, 15).Select(static index => (uint)index))
+            .ToArray();
+        var skeleton = CreateSkeleton(skeletonHashes);
+        var library = CreateLibrary(animationHashes);
+
         Assert.IsFalse(
             ModelPreviewAnimationCompatibility.IsCompatible(skeleton, library),
-            "A large rig with only 50% coverage must stay rejected.");
+            "A rig with only 5 matching bones must stay rejected.");
     }
 
     [TestMethod]

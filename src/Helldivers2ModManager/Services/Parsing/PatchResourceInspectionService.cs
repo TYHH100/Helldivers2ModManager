@@ -1111,7 +1111,8 @@ internal sealed class PatchResourceInspectionService
                     materialTextureSet,
                     materialIdForSection,
                     lodIndex,
-                    rawSection.MaterialIndex));
+                    rawSection.MaterialIndex,
+                    transformIndex));
             }
         }
 
@@ -1319,8 +1320,9 @@ internal sealed class PatchResourceInspectionService
         }
 
         var palettes = TryReadUnitBonePalettes(data, transformCount, boneInfoPointerOffset);
-        if (palettes.Count == 0)
-            return null;
+        // palettes 为空不再丢弃整个骨架：骨骼层级对动画重定向（源参考系）和刚性
+        // 挂接件（MeshInfo transformIndex → 挂接骨骼）仍然有效，只是逐顶点蒙皮
+        // 的调色板索引解析不可用。
 
         return new ModelPreviewUnitRig
         {
@@ -1799,6 +1801,16 @@ internal sealed class PatchResourceInspectionService
             ? rig.Palettes[section.LodIndex]
             : null;
         var canDecodeSkinning = palette is not null && boneIndex.Type == 6 && boneWeight.Type == 7;
+        // 顶点流没有 BoneIndex/BoneWeight 组件的网格是刚性挂接件（弹挂、尾巴、徽章、
+        // 袜子等）。MeshInfo 的 transformIndex 与骨骼层级共用同一张变换表，因此把整块
+        // 网格蒙皮到挂接骨骼（权重 1）即可让它在动画中跟随骨骼运动；静态预览时蒙皮矩
+        // 阵为恒等，渲染结果与旧的纯静态路径完全一致。
+        var attachBoneIndex = -1;
+        if (rig is not null &&
+            section.TransformIndex >= 0 && section.TransformIndex < rig.Skeleton.Bones.Count)
+        {
+            attachBoneIndex = section.TransformIndex;
+        }
         var indexElementSize = indexType == 0 ? 2u : 4u;
         var triangleIndexCount = section.IndexCount - section.IndexCount % 3;
         if (triangleIndexCount > maxPreviewIndicesPerStream)
@@ -1863,10 +1875,10 @@ internal sealed class PatchResourceInspectionService
         var textureCoordinates = uv.Format is 1 or 29 or 33
             ? new float[checked((int)requiredVertexCount * 2)]
             : null;
-        var transformIndices = canDecodeSkinning
+        var transformIndices = canDecodeSkinning || attachBoneIndex >= 0
             ? new int[checked((int)requiredVertexCount * ModelPreviewSkinningData.InfluencesPerVertex)]
             : null;
-        var weights = canDecodeSkinning
+        var weights = canDecodeSkinning || attachBoneIndex >= 0
             ? new float[checked((int)requiredVertexCount * ModelPreviewSkinningData.InfluencesPerVertex)]
             : null;
         if (transformIndices is not null)
@@ -1911,7 +1923,10 @@ internal sealed class PatchResourceInspectionService
                     textureCoordinates = null;
             }
 
-            if (transformIndices is not null && weights is not null && palette is not null)
+            // canDecodeSkinning 而不是 palette 非空作为分支条件：顶点流缺 BoneIndex/
+            // BoneWeight 组件时 palette 可能仍然非空，此时读到的"权重"只是位置字节，
+            // 索引会被调色板全部拒绝，蒙皮静默丢弃。
+            if (transformIndices is not null && weights is not null && canDecodeSkinning)
             {
                 var vertexSourceOffset = checked((int)vertexIndex * (int)vertexStride);
                 var influenceOffset = checked((int)vertexIndex * ModelPreviewSkinningData.InfluencesPerVertex);
@@ -1939,6 +1954,21 @@ internal sealed class PatchResourceInspectionService
                     weights[influenceOffset + influence] /= weightTotal;
                 skinnedVertexCount++;
             }
+        }
+
+        // 挂接兜底：顶点流没有蒙皮数据的刚性挂接件（弹挂、尾巴、徽章等），以及声明了
+        // 骨骼组件但调色板全部拒绝的退化 sprite（导出工具补的空权重），整块网格跟随
+        // MeshInfo 的挂接骨骼。静态预览时蒙皮矩阵为恒等，渲染结果与纯静态路径一致。
+        if (skinnedVertexCount == 0 && attachBoneIndex >= 0 &&
+            transformIndices is not null && weights is not null)
+        {
+            for (var vertexIndex = 0; vertexIndex < requiredVertexCount; vertexIndex++)
+            {
+                var influenceOffset = checked((int)vertexIndex * ModelPreviewSkinningData.InfluencesPerVertex);
+                transformIndices[influenceOffset] = attachBoneIndex;
+                weights[influenceOffset] = 1f;
+            }
+            skinnedVertexCount = (int)requiredVertexCount;
         }
 
         var triangleIndices = new int[rawIndices.Length];

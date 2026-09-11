@@ -149,12 +149,16 @@ internal static class ModelPreviewAnimationCompatibility
 {
     public const int MinimumMatchingBones = 16;
     public const float MinimumBoneCoverage = 0.60f;
-    // 头盔/头部等部件 Unit 的骨架可能只携带少数骨骼。只要这些骨骼几乎全部被动画
-    // 覆盖，就应当让部件跟随动画（未命中的骨骼保持绑定姿态），而不是把整个部件
-    // 冻在绑定姿态上——那是播放时护甲与身体错位的来源之一。覆盖比例要求高
-    // （90%）以避免把仅偶然共享少量骨骼哈希的武器/道具骨架误判为可动画。
-    public const int MinimumCoveredSkeletonBones = 4;
-    public const float SkeletonCoverageForPartialRigs = 0.90f;
+    // 护甲部件/挂接件的 Unit 骨架是"锚骨 + 自定义骨"混合体（实测 15-21 骨的部件
+    // 骨架对游戏动画哈希的命中率只有 40-57%，其余是模组自定义装饰骨），按比例
+    // 判定必然拒绝。跟随语义不依赖匹配率：未匹配的骨骼保持绑定姿态，其蒙皮矩
+    // 阵仍包含已动画祖先的变换，因此只要骨架里有足够多的标准骨被动画覆盖，部
+    // 件就会跟随。匹配数取绝对下限（无比例要求）——骨名哈希体系下无关骨架与
+    // 人物骨重名 6 个的概率可忽略。小型骨架（≤5 骨，如纯标准骨头盔）保留高覆
+    // 盖比例分支，使 4-5 骨全命中的部件仍可跟随。
+    public const int MinimumAttachedSkeletonMatches = 6;
+    public const int MinimumSmallRigMatches = 4;
+    public const float SmallRigCoverage = 0.80f;
 
     public static bool IsCompatible(
         ModelPreviewSkeleton skeleton,
@@ -190,8 +194,9 @@ internal static class ModelPreviewAnimationCompatibility
             return true;
         }
 
-        return matchingBones >= MinimumCoveredSkeletonBones &&
-               matchingBones >= transformHashes.Count * SkeletonCoverageForPartialRigs;
+        return matchingBones >= MinimumAttachedSkeletonMatches ||
+               (matchingBones >= MinimumSmallRigMatches &&
+                matchingBones >= transformHashes.Count * SmallRigCoverage);
     }
 
     internal static HashSet<uint> CollectBoneHashes(IEnumerable<uint> hashes) =>
