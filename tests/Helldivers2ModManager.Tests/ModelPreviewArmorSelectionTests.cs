@@ -57,6 +57,34 @@ public sealed class ModelPreviewArmorSelectionTests
         CollectionAssert.AreEquivalent(meshes, filtered.ToArray());
     }
 
+    [TestMethod]
+    public void ApplyPackageNames_FallsBackToHelmetNameBeforePlaceholder()
+    {
+        var result = new ModelPreviewResult();
+        result.Meshes.AddRange([CreateMesh(7), CreateMesh(8)]);
+
+        ModelPreviewBackend.ApplyPackageNames(
+            result,
+            new Dictionary<long, IReadOnlyList<string>>
+            {
+                [7] = ["content/helmet/cccccccccccccccc.unit"],
+                [8] = ["content/helmet/dddddddddddddddd.unit"]
+            },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["aaaaaaaaaaaaaaaa"] = "Armor A"
+            },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["cccccccccccccccc"] = "Helmet C"
+            });
+
+        var options = result.Armors.ToDictionary(static option => option.Id, static option => option.Name);
+        // 未收录的 ID 保留原有 "Armor {id}" 占位格式
+        Assert.AreEqual("Armor dddddddddddddddd", options["dddddddddddddddd"]);
+        Assert.AreEqual("Helmet C", options["cccccccccccccccc"]);
+    }
+
     private static ModelPreviewMesh CreateMesh(ulong unitId) => new()
     {
         PatchFile = "selected.patch_0",

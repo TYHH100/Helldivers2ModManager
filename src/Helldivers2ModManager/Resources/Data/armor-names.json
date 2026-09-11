@@ -1,9 +1,10 @@
 {
+  "数据来自": "https://docs.google.com/spreadsheets/d/1oQys_OI5DWou4GeRE3mW56j7BIi4M7KftBIPAl1ULFw/edit?gid=1105619619#gid=1105619619",
   "9ba626afa44a3aa3": "BASE ARCHIVE (Easy Access)",
-  "58e4bd4b2278d15c": "B-01 Tactical",
-  "562a45e9bc984eb9": "B-01 Tactical",
-  "6cd3d55c05d4eac1": "B-01 Tactical",
-  "519cc1ec2eb56e1d": "B-01 Tactical",
+  "58e4bd4b2278d15c": "B-01 Tactical (Variation 1)",
+  "562a45e9bc984eb9": "B-01 Tactical (Variation 2)",
+  "6cd3d55c05d4eac1": "B-01 Tactical (Variation 3)",
+  "519cc1ec2eb56e1d": "B-01 Tactical (Variation 4)",
   "2d25ef67b7d87ea3": "CM-09 Bonesnapper",
   "31d06451a09679f1": "FS-05 Marksman",
   "8670598c1f4462dc": "FS-05 Marksman",
@@ -75,7 +76,6 @@
   "62c6fbc5cd90448d": "AF-91 Field Chemist",
   "b2d7f35cb2ab24ce": "AF-52 Lockdown",
   "86a9bdfc23c01517": "AF-50 Noxious Ranger",
-  "5b38ab7e20b4a1f1": "TBD",
   "1a204afc2362648b": "SR-18 Roadblock",
   "082f22454170efd6": "SR-24 Street Scout",
   "b186eae3f2b61509": "SR-64 Cinderblock",
@@ -120,5 +120,7 @@
   "50038ca035821a74": "O-44 Bonded Pilot",
   "19d6f65fa6f101c6": "KDM-763 Pacesetter",
   "d937c4ae5e9f3221": "KDM-73 Dragoon",
-  "476488a5861d15e0": "KDM-500 Outrider"
+  "476488a5861d15e0": "KDM-500 Outrider",
+  "1434ec7cf0edf1bc": "TG-8 Sharpshooter",
+  "bbbb8499544b83ef": "TG-122 Demo-Trooper"
 }

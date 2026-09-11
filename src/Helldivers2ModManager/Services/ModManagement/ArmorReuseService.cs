@@ -7,8 +7,9 @@ using System.Text.Json;
 namespace Helldivers2ModManager.Services;
 
 /// <summary>
-/// 找出同一个游戏补丁中的 Unit 同时归属哪些护甲。
-/// 护甲名称回退数据来自 HD2SDK-CommunityEdition 的 archivehashes 数据；
+/// 找出同一个游戏补丁中的 Unit 同时归属哪些护甲/头盔。
+/// 护甲/头盔名称回退数据来自社区名称表（google sheet），护甲部分最初整理自
+/// HD2SDK-CommunityEdition 的 archivehashes 数据；
 /// 补丁 Unit 解析参考 hd2-repatcher 和 HD2SDK-CommunityEdition 的结构资料。
 /// 来源：https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition、
 /// https://github.com/RaidingForPants/hd2-repatcher。
@@ -20,8 +21,12 @@ internal sealed partial class ArmorReuseService
     private readonly ModService _modService;
     private readonly VersionCheckService _versionCheckService;
     private readonly LocalizationService _localizationService;
-    // HD2SDK-CommunityEdition 的 archivehashes.json 护甲部分，同时作为护甲 package 白名单。`r`n    // Unit 可以出现在任意 package 中（包括只含 JSON 的任务、配置 package），不能仅凭`r`n    // package 名就将其归类为护甲。
+    // HD2SDK-CommunityEdition 的 archivehashes.json 护甲部分，同时作为护甲 package 白名单。
+    // Unit 可以出现在任意 package 中（包括只含 JSON 的任务、配置 package），不能仅凭
+    // package 名就将其归类为护甲；头盔表（helmet-names.json）提供头盔 archive 的
+    // 名称与白名单扩展，使连带覆盖检测同样覆盖头盔。
     private readonly Lazy<IReadOnlyDictionary<string, string>> _sdkArmorNames;
+    private readonly Lazy<IReadOnlyDictionary<string, string>> _sdkHelmetNames;
 
     public ArmorReuseService(
         ILogger<ArmorReuseService> logger,
@@ -34,6 +39,7 @@ internal sealed partial class ArmorReuseService
         _versionCheckService = versionCheckService;
         _localizationService = localizationService;
         _sdkArmorNames = new Lazy<IReadOnlyDictionary<string, string>>(LoadSdkArmorNames);
+        _sdkHelmetNames = new Lazy<IReadOnlyDictionary<string, string>>(LoadSdkHelmetNames);
     }
 
     public async Task<ArmorReuseAnalysisResult> AnalyzeAsync(
@@ -123,8 +129,8 @@ internal sealed partial class ArmorReuseService
         if (armors.Length < 2)
             return null;
 
-        // 一个 base archive patch 中 Unit 数量最多的护甲通常是作者的主替换目标；
-        // 其余护甲会因同一 patch 被整体覆盖而受到连带影响。
+        // 一个 base archive patch 中 Unit 数量最多的护甲/头盔通常是作者的主替换目标；
+        // 其余护甲/头盔会因同一 patch 被整体覆盖而受到连带影响。
         var sourceArmor = armors[0];
         var reusedArmors = armors.Skip(1).ToArray();
 
@@ -147,10 +153,13 @@ internal sealed partial class ArmorReuseService
         if (!IsArchiveId(packageName))
             return null;
 
-        // 仅接纳已确认的护甲 archive ID。非十六进制名称（例如
+        // 仅接纳已确认的护甲/头盔 archive ID。非十六进制名称（例如
         // packages/content/mission_tutorial）是普通 package，可能仅包含 JSON。
-        return _sdkArmorNames.Value.TryGetValue(packageName, out var armorName)
-            ? new ResolvedArmor(packageName, armorName)
+        // 护甲表优先（两表仅基础 archive 一个键重叠），头盔表兜底。
+        if (_sdkArmorNames.Value.TryGetValue(packageName, out var armorName))
+            return new ResolvedArmor(packageName, armorName);
+        return _sdkHelmetNames.Value.TryGetValue(packageName, out var helmetName)
+            ? new ResolvedArmor(packageName, helmetName)
             : null;
     }
 
@@ -167,6 +176,24 @@ internal sealed partial class ArmorReuseService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Unable to load the Community SDK armor name fallback from {Path}", path);
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private IReadOnlyDictionary<string, string> LoadSdkHelmetNames()
+    {
+        // helmet-names.json 为同一社区名称表（google sheet）的头盔部分，
+        // 与护甲表共同构成已知 archive 白名单。
+        var path = Path.Combine(AppContext.BaseDirectory, "Resources", "Data", "helmet-names.json");
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return JsonSerializer.Deserialize<Dictionary<string, string>>(stream)
+                   ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unable to load the Community SDK helmet name fallback from {Path}", path);
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
     }

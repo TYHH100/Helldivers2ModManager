@@ -26,6 +26,7 @@ internal sealed class ModelPreviewBackend
     private readonly VersionCheckService _versionCheckService;
     private readonly ILogger<ModelPreviewBackend> _logger;
     private readonly Lazy<IReadOnlyDictionary<string, string>> _armorNames;
+    private readonly Lazy<IReadOnlyDictionary<string, string>> _helmetNames;
 
     public ModelPreviewBackend(
         PatchResourceInspectionService inspectionService,
@@ -36,6 +37,7 @@ internal sealed class ModelPreviewBackend
         _versionCheckService = versionCheckService;
         _logger = logger;
         _armorNames = new Lazy<IReadOnlyDictionary<string, string>>(LoadArmorNames);
+        _helmetNames = new Lazy<IReadOnlyDictionary<string, string>>(LoadHelmetNames);
     }
 
     public async Task<ModelPreviewResult> PreviewModelAsync(
@@ -184,7 +186,7 @@ internal sealed class ModelPreviewBackend
                 : [];
         }
 
-        BuildArmorOptions(result, _armorNames.Value);
+        BuildArmorOptions(result, _armorNames.Value, _helmetNames.Value);
     }
 
     /// <summary>
@@ -210,7 +212,8 @@ internal sealed class ModelPreviewBackend
     internal static void ApplyPackageNames(
         ModelPreviewResult result,
         IReadOnlyDictionary<long, IReadOnlyList<string>> packageNames,
-        IReadOnlyDictionary<string, string>? armorNames = null)
+        IReadOnlyDictionary<string, string>? armorNames = null,
+        IReadOnlyDictionary<string, string>? helmetNames = null)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(packageNames);
@@ -227,12 +230,13 @@ internal sealed class ModelPreviewBackend
                 : [];
         }
 
-        BuildArmorOptions(result, armorNames);
+        BuildArmorOptions(result, armorNames, helmetNames);
     }
 
     private static void BuildArmorOptions(
         ModelPreviewResult result,
-        IReadOnlyDictionary<string, string>? armorNames = null)
+        IReadOnlyDictionary<string, string>? armorNames = null,
+        IReadOnlyDictionary<string, string>? helmetNames = null)
     {
         var allName = "All model parts";
         result.Armors.Add(new ModelPreviewArmorOption
@@ -243,17 +247,24 @@ internal sealed class ModelPreviewBackend
             MeshCount = result.Meshes.Count
         });
 
-        var names = armorNames ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var armors = armorNames ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var helmets = helmetNames ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var armorId in result.Meshes
                      .SelectMany(static mesh => mesh.ArmorIds)
                      .Distinct(StringComparer.OrdinalIgnoreCase)
                      .OrderBy(static id => id, StringComparer.OrdinalIgnoreCase))
         {
             var meshCount = result.Meshes.Count(mesh => mesh.ArmorIds.Contains(armorId, StringComparer.OrdinalIgnoreCase));
+            // 名称解析顺序：护甲表优先，头盔表兜底；两表都未收录时保留原占位格式
+            var name = armors.TryGetValue(armorId, out var armorName)
+                ? armorName
+                : helmets.TryGetValue(armorId, out var helmetName)
+                    ? helmetName
+                    : $"Armor {armorId}";
             result.Armors.Add(new ModelPreviewArmorOption
             {
                 Id = armorId,
-                Name = names.TryGetValue(armorId, out var name) ? name : $"Armor {armorId}",
+                Name = name,
                 MeshCount = meshCount
             });
         }
@@ -262,6 +273,19 @@ internal sealed class ModelPreviewBackend
     private IReadOnlyDictionary<string, string> LoadArmorNames()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Resources", "Data", "armor-names.json");
+        return LoadNameTable(path, "model preview armor names");
+    }
+
+    private IReadOnlyDictionary<string, string> LoadHelmetNames()
+    {
+        // helmet-names.json 为同一社区名称表（google sheet）的头盔部分，
+        // 用于标注归属头盔 archive 的网格部件。
+        var path = Path.Combine(AppContext.BaseDirectory, "Resources", "Data", "helmet-names.json");
+        return LoadNameTable(path, "model preview helmet names");
+    }
+
+    private IReadOnlyDictionary<string, string> LoadNameTable(string path, string logName)
+    {
         try
         {
             using var stream = File.OpenRead(path);
@@ -272,7 +296,7 @@ internal sealed class ModelPreviewBackend
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Unable to load model preview armor names from {Path}", path);
+            _logger.LogDebug(ex, "Unable to load {LogName} from {Path}", logName, path);
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
     }
