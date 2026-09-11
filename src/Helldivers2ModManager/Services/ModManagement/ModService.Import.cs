@@ -186,7 +186,7 @@ internal sealed partial class ModService
 		if (extractionError is not null && password is null && passwordProvider is not null && IsWrongPassword(extractionError))
 		{
 			// 清理第一次无密码尝试留下的部分文件后，再等待 UI 提供密码。
-			TryDeleteTemporaryDirectory(tmpDir);
+			await TryDeleteTemporaryDirectory(tmpDir);
 			tmpDir.Create();
 			password = await passwordProvider();
 			if (!string.IsNullOrEmpty(password))
@@ -198,7 +198,7 @@ internal sealed partial class ModService
 		if (extractionError is not null)
 		{
 			_logger.LogError(extractionError, "Failed to extract archive \"{}\"", file.Name);
-			TryDeleteTemporaryDirectory(tmpDir);
+			await TryDeleteTemporaryDirectory(tmpDir);
 			problems.Add(new ModProblem
 			{
 				Directory = tmpDir,
@@ -267,8 +267,10 @@ internal sealed partial class ModService
 					}
 				}
 
-				// 清理包装压缩包的临时目录（嵌套压缩包已被递归提取到各自临时目录并完成导入）
-				tmpDir.Delete(true);
+				// 清理包装压缩包的临时目录（嵌套压缩包已被递归提取到各自临时目录并完成导入）。
+				// 走 TryDeleteTemporaryDirectory 而不是直接 Delete(true)，让 AV 实时扫描未释放时
+				// 也能完成清理（参见 line ~189 处的说明）。
+				await TryDeleteTemporaryDirectory(tmpDir);
 				_logger.LogInformation("嵌套压缩包批量导入完成，共处理 {Count} 个", nestedArchives.Length);
 
 				return allNestedProblems.ToArray();
@@ -397,23 +399,70 @@ internal sealed partial class ModService
 		return problems.ToArray();
 	}
 
+	/// <summary>
+	/// 调 SharpSevenZip 解压单个压缩包到目标目录。
+	///
+	/// 关键陷阱（2026-09-11 实测）：
+	/// SharpSevenZip 写出文件后到我们读取之间存在一个时间窗口，期间 Windows Defender 等
+	/// 反病毒软件可能以独占/读共享锁（minifilter 内核层行为表现为 0x80070020 sharing violation）
+	/// 持有刚创建的文件。这在嵌套压缩包场景特别明显：外层刚把 inner 写到 tmpDir，
+	/// 紧接着的递归解压就撞上 sharing violation。SharpSevenZip 的 `ExtractArchive` 是同步的，
+	/// Dispose 也已经把所有 native 句柄释放——所以根本原因不是「外层还没写完 inner 就在读」，
+	/// 而是 AV 占用刚写入的文件。
+	///
+	/// 修复：仅对 sharing/lock violation 做有限次线性退避重试；**其余异常必须原样返回给调用方**。
+	/// 调用方（`TryAddModFromArchiveAsync`）用返回的异常判定 `IsWrongPassword` 来弹出密码输入框——
+	/// 一旦这里把异常抛出去而不是返回，密码流程会被整个跳过，错误直接穿透到 UI 顶层弹窗。
+	/// 因此 catch-all 兜底不可省（2026-09-11 曾因漏掉它导致密码错误变成硬崩溃式弹窗）。
+	/// </summary>
 	private async Task<Exception?> ExtractArchiveAsync(FileInfo file, DirectoryInfo destination, string? password)
 	{
-		try
+		const int maxAttempts = 6;
+
+		for (int attempt = 1; attempt <= maxAttempts; attempt++)
 		{
-			await Task.Run(() =>
+			try
 			{
-				using var extractor = string.IsNullOrEmpty(password)
-					? new SharpSevenZipExtractor(file.FullName)
-					: new SharpSevenZipExtractor(file.FullName, password);
-				extractor.ExtractArchive(destination.FullName);
-			});
-			return null;
+				await Task.Run(() =>
+				{
+					using var extractor = string.IsNullOrEmpty(password)
+						? new SharpSevenZipExtractor(file.FullName)
+						: new SharpSevenZipExtractor(file.FullName, password);
+					extractor.ExtractArchive(destination.FullName);
+				});
+				return null;
+			}
+			catch (IOException ex) when (IsTransientFileLock(ex) && attempt < maxAttempts)
+			{
+				var delayMs = 200 * attempt;
+				_logger.LogWarning(
+					"Extraction of \"{File}\" hit sharing/lock violation on attempt {Attempt}/{Max}: {Message}. " +
+					"This is typically caused by antivirus (e.g. Windows Defender) still scanning the file. " +
+					"Retrying after {Delay} ms.",
+					file.Name, attempt, maxAttempts, ex.Message, delayMs);
+				await Task.Delay(delayMs);
+			}
+			catch (Exception ex)
+			{
+				// 密码错误、CRC、格式不支持、文件不存在，以及重试耗尽的 sharing violation：
+				// 全部原样返回，由调用方决定是弹密码框还是记为 CantReadArchive 问题。
+				return ex;
+			}
 		}
-		catch (Exception ex)
-		{
-			return ex;
-		}
+
+		return null; // 不可达：每次迭代要么 return null，要么 return ex。
+	}
+
+	/// <summary>
+	/// 判断 IOException 是否为可重试的临时文件锁冲突。
+	/// 0x80070020 = ERROR_SHARING_VIOLATION；0x80070021 = ERROR_LOCK_VIOLATION。
+	/// </summary>
+	private static bool IsTransientFileLock(IOException ex)
+	{
+		const int ERROR_SHARING_VIOLATION = unchecked((int)0x80070020);
+		const int ERROR_LOCK_VIOLATION = unchecked((int)0x80070021);
+		return ex.HResult == ERROR_SHARING_VIOLATION
+			|| ex.HResult == ERROR_LOCK_VIOLATION;
 	}
 
 	private static bool IsWrongPassword(Exception exception)
@@ -427,16 +476,37 @@ internal sealed partial class ModService
 		return false;
 	}
 
-	private void TryDeleteTemporaryDirectory(DirectoryInfo directory)
+	private async Task TryDeleteTemporaryDirectory(DirectoryInfo directory)
 	{
-		try
+		// 同样按 AV 实时扫描窗口加有限次重试：刚 SharpSevenZip 写出的文件 AV 还在扫描，
+		// 立刻 directory.Delete(true) 会因为目录里的文件被独占而抛 sharing violation。
+		// 累计延迟最多约 0.6s，绝大多数 AV 扫描能在窗口内结束。
+		const int maxAttempts = 4;
+		Exception? lastError = null;
+
+		for (int attempt = 1; attempt <= maxAttempts; attempt++)
 		{
-			if (directory.Exists)
-				directory.Delete(true);
+			try
+			{
+				if (directory.Exists)
+					directory.Delete(true);
+				return;
+			}
+			catch (IOException ex) when (IsTransientFileLock(ex))
+			{
+				lastError = ex;
+				await Task.Delay(150 * attempt);
+			}
+			catch (Exception ex)
+			{
+				lastError = ex;
+				break;
+			}
 		}
-		catch (Exception ex)
+
+		if (lastError is not null)
 		{
-			_logger.LogWarning(ex, "Failed to clean temporary archive directory \"{Directory}\"", directory.FullName);
+			_logger.LogWarning(lastError, "Failed to clean temporary archive directory \"{Directory}\"", directory.FullName);
 		}
 	}
 }
