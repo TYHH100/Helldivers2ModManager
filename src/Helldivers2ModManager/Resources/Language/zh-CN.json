@@ -1081,6 +1081,26 @@
     "ModelPreviewPage.TextOriginalTooltip": "原版: {text}",
     "ModelPreviewPage.TextBankGroup": "文本库 {id}（语言 {language}）",
     "ModelPreviewPage.TextLoadedStatus": "已加载 {count} 条文本（{banks} 个文本库），来自 {patches} 个 Patch。",
-    "ModelPreviewPage.TextLoadFailed": "文本解析失败: {message}"
+    "ModelPreviewPage.TextLoadFailed": "文本解析失败: {message}",
+    "ModelPreviewPage.LuaTab": "Lua 脚本",
+    "ModelPreviewPage.LuaEntryCount": "{count} 个脚本 · 来自 {patches} 个 Patch",
+    "ModelPreviewPage.LuaLoadedStatus": "已还原 {count} 个 Lua 脚本，来自 {patches} 个 Patch（仅静态解析，未执行任何代码）。",
+    "ModelPreviewPage.LuaLoadFailed": "脚本解析失败: {message}",
+    "ModelPreviewPage.LuaStaticNotice": "本页内容由静态字节码解析生成：模组管理器全程未加载、未编译、未执行任何 Lua 代码。还原文本仅供人工阅读或粘贴给外部模型做安全审阅，请勿在任何 Lua 环境中运行。",
+    "ModelPreviewPage.LuaCopyCurrent": "复制当前",
+    "ModelPreviewPage.LuaCopyCurrentTip": "把当前选中脚本的完整还原文本复制到剪贴板（可直接粘贴给外部模型审阅）",
+    "ModelPreviewPage.LuaCopyAll": "复制全部",
+    "ModelPreviewPage.LuaCopyAllTip": "把全部脚本的还原文本合并复制到剪贴板",
+    "ModelPreviewPage.LuaCopied": "已复制到剪贴板",
+    "ModelPreviewPage.LuaCopyFailed": "复制失败: {message}",
+    "ModelPreviewPage.LuaExtract": "提取全部",
+    "ModelPreviewPage.LuaExtractTip": "把模组内部的脚本文件全部提取到指定文件夹（原始资源体/字节码/还原源码/清单），仅静态写文件，绝不执行",
+    "ModelPreviewPage.LuaExtractDialogTitle": "选择脚本文件提取目标文件夹",
+    "ModelPreviewPage.LuaExtracted": "已提取 {count} 个文件到: {path}",
+    "ModelPreviewPage.LuaExtractFailed": "提取失败: {message}",
+    "ModelPreviewPage.LuaExtractEmpty": "补丁内没有可提取的脚本内容",
+    "ModelPreviewPage.LuaKindBytecode": "字节码",
+    "ModelPreviewPage.LuaKindSource": "明文源码",
+    "ModelPreviewPage.LuaKindFailed": "解析失败"
   }
 }

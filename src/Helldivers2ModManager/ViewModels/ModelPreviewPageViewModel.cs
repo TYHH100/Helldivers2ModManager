@@ -226,7 +226,8 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         AudioBankInspectionService audioInspectionService,
         AudioPlaybackService audioPlaybackService,
         ModTypeDetectionService modTypeDetectionService,
-        TextBankInspectionService textInspectionService)
+        TextBankInspectionService textInspectionService,
+        Services.Parsing.LuaScriptInspectionService luaScriptInspectionService)
     {
         _logger = logger;
         _navigationStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
@@ -239,6 +240,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _audioPlaybackService = audioPlaybackService;
         _modTypeDetectionService = modTypeDetectionService;
         _textInspectionService = textInspectionService;
+        _luaInspectionService = luaScriptInspectionService;
         _localizationService.PropertyChanged += LocalizationServiceOnPropertyChanged;
         _animationTimer = new DispatcherTimer(DispatcherPriority.Background)
         {

@@ -220,6 +220,16 @@ internal sealed class MyService
 - “已替换/原版/新增”标记复用 `GameAudioBaseline`（`EntryKind.TextBank` + `TryGetTextEntry`）：文本库惰性整库解析并缓存（单库 1-2MB 文本，远小于音频媒体红线）；`Found` 比对文本、`ResourceMissing` = 新增条目。
 - 文本列表必须是虚拟化 ListBox + ListCollectionView（与音频列表同一约束）。
 
+### Lua 脚本静态还原与提取（2026-09-12）
+
+模型预览页承载脚本模组（Bingus/Shared-Mod-Loader 生态）的 Lua 静态还原（`Services/Parsing/LuaScriptInspectionService` + `Services/Parsing/LuaJitDumpDecoder` / `LuaJitDumpDisassembler` / `LuaJitDecompiler`，UI 在 `ModelPreviewPageViewModel.Lua.cs` partial 与"Lua 脚本"Tab，Tab 序 4）。**安全红线：全程纯静态解析（bytes→结构→文本），任何代码路径都不得加载/编译/执行/求值还原出的 Lua；不引入 Lua VM 绑定（如 Lua.NET）**。关键约定：
+
+- **格式**：LuaJIT dump（魔数 `1B 4C 4A` + 版本 1=2.0/2=2.1 + flags ULEB）。原型块以 ULEB size 开头（0=结束符），**子原型先于父原型写入流**，KGC CHILD 按完成栈弹出引用。KNUM 用 33 位 ULEB（bit0=is-double）；**KGC I64/U64/COMPLEX 与 KTAB 的 INT/NUM 用两段普通 ULEB**（33 位只属于 KNUM，混用会流错位——Bingus 夹具回归守护）。比较/测试指令后紧跟 JMP：**op 成立 → 执行 JMP；不成立 → 跳过 JMP 直落**，因此 if 条件渲染用发射指令的反转（ISLT→>=、ISEQS→~=，见 ljd `_COMPARISON_MAP`）。泛型 for 有两种布局：体紧跟 ITERC 之后，或 ITERC 在循环底 + 入口 JMP/ISNEXT 跳到底部（pairs 走 ISNEXT+ITERN）。
+- **嵌套**：真身常藏在 `assert(loadstring(<内嵌 dump>))("@模块名")` 的字符串常量里——解析器从字符串常量递归提取内嵌 dump（`EmbeddedDumpCandidates`），提取/报告/提取功能都会单列嵌套块；直接字符串搜索只看得到表象。
+- **忠实优先，跳过优于猜测**：表达式只在直线段内折叠且 CALL 结果一律物化为显式赋值（副作用绝不丢）；结构无法验证的原型**整体回退**为权威清单，FNEW 子原型失败时用**标注占位闭包**（不传染整树）。报告 = 源码级还原（尽力而为）+ 权威清单（luajit -bl 风格）+ 字符串汇总 + 安全声明，两者并存互校。
+- **提取全部**：`ExtractAsync` 把每个含脚本资源写成 `payload.bin` / `blockN.luajit` / `blockN.decompiled.lua` / `blockN.listing.txt` / `blockN.strings.txt` / `report.txt` + README 安全声明，仅写文件不执行。
+- 回归：`LuaScriptInspectionServiceTests`（夹具 = Bingus Shared Loader v3 两层真实 dump，`LuaJitRealWorldFixture`）；改解析/还原规则后必须跑它并与 ljd 输出人工对照。
+
 ### 材质变体去重与纯黑占位材质（特例模型黑色预览问题）
 
 某些特例模型（如角色装甲"白银之城-侦探-CW9"）在预览中整体显示为黑色，但游戏内显示正常。根因是模型同时包含高分辨率正常材质和低分辨率纯黑占位材质，预览工具渲染了全部变体导致纯黑覆盖。修复分两层：

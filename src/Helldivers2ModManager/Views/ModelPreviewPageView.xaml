@@ -841,6 +841,102 @@
                                 </ListBox>
                             </Grid>
                         </TabItem>
+
+                        <TabItem Header="{loc:Loc ModelPreviewPage.LuaTab}"
+                                 Visibility="{Binding HasLuaEntries, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid Margin="4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <DockPanel Grid.Row="0" Margin="2 0 2 4">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <TextBlock Text="{Binding LuaMessageText}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource SystemAccentBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0 0 10 0"
+                                                   Visibility="{Binding HasLuaMessage, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <Button Content="{loc:Loc ModelPreviewPage.LuaExtract}"
+                                                Command="{Binding ExtractLuaFilesCommand}"
+                                                Style="{StaticResource FluentSecondaryButton}"
+                                                Height="30"
+                                                MinWidth="76"
+                                                Padding="10 4"
+                                                Margin="0 0 6 0"
+                                                ToolTip="{loc:Loc ModelPreviewPage.LuaExtractTip}"/>
+                                        <Button Content="{loc:Loc ModelPreviewPage.LuaCopyAll}"
+                                                Command="{Binding CopyAllLuaReportsCommand}"
+                                                Style="{StaticResource FluentSecondaryButton}"
+                                                Height="30"
+                                                MinWidth="76"
+                                                Padding="10 4"
+                                                Margin="0 0 6 0"
+                                                ToolTip="{loc:Loc ModelPreviewPage.LuaCopyAllTip}"/>
+                                        <Button Content="{loc:Loc ModelPreviewPage.LuaCopyCurrent}"
+                                                Command="{Binding CopyLuaReportCommand}"
+                                                Style="{StaticResource FluentSecondaryButton}"
+                                                Height="30"
+                                                MinWidth="76"
+                                                Padding="10 4"
+                                                ToolTip="{loc:Loc ModelPreviewPage.LuaCopyCurrentTip}"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding LuaCountText}"
+                                               FontSize="11"
+                                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+
+                                <!-- 安全声明：静态解析结果，绝不执行。 -->
+                                <TextBlock Grid.Row="1"
+                                           Text="{loc:Loc ModelPreviewPage.LuaStaticNotice}"
+                                           FontSize="11"
+                                           Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="2 0 2 4"/>
+
+                                <!-- 脚本条目列表：每个命中资源一项；通常只有个位数条目。 -->
+                                <ListBox Grid.Row="2"
+                                         ItemsSource="{Binding LuaEntries}"
+                                         SelectedItem="{Binding SelectedLuaEntry}"
+                                         Height="76"
+                                         Margin="2 0 2 4"
+                                         Visibility="{Binding HasMultipleLuaEntries, Converter={StaticResource BoolToVisibilityConverter}}"
+                                         HorizontalContentAlignment="Stretch">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Model.Title}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Model.Title}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding KindText}" FontSize="11" Foreground="{StaticResource NeutralForegroundSecondaryBrush}" VerticalAlignment="Center" Margin="10 0 0 0"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <!-- 只读还原文本：等宽字体、可选中复制、不换行（水平滚动保持格式）。 -->
+                                <TextBox Grid.Row="3"
+                                         Text="{Binding LuaReportText, Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         FontFamily="Consolas"
+                                         FontSize="12"
+                                         Background="{StaticResource NeutralBackgroundFillBrush}"
+                                         BorderBrush="{StaticResource NeutralStrokeBrush}"
+                                         BorderThickness="1"
+                                         Padding="6 4"
+                                         TextWrapping="NoWrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         IsInactiveSelectionHighlightEnabled="True"
+                                         SelectionBrush="{StaticResource SystemAccentBrush}"/>
+                            </Grid>
+                        </TabItem>
                     </TabControl>
                 </Border>
             </Grid>

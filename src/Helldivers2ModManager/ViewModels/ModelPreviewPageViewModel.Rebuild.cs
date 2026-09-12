@@ -853,6 +853,7 @@ internal sealed partial class ModelPreviewPageViewModel
         OnPropertyChanged(nameof(AnimationPlaybackToolTip));
         // 下拉控件的提示/搜索占位文本由代码推给控件（见 ModelPreviewPageView 的同步逻辑）。
         OnPropertyChanged(nameof(AnimationPickerPlaceholder));
+        OnPropertyChanged(nameof(LuaCountText));
         UpdateLocalizedPreviewLabels();
         UpdateCameraOrientationText(_cameraDirection);
     }

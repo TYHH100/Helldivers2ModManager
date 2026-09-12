@@ -260,6 +260,7 @@ internal sealed partial class ModelPreviewPageViewModel
             StopAudioPlayback(clearCurrent: true);
             ClearAudioCollections();
             ClearTextCollections();
+            ClearLuaCollections();
         }
 
         try
@@ -403,6 +404,24 @@ internal sealed partial class ModelPreviewPageViewModel
             else if (Meshes.Count > 0 && resetView)
             {
                 SelectedPreviewTabIndex = 0;
+            }
+
+            // Lua 脚本还原与文本独立加载（脚本模组通常只有脚本资源，没有几何/音频/文本）。
+            // 解析本身在服务内部的后台线程执行；结果只进文本视图，绝不进入任何执行路径。
+            var luaResult = await LoadLuaInventoryAsync(
+                mod,
+                selectedPatchFiles,
+                patchSetKey,
+                loadGeneration,
+                cancellationToken);
+            if (!IsCurrentLoad(mod, loadGeneration))
+                return;
+            ApplyLuaInventory(luaResult);
+            if (Meshes.Count == 0 && !HasAudioEntries && !HasTextEntries && HasLuaEntries)
+            {
+                UpdateLuaSummaryStatus(luaResult.PatchCount, luaResult.Error);
+                if (resetView)
+                    SelectedPreviewTabIndex = LuaScriptsPreviewTabIndex;
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
