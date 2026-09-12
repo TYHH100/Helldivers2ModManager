@@ -1,0 +1,143 @@
+<UserControl x:Class="Helldivers2ModManager.Components.VirtualizedTextPicker"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="36"
+             d:DesignWidth="260"
+             MinWidth="210"
+             MaxWidth="300"
+             UseLayoutRounding="True"
+             SnapsToDevicePixels="True"
+             TextOptions.TextFormattingMode="Display">
+    <!--
+        代码驱动的虚拟化文本下拉：不使用 ItemsSource / ItemTemplate 数据绑定，也不使用
+        ItemContainerGenerator。列表内容由 VirtualizedTextPicker.xaml.cs 手动物化——
+        只有可视区（含少量预取）的行会创建 Border + TextBlock，滚动时复用，因此展开与
+        滚动的成本与条目总数无关（万级条目同样只渲染十余行）。
+
+        与 Popup 的打开状态、搜索框文本、选中项全部在代码层读写，界面上没有任何 Binding。
+    -->
+    <Grid>
+        <ToggleButton x:Name="HeaderButton"
+                      Height="34"
+                      Focusable="False"
+                      ClickMode="Press"
+                      Cursor="Hand"
+                      HorizontalContentAlignment="Stretch"
+                      Click="HeaderButton_OnClick">
+            <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="HeaderBorder"
+                            Background="{StaticResource NeutralBackgroundFillBrush}"
+                            BorderBrush="{StaticResource NeutralBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="10 0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="22"/>
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter Grid.Column="0"
+                                              VerticalAlignment="Center"/>
+                            <Path x:Name="HeaderArrow"
+                                  Grid.Column="1"
+                                  Data="M0,0 L4,5 L8,0"
+                                  Stroke="{StaticResource NeutralForegroundBrush}"
+                                  StrokeThickness="2"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="HeaderBorder" Property="BorderBrush" Value="{StaticResource NeutralBorderStrongBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="HeaderBorder" Property="BorderBrush" Value="{StaticResource SystemAccentBrush}"/>
+                            <Setter TargetName="HeaderArrow" Property="Data" Value="M0,5 L4,0 L8,5"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="HeaderBorder" Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </ToggleButton.Template>
+            <TextBlock x:Name="HeaderText"
+                       VerticalAlignment="Center"
+                       FontSize="14"
+                       TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{StaticResource NeutralForegroundBrush}"/>
+        </ToggleButton>
+
+        <Popup x:Name="DropDownPopup"
+               AllowsTransparency="True"
+               Placement="Bottom"
+               StaysOpen="False"
+               PopupAnimation="Fade"
+               Focusable="False"
+               Opened="DropDownPopup_OnOpened"
+               Closed="DropDownPopup_OnClosed">
+            <Border x:Name="DropDownBorder"
+                    Margin="0 4 0 0"
+                    Background="{StaticResource NeutralBackgroundAltBrush}"
+                    BorderBrush="{StaticResource NeutralBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Effect="{StaticResource ShadowElevationLevel2}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="6 6 6 4">
+                        <TextBox x:Name="SearchBox"
+                                 Height="30"
+                                 Padding="8 0"
+                                 FontSize="13"
+                                 VerticalContentAlignment="Center"
+                                 TextChanged="SearchBox_OnTextChanged"
+                                 PreviewKeyDown="SearchBox_OnPreviewKeyDown"/>
+                        <TextBlock x:Name="SearchHint"
+                                   Margin="11 0 0 0"
+                                   FontSize="13"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                    </Grid>
+
+                    <ScrollViewer x:Name="ListScroll"
+                                  Grid.Row="1"
+                                  Height="300"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  CanContentScroll="False"
+                                  Focusable="False"
+                                  ScrollChanged="ListScroll_OnScrollChanged"
+                                  SizeChanged="ListScroll_OnSizeChanged">
+                        <!-- Background 必须非 null：Panel 的空白区域在 Background 为 null 时不参与命中测试，
+                             那样整片列表区域都收不到鼠标事件（行本身 IsHitTestVisible=false，统一由画布处理）。 -->
+                        <Canvas x:Name="RowHost"
+                                Background="Transparent"
+                                MouseMove="RowHost_OnMouseMove"
+                                MouseLeave="RowHost_OnMouseLeave"
+                                MouseLeftButtonDown="RowHost_OnMouseLeftButtonDown"/>
+                    </ScrollViewer>
+
+                    <TextBlock x:Name="CountText"
+                               Grid.Row="2"
+                               Margin="10 0 10 6"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                </Grid>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>
