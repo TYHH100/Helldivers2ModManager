@@ -19,14 +19,14 @@ public sealed class TempPreviewRenderer
     public async Task RenderAngles()
     {
         var root = FindRepositoryRoot();
-        var outDir = Path.Combine(Path.GetTempPath(), "hd2preview");
+        var outDir = @"D:\TYHH10-git\Helldivers2ModManager\.workbuddy\tmp\render";
         Directory.CreateDirectory(outDir);
 
         var cases = new[]
         {
-            ("Plum", Path.Combine(root.FullName, "Test", "Mods", "Mods", "【学園制服】Plum 替换 CW-9+CE-27+I-92")),
-            ("VrcTell", Path.Combine(root.FullName, "Test", "Mods", "Mods", "715 VRC_Tell 替换RE-1861 肩章轻甲_1a9657a3")),
-            ("Mizuki", Path.Combine(root.FullName, "Test", "Mods", "Mods", "VRC_瑞希 寄染赛车服 替换 CM-10全套 + EX00全套 +CM17头+无畏头_02508ace", "无尾巴"))
+            ("Marette", Path.Combine(@"G:\Temp\HD2ModManager\Mods\Mods", "VRC Milltina 【Marette】替换RS-100")),
+            ("VrcPeridot", Path.Combine(@"G:\Temp\HD2ModManager\Mods\Mods", "VRC Milltina 【♡ 𝐏𝐞𝐫𝐢𝐝𝐨𝐭 ♡ 】 替换 SR-24")),
+            ("MechPower", Path.Combine(@"G:\Temp\HD2ModManager\Mods\Mods", "（0627更新——修复伐木者＆突破腿部异常的问题）充满power的机甲_c3f6ecd8"))
         };
 
         foreach (var (name, modPath) in cases)

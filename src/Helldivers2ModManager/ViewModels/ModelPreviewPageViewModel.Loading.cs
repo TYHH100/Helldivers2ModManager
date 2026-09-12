@@ -267,7 +267,12 @@ internal sealed partial class ModelPreviewPageViewModel
                 foreach (var animation in library.Animations)
                     Animations.Add(new ModelPreviewAnimationChoice(library, animation, sourceMarker));
             }
-            SelectedAnimation = PickDefaultAnimation();
+            // 默认不选中动画：模型保持绑定（站立）姿势，动画只在用户手动选择并播放
+            // 后应用（用户决策 2026-09-11）。此前"默认选中 idle/呼吸类片段"的启发式
+            // 会命中 Prone Pistol Aiming Left Breathing 之类的趴姿片段，且简化蒙皮的
+            // 模组身体（全部权重集中在 1-2 根脊柱骨）被 0 帧动画整体转平，表现为
+            // "打开预览就是平躺/横放"。
+            SelectedAnimation = null;
             // 默认选中第一个具体护甲套装而非"全部模型部件"：多套装替换模组若默认全显，
             // 所有替换网格会叠加在一起（用户决策 2026-09-11）；无命名套装元数据时回落"全部"。
             SelectedArmor = Armors.FirstOrDefault(static armor => !armor.IsAll) ?? Armors.FirstOrDefault();

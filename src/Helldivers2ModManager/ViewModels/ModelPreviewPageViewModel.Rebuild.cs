@@ -98,6 +98,7 @@ internal sealed partial class ModelPreviewPageViewModel
             var build = await Task.Run(
                 () => BuildModelGroup(
                     meshes,
+                    Meshes.ToArray(),
                     previews,
                     useAutomaticMaterials,
                     selectedTextureId,
@@ -139,6 +140,7 @@ internal sealed partial class ModelPreviewPageViewModel
 
     private static ModelPreviewBuildResult BuildModelGroup(
         IReadOnlyList<ModelPreviewMesh> meshes,
+        IReadOnlyList<ModelPreviewMesh> orientationMeshes,
         IReadOnlyDictionary<ulong, LoadedTexturePreview> texturePreviews,
         bool useAutomaticMaterials,
         ulong? selectedTextureId,
@@ -231,7 +233,10 @@ internal sealed partial class ModelPreviewPageViewModel
                 Math.Pow(maxY - minY, 2) +
                 Math.Pow(maxZ - minZ, 2)) / 2,
             0.5);
-        var presentationRotation = ModelPreviewCharacterOrientation.GetRequiredRotation(meshes);
+        // 呈现旋转用全量网格判定：护甲选项/体型筛选改变可见子集，但同一模组的
+        // 整体朝向必须恒定（实测：安德莉亚筛选后躯干子集的 X 跨度被 T-pose 张开
+        // 的手臂抬高到与 Z 相当，bounds 比较把身高轴翻成 X，模型横躺）。
+        var presentationRotation = ModelPreviewCharacterOrientation.GetRequiredRotation(orientationMeshes);
         group.Transform = CreatePresentationTransform(center, presentationRotation);
         group.Transform.Freeze();
         group.Freeze();

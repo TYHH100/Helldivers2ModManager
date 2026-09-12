@@ -57,32 +57,6 @@ internal sealed partial class ModelPreviewPageViewModel
         QueueRebuild(resetCamera: false);
     }
 
-    /// <summary>
-    /// 默认选中的动画：优先名称表命中且为 idle/呼吸类的较长片段。状态机枚举序的
-    /// 第一个片段常是任意过渡或交战动作，直接作为默认呈现与用户预期严重不符；
-    /// 静止类片段对"姿态自然"的第一印象最友好。无命中时回落枚举序第一个。
-    /// </summary>
-    private ModelPreviewAnimationChoice? PickDefaultAnimation()
-    {
-        if (Animations.Count == 0)
-            return null;
-
-        var idle = Animations.FirstOrDefault(choice =>
-            choice.Option.Clip.LengthSeconds >= MinimumDefaultIdleClipSeconds &&
-            ModelPreviewAnimationNames.TryGetName(choice.Option.AnimationId) is { } name &&
-            IsIdleLikeAnimationName(name));
-        return idle ?? Animations.FirstOrDefault();
-    }
-
-    private static bool IsIdleLikeAnimationName(string name) =>
-        name.Contains("idle", StringComparison.OrdinalIgnoreCase) ||
-        name.Contains("breath", StringComparison.OrdinalIgnoreCase) ||
-        // 中文名称表（地狱老司机中文收集表）里的静止类描述
-        name.Contains("闲置", StringComparison.Ordinal) ||
-        name.Contains("待机", StringComparison.Ordinal);
-
-    private const float MinimumDefaultIdleClipSeconds = 1.0f;
-
     private void AnimationTimerOnTick(object? sender, EventArgs e)
     {
         if (!IsAnimationPlaying || SelectedAnimationDuration <= 0 || Volatile.Read(ref _isDisposed) != 0)
