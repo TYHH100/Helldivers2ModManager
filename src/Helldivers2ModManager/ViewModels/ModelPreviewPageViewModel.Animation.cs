@@ -191,6 +191,11 @@ internal sealed partial class ModelPreviewPageViewModel
             if (meshes.Length == 0)
                 return;
 
+            // clip 尚未解码时不动画：此时时长为 0，任何采样都只等价于站立姿势。
+            // 解码完成由 PreloadSelectedAnimationClipAsync 触发一次重建。
+            if (!selectedAnimation.Option.IsClipReady)
+                return;
+
             if (!ReferenceEquals(_animationFrameCacheChoice, selectedAnimation) ||
                 _animationFrameCacheRenderGeneration != renderGeneration)
             {
@@ -200,7 +205,7 @@ internal sealed partial class ModelPreviewPageViewModel
             }
 
             var sample = GetAnimationFrameSample(
-                selectedAnimation.Option.Clip.LengthSeconds,
+                (float)selectedAnimation.Option.CachedLengthSeconds,
                 animationTimeSeconds);
             if (!_animationFrameCache.TryGetValue(sample.FrameIndex, out var updates))
             {
@@ -249,6 +254,11 @@ internal sealed partial class ModelPreviewPageViewModel
         GpuSkinningService gpuSkinningService,
         CancellationToken cancellationToken)
     {
+        // 本方法运行在 Task.Run 内（后台线程），此处解析 clip 命中预热缓存；游戏库的
+        // clip 只在后台解码，解析失败（null）时按“无动画”处理，保持静态姿势。
+        if (selectedAnimation.Option.ResolveClip() is not { } clip)
+            return [];
+
         var transformsBySkeleton = new Dictionary<ModelPreviewSkeleton, IReadOnlyList<System.Numerics.Matrix4x4>>();
         var updates = new AnimationGeometryUpdate[meshes.Count];
         for (var meshIndex = 0; meshIndex < meshes.Count; meshIndex++)
@@ -261,7 +271,7 @@ internal sealed partial class ModelPreviewPageViewModel
                 var bindingKey = new AnimationBindingCacheKey(
                     skinning.Skeleton,
                     selectedAnimation.Library,
-                    selectedAnimation.Option.Clip);
+                    clip);
                 transforms = animationBindings.GetOrAdd(
                         bindingKey,
                         static key => new ModelPreviewAnimationBinding(

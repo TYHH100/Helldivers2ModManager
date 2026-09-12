@@ -88,7 +88,11 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     public ObservableCollection<ModelPreviewMesh> Meshes { get; } = [];
     public ObservableCollection<TextureInspectionItem> Textures { get; } = [];
     public ObservableCollection<ModelPreviewArmorOption> Armors { get; } = [];
-    public ObservableCollection<ModelPreviewAnimationChoice> Animations { get; } = [];
+    // 动画列表整体替换（见 SetAnimations）：万级条目下逐条 Add/Clear 的通知量随条目数
+    // 平方增长，不可接受；且该列表已不再走 WPF 绑定，由 VirtualizedTextPicker 以
+    // 代码驱动方式消费（见 Views/ModelPreviewPageView.xaml 的 WireAnimationPicker）。
+    public IReadOnlyList<ModelPreviewAnimationChoice> Animations { get; private set; } = [];
+    public IReadOnlyList<string> AnimationNames { get; private set; } = [];
     public ObservableCollection<ModelPreviewOptionViewModel> PreviewOptions { get; } = [];
 
     [ObservableProperty]
@@ -166,7 +170,24 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
     public bool HasBodyShapeSwitch => GetArmorMeshes().Count > 0;
     public bool HasArmorSwitch => Armors.Count > 2;
     public bool HasAnimations => Animations.Count > 0;
-    public double SelectedAnimationDuration => SelectedAnimation?.Option.Clip.LengthSeconds ?? 0;
+    // 只读已解码 clip 的时长（未就绪时为 0），绝不在此触发解码——见
+    // ModelPreviewAnimationOption.CachedLengthSeconds。UI 线程一旦解码就会冻结界面。
+    public double SelectedAnimationDuration => SelectedAnimation?.Option.CachedLengthSeconds ?? 0;
+    public int SelectedAnimationIndex
+    {
+        get
+        {
+            if (SelectedAnimation is not { } selected)
+                return -1;
+            var animations = Animations;
+            for (var index = 0; index < animations.Count; index++)
+            {
+                if (ReferenceEquals(animations[index], selected))
+                    return index;
+            }
+            return -1;
+        }
+    }
     public string AnimationPlaybackGlyph => IsAnimationPlaying ? "\uE769" : "\uE768";
     public string AnimationPlaybackToolTip => _localizationService[
         IsAnimationPlaying ? "ModelPreviewPage.PauseAnimation" : "ModelPreviewPage.PlayAnimation"];
@@ -252,6 +273,33 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
 
         SelectedMod = mod;
     }
+
+    /// <summary>
+    /// 整体替换动画列表并同步构建显示名数组（一次属性通知，不产生 CollectionChanged
+    /// 风暴）。名称数组与选择列表按下标一一对应，供代码驱动的下拉控件使用。
+    /// </summary>
+    internal void SetAnimations(IReadOnlyList<ModelPreviewAnimationChoice> animations)
+    {
+        ArgumentNullException.ThrowIfNull(animations);
+        Animations = animations;
+        AnimationNames = animations.Count == 0
+            ? []
+            : animations.Select(static choice => choice.DisplayName).ToArray();
+        OnPropertyChanged(nameof(Animations));
+        OnPropertyChanged(nameof(AnimationNames));
+        OnPropertyChanged(nameof(HasAnimations));
+    }
+
+    /// <summary>下拉控件回传的源索引（-1 表示清空选择）。</summary>
+    internal void SelectAnimationAt(int index)
+    {
+        var animations = Animations;
+        SelectedAnimation = index >= 0 && index < animations.Count ? animations[index] : null;
+    }
+
+    internal string AnimationPickerPlaceholder => _localizationService["ModelPreviewPage.AnimationPlaceholder"];
+    internal string AnimationSearchHint => _localizationService["ModelPreviewPage.AnimationSearchHint"];
+    internal string AnimationNoMatchText => _localizationService["ModelPreviewPage.AnimationNoMatch"];
 
     internal sealed record ModelPreviewAnimationChoice(
         ModelPreviewAnimationLibrary Library,

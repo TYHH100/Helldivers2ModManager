@@ -161,12 +161,15 @@ internal sealed partial class ModelPreviewPageViewModel
         var maxY = double.NegativeInfinity;
         var maxZ = double.NegativeInfinity;
         var skinningTransforms = new Dictionary<ModelPreviewSkeleton, IReadOnlyList<System.Numerics.Matrix4x4>>();
+        // clip 惰性解码只能在后台线程：BuildModelGroup 由 Task.Run 调用（见上方调用点），
+        // 此处解析命中预热缓存；解析失败（null）时整体按静态姿势重建。
+        var selectedClip = selectedAnimation?.Option.ResolveClip();
 
         foreach (var source in meshes)
         {
             cancellationToken.ThrowIfCancellationRequested();
             CachedMeshGeometry cachedGeometry;
-            if (selectedAnimation is not null && source.Skinning is { } skinning &&
+            if (selectedAnimation is not null && selectedClip is not null && source.Skinning is { } skinning &&
                 ModelPreviewAnimationCompatibility.IsCompatible(
                     skinning.Skeleton,
                     selectedAnimation.Library))
@@ -176,7 +179,7 @@ internal sealed partial class ModelPreviewPageViewModel
                     var bindingKey = new AnimationBindingCacheKey(
                         skinning.Skeleton,
                         selectedAnimation.Library,
-                        selectedAnimation.Option.Clip);
+                        selectedClip);
                     transforms = animationBindings.GetOrAdd(
                             bindingKey,
                             static key => new ModelPreviewAnimationBinding(
@@ -848,6 +851,8 @@ internal sealed partial class ModelPreviewPageViewModel
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(AutomaticallyHiddenMeshSummary));
         OnPropertyChanged(nameof(AnimationPlaybackToolTip));
+        // 下拉控件的提示/搜索占位文本由代码推给控件（见 ModelPreviewPageView 的同步逻辑）。
+        OnPropertyChanged(nameof(AnimationPickerPlaceholder));
         UpdateLocalizedPreviewLabels();
         UpdateCameraOrientationText(_cameraDirection);
     }
@@ -900,7 +905,7 @@ internal sealed partial class ModelPreviewPageViewModel
         Meshes.Clear();
         Textures.Clear();
         Armors.Clear();
-        Animations.Clear();
+        SetAnimations([]);
         // A queued rebuild can still be unwinding after navigation. It observes
         // _isDisposed/_renderGeneration above; the rebuild gate and page-lifetime
         // cancellation are guarded/verified against post-dispose access, so both are

@@ -62,10 +62,13 @@ public sealed class ModelPreviewModAnimationTests
         var option = library.Animations[0];
         Assert.AreEqual(animationId, option.AnimationId);
         Assert.AreEqual(0x1AD6D70FCD7C3209UL, option.StateNameHash);
-        Assert.AreEqual(1.5f, option.Clip.LengthSeconds);
-        Assert.AreEqual(2, option.Clip.BoneCount);
-        Assert.AreEqual(1, option.Clip.Keyframes.Count);
-        Assert.AreEqual(0.25f, option.Clip.Keyframes[0].TimeSeconds);
+        // 模组库在构建期即解码 clip，ResolveClip 直接返回它且不触发任何惰性加载。
+        var clip = option.ResolveClip();
+        Assert.IsNotNull(clip);
+        Assert.AreEqual(1.5f, clip.LengthSeconds);
+        Assert.AreEqual(2, clip.BoneCount);
+        Assert.AreEqual(1, clip.Keyframes.Count);
+        Assert.AreEqual(0.25f, clip.Keyframes[0].TimeSeconds);
     }
 
     [TestMethod]
@@ -188,9 +191,11 @@ public sealed class ModelPreviewModAnimationTests
             Assert.IsTrue(library.IsFromMod);
             Assert.IsTrue(ModelPreviewAnimationCompatibility.IsCompatible(skeleton, library),
                 "The mod-bundled library must be compatible with the weapon skeleton by resource id.");
-            Assert.IsTrue(library.Animations.All(static animation => animation.Clip.LengthSeconds > 0));
+            Assert.IsTrue(library.Animations.All(static animation => animation.ResolveClip() is not null));
+            var clip = library.Animations[0].ResolveClip();
+            Assert.IsNotNull(clip);
             var binding = new ModelPreviewAnimationBinding(
-                skeleton, library.BoneHashes, library.Animations[0].Clip);
+                skeleton, library.BoneHashes, clip);
             Assert.AreEqual(skeleton.Bones.Count, binding.SampleSkinningTransforms(0.1f).Length);
             totalAnimations += library.Animations.Count;
         }

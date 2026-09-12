@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vms="clr-namespace:Helldivers2ModManager.ViewModels"
+             xmlns:cmp="clr-namespace:Helldivers2ModManager.Components"
              xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vms:ModelPreviewPageViewModel}"
@@ -147,18 +148,11 @@
                                                Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
                                                VerticalAlignment="Center"
                                                Margin="0 0 8 0"/>
-                                    <ComboBox ItemsSource="{Binding Animations}"
-                                              SelectedItem="{Binding SelectedAnimation, Mode=TwoWay}"
-                                              MinWidth="210"
-                                              MaxWidth="300"
-                                              MaxDropDownHeight="300"
-                                              Margin="0 0 6 0">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
+                                    <!-- 动画下拉不使用 ComboBox：其 ItemContainerGenerator / BringIntoView
+                                         在上千条目下会线性生成沿途容器并冻结界面。这里改用代码驱动的
+                                         虚拟化控件，条目由 ModelPreviewPageView.xaml.cs 直接喂入与回读。 -->
+                                    <cmp:VirtualizedTextPicker x:Name="AnimationPicker"
+                                                               Margin="0 0 6 0"/>
                                     <Button Command="{Binding ToggleAnimationPlaybackCommand}"
                                             Style="{StaticResource FluentIconButton}"
                                             Width="30" Height="30"

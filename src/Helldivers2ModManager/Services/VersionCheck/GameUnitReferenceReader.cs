@@ -38,7 +38,6 @@ internal sealed class GameUnitReferenceReader
     private const long AnimationTypeId = unchecked((long)0x931E336D7646CC26UL);
     private const long StateMachineTypeId = unchecked((long)0xA486D4045106165CUL);
     private const long HelldiverAvatarUnitId = 5556372446766824087;
-    private const int MaxAnimationsPerPreview = 256;
     private readonly SemaphoreSlim _gameReferenceSemaphore = new(1, 1);
     private GameUnitReferenceIndex? _gameReferenceIndex;
 
@@ -224,7 +223,7 @@ internal sealed class GameUnitReferenceReader
         }
     }
 
-    private static ModelPreviewAnimationLibrary? FindCompatibleGameAnimationLibrary(
+    private ModelPreviewAnimationLibrary? FindCompatibleGameAnimationLibrary(
         GameUnitReferenceIndex index,
         IReadOnlyCollection<uint> transformNameHashes,
         CancellationToken cancellationToken)
@@ -233,9 +232,9 @@ internal sealed class GameUnitReferenceReader
         if (transformHashes.Count == 0)
             return null;
 
-        // 头像动画库对所有骨架相同：同一索引生命周期内只解析一次
-        // （LZ4 解码头像 Unit + bones + state machine + 最多 256 个动画 clip，
-        // 多个骨架重复调用会重复全部解码）。
+        // 头像动画库对所有骨架相同：同一索引生命周期内只解析一次（LZ4 解码头像
+        // Unit + bones + state machine；动画 clip 惰性解码，挂接成本与状态机里的
+        // 动画数量无关，多个骨架重复调用只重复前两步）。
         var reference = index.HelldiverAnimationReference;
         if (reference is null)
         {
@@ -311,7 +310,7 @@ internal sealed class GameUnitReferenceReader
         return references;
     }
 
-    private static ModelPreviewAnimationLibrary? ReadGameAnimationLibrary(
+    private ModelPreviewAnimationLibrary? ReadGameAnimationLibrary(
         GameUnitReferenceIndex index,
         ulong bonesId,
         ulong stateMachineId,
@@ -325,31 +324,19 @@ internal sealed class GameUnitReferenceReader
 
         var boneHashes = ModelPreviewAnimationLibraryParser.ParseBoneHashes(bonesData);
         var references = ModelPreviewAnimationLibraryParser.ParseStateMachineAnimations(stateMachineData);
-        var animations = new List<ModelPreviewAnimationOption>(Math.Min(references.Count, MaxAnimationsPerPreview));
-        foreach (var reference in references.Take(MaxAnimationsPerPreview))
+        // 只登记状态机的全部动画引用（ID/状态哈希/层号），不在此处解码 clip。逐条预
+        // 解码既慢又占内存，此前因此用 256 上限截断列表，状态机尾部的表情/胜利姿势/
+        // 敬礼等动画从下拉框消失；clip 由 CreateGameClipLoader 在选中时惰性解码。
+        var animations = new List<ModelPreviewAnimationOption>(references.Count);
+        foreach (var reference in references)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var animationData = TryReadIndexedGameResource(
-                index,
-                unchecked((long)reference.AnimationId),
-                AnimationTypeId);
-            if (animationData is null ||
-                !ModelPreviewAnimationParser.TryParse(
-                    animationData,
-                    reference.AnimationId,
-                    out var clip,
-                    out _) ||
-                clip is null || clip.BoneCount > boneHashes.Count)
-            {
-                continue;
-            }
-
             animations.Add(new ModelPreviewAnimationOption
             {
                 AnimationId = reference.AnimationId,
                 StateNameHash = reference.StateNameHash,
                 LayerIndex = reference.LayerIndex,
-                Clip = clip
+                ClipLoader = CreateGameClipLoader(reference.AnimationId, boneHashes.Count)
             });
         }
 
@@ -364,6 +351,45 @@ internal sealed class GameUnitReferenceReader
                 SourceSkeleton = sourceSkeleton
             };
     }
+
+    /// <summary>
+    /// 游戏动画 clip 的惰性解码闭包：选中具体动画时才从<b>当前</b>索引读取并解析该
+    /// 资源（骨数校验与旧的全量预解码过滤一致，骨数超限/缺资源/解析失败按“该动画
+    /// 不可用”返回 null）。每次调用都在 _gameReferenceSemaphore 内取数据，与索引的
+    /// 其他读取者互斥；解析在锁外进行，锁只覆盖 IO。必须在后台线程调用。
+    /// </summary>
+    private Func<ModelPreviewAnimationClip?> CreateGameClipLoader(ulong animationId, int boneCount) => () =>
+    {
+        byte[]? animationData;
+        try
+        {
+            _gameReferenceSemaphore.Wait();
+            try
+            {
+                animationData = _gameReferenceIndex is { } index
+                    ? TryReadIndexedGameResource(index, unchecked((long)animationId), AnimationTypeId)
+                    : null;
+            }
+            finally
+            {
+                _gameReferenceSemaphore.Release();
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // 会话中游戏档案被替换、或索引已释放：该动画不可用，不影响其余动画。
+            return null;
+        }
+
+        if (animationData is null ||
+            !ModelPreviewAnimationParser.TryParse(animationData, animationId, out var clip, out _) ||
+            clip is null)
+        {
+            return null;
+        }
+
+        return clip.BoneCount > boneCount ? null : clip;
+    };
 
     /// <summary>
     /// 在游戏索引上解析指定 Unit 的参考数据（读缓存字典 + 按需 LZ4 解码）。

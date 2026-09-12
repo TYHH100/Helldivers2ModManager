@@ -29,8 +29,57 @@ internal sealed class ModelPreviewAnimationOption
     public required ulong AnimationId { get; init; }
     public required ulong StateNameHash { get; init; }
     public required int LayerIndex { get; init; }
-    public required ModelPreviewAnimationClip Clip { get; init; }
-    public string DisplayName => ModelPreviewAnimationNames.GetDisplayName(AnimationId, StateNameHash);
+
+    /// <summary>
+    /// 已解码的 clip。模组库（<see cref="ModelPreviewAnimationLibrary.IsFromMod"/>）构建期
+    /// 直接赋值（补丁资源已在内存中）；游戏库恒为 null，clip 由 <see cref="ClipLoader"/>
+    /// 在后台首次调用 <see cref="ResolveClip"/> 时解码。
+    /// </summary>
+    public ModelPreviewAnimationClip? Clip { get; init; }
+
+    /// <summary>游戏库惰性解码器；返回 null 表示该动画不可用（缺资源/解析失败/骨数超限）。</summary>
+    public Func<ModelPreviewAnimationClip?>? ClipLoader { get; init; }
+
+    private readonly object _clipGate = new();
+    private ModelPreviewAnimationClip? _resolvedClip;
+    private int _clipResolved;
+    private string? _displayName;
+
+    /// <summary>
+    /// 显示名（惰性缓存）。列表滚动与选择会对同一选项反复求值，缓存后只拼接一次。
+    /// </summary>
+    public string DisplayName =>
+        _displayName ??= ModelPreviewAnimationNames.GetDisplayName(AnimationId, StateNameHash);
+
+    /// <summary>
+    /// 已就绪 clip 的时长；未解码时为 0。<b>只读缓存，绝不触发解码</b>——解码要读游戏
+    /// 档案（整块 LZ4 解压，秒级），只能发生在后台线程。UI 绑定与播放门控一律读此属性。
+    /// </summary>
+    public double CachedLengthSeconds => (_resolvedClip ?? Clip)?.LengthSeconds ?? 0;
+
+    /// <summary>clip 是否已解析（无论成败）。</summary>
+    public bool IsClipReady => Clip is not null || Volatile.Read(ref _clipResolved) != 0;
+
+    /// <summary>
+    /// 解析 clip（含缓存）。<b>只能在后台线程调用</b>：首次调用会同步读取游戏档案并解压
+    /// （秒级耗时），在 UI 线程调用会冻结整个界面。双检锁避免重复解码；解析失败（null）
+    /// 同样记账，避免每次重建反复触发 IO。
+    /// </summary>
+    public ModelPreviewAnimationClip? ResolveClip()
+    {
+        if (Clip is not null)
+            return Clip;
+        if (Volatile.Read(ref _clipResolved) != 0)
+            return _resolvedClip;
+        lock (_clipGate)
+        {
+            if (_clipResolved != 0)
+                return _resolvedClip;
+            _resolvedClip = ClipLoader?.Invoke();
+            Volatile.Write(ref _clipResolved, 1);
+            return _resolvedClip;
+        }
+    }
 }
 
 /// <summary>

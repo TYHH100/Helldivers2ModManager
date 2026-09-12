@@ -92,6 +92,42 @@ internal sealed partial class ModelPreviewPageViewModel
         OnPropertyChanged(nameof(SelectedAnimationDuration));
         OnPropertyChanged(nameof(AnimationTimeText));
         QueueRebuild(resetCamera: false);
+        // clip 解码只能在后台线程（首次解码要读游戏档案并整块 LZ4 解压，秒级耗时）。
+        // 先按站立姿势重建一次给出即时反馈，解码完成后刷新时长并重建为动画姿态。
+        _ = PreloadSelectedAnimationClipAsync(value);
+    }
+
+    /// <summary>
+    /// 后台预热选中动画的 clip。UI 线程绝不触发解码——此前把解码放进
+    /// SelectedAnimationDuration 的绑定 getter，选中动画的瞬间即冻结整个界面。
+    /// 预热期间界面保持完全可交互；完成时若选择已改变则静默丢弃结果。
+    /// </summary>
+    private async Task PreloadSelectedAnimationClipAsync(ModelPreviewAnimationChoice? choice)
+    {
+        if (choice is null || choice.Option.IsClipReady || Volatile.Read(ref _isDisposed) != 0)
+            return;
+
+        var token = _pageLifetimeCancellation.Token;
+        try
+        {
+            await Task.Run(choice.Option.ResolveClip, token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unable to decode the selected preview animation clip");
+        }
+
+        if (token.IsCancellationRequested || !ReferenceEquals(SelectedAnimation, choice))
+            return;
+
+        OnPropertyChanged(nameof(SelectedAnimationDuration));
+        OnPropertyChanged(nameof(AnimationTimeText));
+        if (choice.Option.IsClipReady)
+            QueueRebuild(resetCamera: false);
     }
 
     partial void OnIsAnimationPlayingChanged(bool value)
@@ -201,9 +237,8 @@ internal sealed partial class ModelPreviewPageViewModel
             Meshes.Clear();
             Textures.Clear();
             StopAnimationPlayback();
-            Animations.Clear();
+            SetAnimations([]);
             SelectedAnimation = null;
-            OnPropertyChanged(nameof(HasAnimations));
             Armors.Clear();
             _selection = new([], 0);
             OnPropertyChanged(nameof(AutomaticallyHiddenMeshCount));
@@ -259,14 +294,16 @@ internal sealed partial class ModelPreviewPageViewModel
                     armor.Name = _localizationService["ModelPreviewPage.AllArmors"];
                 Armors.Add(armor);
             }
+            var animationChoices = new List<ModelPreviewAnimationChoice>();
             foreach (var library in result.AnimationLibraries)
             {
                 var sourceMarker = library.IsFromMod
                     ? _localizationService["ModelPreviewPage.ModAnimationSource"]
                     : string.Empty;
                 foreach (var animation in library.Animations)
-                    Animations.Add(new ModelPreviewAnimationChoice(library, animation, sourceMarker));
+                    animationChoices.Add(new ModelPreviewAnimationChoice(library, animation, sourceMarker));
             }
+            SetAnimations(animationChoices);
             // 默认不选中动画：模型保持绑定（站立）姿势，动画只在用户手动选择并播放
             // 后应用（用户决策 2026-09-11）。此前"默认选中 idle/呼吸类片段"的启发式
             // 会命中 Prone Pistol Aiming Left Breathing 之类的趴姿片段，且简化蒙皮的

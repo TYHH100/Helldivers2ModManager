@@ -27,9 +27,16 @@ internal partial class ModelPreviewPageView
     public ModelPreviewPageView()
     {
         InitializeComponent();
+        AnimationPicker.SelectionChanged += OnAnimationPickerSelectionChanged;
         DataContextChanged += OnDataContextChanged;
-        Loaded += (_, _) => ResetCamera();
+        Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        ResetCamera();
+        SyncAnimationPicker();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -65,12 +72,48 @@ internal partial class ModelPreviewPageView
         if (e.NewValue is INotifyPropertyChanged newNotify)
             newNotify.PropertyChanged += ViewModelOnPropertyChanged;
         ResetCamera();
+        SyncAnimationPicker();
     }
 
     private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ModelPreviewPageViewModel.CameraResetVersion))
-            Dispatcher.BeginInvoke(ResetCamera);
+        switch (e.PropertyName)
+        {
+            case nameof(ModelPreviewPageViewModel.CameraResetVersion):
+                Dispatcher.BeginInvoke(ResetCamera);
+                break;
+            case nameof(ModelPreviewPageViewModel.AnimationNames):
+            case nameof(ModelPreviewPageViewModel.AnimationPickerPlaceholder):
+                SyncAnimationPicker();
+                break;
+            case nameof(ModelPreviewPageViewModel.SelectedAnimation):
+                AnimationPicker.SetSelectedIndex(ViewModel?.SelectedAnimationIndex ?? -1);
+                break;
+        }
+    }
+
+    private ModelPreviewPageViewModel? ViewModel => DataContext as ModelPreviewPageViewModel;
+
+    private void OnAnimationPickerSelectionChanged(object? sender, int index) =>
+        ViewModel?.SelectAnimationAt(index);
+
+    /// <summary>
+    /// 以代码方式把动画条目与选择推给下拉控件、并回读用户选择——控件内部不使用任何
+    /// 数据绑定，因此条目数量不会进入 WPF 的绑定/容器生成路径。列表重建、切换语言与
+    /// 导航到本页时都会重新同步一次。
+    /// </summary>
+    private void SyncAnimationPicker()
+    {
+        if (ViewModel is not { } viewModel)
+        {
+            AnimationPicker.SetItems(null, -1);
+            return;
+        }
+
+        AnimationPicker.SetPlaceholder(viewModel.AnimationPickerPlaceholder);
+        AnimationPicker.SetSearchHint(viewModel.AnimationSearchHint);
+        AnimationPicker.SetEmptyText(viewModel.AnimationNoMatchText);
+        AnimationPicker.SetItems(viewModel.AnimationNames, viewModel.SelectedAnimationIndex);
     }
 
     private void PreviewViewport_OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
