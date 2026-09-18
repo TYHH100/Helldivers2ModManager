@@ -7,9 +7,16 @@ namespace Helldivers2ModManager.Views;
 
 internal partial class EditPageView : Page
 {
-	public EditPageView()
+    public EditPageView()
+    {
+        InitializeComponent();
+		Loaded += OnLoaded;
+    }
+
+	private async void OnLoaded(object sender, RoutedEventArgs e)
 	{
-		InitializeComponent();
+		if (DataContext is EditPageViewModel viewModel)
+			await viewModel.LoadCachedTranslationsAsync();
 	}
 
 	private void OptionImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

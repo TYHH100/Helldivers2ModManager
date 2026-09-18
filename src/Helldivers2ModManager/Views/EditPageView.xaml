@@ -22,11 +22,28 @@
 			</Grid.RowDefinitions>
 
 			<!-- Header -->
-			<TextBlock Grid.Row="0"
-					   Text="{Binding EditMod.Name}"
-					   Style="{StaticResource FluentSectionHeader}"
-					   HorizontalAlignment="Center"
-					   Margin="0 0 0 16"/>
+			<StackPanel Grid.Row="0" Margin="0 0 0 16">
+				<TextBlock Text="{Binding EditMod.Name}"
+						   Style="{StaticResource FluentSectionHeader}"
+						   HorizontalAlignment="Center"/>
+				<Grid Margin="0 8 0 0">
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="Auto"/>
+						<ColumnDefinition Width="*"/>
+					</Grid.ColumnDefinitions>
+					<Button Content="{loc:Loc EditPage.TranslateOptions}"
+							Style="{StaticResource FluentSecondaryButton}"
+							Command="{Binding TranslateOptionsCommand}"
+							IsEnabled="{Binding IsTranslating, Converter={StaticResource InverseBoolConverter}}"
+							Padding="14 8"/>
+					<TextBlock Grid.Column="1"
+							   Text="{Binding TranslationStatus}"
+							   Margin="10 0 0 0"
+							   VerticalAlignment="Center"
+							   TextWrapping="Wrap"
+							   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+				</Grid>
+			</StackPanel>
 
 			<!-- Options List -->
 			<ScrollViewer Grid.Row="1"
@@ -88,11 +105,13 @@
 													   FontSize="16"
 													   FontWeight="SemiBold"
 													   Foreground="{StaticResource NeutralForegroundBrush}"/>
-											<TextBlock Text="{Binding Description}"
+																<TextBlock Text="{Binding Description}"
 													   FontSize="13"
 													   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
 													   TextWrapping="Wrap"
-													   Margin="0 4 0 0"/>
+																		 Margin="0 4 0 0"/>
+																<TextBlock Text="{Binding TranslatedName}" FontSize="15" Foreground="{StaticResource SystemAccentBrush}" TextWrapping="Wrap"/>
+																<TextBlock Text="{Binding TranslatedDescription}" FontSize="12" Foreground="{StaticResource SystemAccentBrush}" TextWrapping="Wrap" Margin="0 2 0 0"/>
 										</StackPanel>
 
 										<!-- Enable Checkbox -->
@@ -142,10 +161,12 @@
 																	   FontSize="14"
 																	   FontWeight="SemiBold"
 																	   Foreground="{StaticResource NeutralForegroundBrush}"/>
-															<TextBlock Text="{Binding Description}"
+																		<TextBlock Text="{Binding Description}"
 																	   FontSize="12"
 																	   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
-																	   TextWrapping="Wrap"/>
+																			 TextWrapping="Wrap"/>
+																		<TextBlock Text="{Binding TranslatedName}" FontSize="13" Foreground="{StaticResource SystemAccentBrush}" TextWrapping="Wrap"/>
+																		<TextBlock Text="{Binding TranslatedDescription}" FontSize="11" Foreground="{StaticResource SystemAccentBrush}" TextWrapping="Wrap"/>
 														</StackPanel>
 													</Grid>
 												</DataTemplate>

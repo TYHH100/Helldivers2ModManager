@@ -708,6 +708,47 @@ internal sealed class SettingsService
 			_encryptedNexusApiKey = EncryptString(value);
 		}
 	}
+
+	public string AiTranslationEndpoint
+	{
+		get { GuardInitialized(); return _aiTranslationEndpoint; }
+		set { GuardInitialized(); GuardReadonly(); _aiTranslationEndpoint = string.IsNullOrWhiteSpace(value) ? "https://api.deepseek.com/chat/completions" : value.Trim(); }
+	}
+
+	public string AiTranslationModel
+	{
+		get { GuardInitialized(); return _aiTranslationModel; }
+		set { GuardInitialized(); GuardReadonly(); _aiTranslationModel = string.IsNullOrWhiteSpace(value) ? "deepseek-flash" : value.Trim(); }
+	}
+
+	public string AiTranslationTargetLanguage
+	{
+		get { GuardInitialized(); return _aiTranslationTargetLanguage; }
+		set { GuardInitialized(); GuardReadonly(); _aiTranslationTargetLanguage = string.IsNullOrWhiteSpace(value) ? "简体中文" : value.Trim(); }
+	}
+
+	public string? AiTranslationApiKey
+	{
+		get { GuardInitialized(); return DecryptString(_encryptedAiTranslationApiKey); }
+		set { GuardInitialized(); GuardReadonly(); _encryptedAiTranslationApiKey = EncryptString(value); }
+	}
+
+	public bool AiTranslationEnableThinking
+	{
+		get { GuardInitialized(); return _aiTranslationEnableThinking; }
+		set { GuardInitialized(); GuardReadonly(); _aiTranslationEnableThinking = value; }
+	}
+
+	public string AiTranslationReasoningEffort
+	{
+		get { GuardInitialized(); return _aiTranslationReasoningEffort; }
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_aiTranslationReasoningEffort = value is "low" or "high" or "max" ? value : "high";
+		}
+	}
 	
 	private readonly FileInfo _file;
 	private static readonly byte[] s_optionalEntropy = Encoding.UTF8.GetBytes("Helldivers2ModManager_Entropy_2024");
@@ -766,7 +807,7 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private bool _autoTagCreateMissingTags = false;
 	[JsonInclude]
-	private bool _enableMusicPlayer = true;
+	private bool _enableMusicPlayer = false;
 	[JsonInclude]
 	private bool _autoPlayBackgroundMusic = false;
 	[JsonInclude]
@@ -789,6 +830,18 @@ internal sealed class SettingsService
 	private ObservableCollection<ModTag> _tags = null!;
 	[JsonInclude]
 	private string? _encryptedNexusApiKey;
+	[JsonInclude]
+	private string? _encryptedAiTranslationApiKey;
+	[JsonInclude]
+	private string _aiTranslationEndpoint = "https://api.deepseek.com/chat/completions";
+	[JsonInclude]
+	private string _aiTranslationModel = "deepseek-flash";
+	[JsonInclude]
+	private string _aiTranslationTargetLanguage = "简体中文";
+	[JsonInclude]
+	private bool _aiTranslationEnableThinking;
+	[JsonInclude]
+	private string _aiTranslationReasoningEffort = "high";
 	[JsonInclude]
 	private string _language = string.Empty;
 	[JsonInclude]
@@ -1073,6 +1126,12 @@ internal sealed class SettingsService
 				color = tag.Color
 			}),
 			NexusApiKey = _encryptedNexusApiKey,
+			AiTranslationEndpoint = _aiTranslationEndpoint,
+			AiTranslationModel = _aiTranslationModel,
+			AiTranslationTargetLanguage = _aiTranslationTargetLanguage,
+			AiTranslationApiKey = _encryptedAiTranslationApiKey,
+			AiTranslationEnableThinking = _aiTranslationEnableThinking,
+			AiTranslationReasoningEffort = _aiTranslationReasoningEffort,
 			Language = _language,
 			BackgroundMode = _backgroundMode,
 			BackgroundImagePath = _backgroundImagePath,
@@ -1336,6 +1395,22 @@ internal sealed class SettingsService
 		}
 		if (root.TryGetProperty(nameof(NexusApiKey), JsonValueKind.String, out prop))
 			_encryptedNexusApiKey = prop.GetString();
+		if (root.TryGetProperty(nameof(AiTranslationEndpoint), JsonValueKind.String, out prop))
+			_aiTranslationEndpoint = prop.GetString() ?? _aiTranslationEndpoint;
+		if (root.TryGetProperty(nameof(AiTranslationModel), JsonValueKind.String, out prop))
+			_aiTranslationModel = prop.GetString() ?? _aiTranslationModel;
+		if (root.TryGetProperty(nameof(AiTranslationTargetLanguage), JsonValueKind.String, out prop))
+			_aiTranslationTargetLanguage = prop.GetString() ?? _aiTranslationTargetLanguage;
+		if (root.TryGetProperty(nameof(AiTranslationApiKey), JsonValueKind.String, out prop))
+			_encryptedAiTranslationApiKey = prop.GetString();
+		if (root.TryGetProperty(nameof(AiTranslationEnableThinking), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+			_aiTranslationEnableThinking = prop.GetBoolean();
+		if (root.TryGetProperty(nameof(AiTranslationReasoningEffort), JsonValueKind.String, out prop))
+		{
+			var reasoningEffort = prop.GetString();
+			if (reasoningEffort is "low" or "high" or "max")
+				_aiTranslationReasoningEffort = reasoningEffort;
+		}
 
 		if (!firstRunTutorialCompletedFound)
 			_firstRunTutorialCompleted = true;
@@ -1418,7 +1493,7 @@ internal sealed class SettingsService
 		_enableAutoTagging = false;
 		_autoTagCreateMissingTags = false;
 		_autoTagMappings = [];
-		_enableMusicPlayer = true;
+		_enableMusicPlayer = false;
 		_autoPlayBackgroundMusic = false;
 		_musicPlayerHorizontalPosition = 0.98;
 		_musicPlayerVerticalPosition = 0.75;
@@ -1429,6 +1504,12 @@ internal sealed class SettingsService
 		_tags = [];
 		_organizationalFolderNames = ["Models", "Model"];
 		_encryptedNexusApiKey = null;
+		_encryptedAiTranslationApiKey = null;
+		_aiTranslationEndpoint = "https://api.deepseek.com/chat/completions";
+		_aiTranslationModel = "deepseek-flash";
+		_aiTranslationTargetLanguage = "简体中文";
+		_aiTranslationEnableThinking = false;
+		_aiTranslationReasoningEffort = "high";
 		_useDeploymentOrder = false;
 		_deploymentOrderGuids = [];
 		_optionOrders = [];

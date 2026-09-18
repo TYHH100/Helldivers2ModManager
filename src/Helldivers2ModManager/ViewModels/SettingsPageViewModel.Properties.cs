@@ -435,6 +435,50 @@ internal sealed partial class SettingsPageViewModel
 		}
 	}
 
+	public string AiTranslationEndpoint
+	{
+		get => _settingsService.Initialized ? _settingsService.AiTranslationEndpoint : "https://api.deepseek.com/chat/completions";
+		set { OnPropertyChanging(); _settingsService.AiTranslationEndpoint = value; OnPropertyChanged(); }
+	}
+
+	public string AiTranslationModel
+	{
+		get => _settingsService.Initialized ? _settingsService.AiTranslationModel : "deepseek-flash";
+		set { OnPropertyChanging(); _settingsService.AiTranslationModel = value; OnPropertyChanged(); }
+	}
+
+	public string AiTranslationTargetLanguage
+	{
+		get => _settingsService.Initialized ? _settingsService.AiTranslationTargetLanguage : "简体中文";
+		set { OnPropertyChanging(); _settingsService.AiTranslationTargetLanguage = value; OnPropertyChanged(); }
+	}
+
+	public string? AiTranslationApiKey
+	{
+		get => _settingsService.Initialized ? _settingsService.AiTranslationApiKey : null;
+		set { OnPropertyChanging(); _settingsService.AiTranslationApiKey = value; OnPropertyChanged(); }
+	}
+
+	public bool AiTranslationEnableThinking
+	{
+		get => _settingsService.Initialized && _settingsService.AiTranslationEnableThinking;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.AiTranslationEnableThinking = value;
+			OnPropertyChanged();
+			OnPropertyChanged(nameof(AiTranslationReasoningEffortEnabled));
+		}
+	}
+
+	public bool AiTranslationReasoningEffortEnabled => AiTranslationEnableThinking;
+
+	public string AiTranslationReasoningEffort
+	{
+		get => _settingsService.Initialized ? _settingsService.AiTranslationReasoningEffort : "high";
+		set { OnPropertyChanging(); _settingsService.AiTranslationReasoningEffort = value; OnPropertyChanged(); }
+	}
+
 	/// <summary>
 	/// 是否在软件启动后自动播放。
 	/// </summary>

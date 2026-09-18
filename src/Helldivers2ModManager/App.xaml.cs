@@ -117,7 +117,15 @@ internal partial class App : Application
 
 			// 在线程池线程上运行 InitAsync，避免 UI 线程死锁
 			bool initOk = Task.Run(() => settingsService.InitAsync()).GetAwaiter().GetResult();
-			if (initOk)
+			if (!initOk)
+			{
+				// 首次启动时 settings.json 尚不存在，InitAsync 会返回 false，
+				// 但后续 ViewModel 仍会读取设置属性，必须先建立默认状态。
+				settingsService.InitDefault();
+				_logger?.LogInformation("Settings file was not found; initialized default settings");
+			}
+
+			if (settingsService.Initialized)
 			{
 				if (!string.IsNullOrEmpty(settingsService.Language))
 				{
@@ -129,6 +137,13 @@ internal partial class App : Application
 		catch (Exception ex)
 		{
 			_logger?.LogWarning(ex, "Failed to initialize settings / language preference, using auto-detect");
+			var settingsService = Host.Services.GetRequiredService<SettingsService>();
+			if (!settingsService.Initialized)
+			{
+				// 读取损坏或临时不可用时也不能让 MainViewModel 在构造阶段访问未初始化设置。
+				settingsService.InitDefault();
+				_logger?.LogInformation("Initialized default settings after settings load failure");
+			}
 		}
 	}
 

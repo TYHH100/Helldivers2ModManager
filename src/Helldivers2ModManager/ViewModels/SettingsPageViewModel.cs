@@ -211,6 +211,13 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(AutoTagPairingButtonVisible));
 		OnPropertyChanged(nameof(MaxLogFiles));
 		OnPropertyChanged(nameof(NexusApiKey));
+		OnPropertyChanged(nameof(AiTranslationEndpoint));
+		OnPropertyChanged(nameof(AiTranslationModel));
+		OnPropertyChanged(nameof(AiTranslationTargetLanguage));
+		OnPropertyChanged(nameof(AiTranslationApiKey));
+		OnPropertyChanged(nameof(AiTranslationEnableThinking));
+		OnPropertyChanged(nameof(AiTranslationReasoningEffortEnabled));
+		OnPropertyChanged(nameof(AiTranslationReasoningEffort));
 		OnPropertyChanged(nameof(SelectedLanguageCode));
 		OnPropertyChanged(nameof(AvailableLanguages));
 		OnPropertyChanged(nameof(EnableMusicPlayer));

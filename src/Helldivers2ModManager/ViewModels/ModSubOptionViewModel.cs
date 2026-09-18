@@ -13,6 +13,18 @@ internal sealed class ModSubOptionViewModel(ModViewModel vm, int idx, int subIdx
 
 	public string Description => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Description;
 
+	public string? TranslatedName => _translatedName;
+
+	public string? TranslatedDescription => _translatedDescription;
+
+	internal void SetTranslation(string? name, string? description)
+	{
+		_translatedName = name;
+		_translatedDescription = description;
+		OnPropertyChanged(nameof(TranslatedName));
+		OnPropertyChanged(nameof(TranslatedDescription));
+	}
+
 	public Visibility ImageVisibility => ((V1ModManifest)_vm.Data.Manifest).Options![_idx].SubOptions![_subIdx].Image is not null ? Visibility.Visible : Visibility.Collapsed;
 
 	public ImageSource? Image
@@ -44,4 +56,6 @@ internal sealed class ModSubOptionViewModel(ModViewModel vm, int idx, int subIdx
 	private readonly ModViewModel _vm = vm;
 	private readonly int _idx = idx;
 	private readonly int _subIdx = subIdx;
+	private string? _translatedName;
+	private string? _translatedDescription;
 }

@@ -8,6 +8,7 @@
       xmlns:sys="clr-namespace:System;assembly=mscorlib"
       xmlns:logging="clr-namespace:Microsoft.Extensions.Logging;assembly=Microsoft.Extensions.Logging.Abstractions"
       xmlns:loc="clr-namespace:Helldivers2ModManager.Extensions"
+      xmlns:behaviors="clr-namespace:Helldivers2ModManager.Behaviors"
       mc:Ignorable="d"
       d:DataContext="{d:DesignInstance vms:SettingsPageViewModel}"
       d:Background="{StaticResource MicaBackgroundBrush}"
@@ -722,6 +723,43 @@
                                 <TextBlock Text="{loc:Loc SettingsPage.ToolsDesc}"
                                            Style="{StaticResource FluentBodyText}"
                                            Margin="0 4 0 12"/>
+
+                                <StackPanel Margin="0 0 0 16">
+                                        <Border Style="{StaticResource FluentDivider}" Margin="0 0 0 12"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.AiTranslation}" Style="{StaticResource FluentSubSectionHeader}" Margin="0"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.AiTranslationDesc}" Style="{StaticResource FluentBodyText}" Margin="0 4 0 12" TextWrapping="Wrap"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.AiEndpoint}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                        <TextBox Text="{Binding AiTranslationEndpoint, UpdateSourceTrigger=LostFocus}" Margin="0 4 0 8"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.AiModel}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                        <TextBox Text="{Binding AiTranslationModel, UpdateSourceTrigger=LostFocus}" Margin="0 4 0 8"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.AiTargetLanguage}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                        <TextBox Text="{Binding AiTranslationTargetLanguage, UpdateSourceTrigger=LostFocus}" Margin="0 4 0 8"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.AiApiKey}" FontSize="12" Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                        <PasswordBox behaviors:PasswordBoxBinding.BoundPassword="{Binding AiTranslationApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource FluentPasswordBox}"
+                                                     Margin="0 4 0 12"/>
+                                        <CheckBox IsChecked="{Binding AiTranslationEnableThinking}"
+                                                  Content="{loc:Loc SettingsPage.AiEnableThinking}"
+                                                  Margin="0 0 0 8"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.AiThinkingDesc}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0 0 0 8"/>
+                                        <TextBlock Text="{loc:Loc SettingsPage.AiReasoningEffort}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource NeutralForegroundSecondaryBrush}"/>
+                                        <ComboBox SelectedValue="{Binding AiTranslationReasoningEffort}"
+                                                  SelectedValuePath="Tag"
+                                                  IsEnabled="{Binding AiTranslationReasoningEffortEnabled}"
+                                                  HorizontalAlignment="Left"
+                                                  Width="180"
+                                                  Margin="0 4 0 0">
+                                            <ComboBoxItem Tag="low" Content="{loc:Loc SettingsPage.AiReasoningLow}"/>
+                                            <ComboBoxItem Tag="high" Content="{loc:Loc SettingsPage.AiReasoningHigh}"/>
+                                            <ComboBoxItem Tag="max" Content="{loc:Loc SettingsPage.AiReasoningMax}"/>
+                                        </ComboBox>
+                                </StackPanel>
 
                                 <!-- 重放新手引导 -->
                                 <Button Content="{loc:Loc SettingsPage.ReplayTutorial}"
