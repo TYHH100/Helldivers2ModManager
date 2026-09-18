@@ -18,6 +18,7 @@ namespace Helldivers2ModManager.Tests;
 /// 切换（SelectGroupAsync）与删除（DeleteGroupAsync）时落盘，InitAsync 时恢复。
 /// </summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class ModGroupServiceLastSelectedGroupTests
 {
     [TestMethod]

@@ -210,10 +210,28 @@ internal sealed partial class DashboardPageViewModel
                             return password;
                         }
 
+                        async Task<bool> RequestScriptSecurityConfirmAsync()
+                        {
+                            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                            await Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+                                {
+                                    Title = _localizationService["DashboardPage.ScriptModSecurityWarningTitle"],
+                                    Message = _localizationService["DashboardPage.ScriptModSecurityWarningMessage"],
+                                    Confirm = () => completion.TrySetResult(true),
+                                    Abort = () => completion.TrySetResult(false),
+                                });
+                            });
+                            return await completion.Task;
+                        }
+
                         var problems = await _modService.TryAddModFromArchiveAsync(
                             new FileInfo(selectedFiles[i]),
                             nestedProgress,
-                            RequestArchivePasswordAsync);
+                            RequestArchivePasswordAsync,
+                            password: null,
+                            RequestScriptSecurityConfirmAsync);
                         if (problems.Length > 0)
                         {
                             allProblems.AddRange(problems);

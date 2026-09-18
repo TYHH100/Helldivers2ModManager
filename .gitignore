@@ -387,6 +387,9 @@ Complete
 # WorkBuddy
 .workbuddy
 
+# Claude Code
+.claude
+
 docs/
 settings.json
 Test/

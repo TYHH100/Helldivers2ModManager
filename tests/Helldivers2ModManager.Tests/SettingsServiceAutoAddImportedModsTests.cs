@@ -6,6 +6,7 @@ using System.IO;
 namespace Helldivers2ModManager.Tests;
 
 [TestClass]
+[DoNotParallelize]
 public sealed class SettingsServiceAutoAddImportedModsTests
 {
     [TestMethod]

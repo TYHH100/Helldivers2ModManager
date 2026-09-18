@@ -1,6 +1,7 @@
 using Helldivers2ModManager.Exceptions;
 using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
+using Helldivers2ModManager.Services.Parsing;
 using Helldivers2ModManager.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -160,11 +161,13 @@ internal sealed partial class ModService
 	/// </summary>
 	/// <param name="file">压缩包文件</param>
 	/// <param name="nestedProgress">嵌套压缩包处理进度回调：(当前序号(0-based), 总数, 当前文件名)，仅在检测到嵌套压缩包时调用</param>
+	/// <param name="scriptSecurityCallback">脚本模组安全确认回调：检测到脚本内容时调用，返回 true 继续导入，false 取消</param>
 	public async Task<ModProblem[]> TryAddModFromArchiveAsync(
 		FileInfo file,
 		Action<int, int, string>? nestedProgress = null,
 		Func<Task<string?>>? passwordProvider = null,
-		string? password = null)
+		string? password = null,
+		Func<Task<bool>>? scriptSecurityCallback = null)
 	{
 		GuardInitialized();
 
@@ -252,7 +255,12 @@ internal sealed partial class ModService
 					try
 					{
 						// 递归处理嵌套压缩包，传递同一进度回调以支持多层嵌套的进度上报
-						var nestedProblems = await TryAddModFromArchiveAsync(nestedArchive, nestedProgress, passwordProvider, password);
+						var nestedProblems = await TryAddModFromArchiveAsync(
+							nestedArchive,
+							nestedProgress,
+							passwordProvider,
+							password,
+							scriptSecurityCallback);
 						allNestedProblems.AddRange(nestedProblems);
 					}
 					catch (Exception ex)
@@ -391,6 +399,31 @@ internal sealed partial class ModService
 		_modsByGuid[mod.Manifest.Guid] = mod;
 		_modsByPath[mod.Directory.FullName] = mod;
 		ModAdded?.Invoke(mod);
+
+		// 检测脚本模组并在需要时请求用户确认（仅在首次导入时检测，更新操作不重复提示）
+		if (scriptSecurityCallback is not null && LuaScriptInspectionService.ContainsScriptContent(modDir))
+		{
+			_logger.LogInformation("Script content detected in mod \"{Name}\", requesting security confirmation", manifest.Name);
+			var confirmed = await scriptSecurityCallback();
+			if (!confirmed)
+			{
+				_logger.LogInformation("User declined to import script mod \"{Name}\"", manifest.Name);
+				// 用户拒绝导入：撤销刚才的添加操作，清理目录
+				_mods.Remove(mod);
+				_modsByGuid.Remove(mod.Manifest.Guid);
+				_modsByPath.Remove(mod.Directory.FullName);
+				var recycleOption = _settingsService.DeleteToRecycleBin ? RecycleOption.SendToRecycleBin : RecycleOption.DeletePermanently;
+				await Task.Run(() => FileSystem.DeleteDirectory(modDir.FullName, UIOption.OnlyErrorDialogs, recycleOption));
+				problems.Add(new ModProblem
+				{
+					Directory = modDir,
+					Kind = ModProblemKind.CantReadArchive,
+					ExtraData = "User declined to import script mod for security reasons",
+				});
+				 tmpDir.Delete(true);
+				return problems.ToArray();
+			}
+		}
 
 		// 后台异步计算并存储新模组的文件哈希值（fire-and-forget，不阻塞导入流程）
 		_modHashService.ComputeAndStoreForModAsync(mod);

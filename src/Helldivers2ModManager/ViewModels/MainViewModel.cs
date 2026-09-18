@@ -61,6 +61,11 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable, IRe
 
 	public string FirstRunTutorialStepText => $"{_firstRunTutorialStep + 1}/{TutorialStepCount}";
 
+	[ObservableProperty]
+	private bool _showMusicPlayer;
+
+	public FloatingMusicPlayerViewModel FloatingMusicPlayerViewModel { get; }
+
 	private static readonly ProcessStartInfo s_helpStartInfo = new(@"https://teutinsa.github.io/hd2mm-site/index.html") { UseShellExecute = true };
 	private static readonly ProcessStartInfo s_reportBugStartInfo = new(@"https://github.com/TYHH100/Helldivers2ModManager/issues") { UseShellExecute = true };
 
@@ -144,6 +149,7 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable, IRe
 		NavigationStore navigationStore,
 		LocalizationService localizationService,
 		SettingsService settingsService,
+		BackgroundMusicService backgroundMusicService,
 		ILogger<MainViewModel> logger)
 	{
 		_navigationStore = navigationStore;
@@ -152,11 +158,15 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable, IRe
 		_logger = logger;
 		_background = new SolidColorBrush(Color.FromScRgb(0.7f, 0, 0, 0));
 
+		FloatingMusicPlayerViewModel = new FloatingMusicPlayerViewModel(backgroundMusicService, localizationService, settingsService);
+		ShowMusicPlayer = settingsService.EnableMusicPlayer;
+
 		_navigationStore.Navigated += NavigationStore_Navigated;
 		_settingsService.SettingsChanged += SettingsService_SettingsChanged;
 		RefreshBackground();
 		ObserveCurrentPageViewModel();
 		WeakReferenceMessenger.Default.Register<ReplayFirstRunTutorialMessage>(this);
+
 	}
 
 	private void NavigationStore_Navigated(object? sender, EventArgs e)
@@ -169,6 +179,8 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable, IRe
 	private void SettingsService_SettingsChanged(object? sender, EventArgs e)
 	{
 		RefreshBackground();
+		ShowMusicPlayer = _settingsService.EnableMusicPlayer;
+		FloatingMusicPlayerViewModel.SetEnabled(ShowMusicPlayer);
 	}
 
 	private void RefreshBackground()
@@ -420,6 +432,7 @@ internal sealed partial class MainViewModel : ObservableObject, IDisposable, IRe
 			WeakReferenceMessenger.Default.Unregister<ReplayFirstRunTutorialMessage>(this);
 			if (_observedPageViewModel is not null)
 				_observedPageViewModel.PropertyChanged -= CurrentViewModel_PropertyChanged;
+			FloatingMusicPlayerViewModel.Dispose();
 		}
 
 		_disposed = true;

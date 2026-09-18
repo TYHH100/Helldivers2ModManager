@@ -418,4 +418,34 @@ internal sealed partial class SettingsPageViewModel
 	/// 第一个选项为"自动检测"，值为空字符串。
 	/// </summary>
 	public ObservableCollection<LanguageItem> AvailableLanguages => _localizationService.AvailableLanguages;
+
+	/// <summary>
+	/// 是否显示并启用音乐播放器。
+	/// </summary>
+	public bool EnableMusicPlayer
+	{
+		get => _settingsService.Initialized && _settingsService.EnableMusicPlayer;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.EnableMusicPlayer = value;
+			if (value)
+				_backgroundMusicService.EnsureMusicDirectory();
+			OnPropertyChanged();
+		}
+	}
+
+	/// <summary>
+	/// 是否在软件启动后自动播放。
+	/// </summary>
+	public bool AutoPlayBackgroundMusic
+	{
+		get => _settingsService.Initialized && _settingsService.AutoPlayBackgroundMusic;
+		set
+		{
+			OnPropertyChanging();
+			_settingsService.AutoPlayBackgroundMusic = value;
+			OnPropertyChanged();
+		}
+	}
 }

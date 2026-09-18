@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Windows;
 
 namespace Helldivers2ModManager.ViewModels;
 
@@ -185,8 +186,30 @@ internal sealed partial class NexusDownloadPageViewModel : PageViewModelBase
                     tempPath);
 
                 StatusMessage = _localizationService["NexusDownloadPage.Importing"];
-                
-                var problems = await _modService.TryAddModFromArchiveAsync(new FileInfo(downloadedPath));
+
+                // 脚本模组安全确认回调
+                async Task<bool> RequestScriptSecurityConfirmAsync()
+                {
+                    var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        WeakReferenceMessenger.Default.Send(new MessageBoxConfirmMessage
+                        {
+                            Title = _localizationService["DashboardPage.ScriptModSecurityWarningTitle"],
+                            Message = _localizationService["DashboardPage.ScriptModSecurityWarningMessage"],
+                            Confirm = () => completion.TrySetResult(true),
+                            Abort = () => completion.TrySetResult(false),
+                        });
+                    });
+                    return await completion.Task;
+                }
+
+                var problems = await _modService.TryAddModFromArchiveAsync(
+                    new FileInfo(downloadedPath),
+                    nestedProgress: null,
+                    passwordProvider: null,
+                    password: null,
+                    scriptSecurityCallback: RequestScriptSecurityConfirmAsync);
                 
                 if (problems.Length > 0)
                 {

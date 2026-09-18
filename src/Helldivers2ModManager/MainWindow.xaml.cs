@@ -1,4 +1,5 @@
 using Helldivers2ModManager.ViewModels;
+using Helldivers2ModManager.Services.Infrastructure;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -34,14 +35,21 @@ internal partial class MainWindow : Window
 	private StackPanel? _dropHintValidPanel;
 	private StackPanel? _dropHintInvalidPanel;
 
-	public MainWindow(MainViewModel viewModel)
+	private readonly MainViewModel _viewModel;
+	private readonly SettingsService _settingsService;
+
+	public MainWindow(MainViewModel viewModel, SettingsService settingsService)
 	{
 		InitializeComponent();
 
 		DataContext = viewModel;
+		_viewModel = viewModel;
+		_settingsService = settingsService;
 
 		_dropHintTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
 		_dropHintTimer.Tick += DropHintTimer_Tick;
+
+		Loaded += MainWindow_Loaded;
 	}
 
 	public override void OnApplyTemplate()
@@ -51,6 +59,13 @@ internal partial class MainWindow : Window
 		_dropHintOverlay = Template.FindName("dropHintOverlay", this) as Border;
 		_dropHintValidPanel = Template.FindName("dropHintValidPanel", this) as StackPanel;
 		_dropHintInvalidPanel = Template.FindName("dropHintInvalidPanel", this) as StackPanel;
+	}
+
+	private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+	{
+		_viewModel.FloatingMusicPlayerViewModel.SetEnabled(
+			_settingsService.EnableMusicPlayer,
+			_settingsService.EnableMusicPlayer && _settingsService.AutoPlayBackgroundMusic);
 	}
 
 	protected override void OnActivated(EventArgs e)

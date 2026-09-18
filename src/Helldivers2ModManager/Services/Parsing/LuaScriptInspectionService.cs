@@ -55,6 +55,96 @@ internal sealed class LuaScriptInspectionService
         CancellationToken cancellationToken)
         => Task.Run(() => Inspect(modDirectory, patchFiles, cancellationToken), cancellationToken);
 
+    /// <summary>
+    /// 快速检测模组目录是否包含脚本内容（不做完整解析，仅用于导入时的安全提示判断）。
+    /// 扫描补丁文件，查找 Bingus 脚本类型资源或 LuaJIT/明文 Lua 特征。
+    /// 改进版：扫描所有补丁文件的所有资源，确保能检测到任何位置的脚本内容。
+    /// </summary>
+    public static bool ContainsScriptContent(DirectoryInfo modDirectory)
+    {
+        try
+        {
+            var patchFiles = modDirectory.GetFiles("*.patch_*", SearchOption.AllDirectories);
+            if (patchFiles.Length == 0)
+                return false;
+
+            // 提高扫描限制，确保不漏检脚本内容
+            const int maxPatchesToScan = 20;
+            const int maxResourcesPerPatch = 100;
+            const int quickScanBytes = 1024 * 1024; // 扫描前 1MB，覆盖更多脚本场景
+
+            // 将 stackalloc 移出循环，避免潜在的堆栈溢出
+            Span<byte> header = stackalloc byte[HeaderSize];
+            Span<byte> entry = stackalloc byte[FileEntrySize];
+
+            foreach (var patch in patchFiles.Take(maxPatchesToScan))
+            {
+                if (!patch.Exists || patch.Length < HeaderSize)
+                    continue;
+
+                using var stream = new FileStream(
+                    patch.FullName,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete,
+                    8192,
+                    FileOptions.SequentialScan);
+
+                if (!TryReadAt(stream, 0, header) || BinaryPrimitives.ReadInt32LittleEndian(header) != PatchHeaderMagic)
+                    continue;
+
+                var numTypes = BinaryPrimitives.ReadInt32LittleEndian(header[4..]);
+                var numFiles = BinaryPrimitives.ReadInt32LittleEndian(header[8..]);
+                if (numTypes < 0 || numFiles < 0 || numTypes > MaxTypes || numFiles > MaxFiles)
+                    continue;
+
+                var fileEntriesOffset = HeaderSize + (long)numTypes * TypeEntrySize;
+                if (fileEntriesOffset + (long)numFiles * FileEntrySize > stream.Length)
+                    continue;
+
+                var resourcesScanned = 0;
+
+                for (var i = 0; i < numFiles && resourcesScanned < maxResourcesPerPatch; i++)
+                {
+                    if (!TryReadAt(stream, fileEntriesOffset + i * FileEntrySize, entry))
+                        break;
+
+                    var typeId = BinaryPrimitives.ReadUInt64LittleEndian(entry[8..]);
+                    var dataOffset = (long)BinaryPrimitives.ReadUInt64LittleEndian(entry[16..]);
+                    var dataSize = BinaryPrimitives.ReadUInt32LittleEndian(entry[56..]);
+
+                    // Bingus 脚本类型资源直接判定
+                    if (typeId == BingusLuaScriptTypeId && dataSize > 0)
+                        return true;
+
+                    if (dataOffset < 0 || dataSize == 0 || dataOffset > stream.Length - dataSize)
+                        continue;
+
+                    // 即使资源很大，也扫描前段来检测脚本特征
+                    var scanSize = (int)Math.Min(dataSize, quickScanBytes);
+                    var data = new byte[scanSize];
+                    if (!TryReadAt(stream, dataOffset, data))
+                        continue;
+
+                    resourcesScanned++;
+
+                    // 快速特征检测：LuaJIT 魔数或明文 Lua 关键词
+                    if (FindDumpCandidates(data).Count > 0)
+                        return true;
+                    if (LooksLikePlainLua(data, out _))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            // 检测失败时保守返回 false（避免误报导致无法导入正常模组）
+            return false;
+        }
+    }
+
     internal sealed record LuaExtractionResult(int FileCount, string DestinationDirectory, string? Error)
     {
         public static readonly LuaExtractionResult Failed = new(0, string.Empty, "extraction failed");
@@ -388,10 +478,13 @@ internal sealed class LuaScriptInspectionService
         byte[] data)
     {
         var candidates = FindDumpCandidates(data);
+
+        // 优先检测明文 Lua（某些模组直接嵌入明文源码而不编译）
         if (candidates.Count == 0)
         {
             if (TryBuildPlainTextEntry(patchRelativePath, fileId, typeId, resourceOffset, resourceSize, data) is { } plain)
                 return plain;
+            // 声明为脚本类型但未找到内容：报告解析失败
             if (typeId == BingusLuaScriptTypeId)
                 return BuildFailedEntry(patchRelativePath, fileId, typeId, resourceOffset, resourceSize, data, "资源声明为脚本类型，但未找到可识别的 Lua 字节码或明文源码");
             return null;
@@ -650,14 +743,28 @@ internal sealed class LuaScriptInspectionService
         if (candidate.Length == 0 || printable < candidate.Length * 0.95)
             return false;
 
+        // 扩展关键词检测，提高明文 Lua 识别准确率
         var keywords = 0;
-        foreach (var keyword in (ReadOnlySpan<string>)["function", "local", "end", "then", "require", "return", "pairs", "ipairs", "print"])
+        var luaKeywords = new[]
+        {
+            "function", "local", "end", "then", "else", "elseif",
+            "require", "return", "if", "for", "while", "do",
+            "pairs", "ipairs", "print", "table", "string", "math",
+            "nil", "true", "false", "and", "or", "not", "break",
+            "repeat", "until", "in", "self", "module", "package"
+        };
+
+        foreach (var keyword in luaKeywords)
         {
             if (candidate.Contains(keyword, StringComparison.Ordinal))
                 keywords++;
         }
 
-        if (keywords < 2 && !candidate.Contains("--", StringComparison.Ordinal))
+        // 检测 Lua 注释特征（-- 或 --[[）
+        var hasComment = candidate.Contains("--", StringComparison.Ordinal);
+
+        // 降低判定门槛：2个关键词或1个关键词+注释即可
+        if (keywords < 2 && !(keywords >= 1 && hasComment))
             return false;
 
         text = candidate;

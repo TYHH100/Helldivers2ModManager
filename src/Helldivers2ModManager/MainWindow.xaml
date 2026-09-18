@@ -187,7 +187,17 @@
 								<cmp:ModConflictDetailOverlay Grid.Row="1"/>
 								<cmp:MessageBox Grid.Row="1"/>
 								<cmp:FirstRunTutorialOverlay Grid.Row="1"/>
-							<cmp:ToastOverlay Grid.Row="1"/>
+								<cmp:ToastOverlay Grid.Row="1"/>
+
+								<!-- 悬浮音乐播放器容器（Canvas 允许自由拖动） -->
+								<Canvas Grid.Row="1"
+										x:Name="MusicPlayerCanvas"
+										Panel.ZIndex="100"
+										Visibility="{Binding ShowMusicPlayer, Converter={StaticResource BoolToVisibilityConverter}}">
+									<views:FloatingMusicPlayer
+										x:Name="FloatingMusicPlayer"
+										DataContext="{Binding FloatingMusicPlayerViewModel}"/>
+								</Canvas>
 
 								<!-- 拖拽导入提示覆盖层：拖入压缩包时提示松开导入（模板内元素，code-behind 经 Template.FindName 访问） -->
 								<Border x:Name="dropHintOverlay"

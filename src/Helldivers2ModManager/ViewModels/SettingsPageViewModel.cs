@@ -29,10 +29,11 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 	private readonly ModService _modService;
 	private readonly LocalizationService _localizationService;
 	private readonly Services.BackgroundTaskService _backgroundTaskService;
+	private readonly BackgroundMusicService _backgroundMusicService;
 	[ObservableProperty]
 	private int _selectedOrgFolder = -1;
 
-	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService, ModHashService modHashService, ModService modService, LocalizationService localizationService, Services.BackgroundTaskService backgroundTaskService)
+	public SettingsPageViewModel(ILogger<SettingsPageViewModel> logger, NavigationStore navStore, SettingsService settingsService, INexusModsService nexusModsService, ModHashService modHashService, ModService modService, LocalizationService localizationService, Services.BackgroundTaskService backgroundTaskService, BackgroundMusicService backgroundMusicService)
 	{
 		_logger = logger;
 		_navStore = navStore;
@@ -42,6 +43,7 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		_modService = modService;
 		_localizationService = localizationService;
 		_backgroundTaskService = backgroundTaskService;
+		_backgroundMusicService = backgroundMusicService;
 
 		OrganizationalFolderNames.CollectionChanged += OrgFolderNames_CollectionChanged;
 
@@ -211,6 +213,8 @@ internal sealed partial class SettingsPageViewModel : PageViewModelBase
 		OnPropertyChanged(nameof(NexusApiKey));
 		OnPropertyChanged(nameof(SelectedLanguageCode));
 		OnPropertyChanged(nameof(AvailableLanguages));
+		OnPropertyChanged(nameof(EnableMusicPlayer));
+		OnPropertyChanged(nameof(AutoPlayBackgroundMusic));
 	}
 
 	private void OrgFolderNames_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)

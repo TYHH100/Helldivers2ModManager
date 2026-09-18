@@ -485,6 +485,74 @@ internal sealed class SettingsService
 	}
 
 	/// <summary>
+	/// 启动软件时自动播放背景音乐（默认关闭）。
+	/// </summary>
+	public bool EnableMusicPlayer
+	{
+		get
+		{
+			GuardInitialized();
+			return _enableMusicPlayer;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_enableMusicPlayer = value;
+		}
+	}
+
+	/// <summary>
+	/// 启动软件时自动播放背景音乐（默认关闭）。
+	/// </summary>
+	public bool AutoPlayBackgroundMusic
+	{
+		get
+		{
+			GuardInitialized();
+			return _autoPlayBackgroundMusic;
+		}
+
+		set
+		{
+			GuardInitialized();
+			GuardReadonly();
+			_autoPlayBackgroundMusic = value;
+		}
+	}
+
+	public double MusicPlayerHorizontalPosition
+	{
+		get { GuardInitialized(); return _musicPlayerHorizontalPosition; }
+		set { GuardInitialized(); GuardReadonly(); _musicPlayerHorizontalPosition = Math.Clamp(value, 0, 1); }
+	}
+
+	public double MusicPlayerVerticalPosition
+	{
+		get { GuardInitialized(); return _musicPlayerVerticalPosition; }
+		set { GuardInitialized(); GuardReadonly(); _musicPlayerVerticalPosition = Math.Clamp(value, 0, 1); }
+	}
+
+	public double MusicPlayerVolume
+	{
+		get { GuardInitialized(); return _musicPlayerVolume; }
+		set { GuardInitialized(); GuardReadonly(); _musicPlayerVolume = Math.Clamp(value, 0, 1); }
+	}
+
+	public MusicPlaybackMode MusicPlayerPlaybackMode
+	{
+		get { GuardInitialized(); return _musicPlaybackMode; }
+		set { GuardInitialized(); GuardReadonly(); _musicPlaybackMode = Enum.IsDefined(value) ? value : MusicPlaybackMode.Sequential; }
+	}
+
+	public string LastMusicTrackRelativePath
+	{
+		get { GuardInitialized(); return _lastMusicTrackRelativePath; }
+		set { GuardInitialized(); GuardReadonly(); _lastMusicTrackRelativePath = value ?? string.Empty; }
+	}
+
+	/// <summary>
 	/// 模组列表分隔符集合
 	/// </summary>
 	public ObservableCollection<ModSeparator> Separators
@@ -641,7 +709,7 @@ internal sealed class SettingsService
 		}
 	}
 	
-	private static readonly FileInfo s_file = new("settings.json");
+	private readonly FileInfo _file;
 	private static readonly byte[] s_optionalEntropy = Encoding.UTF8.GetBytes("Helldivers2ModManager_Entropy_2024");
 	private static readonly JsonSerializerOptions s_serializerOptions = new()
 	{
@@ -698,6 +766,20 @@ internal sealed class SettingsService
 	[JsonInclude]
 	private bool _autoTagCreateMissingTags = false;
 	[JsonInclude]
+	private bool _enableMusicPlayer = true;
+	[JsonInclude]
+	private bool _autoPlayBackgroundMusic = false;
+	[JsonInclude]
+	private double _musicPlayerHorizontalPosition = 0.98;
+	[JsonInclude]
+	private double _musicPlayerVerticalPosition = 0.75;
+	[JsonInclude]
+	private double _musicPlayerVolume = 0.3;
+	[JsonInclude]
+	private MusicPlaybackMode _musicPlaybackMode = MusicPlaybackMode.Sequential;
+	[JsonInclude]
+	private string _lastMusicTrackRelativePath = string.Empty;
+	[JsonInclude]
 	private List<AutoTagMapping> _autoTagMappings = [];
 	[JsonInclude]
 	private ObservableCollection<ModSeparator> _separators = null!;
@@ -729,6 +811,7 @@ internal sealed class SettingsService
 	public SettingsService(ILogger<SettingsService> logger)
 	{
 		_logger = logger;
+		_file = new FileInfo(Path.GetFullPath("settings.json"));
 	}
 
 	private string? EncryptString(string? plainText)
@@ -780,8 +863,8 @@ internal sealed class SettingsService
 
 		_logger.LogInformation("Initializing settings service (readonly = {})", @readonly);
 		
-		s_file.Refresh();
-		if (!s_file.Exists)
+		_file.Refresh();
+		if (!_file.Exists)
 			return false;
 
 		ResetInternal();
@@ -802,8 +885,8 @@ internal sealed class SettingsService
 	{
 		_logger.LogInformation("Reloading settings from disk");
 		
-		s_file.Refresh();
-		if (!s_file.Exists)
+		_file.Refresh();
+		if (!_file.Exists)
 			return;
 
 		ResetInternal();
@@ -836,14 +919,15 @@ internal sealed class SettingsService
 		ResetInternal();
 	}
 
-	public async Task SaveAsync()
+	public async Task SaveAsync(bool notifyListeners = true)
 	{
 		GuardInitialized();
 		GuardReadonly();
 
 		var json = JsonSerializer.Serialize(CreateJsonModel(), s_serializerOptions);
-		await File.WriteAllTextAsync(s_file.FullName, json);
-		SettingsChanged?.Invoke(this, EventArgs.Empty);
+		await File.WriteAllTextAsync(_file.FullName, json);
+		if (notifyListeners)
+			SettingsChanged?.Invoke(this, EventArgs.Empty);
 	}
 
 	public bool Validate()
@@ -960,6 +1044,13 @@ internal sealed class SettingsService
 			AutoAddImportedModsToActiveProfile = _autoAddImportedModsToActiveProfile,
 			EnableAutoTagging = _enableAutoTagging,
 			AutoTagCreateMissingTags = _autoTagCreateMissingTags,
+			EnableMusicPlayer = _enableMusicPlayer,
+			AutoPlayBackgroundMusic = _autoPlayBackgroundMusic,
+			MusicPlayerHorizontalPosition = _musicPlayerHorizontalPosition,
+			MusicPlayerVerticalPosition = _musicPlayerVerticalPosition,
+			MusicPlayerVolume = _musicPlayerVolume,
+			MusicPlayerPlaybackMode = _musicPlaybackMode,
+			LastMusicTrackRelativePath = _lastMusicTrackRelativePath,
 			AutoTagMappings = _autoTagMappings.Select(static m => new
 			{
 				type = m.Type,
@@ -1004,8 +1095,8 @@ internal sealed class SettingsService
 
 	private async Task ReadAsyncFallback()
 	{
-		var stream = s_file.Open(FileMode.Open, FileAccess.Read, FileShare.Read);
-		var document = await JsonDocument.ParseAsync(stream, new JsonDocumentOptions
+		using var stream = _file.Open(FileMode.Open, FileAccess.Read, FileShare.Read);
+		using var document = await JsonDocument.ParseAsync(stream, new JsonDocumentOptions
 		{
 			AllowTrailingCommas = true,
 			CommentHandling = JsonCommentHandling.Skip
@@ -1126,6 +1217,30 @@ internal sealed class SettingsService
 		_enableAutoTagging = prop.GetBoolean();
 	if (root.TryGetProperty(nameof(AutoTagCreateMissingTags), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
 		_autoTagCreateMissingTags = prop.GetBoolean();
+	if (root.TryGetProperty(nameof(EnableMusicPlayer), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		_enableMusicPlayer = prop.GetBoolean();
+	if (root.TryGetProperty(nameof(AutoPlayBackgroundMusic), out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		_autoPlayBackgroundMusic = prop.GetBoolean();
+	else if (root.TryGetProperty("EnableBackgroundMusic", out prop) && prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		_autoPlayBackgroundMusic = prop.GetBoolean();
+	if (root.TryGetProperty(nameof(MusicPlayerHorizontalPosition), out prop) && prop.TryGetDouble(out var musicPlayerHorizontalPosition))
+		_musicPlayerHorizontalPosition = Math.Clamp(musicPlayerHorizontalPosition, 0, 1);
+	if (root.TryGetProperty(nameof(MusicPlayerVerticalPosition), out prop) && prop.TryGetDouble(out var musicPlayerVerticalPosition))
+		_musicPlayerVerticalPosition = Math.Clamp(musicPlayerVerticalPosition, 0, 1);
+	if (root.TryGetProperty(nameof(MusicPlayerVolume), out prop) && prop.TryGetDouble(out var musicPlayerVolume))
+		_musicPlayerVolume = Math.Clamp(musicPlayerVolume, 0, 1);
+	if (root.TryGetProperty(nameof(MusicPlayerPlaybackMode), out prop))
+	{
+		if (prop.ValueKind == JsonValueKind.String
+			&& Enum.TryParse<MusicPlaybackMode>(prop.GetString(), ignoreCase: true, out var parsedMusicPlaybackMode)
+			&& Enum.IsDefined(parsedMusicPlaybackMode))
+			_musicPlaybackMode = parsedMusicPlaybackMode;
+		else if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var musicPlaybackMode)
+			&& Enum.IsDefined(typeof(MusicPlaybackMode), musicPlaybackMode))
+			_musicPlaybackMode = (MusicPlaybackMode)musicPlaybackMode;
+	}
+	if (root.TryGetProperty(nameof(LastMusicTrackRelativePath), out prop) && prop.ValueKind == JsonValueKind.String)
+		_lastMusicTrackRelativePath = prop.GetString() ?? string.Empty;
 	if (root.TryGetProperty(nameof(AutoTagMappings), JsonValueKind.Array, out var mappingArr))
 	{
 		var mappingList = new List<AutoTagMapping>();
@@ -1303,6 +1418,13 @@ internal sealed class SettingsService
 		_enableAutoTagging = false;
 		_autoTagCreateMissingTags = false;
 		_autoTagMappings = [];
+		_enableMusicPlayer = true;
+		_autoPlayBackgroundMusic = false;
+		_musicPlayerHorizontalPosition = 0.98;
+		_musicPlayerVerticalPosition = 0.75;
+		_musicPlayerVolume = 0.3;
+		_musicPlaybackMode = MusicPlaybackMode.Sequential;
+		_lastMusicTrackRelativePath = string.Empty;
 		_separators = [];
 		_tags = [];
 		_organizationalFolderNames = ["Models", "Model"];

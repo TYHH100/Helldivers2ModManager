@@ -106,6 +106,13 @@ internal sealed class MyService
 - `ResetInternal` 漏登记 → 用户点「重置所有设置」后，JSON 已写入的 `true` 状态被覆盖为字段默认值前看似正常，但下次重置会回到不一致状态。
 - 在 `ModService_ModAdded`（`DashboardPageViewModel.cs`）里直接加入分组 → 该事件还会被「刷新模组库」触发，会把目录里本来不属于该配置文件的旧模组一并加入，违反用户意图；只能在导入窗口内通过临时订阅区分。
 
+**悬浮音乐播放器**：
+
+- `EnableMusicPlayer` 只控制播放器是否工作/显示；`AutoPlayBackgroundMusic` 只控制启动播放，默认分别为 `true` / `false`。启用时立即确保程序目录下的 `Music` 存在。
+- 播放模式固定为 `Sequential`（默认，到末尾停止）、`Loop`（列表循环）、`Shuffle`（随机且多首时不连续重复）；模式、音量和当前曲目由播放器合并自动保存，退出时再强制落盘。
+- 当前曲目只保存相对 `Music` 的路径；刷新或启动时目标缺失则回退第一首，列表为空则清空，禁止保存绝对路径或沿用悬空索引。
+- `SettingsService.ReadAsyncFallback` 打开的 `FileStream`/`JsonDocument` 必须用 `using` 释放，否则设置文件会长期锁定并导致测试临时目录无法清理。
+
 ### 分组内排序与顺序持久化（2026-09-11 修复）
 
 列表显示顺序的唯一来源是 `ModGroupService.FilterMods/FilterModViewModels` 的输出序，两条路径不同：
@@ -323,7 +330,7 @@ catch (Exception ex)
 | 把取消异常当成崩溃 | `TaskCanceledException` 可能只是防抖或新请求取消；先确认实际使用的功能和取消来源，再判断是否是真故障。 |
 | `await` 长任务或手写 `Add`+`Task.Run`+`Complete/Fail` 样板 | 耗时操作统一走 `BackgroundTaskService.RunAsync(...)`（后台线程 + 状态生命周期一把管，见 §6）；`BackgroundTaskService` 单独用 `Add/Update/Complete` 只管理状态、不提供后台线程，`await` 只让出异步 IO，同步 CPU 密集代码（LZ4 解码、SHA-256、压缩/解压、大文件解析）仍在调用线程（UI）执行。服务内部 CPU 密集解析优先在服务内部后台化（参考 `GameUnitReferenceReader`/`ModService`/`ModHashService`/`PatchResourceInspectionService`），改完后检查所有 UI 入口。 |
 | 切换配置/模组库时逐项改 `ObservableCollection`，或用 `List.Contains` 在全量模组循环内判断分组成员 | 大列表视图先用普通 `List` 构造完再一次替换绑定集合；分组成员判断先建立 `HashSet<Guid>`；SQLite 整组写入不要占用 UI 线程，先完成内存切换再后台持久化。 |
-| 用过时断言或并行构建验证 | 按当前 MSTest 版本使用 `Assert.AreEqual` 等兼容断言；涉及共享 `obj` 时串行构建/测试，验证生成代码时不要使用 `--no-build`。 |
+| 用过时断言或并行构建验证 | 按当前 MSTest 版本使用 `Assert.AreEqual` 等兼容断言；涉及共享 `obj` 时串行构建/测试，验证生成代码时不要使用 `--no-build`；修改进程级 `Environment.CurrentDirectory` 的测试类必须标记 `[DoNotParallelize]`，否则会互相读取对方的 `settings.json`。 |
 | 只验证 CLI 发布，不验证 VS 发布 | 修改 `Helldivers2PatchTool` 时复现对应 Publish Profile；独立工具不能直接引用自包含 EXE，且共享主程序构建必须固定 `net10.0-windows` 和 `win-x64`。 |
 | 模型预览整体黑色或局部缺失只查材质引用 | 特例模型同时含高分辨率正常材质和 BC7 纯黑占位材质；先按 `(MeshInfoIndex, VO, VC, IC)` 去重材质变体（不含 IO），再以多点 BC7 采样加解码后的全像素纯黑验证过滤占位，不能只看前 64 字节。对稀疏 section，按三角形引用压缩顶点后再做全局容量判断。详见 §5。 |
 | 旧角色材质只替换父模板 ID | 先与同一装备的可用 Mod 对照。已验证 DP-00 的 `0x102/1280B/248B` 角色材质在当前游戏仍保留旧结构，只需将父模板 `0x54AE...` 替为 `0x8F66...`；不要凭另一份样例把变量表、结束偏移或材质版本重建。没有同资源证据的 emissive/未知 schema 仅警告，不自动重写。 |

@@ -136,6 +136,20 @@ internal partial class App : Application
 	{
 		try
 		{
+			if (MainWindow?.DataContext is MainViewModel mainViewModel)
+			{
+				Task.Run(() => mainViewModel.FloatingMusicPlayerViewModel.FlushPlaybackPreferencesAsync())
+					.GetAwaiter()
+					.GetResult();
+			}
+		}
+		catch (Exception ex)
+		{
+			_logger?.LogError(ex, "Failed to save music player state during application exit");
+		}
+
+		try
+		{
 			Host.Services.GetRequiredService<ProfileSaveCoordinator>()
 				.FlushAsync()
 				.GetAwaiter()
