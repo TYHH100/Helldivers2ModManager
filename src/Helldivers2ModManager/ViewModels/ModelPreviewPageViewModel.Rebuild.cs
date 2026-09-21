@@ -455,8 +455,6 @@ internal sealed partial class ModelPreviewPageViewModel
         _decodedTextureOrder.Clear();
         _modelResultCache.Clear();
         _modelResultOrder.Clear();
-        ClearAudioInventoryCache();
-        ClearTextInventoryCache();
         // ConditionalWeakTable has no Clear API. Replacing it removes this page's
         // strong cache root so old WPF MeshGeometry3D instances can be collected.
         _geometryCache = new ConditionalWeakTable<ModelPreviewMesh, CachedMeshGeometry>();
@@ -853,7 +851,6 @@ internal sealed partial class ModelPreviewPageViewModel
         OnPropertyChanged(nameof(AnimationPlaybackToolTip));
         // 下拉控件的提示/搜索占位文本由代码推给控件（见 ModelPreviewPageView 的同步逻辑）。
         OnPropertyChanged(nameof(AnimationPickerPlaceholder));
-        OnPropertyChanged(nameof(LuaCountText));
         UpdateLocalizedPreviewLabels();
         UpdateCameraOrientationText(_cameraDirection);
     }
@@ -885,10 +882,6 @@ internal sealed partial class ModelPreviewPageViewModel
         Volatile.Write(ref _isDisposed, 1);
         StopAnimationPlayback();
         _animationTimer.Tick -= AnimationTimerOnTick;
-        _audioPositionTimer.Stop();
-        _audioPositionTimer.Tick -= AudioPositionTimerOnTick;
-        _audioPlaybackService.PlaybackEnded -= AudioPlaybackServiceOnPlaybackEnded;
-        StopAudioPlayback(clearCurrent: true);
         _pageLifetimeCancellation.Cancel();
         _loadCancellation?.Cancel();
         Interlocked.Increment(ref _renderGeneration);

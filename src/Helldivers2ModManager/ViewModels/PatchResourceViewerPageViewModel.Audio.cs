@@ -13,9 +13,9 @@ using System.Windows.Threading;
 
 namespace Helldivers2ModManager.ViewModels;
 
-internal sealed partial class ModelPreviewPageViewModel
+internal sealed partial class PatchResourceViewerPageViewModel
 {
-    internal const int AudioPreviewTabIndex = 2;
+    internal const int AudioPreviewTabIndex = 3;
 
     private const int MaxCachedAudioInventories = 2;
 
@@ -29,6 +29,7 @@ internal sealed partial class ModelPreviewPageViewModel
     private AudioEntryViewModel? _currentAudioEntry;
     private int _audioUncomparedCount;
     private bool _suppressAudioPositionUpdates;
+    private int _audioPlaybackGeneration;
 
     private readonly List<AudioEntryViewModel> _viewEntries = [];
 
@@ -88,7 +89,6 @@ internal sealed partial class ModelPreviewPageViewModel
     private int _selectedPreviewTabIndex;
 
     public bool HasAudioEntries => AudioEntryTotalCount > 0;
-    public bool IsAudioOnlyPreview => HasAudioEntries && !HasModel;
     public int AudioEntryTotalCount { get; private set; }
     public int AudioBankCount { get; private set; }
     public bool HasAudioMessage => !string.IsNullOrEmpty(AudioMessageText);
@@ -176,7 +176,7 @@ internal sealed partial class ModelPreviewPageViewModel
     [RelayCommand]
     private async Task ToggleAudioEntryPlayback(AudioEntryViewModel? entry)
     {
-        if (entry is null)
+        if (_isDisposed || entry is null || !_allAudioEntries.Contains(entry))
             return;
         if (ReferenceEquals(CurrentAudioEntry, entry))
         {
@@ -204,9 +204,12 @@ internal sealed partial class ModelPreviewPageViewModel
 
         AudioMessageText = string.Empty;
         IsAudioBusy = true;
+        var generation = ++_audioPlaybackGeneration;
         try
         {
-            var (success, error) = await _audioPlaybackService.PlayAsync(entry.Model, CancellationToken.None);
+            var (success, error) = await _audioPlaybackService.PlayAsync(entry.Model, _pageLifetimeCancellation.Token);
+            if (_isDisposed || generation != _audioPlaybackGeneration)
+                return;
             if (success)
             {
                 CurrentAudioEntry = entry;
@@ -233,13 +236,16 @@ internal sealed partial class ModelPreviewPageViewModel
         }
         catch (Exception ex)
         {
+            if (_isDisposed || generation != _audioPlaybackGeneration)
+                return;
             _logger.LogError(ex, "Audio preview playback failed");
             AudioMessageText = _localizationService["ModelPreviewPage.AudioPlaybackFailed"]
                 .Replace("{message}", ex.Message);
         }
         finally
         {
-            IsAudioBusy = false;
+            if (!_isDisposed && generation == _audioPlaybackGeneration)
+                IsAudioBusy = false;
         }
     }
 
@@ -260,6 +266,8 @@ internal sealed partial class ModelPreviewPageViewModel
 
     private void StopAudioPlayback(bool clearCurrent)
     {
+        ++_audioPlaybackGeneration;
+        IsAudioBusy = false;
         _audioPositionTimer.Stop();
         _audioPlaybackService.Stop();
         IsAudioPlaying = false;
@@ -302,7 +310,7 @@ internal sealed partial class ModelPreviewPageViewModel
         // PlaybackStopped fires on an audio thread; all state below is UI-bound.
         void Apply()
         {
-            if (!ReferenceEquals(CurrentAudioEntry?.Model, entry))
+            if (_isDisposed || !ReferenceEquals(CurrentAudioEntry?.Model, entry))
                 return;
             IsAudioPlaying = false;
             _audioPositionTimer.Stop();
@@ -359,7 +367,7 @@ internal sealed partial class ModelPreviewPageViewModel
         }
     }
 
-    /// <summary>Runs beside the model preview load; guarded by the same generation counter.</summary>
+    /// <summary>Loads resources for the selected patch set; guarded by the page load generation.</summary>
     private async Task<AudioInventoryResult> LoadAudioInventoryAsync(
         ModData mod,
         IReadOnlyList<FileInfo> patchFiles,
@@ -437,7 +445,6 @@ internal sealed partial class ModelPreviewPageViewModel
         AudioEntriesView.Refresh();
 
         OnPropertyChanged(nameof(HasAudioEntries));
-        OnPropertyChanged(nameof(IsAudioOnlyPreview));
         OnPropertyChanged(nameof(AudioEntryTotalCount));
         OnPropertyChanged(nameof(AudioBankCount));
         OnPropertyChanged(nameof(AudioCountText));
@@ -463,7 +470,6 @@ internal sealed partial class ModelPreviewPageViewModel
         SelectedAudioEntry = null;
         AudioMessageText = string.Empty;
         OnPropertyChanged(nameof(HasAudioEntries));
-        OnPropertyChanged(nameof(IsAudioOnlyPreview));
         OnPropertyChanged(nameof(AudioEntryTotalCount));
         OnPropertyChanged(nameof(AudioBankCount));
         OnPropertyChanged(nameof(AudioCountText));

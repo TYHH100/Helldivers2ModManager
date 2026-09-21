@@ -1,3 +1,4 @@
+using Helldivers2ModManager.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -15,6 +16,16 @@ public partial class PatchResourceViewerPageView : UserControl
     public PatchResourceViewerPageView()
     {
         InitializeComponent();
+    }
+
+    private void AudioEntryRow_OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: AudioEntryViewModel entry } &&
+            DataContext is PatchResourceViewerPageViewModel viewModel &&
+            viewModel.ToggleAudioEntryPlaybackCommand.CanExecute(entry))
+        {
+            viewModel.ToggleAudioEntryPlaybackCommand.Execute(entry);
+        }
     }
 
     private void PreviewImage_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)

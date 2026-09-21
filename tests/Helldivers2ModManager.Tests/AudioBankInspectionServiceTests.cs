@@ -417,9 +417,9 @@ public sealed class AudioBankInspectionServiceTests
     public void ShouldSkipAudioPreview_MultiOptionAudioModsOnly()
     {
         // 多选项且检测为音频 → 跳过；单选项或非音频 → 不跳过。
-        Assert.IsTrue(Helldivers2ModManager.ViewModels.ModelPreviewPageViewModel.ShouldSkipAudioPreviewCore(3, Helldivers2ModManager.Models.ModType.Audio));
-        Assert.IsFalse(Helldivers2ModManager.ViewModels.ModelPreviewPageViewModel.ShouldSkipAudioPreviewCore(1, Helldivers2ModManager.Models.ModType.Audio));
-        Assert.IsFalse(Helldivers2ModManager.ViewModels.ModelPreviewPageViewModel.ShouldSkipAudioPreviewCore(3, Helldivers2ModManager.Models.ModType.Model));
-        Assert.IsFalse(Helldivers2ModManager.ViewModels.ModelPreviewPageViewModel.ShouldSkipAudioPreviewCore(2, Helldivers2ModManager.Models.ModType.Unknown));
+        Assert.IsTrue(Helldivers2ModManager.ViewModels.PatchResourceViewerPageViewModel.ShouldSkipAudioPreviewCore(3, Helldivers2ModManager.Models.ModType.Audio));
+        Assert.IsFalse(Helldivers2ModManager.ViewModels.PatchResourceViewerPageViewModel.ShouldSkipAudioPreviewCore(1, Helldivers2ModManager.Models.ModType.Audio));
+        Assert.IsFalse(Helldivers2ModManager.ViewModels.PatchResourceViewerPageViewModel.ShouldSkipAudioPreviewCore(3, Helldivers2ModManager.Models.ModType.Model));
+        Assert.IsFalse(Helldivers2ModManager.ViewModels.PatchResourceViewerPageViewModel.ShouldSkipAudioPreviewCore(2, Helldivers2ModManager.Models.ModType.Unknown));
     }
 }

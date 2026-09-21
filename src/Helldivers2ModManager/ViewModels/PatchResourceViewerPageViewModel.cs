@@ -28,6 +28,12 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
     private readonly PatchResourceInspectionService _inspectionService;
     private readonly LocalizationService _localizationService;
     private TexturePreviewData? _loadedTexturePreview;
+    private CancellationTokenSource? _textureCancellation;
+    private readonly SemaphoreSlim _textureDecodeGate = new(1, 1);
+    internal Task PendingTextureLoad { get; private set; } = Task.CompletedTask;
+
+    [ObservableProperty]
+    private bool _useOriginalTextureResolution;
 
     public override string Title => _localizationService["PatchResourceViewerPage.Title"];
 
@@ -66,13 +72,31 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
         IServiceProvider provider,
         ModService modService,
         PatchResourceInspectionService inspectionService,
-        LocalizationService localizationService)
+        LocalizationService localizationService,
+        AudioBankInspectionService audioInspectionService,
+        AudioPlaybackService audioPlaybackService,
+        ModTypeDetectionService modTypeDetectionService,
+        TextBankInspectionService textInspectionService,
+        Services.Parsing.LuaScriptInspectionService luaScriptInspectionService)
     {
         _logger = logger;
         _navigationStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
         _modService = modService;
         _inspectionService = inspectionService;
         _localizationService = localizationService;
+        _audioInspectionService = audioInspectionService;
+        _audioPlaybackService = audioPlaybackService;
+        _modTypeDetectionService = modTypeDetectionService;
+        _textInspectionService = textInspectionService;
+        _luaInspectionService = luaScriptInspectionService;
+        _audioPositionTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(100)
+        };
+        _audioPositionTimer.Tick += AudioPositionTimerOnTick;
+        _audioPlaybackService.PlaybackEnded += AudioPlaybackServiceOnPlaybackEnded;
+        InitializeAudioView();
+        InitializeTextView();
         _localizationService.PropertyChanged += LocalizationServiceOnPropertyChanged;
 
         _ = RefreshModsAsync();
@@ -81,8 +105,25 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
     [RelayCommand]
     private void GoBack() => _navigationStore.Value.Navigate<DashboardPageViewModel>();
 
+    public void SetInitialMod(ModData mod)
+    {
+        ArgumentNullException.ThrowIfNull(mod);
+        if (!Mods.Contains(mod))
+            Mods.Add(mod);
+        SelectedMod = mod;
+    }
+
     [RelayCommand(AllowConcurrentExecutions = false)]
-    private async Task RefreshMods() => await RefreshModsAsync();
+    private async Task RefreshMods()
+    {
+        var previous = SelectedMod;
+        await RefreshModsAsync();
+        if (previous is not null && ReferenceEquals(previous, SelectedMod))
+        {
+            PendingResourceLoad = LoadSelectedModAsync(previous);
+            await PendingResourceLoad;
+        }
+    }
 
     [RelayCommand]
     private void SetTextureChannel(string channel)
@@ -93,14 +134,32 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
 
     partial void OnSelectedModChanged(ModData? value)
     {
-        if (value is not null)
-            _ = LoadSelectedModAsync(value);
+        CancelResourceLoad();
+        ClearResourceCollections();
+        if (value is not null && !_isDisposed)
+            PendingResourceLoad = LoadSelectedModAsync(value);
     }
 
     partial void OnSelectedTextureChanged(TextureInspectionItem? value)
     {
-        if (value is not null && SelectedMod is not null)
-            _ = LoadTexturePreviewAsync(SelectedMod, value);
+        CancelTexturePreview();
+        if (!_isDisposed && value is not null && SelectedMod is not null)
+            PendingTextureLoad = LoadTexturePreviewAsync(SelectedMod, value);
+    }
+
+    partial void OnUseOriginalTextureResolutionChanged(bool value)
+    {
+        OnSelectedTextureChanged(SelectedTexture);
+    }
+
+    private void CancelTexturePreview()
+    {
+        _textureCancellation?.Cancel();
+        _textureCancellation?.Dispose();
+        _textureCancellation = null;
+        _loadedTexturePreview = null;
+        TexturePreview = null;
+        TexturePreviewStatus = string.Empty;
     }
 
     partial void OnTextureChannelChanged(TexturePreviewChannel value)
@@ -131,54 +190,13 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
         await Task.CompletedTask;
     }
 
-    private async Task LoadSelectedModAsync(ModData mod)
-    {
-        IsLoading = true;
-        StatusText = _localizationService["PatchResourceViewerPage.Loading"].Replace("{name}", mod.Manifest.Name);
-        TocEntries.Clear();
-        GpuStreams.Clear();
-        Textures.Clear();
-        SelectedTexture = null;
-        _loadedTexturePreview = null;
-        TexturePreview = null;
-        TexturePreviewStatus = _localizationService["PatchResourceViewerPage.SelectTexture"];
-
-        try
-        {
-            var result = await _inspectionService.InspectAsync(mod.Directory);
-            if (!ReferenceEquals(mod, SelectedMod))
-                return;
-
-            foreach (var item in result.TocEntries)
-                TocEntries.Add(item);
-            foreach (var item in result.GpuStreams)
-                GpuStreams.Add(item);
-            foreach (var item in result.Textures)
-                Textures.Add(item);
-
-            SelectedTexture = Textures.FirstOrDefault();
-
-            StatusText = string.IsNullOrWhiteSpace(result.Error)
-                ? _localizationService["PatchResourceViewerPage.Loaded"]
-                    .Replace("{patches}", result.PatchFileCount.ToString())
-                    .Replace("{toc}", TocEntries.Count.ToString())
-                    .Replace("{streams}", GpuStreams.Count.ToString())
-                : _localizationService["PatchResourceViewerPage.LoadedWithWarning"].Replace("{message}", result.Error);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to inspect patch resources for {Mod}", mod.Manifest.Name);
-            StatusText = _localizationService["PatchResourceViewerPage.LoadFailed"].Replace("{message}", ex.Message);
-        }
-        finally
-        {
-            if (ReferenceEquals(mod, SelectedMod))
-                IsLoading = false;
-        }
-    }
-
     private async Task LoadTexturePreviewAsync(ModData mod, TextureInspectionItem texture)
     {
+        var generation = _loadGeneration;
+        _textureCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            _loadCancellation?.Token ?? _pageLifetimeCancellation.Token);
+        var token = _textureCancellation.Token;
+        var original = UseOriginalTextureResolution;
         _loadedTexturePreview = null;
         TexturePreview = null;
         TexturePreviewStatus = _localizationService["PatchResourceViewerPage.LoadingTexture"]
@@ -186,8 +204,26 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
 
         try
         {
-            var preview = await _inspectionService.PreviewTextureAsync(mod.Directory, texture);
-            if (!ReferenceEquals(mod, SelectedMod) || !ReferenceEquals(texture, SelectedTexture))
+            // Keep full-resolution decoding bounded; never silently label a reduced mip as original.
+            const int originalPixelLimit = 67_108_864;
+            if (original && (long)texture.Width * texture.Height > originalPixelLimit)
+            {
+                TexturePreviewStatus = _localizationService["PatchResourceViewerPage.OriginalTextureTooLarge"];
+                return;
+            }
+
+            TexturePreviewData? preview;
+            await _textureDecodeGate.WaitAsync(token);
+            try
+            {
+                preview = await _inspectionService.PreviewTextureAsync(mod.Directory, texture,
+                    maxPreviewPixels: original ? originalPixelLimit : 4_194_304, cancellationToken: token);
+            }
+            finally
+            {
+                _textureDecodeGate.Release();
+            }
+            if (token.IsCancellationRequested || !IsCurrentLoad(mod, generation) || !ReferenceEquals(texture, SelectedTexture))
                 return;
 
             if (preview is null)
@@ -209,10 +245,11 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
                 .Replace("{height}", preview.Height.ToString())
                 .Replace("{format}", preview.Description);
         }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to decode texture {TextureId}", texture.TextureIdText);
-            if (ReferenceEquals(texture, SelectedTexture))
+            if (!token.IsCancellationRequested && IsCurrentLoad(mod, generation) && ReferenceEquals(texture, SelectedTexture))
                 TexturePreviewStatus = _localizationService["PatchResourceViewerPage.TextureUnavailable"];
         }
     }
@@ -238,7 +275,8 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
             var png = new BitmapImage();
             png.BeginInit();
             png.CacheOption = BitmapCacheOption.OnLoad;
-            png.DecodePixelWidth = Math.Min(preview.Width, 2048);
+            if (!UseOriginalTextureResolution)
+                png.DecodePixelWidth = Math.Min(preview.Width, 2048);
             png.StreamSource = encodedImage;
             png.EndInit();
 
@@ -283,6 +321,18 @@ internal sealed partial class PatchResourceViewerPageViewModel : PageViewModelBa
 
     protected override void OnDispose()
     {
+        _isDisposed = true;
+        CancelTexturePreview();
+        CancelResourceLoad();
+        _audioPositionTimer.Tick -= AudioPositionTimerOnTick;
+        _audioPlaybackService.PlaybackEnded -= AudioPlaybackServiceOnPlaybackEnded;
+        ClearResourceCollections();
+        ClearAudioInventoryCache();
+        ClearTextInventoryCache();
+        _luaInventoryCache.Clear();
+        _luaInventoryOrder.Clear();
+        _pageLifetimeCancellation.Cancel();
+        _pageLifetimeCancellation.Dispose();
         _localizationService.PropertyChanged -= LocalizationServiceOnPropertyChanged;
     }
 }

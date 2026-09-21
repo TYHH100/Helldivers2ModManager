@@ -1,401 +1,131 @@
 # Helldivers2ModManager 开发指引
 
-这份文件只记录会影响开发、排障和交付的约定。具体行为以当前源码、测试、资源和 Schema 为准；不要在这里复制会频繁变化的字段清单。
+只记录长期约定和已验证的易错点。具体字段、格式、阈值以当前源码、测试和 Schema 为准；新增提醒用“触发条件 → 正确做法”，合并到对应章节，不追加长篇排障记录。
 
 ## 1. 工作原则
 
-- 项目运行在 Windows，主程序是 WPF/.NET 10。默认使用 PowerShell。
-- 先检查真实代码路径、实际运行边界和样例文件，再判断原因或修改方案。
-- 工作树可能已有用户改动。修改前查看 `git status --short`，只触碰当前任务需要的文件，保留无关改动。
-- 文件解析、部署和修复属于高风险操作：先校验路径、范围、哈希或备份信息，再写入；能只读完成的检查不要改动源文件。
-- 测试需要临时复制文件时，测试结束必须删除临时副本，避免目录堆积。
-- 主程序或 Visual Studio 调试器运行时会锁定默认 `bin` 下的 WPF EXE/DLL；不要擅自关闭用户进程，改用 `dotnet test --artifacts-path <系统临时目录>` 隔离验证产物，并在完成后校验路径再删除该临时目录。
-- AI 文本翻译必须按有限大小批量调用 Chat Completions，并限制批次并发；不要对每个名称/描述逐条串行请求。缓存键必须包含端点、模型、目标语言、思考模式（开启时还含推理强度）和原文，页面打开时只读缓存，用户点击翻译才请求网络。流式输出按完整 JSONL 条目逐条更新 UI，不能等整批完成才显示；思考模式默认关闭，仅开启时发送 `reasoning_effort`。
-- 需要联网查资料时优先使用 AnySearch 技能；没有必要时不要联网。
-- 使用 `apply_patch` 编辑文本文件；不要用重置、覆盖或递归删除命令清理用户改动。
+- 中文回复，简洁沟通，不过度审计。Git 提交和推送说明遵守 Conventional Commits。
+- Windows / WPF / .NET 10，默认 PowerShell。先看真实代码、调用边界和样例，再判断或修改。
+- 修改前后检查 `git status --short`，保留用户已有改动；文本编辑用 `apply_patch`，禁止用重置或覆盖清理用户改动。
+- 解析、部署、修复先校验路径、范围、哈希和备份；用户 Mod、游戏资源及样例默认只读，不提交到仓库。
+- 删除前确认最终绝对路径在目标目录内，优先可恢复操作。测试副本和临时产物用完清理。
+- 必要时才联网，优先可用的 AnySearch 技能；引用外部资料时提供来源链接，保留代码中的出处声明。
+- 移除功能须清理设置、菜单、服务、资源和文档的完整链路；共享服务、样式和解析器变更须检查调用方。
+
+## 2. 项目与架构
+
+- 解决方案：`Helldivers2ModManager.sln`。应用项目在 `src/`，MSTest 在 `tests/`，Schema 与资料在 `docs/`；`archive/` 是未跟踪的历史归档。
+- 主程序 `Helldivers2ModManager` 承载领域、服务与 UI；主程序、测试、`Purger` 使用 `net10.0-windows`。
+- `Helldivers2PatchTool` 使用 `net10.0-windows7.0`，引用主程序时经 `SetTargetFramework` 固定为自包含、win-x64；不要破坏此配置导致 NETSDK1150。
+- 依赖：前端 → 领域服务 → 基础设施/持久化。`Services`、`Models` 不得引用 `ViewModels`；`Services/Infrastructure/` 下的 Settings/Localization 服务不得依赖 UI（独立工具也使用）。
+- 领域入口：`Services/{VersionCheck,Parsing,ModManagement,ModelPreview,Search}/`；设施：`Services/{Persistence,Infrastructure,Nexus}/`；UI：`Views/`、`ViewModels/`、`Components/`、`Stores/`、`Resources/`。
+- `App.xaml.cs` 扫描 `[RegisterService]` 注册服务。默认类型为 `internal`；共享状态用 Singleton，页面 VM 用 Transient；接口与实现共用实例时用 `Contract`。
+- 新页面必须齐备 VM 注册、`MainWindow.xaml` 的 DataTemplate 和 View。导航走 `NavigationStore.Navigate<T>` 的独立 scope，禁止根容器直接解析页面 VM 导致退出后仍持有资源。
+
+## 3. WPF、异步与本地化
+
+- VM 使用已有基类/ObservableObject 与 CommunityToolkit；业务逻辑在 VM/Service。大型类按流水线拆 partial，功能写入对应文件。
+- 公共样式放 `Resources/Styles/`，引用前核对资源键。改 XAML 后检查 code-behind 的旧名称、模板、导航入口及深色主题。
+- WPF 集合和绑定属性只在 UI 线程更新。大列表先构造普通 List 再整体替换，成员判断用 HashSet；音频/文本列表用虚拟化 ListBox + ListCollectionView，分组时也启用虚拟化。
+- 动画选择必须保留 `VirtualizedTextPicker`：只物化可视行、回传源索引、按偏移定位选中项。不要换回 ComboBox 或修改全局 FluentComboBox（BringIntoView 会线性生成大量容器）。
+- 耗时业务统一用 `BackgroundTaskService.RunAsync`；work 内只做后台计算，通过 `BackgroundTaskContext.Report` 更新进度，结果回 UI 应用。`await` 和单独 Add/Update 不会把 CPU 工作移出 UI 线程。
+- 有专属进度弹窗的任务用 `isForeground: true`；静默任务用默认后台模式。保留任务注册和弹窗步骤；终态 Complete/Fail/Cancel 必须经 `QueueOnUiThread` 排队，避免抢在步骤更新前完成。
+- 有总量用 0..1 进度，否则 IsIndeterminate。正常取消不当作故障；切换请求/退出时取消旧任务，并用代次检查防止旧结果回写。
+- TCS 桥接 `MessageBoxSelectionMessage` 必须提供 Abort 回调，否则点击取消后任务挂起；会话结束会清空状态时，先捕获总结所需对象。
+- 本地化：XAML 用 LocExtension，代码用注入的 LocalizationService；新增 `Section.Key` 同步写入 `Resources/Language/{zh-CN,en-US}.json`。删改键后检查旧引用和双语缺失键，禁止硬编码用户文本。
+
+## 4. 设置、配置与导入
+
+### 设置
+
+- 新设置须同时完成：字段默认值与 Guard 属性；`CreateJsonModel / ReadAsyncFallback / ResetInternal`；SettingsPageViewModel 双向属性及 Update 通知；设置页卡片；双语资源。缺字段时回落默认值。
+- `settings.json` 在程序目录；读取的 FileStream/JsonDocument 必须 using 释放。路径设置校验必要游戏文件；部署默认复制，符号链接仅在用户开启且权限满足时使用。
+- 音乐播放器：EnableMusicPlayer 控制启用/显示（默认 true），AutoPlayBackgroundMusic 只控制启动播放（默认 false）；启用时确保 Music 目录存在。
+- 播放模式为 Sequential（末尾停止）、Loop、Shuffle（多首时不连续重复）；模式、音量、曲目合并保存，退出强制落盘。曲目只存 Music 下相对路径，缺失回退第一首，空库清空。
+
+### 配置与排序
+
+- `ModGuids` 是分组成员权威，默认组也不是天然包含全部模组。默认组排序来自 `_mods / enabled_mods.SortOrder`；非默认组按 ModGuids 顺序输出，禁止兜底追加外部成员。
+- 非默认组部署序随显示序。非 Dashboard 保存时用 `ProfileSaveCoordinator.GetCurrentOrder()` 过滤成员作为 Capture 的 preferredOrder，取不到才回退 ModService 顺序。
+- 导入自动入组（默认关闭）只在 `AddFilesCoreAsync` 本轮导入期间临时订阅 ModAdded，finally 解绑并加入本轮新增 GUID；不要放入通用 ModAdded 处理器（刷新库也会触发）。
+- 自动入组后重新请求配置保存；导入结束用 `SaveProfileNowAsync(showProgress: false)` 立即落盘，不能只依赖防抖或退出保存。自动入组失败记 Warning，不阻断导入，提示用 Toast。
+- 当前配置存 `app_state.last_selected_group_id`：初始化恢复，切换/删除当前组时立即保存，缺失或失效回退默认组。会话状态复用 app_state，不塞设置页、不在全量重插的 mod_groups 上加列。
+
+### 文件操作
+
+- 保持 Legacy/V1 清单兼容，以 `docs/mod_manifest_v1-schema.json` 为准。V1 的 `Options: []` 与无选项均回退根目录补丁，区别于“关闭”占位选项。
+- 部署输入来自 Dashboard/Profile；预览选项和扫描结果不得覆盖部署选择。改清单/选项/部署须验证 manifest、备份和恢复。
+- 批量复制用有限并发 + `File.Copy`，保留符号链接分支；避免无界 Task.WhenAll 和无界哈希。
+- 嵌套解压的共享锁可能来自杀毒扫描。仅对 0x80070020/0x80070021 有界重试；密码、CRC、缺文件等保持原失败语义。
+
+## 5. Patch 解析与修复
+
+- 以 VersionCheckService、PatchResourceInspectionService 为准。补丁族为 `{16位hex}.patch_{索引}` 及同名 `.gpu_resources / .stream`。
+- GPU 不得整体读入内存；大型文件有界随机读取。偏移/长度用 long/ulong，读前验证溢出、范围、对齐和声明尺寸，同时限制单文件与合并后总 Mesh/顶点/索引、并发和缓存。
+- 明确偏移基址：MeshInfo 材料/Section 偏移相对 MeshInfo，GPU 偏移叠加正确 Unit/Stream 基址。诊断输出用相对路径，避免多选项同名文件混淆。
+- Legacy 类型表允许数量为 0 的空槽，按类型值双向比较，不能只比较字典数量。大小差异需区分截断和合法填充。
+- “0 个 GPU Stream”先查 Unit 版本门槛；版本 1 走旧顶点格式。当前 Unit 版本从同 File ID 的游戏引用读取，不能全部硬编码成 10800438。
+- 未知结构仅警告，不猜测损坏或修复。已知可用 Mod 先排除检测器误报、检查 `.hd2mm-backup.json`；修复先保存备份元数据，失败恢复并记录原因。
+- 批量修复只处理明确支持的类型；音频等不支持类型必须跳过。版本检查、冲突、护甲关系扫描保持独立，关系证据来自已启用 Mod 的真实 Patch。
+- 已验证旧角色材质迁移沿用现有签名和测试：只改父模板时不臆造结构；发生 0x54AE→0x8F66 迁移的 patch，符合条件的全部旧 Unit 统一使用当前游戏 LOD，保留 Mod GPU/纹理（见 RequiresCurrentGameLodForLegacyCharacterPack）。
+- 自定义角色按 CustomizationSlot 分组并结合 Mesh 签名保留 Mod LOD，不能仅看单 Mesh ID/GPU 大小；验证 Slim/Stocky 和实际玩家动态场景。
+
+## 6. 模型、动画与材质预览
+
+- 按真实 MeshInfo/Section/Transform 解码；失败可观测、可测试，不用整 Stream 回退或球体/方盒猜测掩盖错误。稀疏 section 先压缩实际引用顶点再算容量。
+- 护甲按显示名合并本体/头盔 archive，过滤用 `option.Ids`，未知/共享网格保留；默认第一个具体套装，无套装才回退“全部”。名称表变更同时检查 ArmorReuseService 和 ModelPreviewBackend。
+- 加载后 `SelectedAnimation = null`，保持绑定姿态；仅手动播放/拖进度应用动画，不自动挑 idle/呼吸片段。
+- 朝向使用全量网格：可信 torso/legs 质心差优先，不显著则回退顶点标准差与 Z 轴先验；不依赖 bounds，不恢复 torso/remainder 反转或无标注 X 翻转。改规则重跑 RealLibraryOrientationScan、FullLibraryOrientationScan，并人工审查人物与武器/载具/VFX。
+- 源骨架可用时采用世界差量 `S⁻¹·A`，无源骨架才退回局部差量。根骨骼保持绑定姿态，additive 以 rest 叠加；兼容性判定统一改 ModelPreviewAnimationCompatibility。
+- 无 BoneIndex/BoneWeight 或全部权重无效时，可用合法 TransformIndex 做单骨全权重挂接；不能以 palette 非空判定顶点流有蒙皮字段，也不能因 palette 空丢弃骨架层级。
+- 游戏动画全量登记、clip 惰性解码；消费者用 `ResolveClip()`，只能后台调用，失败也缓存；UI 只读 `CachedLengthSeconds`。骨数不兼容仍保留列表项，不可播放时返回 null；不要恢复 256 条截断或直接读 Option.Clip。
+- 动画名称英文打底、中文覆盖，中文 Unknown 不覆盖；名称表键为 16 位 hex，十进制转换用脚本，校验源 ID、跳过元数据、重复 ID 取先到者。
+- 纹理保留 RGB/RGBA/A 模式，不默认用 Alpha 作不透明度。材质变体按 `(MeshInfoIndex, VertexOffset, VertexCount, IndexCount)` 去重，不能包含 IndexOffset；优先高分辨率 Albedo。
+- 纯黑占位须多点采样并解码验证，不能只读头部；仅在同 stream 有正常 section 时剔除。缺失贴图灰模回退，不猜测材质内容。
+- 流光仍参与 BaseColor 回退；Alpha 非均匀时不当流光强度，使用静态高光，禁止动态扫光。纯 Emissive 材质压暗 Diffuse 并使用自发光；动画画刷在 UI 线程创建、不冻结。
+- 材质缓存键包含组合形态；手动单贴图模式不叠加高光/发光/动画。相关回归见 ModelPreviewArmorSelection、AnimationBinding、AnimationOption、AttachedSkinning、MaterialTexture、MaterialVariantSelector 测试。
+
+## 7. Patch 资源查看器
+
+- 音频、字幕、Lua 位于 Patch 资源查看器；模型页负责几何、材质、动画，并可携带当前模组跳转。UI 在 `PatchResourceViewerPageViewModel.{Loading,Audio,Text,Lua}.cs`。
+- TOC/纹理/音频/字幕/脚本及提取统一用临时选项选出的 patch 集合；切换、刷新、退出取消旧加载，停止播放同时使未完成试听失效。
+
+### 音频与字幕
+
+- hd2-audio-modder 为 ARR：只参考公开结构/常量，禁止复制源码，保留 README 和代码出处。
+- 音频检查只读 TOC、chunk 头、DIDX 与有界 WEM 头探针；媒体按需切片，不整包加载。Bank 有 16 字节前缀，TEXT_BANK 没有；具体布局看 AudioBankInspectionService / TextBankFormat。
+- WEM 转换 AoTuV 优先、Default 兜底，并以 VorbisReader 构造校验，不能只看转换未抛异常。截断预取媒体禁止播放；dep 关联失败回退 Bank ID，单 bank 的 stream 合并显示。
+- V1 多选项且主类型为 Audio 的模组直接跳过音频预览（用户决定），保留提示。
+- GameAudioBaseline 只缓存音频 TOC 与 SHA-256，不缓存媒体字节；先比尺寸再流式哈希，有条数/字节预算，超预算标未知。句柄缓存逐出时释放，不可播放条目不比对。
+- 字幕基线惰性解析，支持空库；资源缺失标新增，不能假设字符串 ID 连续。回归：AudioBankInspectionServiceTests、TextBankInspectionServiceTests、PatchResourceViewerLifecycleTests。
+
+### Lua
+
+- 全程静态 bytes→结构→文本，禁止加载、编译、执行或求值脚本，不引入 Lua VM。
+- 子原型先于父原型，KGC CHILD 按栈关联；KNUM 的 33 位 ULEB 不得误用于 KGC/KTAB；比较指令成立才执行紧跟的 JMP，还原 if 注意反转条件。
+- 递归检查字符串中的嵌套 dump；保留 CALL 副作用，不能验证的原型回退权威指令清单，子闭包失败用标注占位。
+- 提取保留原始载荷、字节码、还原源码、指令清单、字符串及报告，只写文件不执行。改解析规则跑 LuaScriptInspectionServiceTests，并与 ljd 输出人工对照。
 
-## 2. 项目边界
+## 8. 其他易错点
 
-| 项目 | 作用 | 目标框架 |
-|---|---|---|
-| `Helldivers2ModManager` | 主 WPF 应用（唯一的库代码载体：领域模型、VersionCheck、服务、UI 全在本项目） | `net10.0-windows` |
-| `Helldivers2ModManager.Tests` | MSTest 测试 | `net10.0-windows` |
-| `Purger` | 独立清理工具 | `net10.0-windows` |
-| `Helldivers2PatchTool` | 独立补丁检测/修复工具，通过 `ProjectReference` 引用主程序（引用构建经 `SetTargetFramework` 钉死为自包含 + win-x64，规避 NETSDK1150） | `net10.0-windows7.0` |
+- OLE 拖拽滚轮走 UI 线程 WH_MOUSE_LL，处理后吞掉消息；用 DispatcherTimer 看门狗清理钩子，不只依赖 Rendering。合成 gong 排序刷新用冒泡 DragOver；SendInput 滚轮可能改变按键状态，不能当作真实拖拽等价验证。
+- 文件导入在 Window 的 PreviewDragOver/PreviewDrop 拦截 FileDrop；排序 VM 防御性排除 string[]/FileDrop，避免 gong 当作可排序项。ScrollViewer 查找兼顾视觉后代。
+- ControlTemplate 内命名元素用 OnApplyTemplate/Template.FindName；不要用 Window.Content 的 Grid/ContentControl 包裹 Page，避免破坏 Window/Frame 父级要求。
+- 闪屏在 MainWindow.ContentRendered 后关闭，Rendering 是帧提交前事件，可能引起黑闪。
+- 拼音 API 位于 ToolGood.Words.Pinyin，结果转小写；词库首次加载在后台预热，名称匹配缓存不要在输入热路径反复构建。
+- 使用 ILogger<T>；主程序按 AutoCleanLogs/MaxLogFiles 清理日志。PatchTool 保留独立 FileLogger（不依赖 App.Current），Debug 起记，程序目录 logs 下最多保留 5 个日志。
 
-解决方案文件是 `Helldivers2ModManager.sln`，仓库采用 src/ 布局：四个可构建项目都在 `src/`，测试在 `tests/`，补丁解析/模型相关资料在 `docs/`（含 `mod_manifest_v1-schema.json`）。主应用的服务、模型、ViewModel、View 和资源分别位于同名目录；补丁解析与模型/纹理预览的关键实现集中在 `Services/`、`Models/` 和对应的 `ViewModels/` 中。
-
-仓库布局说明：
-
-- 仓库采用 src/ 布局：四个可构建项目都在 `src/`，测试在 `tests/`，资料与 `mod_manifest_v1-schema.json` 在 `docs/`；`archive/` 是历史遗留归档（未跟踪）。
-- 服务注册：`App.xaml.cs` 反射扫描主程序集的 `[RegisterService]` 标注。
-
-## 3. 架构约定
-
-### 分层总览（核心 / 基础 / 前端）
-
-代码按三层组织，目录即分层；所有命名空间为 `Helldivers2ModManager.*`，目录移动不影响 DI/XAML。
-
-**核心（领域逻辑）**——不依赖 UI：
-- `Models/`：清单家族（Mod/Option/Manifest）、Patch 资源描述、`Models/ModelPreview/` 预览数据模型。
-- `Services/VersionCheck/`：`VersionCheckService` 门面 + 修复/备份/伴生恢复/批量修复子服务 + 游戏引用读取器 + `VersionCheckShared`（共享常量与 `RepairGate`）/`VersionCheckFileOps`。
-- `Services/Parsing/`：`PatchResourceInspectionService`（补丁资源检视）、`PhysBoneParamLocator`。
-- `Services/ModManagement/`：mod 生命周期——`ModService`（+Import/Update/Deploy partial）、`ModHashService`/`FileHashUtils`、`ModTypeDetectionService`、`ModConflictService`、`ModGroupService`、`ProfileService`/`ProfileSaveCoordinator`、`BisectService`、`ArmorReuseService`、`DeploymentOrderHelper`。
-- `Services/Search/`（SearchFilterService/FuzzySearchMatcher）、`Services/ModelPreview/`（ModelPreviewBackend/GpuSkinningService）是领域侧的专用子系统。
-
-**基础（设施与持久化）**——为核心与前端提供支撑：
-- `Services/Persistence/`：`DatabaseService` + 全部 `*Repository`（SQLite 仓储）。
-- `Services/Infrastructure/`：`BackgroundTaskService`（后台任务）、`GameProcessService`（游戏运行护栏）、`RepairDisclaimerService`、`FileLogger`。
-- `Services/Nexus/`：NexusMods API 客户端（接口契约注册的范本）。
-
-**前端（UI）**——Views/（页面视图）、ViewModels/（页面 VM 与 partial 流水线）、Components/（覆盖层控件）、Stores/（导航/编辑会话状态）、Resources/（样式/本地化 JSON/字体）、Behaviors/、Converters/、App/MainWindow/SplashWindow。
-
-依赖方向固定：前端 → 领域服务 → 基础设施/持久化；所有 Services 与 Models 不得反向引用 ViewModels。`SettingsService`/`LocalizationService` 位于 `Services/Infrastructure/`，由 PatchTool 直接 `new` 使用（它们不能依赖任何 UI 类型）。
-
-### 服务注册
-
-服务由 `RegisterServiceAttribute` 配合 `App.xaml.cs` 反射注册：
-
-```csharp
-[RegisterService(ServiceLifetime.Singleton)]
-internal sealed class MyService
-{
-}
-```
-
-- 默认使用 `internal`，仅必要时公开类型。
-- 长期共享的状态或服务使用 `Singleton`；页面 ViewModel 通常使用 `Transient`。
-- 需要接口和实现类共用实例时使用 `Contract`，参考 `Services/Nexus/` 中的写法。
-- 新增页面必须同时完成三件事：ViewModel 注册、`MainWindow.xaml` 的 `DataTemplate`、对应 View。缺少模板会导致导航空白或渲染错误。
-
-### MVVM 与 WPF
-
-- ViewModel 继承项目已有的基类或 `ObservableObject`，使用 CommunityToolkit 的 `[ObservableProperty]` 和 `[RelayCommand]`。
-- 业务逻辑放在 ViewModel/Service，不在 code-behind 中堆积。
-- 大型 ViewModel/控件按流水线拆 partial 文件（保持单一类型、文件级分区），已有先例：`DashboardPageViewModel.{Selection,Import,Deploy,Scans,Export,Tags}.cs`、`ModelPreviewPageViewModel.{Loading,Textures,Animation,Rebuild}.cs`、`SettingsPageViewModel.Properties.cs`、`VersionCheckDetailOverlay.{Repair,Backup,ViewData}.cs`、`ModService.{Import,Update,Deploy}.cs`。新增功能写进对应 partial 文件，不要把主文件重新养大。
-- 根目录只保留应用入口（App/MainWindow/SplashWindow/AssemblyInfo/FileLogger）；行为类在 `Behaviors/`，值转换器在 `Converters/`，视图辅助类型（如 `DashboardItemTemplateSelector`）在 `Views/`。
-- 公共控件样式集中在 `Resources/Styles/FluentControls.xaml` 等共享资源中；引用前先确认资源键确实存在。
-- 后台线程不得直接修改 WPF 集合或绑定属性；通过 `BackgroundTaskService` 或 Dispatcher 切回 UI 线程。
-- **大列表不要用裸 `StackPanel` 做 items host**：`FluentComboBox` 模板的下拉区就是 `ScrollViewer + <StackPanel IsItemsHost="True"/>`（无虚拟化），任何上千条目的集合塞进去都会在展开时实体化全部行并卡死。音频/文本列表的既有约定是虚拟化 ListBox + ListCollectionView；动画列表走下面的专用控件。
-- **动画下拉是代码驱动的虚拟化控件（`Components/VirtualizedTextPicker.xaml(.cs)`），不要再换回 ComboBox**：WPF 的 `ItemContainerGenerator` 在展开时会把选中项送进视野，而 Item 滚动单位下的 `BringIntoView` 会**从当前位置线性生成沿途所有容器**——条目上千后第二次展开即冻结界面（第一次没有选中项所以正常）。该控件不使用 `ItemsSource`/`ItemTemplate` 数据绑定、不使用容器生成器：条目由 `ModelPreviewPageView.xaml.cs` 的 `SyncAnimationPicker()` 直接推入，用户选择经 `SelectionChanged` 回传**源索引**写回 ViewModel；列表只物化可视区若干行（区间计算 `VirtualizationRange.Compute` 是纯函数，带回归测试），定位选中项直接换算滚动偏移。`FluentComboBox` 是全项目 ComboBox 的隐式样式，**不要为这个列表去改它**（会影响设置页等所有下拉）。
-
-### 本地化
-
-- 运行时本地化由 `Services/LocalizationService.cs` 提供，资源在 `Resources/Language/*.json`。
-- XAML 使用 `Extensions/LocExtension.cs`；代码使用注入的 `LocalizationService`。
-- 新字符串按 `Section.Key` 命名，并同步更新 `zh-CN.json`、`en-US.json`；不要在 View 中硬编码用户可见文本。
-
-### 设置项（SettingsService）扩展约定
-
-新增用户开关时必须四件事齐做，缺一会造成「开关显示正常但运行时不变」或「旧用户升级后行为莫名改变」：
-
-1. `SettingsService` 增加 `[JsonInclude] private` 字段（含默认值）、公开属性（含 `GuardInitialized`/`GuardReadonly`），同步在 `CreateJsonModel`（序列化）、`ReadAsyncFallback`（反序列化，缺失时回落到字段默认值）、`ResetInternal`（重置为默认值）三处登记。
-2. `SettingsPageViewModel.Properties.cs` 增加同名校验 `Initialized` 的双向属性；`SettingsPageViewModel.Update()` 调 `OnPropertyChanged` 通知。
-3. 设置页 XAML（`Views/SettingsPageView.xaml`）放进对应 Tab 的 `FluentSettingsCard` 区块，沿用「CheckBox + TextBlock(标题) + TextBlock(描述)」组合。
-4. `Resources/Language/{zh-CN,en-US}.json` 同步加键；建议新建独立 `SettingsPage.ModXxx` 卡片而不是塞进现有卡片。
-
-**导入时自动加入配置文件**（`AutoAddImportedModsToActiveProfile`，默认 `false`）：
-
-- **默认配置与自定义配置同样生效**：默认组的 `ModGuids` 成员列表同样是动态持久化的（仅首次创建时填充），新导入模组不在其中、工作区视图按 `ModGuids` 过滤——不存在「默认组天然包含全部模组」这回事。
-- 触发点是 `DashboardPageViewModel.Import.cs` 的 `AddFilesCoreAsync`：导入循环前按设置订阅 `_modService.ModAdded` 记录本轮新增 GUID，`finally` 块必须解绑并执行一次 `_modGroupService.AddModsToGroupAsync`。
-- 加入分组后必须补一次 `RequestProfileSave()`：`ModAdded` 先触发的自动保存快照不含新模组（事件订阅顺序上 `trackImported` 在 `ModService_ModAdded` 之后），而默认组的 `enabled_mods` 写入是 DELETE+全量重插，缺了新模组要等下次启动才由 `LoadAsync` 默认状态补录。
-- 提示用 `WeakReferenceMessenger.Default.Send(new ToastMessage(...))`（气泡自动消失），不要弹模态对话框阻塞用户。
-- 失败用 `_logger.LogWarning` 吞掉——导入主流程必须不受该设置故障影响。
-
-**易错点**：
-
-- `ReadAsyncFallback` 漏登记 → 旧用户升级后设置项永远是默认 `false`，看似「开关没生效」。
-- `ResetInternal` 漏登记 → 用户点「重置所有设置」后，JSON 已写入的 `true` 状态被覆盖为字段默认值前看似正常，但下次重置会回到不一致状态。
-- 在 `ModService_ModAdded`（`DashboardPageViewModel.cs`）里直接加入分组 → 该事件还会被「刷新模组库」触发，会把目录里本来不属于该配置文件的旧模组一并加入，违反用户意图；只能在导入窗口内通过临时订阅区分。
-
-**悬浮音乐播放器**：
-
-- `EnableMusicPlayer` 只控制播放器是否工作/显示；`AutoPlayBackgroundMusic` 只控制启动播放，默认分别为 `true` / `false`。启用时立即确保程序目录下的 `Music` 存在。
-- 播放模式固定为 `Sequential`（默认，到末尾停止）、`Loop`（列表循环）、`Shuffle`（随机且多首时不连续重复）；模式、音量和当前曲目由播放器合并自动保存，退出时再强制落盘。
-- 当前曲目只保存相对 `Music` 的路径；刷新或启动时目标缺失则回退第一首，列表为空则清空，禁止保存绝对路径或沿用悬空索引。
-- `SettingsService.ReadAsyncFallback` 打开的 `FileStream`/`JsonDocument` 必须用 `using` 释放，否则设置文件会长期锁定并导致测试临时目录无法清理。
-
-### 分组内排序与顺序持久化（2026-09-11 修复）
-
-列表显示顺序的唯一来源是 `ModGroupService.FilterMods/FilterModViewModels` 的输出序，两条路径不同：
-
-- **默认组**：顺序 = `_mods`（`enabled_mods.SortOrder`）。拖拽时 `SyncModsOrderFromDisplay` 直接重排 `_mods` 并经快照持久化，闭环。
-- **非默认组**：拖拽只重建 `SelectedGroup.ModGuids`（不重排 `_mods`）。因此 `FilterMods/FilterModViewModels` 对非默认组**必须按 `ModGuids` 顺序输出成员**（2026-09-11 修复前按 `_mods` 序输出，导致任何列表重建（再导入/切视图/清搜索/切分组）都会把显示顺序弹回 `_mods` 序，用户拖好的顺序"自己变了"）。
-- `ModGuids` 以 JSON 数组整体持久化在 `mod_groups` 表（顺序保真）；它同时是成员表权威，`Filter*` 不得输出不在 `ModGuids` 中的模组（不要加"兜底追加"，会破坏过滤语义）。
-- 部署顺序语义：非默认组的部署序随分组内排序（快照 preferredOrder = 显示序）。改动 `Filter*` 排序时默认组与非默认组语义必须分别验证。
-
-**导入后落盘时机**：导入完成（含自动加入配置文件）后用 `SaveProfileNowAsync(showProgress: false)` 立即落盘，不要依赖 300ms 防抖——崩溃/强杀丢失 pending 快照后，重启时缺记录的模组走 `ProfileService.LoadAsync` 的 remainder 分支，按 `Mods` 目录文件系统枚举序（≈目录名字典序）排在末尾区域，批量导入多个模组时相对顺序会变。
-
-### 当前配置文件（选中状态）持久化（2026-09-11 修复）
-
-**症状**：重新打开软件后总是回到「默认配置文件」，而不是上次关闭前使用的配置文件。
-
-**根因**：当前配置文件只用 `ModGroupService` 的内存字段 `_lastSelectedGroupId` 记录，该字段初值恒为 `ModGroup.DefaultGroupId`；`SelectGroupAsync` 只改内存不落盘，`InitAsync` 又用该字段回落，于是每次启动必然落在默认配置文件。
-
-**正确做法**：
-
-- 新增通用键值表 `app_state (StateKey TEXT PRIMARY KEY, StateValue TEXT)`，由 `DatabaseService.EnsureInitialized` 建表（与 `mod_groups` 同库同目录，按存储目录各初始化一次）。
-- `ModGroupRepository.LoadLastSelectedGroupId` / `SaveLastSelectedGroupIdAsync` 读写键 `last_selected_group_id`（`INSERT OR REPLACE`，只写一行）。
-- `ModGroupService.InitAsync` 读该键恢复选中，记录缺失或指向已删除的配置文件时回落默认配置文件；`SelectGroupAsync`（切换后）与 `DeleteGroupAsync`（删除当前配置文件、回落默认组时）调用 `SaveSelectedGroupIdAsync` 落盘。
-- `SelectedGroup` 是 `private set`，全项目只有 `InitAsync`/`SelectGroupAsync`/`DeleteGroupAsync` 三处赋值——新增任何修改路径都必须同步落盘。
-- 回归测试：`tests/Helldivers2ModManager.Tests/ModGroupServiceLastSelectedGroupTests.cs`（恢复自定义配置文件 / 删除当前配置文件后回落 / 记录指向不存在 Id 时回落）。
-
-**易错点**：
-
-- 不要把这类 UI 会话状态塞进 `SettingsService`：它不应出现在设置页，也不该被「重置所有设置」清空，而且按设置项约定要改 5 处、成本高。库内 kv 状态一律复用 `app_state`，不要再开新表。
-- 不要给 `mod_groups` 加列承载：`SaveGroupsAsync` 是 DELETE + 全量重插，加列会引入读改写竞争。
-- 不要做成防抖或「退出时统一保存」：切换时立即落盘才能覆盖强杀/崩溃场景，见 §6 的落盘时机原则。
-
-## 4. 数据和文件解析硬约束
-
-### Mod 清单
-
-- 清单格式以 `docs/mod_manifest_v1-schema.json` 和 `Models/` 中的实现为准。
-- 必须保持 Legacy 与 V1 的兼容行为；不支持的版本应沿用现有异常和提示链路。
-- 修改清单保存、选项或部署逻辑时，要验证 `manifest.json`、备份和恢复行为，不要只验证页面显示。
-- Dashboard/Profile 中的启用状态是部署输入的来源；不要用临时 View 状态或扫描结果覆盖用户选择。
-
-### Patch、GPU 和 Stream
-
-补丁文件通常包括：
-
-```text
-{16 位小写十六进制}.patch_{索引}
-{同名}.patch_{索引}.gpu_resources
-{同名}.patch_{索引}.stream
-```
-
-解析规则以 `VersionCheckService` 和 `PatchResourceInspectionService` 为准：
-
-- 按单文件评估内存；普通小文件可以走内存快路径，但不能成为唯一路径。
-- `.gpu_resources` 不得整体读入内存。大型或不确定大小的文件使用 `FileStream` 随机读取必要结构。
-- 偏移和长度使用 `long`/`ulong` 计算；每次读取前检查 `offset + size` 未溢出且在对应流长度内。
-- 同时验证主 patch、GPU companion、stream companion 的范围、对齐、Unit/LOD 和声明尺寸。
-- 未知格式或无法确认的结构标为警告并记录原因，不凭猜测当作损坏或自动修复。
-- 版本检查、冲突分析和修复流程要保持边界清晰；批量修复前确认目标类型确实支持自动修复，并保留备份/回滚信息。
-
-## 5. 模型和纹理预览
-
-- 预览必须依据真实 Mod 中的 MeshInfo、资源表、偏移、顶点布局和变换解析；几何异常应修正解析链路，不用形状猜测或硬编码补丁掩盖问题。
-- GPU/纹理数据读取要有上限、取消和缓存策略；避免把整套资源或所有贴图一次性载入内存。
-- 使用有限并发处理 patch 级 I/O；新的选择触发时取消旧任务，重建请求需要合并，避免并发重建和过期结果回写。
-- 纹理预览要根据实际通道统计判断用途，并保留 `RGB`、`RGBA`、`A` 等明确显示模式；不要默认把 Alpha 当作模型不透明度。
-- 预览相关改动至少覆盖：资源边界、MeshInfo/变换、材质贴图匹配、纹理格式/通道、取消和缓存行为。
-
-### 护甲选择（套装选项语义，2026-09-11）
-
-护甲下拉框的选项单位是**整套护甲**，不是单个 archive：同一套装的护甲本体与头盔是两个不同 archive ID（分别收录于 `Resources/Data/armor-names.json` 与 `helmet-names.json`），解析出的显示名相同（轻重中变体同理同名）。约定：
-
-- `ModelPreviewBackend.BuildArmorOptions` 按**解析后的显示名**对 archive ID 分组，同名合并为一个 `ModelPreviewArmorOption`；`Ids` 携带该套装全部 archive ID，`Id` 仅为组内代表 ID（兼容旧签名/字典场景），选项按名称排序。
-- 过滤必须走 `FilterByArmor(meshes, option.Ids)` 重载（任一 ID 命中即保留，`ArmorIds` 为空的未知/共享网格全保留）；用单 `Id` 过滤会丢掉头盔（或本体）独占网格，表现为"选套装少了半个装备"。
-- **默认选中第一个具体套装**，不是"全部模型部件"（`ModelPreviewPageViewModel.Loading.cs`，用户决策 2026-09-11）：多套装替换模组默认全显会把所有替换网格叠在一起；"全部"仍保留为可选项，无命名套装元数据时才回落"全部"。不要把默认值"修"回 All。
-- 选项的 `MeshCount` 是套装内全部 archive 命中网格的并集计数；改名表、排序或过滤逻辑时，`tests/.../ModelPreviewArmorSelectionTests.cs` 的 `ApplyPackageNames_MergesArmorAndHelmetWithSameNameIntoSingleSet` 守护该语义。
-
-### 动画播放与骨架绑定（2026-09-11）
-
-- **预览默认姿势与朝向**：加载后 `SelectedAnimation = null`——模型保持绑定（站立）姿势，动画只在手动选择并播放/拖动进度后应用（`_isAnimationApplied` 门控在 `RebuildModelGroupAsync` 生效）。**不要**恢复"默认选中 idle/呼吸类片段"的启发式：它会命中 Prone Pistol Aiming Left Breathing 之类的趴姿片段，而大量护甲模组的身体是简化蒙皮（全部权重集中在 1-2 根脊柱骨，实测安德莉亚 30147 顶点只蒙 2 骨），趴姿 0 帧动画把整个模型刚体转平，表现为"打开预览就是平躺/横放"。
-- **呈现旋转（`ModelPreviewCharacterOrientation.GetRequiredRotation`）**：HD2 人物资源是 **Z-up、原点在脚底**（+Z 指向头顶），WPF 视口是 Y-up，故需要 Z→Y 呈现旋转。两级判定：①**解剖学证据优先**——torso 与 legs 标注网格都可信（顶点 ≥ 全模型 2% 且 ≥100 点，实测 B08 的 81 顶点小标签件不可信）时用质心差；**质心差方向不显著（撞 dominance 门槛返回 None）时必须回退标准差路径**，不许直接放弃（实测 VRC Milltina Marette：裙摆/臂饰把质心横向差拉开，直接 None 导致躺平）；②其余一律走**顶点标准差路径**（bounds 会被 T-pose 张臂/翅膀拖偏，实测安德莉亚子集 X 跨度 ≈ Z 跨度翻轴）+ Z 轴 1.15× 先验（张臂抬高 X/Y 时仍按 Z 站立，实测千代澪/Rosetta 的 X/Z 标准差仅差 0.01-0.03）+ 主轴 1.05× 显著性门槛（不显著保守不转）。**已删除**两类误伤源：""torso vs remainder 质心差再反转（Reverse）"路径（它假设剩余件在躯干上方，实际剩余件是髋/腿/臂在下方，实测 B08 倒立、Kaguya/718 拒绝旋转）与**无标注路径的 X 翻转分支**（实测"充满power的机甲"被 X 翻转误伤，HD2 生态不存在需要 X 翻转的 Y-up 横放人物资源——X/Y 主导一律 None 保持原始朝向）。③**旋转输入用全量网格**（`BuildModelGroup` 的 `orientationMeshes` = `Meshes.ToArray()`）——护甲选项/体型筛选不得影响整体朝向。武器/载具/VFX 模组（stdY 主导或小道具）判定为 None、保持原始朝向，这是预期行为不是缺陷。
-- **全库朝向审查工具**：`tests/.../RealLibraryOrientationScan.cs`（只读扫描 `G:\Temp\HD2ModManager\Mods\Mods`，硬编码用户路径）与 `FullLibraryOrientationScan.cs`（Test/Mods）。改动判定规则后必须重跑两个扫描，人工审查"会被旋转的模组"是否都是人物；报告在 `.workbuddy/tmp/*orientation_scan.txt`。判定基准（2026-09-11，94+39 模组）：全部人物/护甲模组 = PositiveZ/NegativeZ 直立，武器/道具/载具/VFX = None。
-
-- **绑定首选世界差量重定向**（`ModelPreviewAnimationBinding`，源骨架可用时自动启用）：clip 轨道局部 TRS 是游戏本体骨架层级内的**绝对局部姿态**（初始姿态即参考系，游戏引擎直接套用，无需差量修正），沿源层级合成世界矩阵 A 后，蒙皮差量取 **G = S⁻¹·A**（S 为源骨骼绑定）。G 与目标骨架的局部轴/父链无关，旋转轨道等价于绕目标骨骼自身位置的纯旋转，直接应用于模组网格即可。**背景**：改模骨架（Blender 重导出）的骨骼局部轴与游戏骨架普遍不一致，且常插入自定义脊骨改变父链——局部差量公式（`rest·initial⁻¹·animated`）在该场景把旋转套到错误的轴上，表现为膝盖反弯、手臂架死（2026-09-11 实测并经真实游戏数据诊断确认）。源骨架来自游戏本体 Unit 资源的变换层级（`GameUnitReferenceReader` 读取并随 `ModelPreviewAnimationLibrary.SourceSkeleton` 下发）；源骨架为 null（如模组自带动作库）时退回局部差量路径。
-- clip **不携带**骨骼哈希表（动画资源头部的 hashesCount/hashes2Count 实测为 0）：轨道 i 与 Bones 资源第 i 项对应的假设经真实数据验证成立（骨盆/肩/腿轨道哈希命中呈解剖学自洽）。但 **clip.BoneCount 可能大于 Bones 资源条目数**（实测武器夹具 25>24），此类 clip **不再从列表消失**：全量登记后它仍在列表里，但 `ResolveClip()` 返回 null（时长 0、不可播放）——遇到"动画列表有条目但选了没反应"先查这里。
-- 骨架兼容性判定（`ModelPreviewAnimationCompatibility.IsCompatibleHashes`）是**库挂接（GameUnitReferenceReader）与播放期过滤共用的唯一实现**，改规则只能改这里。三条规则：①"双向 60% 覆盖 + ≥16 骨"（完整角色 rig）；②"挂接件骨架匹配数 ≥6"（无比例要求）——护甲部件骨架是"锚骨+自定义骨"混合体，实测 15-21 骨对游戏动画哈希命中率仅 40-57%，比例判定必然拒绝；未匹配骨保持绑定姿态且蒙皮矩阵携带已动画祖先的变换，跟随语义不依赖匹配率；③"小型骨架（≤5 骨）匹配 ≥4 且覆盖 ≥80%"（纯标准骨头盔）。改模骨架 BonesId/StateMachineId 常为 0（不引用骨骼资源），纯靠哈希规则命中本体动画库。
-- **刚性挂接件蒙皮（2026-09-11 修复，"身体只有部分部位在动"的根因）**：大量护甲模组网格（弹挂/尾巴/徽章/袜子/单三角 sprite）的顶点流**没有 BoneIndex/BoneWeight 组件**，或带组件但调色板全拒（导出工具补的空权重）。它们在游戏里靠 MeshInfo 的 `transformIndex` 挂接骨骼跟随运动——该索引与 Unit 变换表/骨骼层级**共用同一张表**，解析为"单骨骼全权重蒙皮"（`ReadModelSectionMeshAsync` 挂接兜底：decode 全失败且挂接骨骼有效时全部顶点权重 1 挂到 `section.TransformIndex`）。静态预览时蒙皮矩阵恒等、渲染不变；动画时用骨骼蒙皮矩阵整体驱动。**不要**把"palette 非空"当作逐顶点解码分支的条件（顶点流缺骨骼组件时 palette 仍可能非空，会把位置字节当权重读出垃圾）。
-- `TryReadUnitRig` 在调色板表为空时**不再返回 null**（骨骼层级对重定向源参考系与挂接兜底仍有效）；Unit 版本仍是硬门槛（非 1/10800437/10800438 整个 Unit 跳过）。批量诊断管线健康用 `PreviewModelAsync` 后统计 `mesh.Skinning == null` 数量——修复后全部 38 个存量模组应 100% 蒙皮（回归：`ModelPreviewAttachedSkinningTests`）。
-- 层级根骨骼固定保持绑定姿态（根位移/旋转由游戏角色控制器消耗，直接套用会移动/旋转整个模型）；additive clip 在两条路径下均以 rest 为基底叠加（源路径先做 initial⁻¹ 门限）。
-- 动画名称主源是 `Resources/Data/animation-names.json`（社区 "Helldivers 2 Archive Labeling" 表的 Animation IDs 页，874 条，键为十进制 Entry ID 转成的 16 位小写十六进制）；中文表 `animation-names-zh.json`（kdocs「地狱老司机Archive ID中文收集表」的 动画ID收集 页，162 条，经金山文档连接器读取，kdocs 页面为 canvas 渲染无法直接抓取、须走连接器 `sheet.get_range_data` 分块拉取）覆盖同名键。加载顺序：英文打底 → 中文覆盖，但中文表中的 "Unknown" 占位不覆盖（`MergeNameTables`）；内置 14 条仅在两个文件都缺失时兜底。非 16-hex 键（含「数据来自」元数据键）被解析器静默跳过。**社区表的 Entry ID 有抄录笔误可能**（同 ID 出现两次、个别格是残缺文本），生成脚本须做 15-20 位纯数字校验；同 ID 多名取先到者。
-- **游戏库动画列表不设上限、clip 惰性解码（2026-09-12，取代旧的 `MaxAnimationsPerPreview=256` 截断）**：`ReadGameAnimationLibrary` 登记状态机里的**全部**动画引用，只挂 `ClipLoader` 闭包而不再解码。旧实现逐条预解码、为此截断 256 条，状态机尾部的表情/胜利姿势/敬礼等动画从下拉框消失（表现为"护甲动画缺少名称表里的动画"）。clip 由 `ModelPreviewAnimationOption.ResolveClip()` 在后台首次调用时读取游戏档案解码并缓存（骨数超限/缺资源/解析失败 → null，且**失败也记账**，不反复 IO）；`ClipLoader` 的读取在 `_gameReferenceSemaphore` 内、始终经当前索引寻址，索引被替换时按"该动画不可用"处理。**三条硬约束**：①消费端一律走 `ResolveClip()` / `CachedLengthSeconds`，**禁止直接读 `Option.Clip`**（游戏库恒为 null，只有模组库 `IsFromMod` 构建期赋值，绕过会导致游戏库动画全部失效）；②`ResolveClip()` **只能在后台线程调用**——首次调用同步读档案并整块 LZ4 解压（秒级），在 UI 线程调用会冻结整个界面；③UI 绑定（时长/进度条/时间文本）只读 `CachedLengthSeconds`（纯缓存，未就绪为 0，绝不触发解码），解码由 `PreloadSelectedAnimationClipAsync` 在 `Task.Run` 中预热，就绪后刷新显示并重建一次。诊断"列表缺动画"不再查上限；十进制↔十六进制换算仍用脚本（**手算极易出错**）。回归：`ModelPreviewAnimationOptionTests`、`VirtualizationRangeTests`。
-
-### 音频模组预览（Wwise bank/WEM）
-
-模型预览页同时承载音频模组的试听（`Services/Audio/AudioBankInspectionService` + `AudioPlaybackService`，UI 在 `ModelPreviewPageViewModel.Audio.cs` partial 与 `ModelPreviewPageView.xaml` 的音频 Tab/纯音频覆盖层）。关键约定：
-
-- 结构知识来源：hd2-audio-modder（无许可证，保留所有权利 ARR）。只参考其公开的补丁结构/常量（TOC 类型 ID、bank chunk 布局等），**禁止复制其源码**；出处声明保留在 README"第三方声明"与 `AudioBankInspectionService` 常量注释中，改动相关代码时不要移除。
-- 音频补丁结构：TOC 类型 `WWISE_BANK(0x535A7BD3E650D799)`/`WWISE_STREAM(0x504B55235D21440E)`/`WWISE_DEP(0xAF32095C82F2B070)`（注意 `ModTypeDetectionService.PathEntryTypeId` 就是 WWISE_DEP——检测扫到的路径字符串来自 dep 条目）。bank 的 toc_data 有 16 字节前缀（`D82F7678`+长度+file_id），其后是 BKHD/DIDX/DATA/HIRC chunk；DIDX 12 字节/条（source_id+offset+size），offset 相对 DATA body。
-- 检查只做有界读取：TOC+chunk 头+DIDX+每条目 128 字节 WEM 头探针；媒体数据按需由播放服务切片读取，禁止把 DATA chunk（数 MB～数十 MB）或整包（语音包数千条目）读入内存。
-- WEM 解码链路：Ww2Ogg.Core（NuGet，ww2ogg 的 .NET 移植，BSD-3）转 Ogg → NVorbis 解码 → NAudio WasapiOut。**HD2 音频用 aoTuV codebook 编码：必须先试 `CodebookLibrary.AoTuV`，失败再回退 `Default`**；用 Default 转换不会抛异常但 NVorbis 解码报 `Residue0.Init` 错误，`VorbisReader` 构造即完成 setup 头校验，因此"构造成功=可播放"。
-- dep（音频库名）按 TOC file_id 关联到 bank，但部分真实补丁 dep 的 file_id 与 bank 不一致（原 hd2-audio-modder 工具同样挂不上），UI 需回退显示 `Bank 0x…`；单 bank 补丁的 stream 条目合并进 bank 组显示。
-- 预取媒体（PREFETCH_STREAM）只存前半段数据，WEM 头声明的 riff 尺寸会大于实际可得字节，探针将其标为 `Truncated` 并禁止播放。
-- 音频列表必须是**虚拟化 ListBox + ListCollectionView**（分组/过滤走视图 Refresh），语音包单模组可达近万条目；改回 ItemsControl+ScrollViewer 会把全部行实体化，UI 卡死并拖慢整个系统（已实测回归）。
-- **多选项全音频模组（V1 manifest，Options.Count > 1 且 ModTypeDetectionService 检测主类型为 Audio）直接跳过音频预览**（用户决策，`ShouldSkipAudioPreviewCore`）：逐选项解析 + 基线比对的代价在该场景不可控，状态栏提示部署后游戏内体验。不要"优化"掉这个跳过。
-- "已替换/原版"标记来自与游戏原版同 FileID 包的比对（`GameAudioBaseline`：legacy 平铺文件与 slim DSAR bundle 两种读取路径，复用 `GameUnitReferenceReader` 的静态读取器；bundle 索引按 data 目录缓存，包名查找为字节级比较）。比对层有硬性的内存/IO 红线——**基线只驻留 TOC 元数据与每媒体 32 字节 SHA-256，绝不缓存媒体字节数组**（曾因整 bank DATA 常驻 + 逐条目开关文件随机读，在万条目语音包上占 1GB+ 内存并造成系统级卡顿）；比对顺序为"原版尺寸先行（零 IO 快速路径）→ 流式哈希（64KB 分块）"，并有单包预算上限（条数 + 字节数，耗尽后一律回答"未知"并在 UI 提示，绝不继续读）；legacy 布局持有常开只读句柄（基线缓存逐出时 Dispose），stream 条目按偏移排序使游戏侧读取近似顺序 IO；非可播放条目（截断/非 RIFF）不参与比对，避免把截断误判为已替换。
-
-### 字幕/文本模组预览（TEXT_BANK）
-
-模型预览页同时承载字幕/文本模组的预览（`Services/Text/TextBankInspectionService` + `Services/Text/TextBankFormat`，UI 在 `ModelPreviewPageViewModel.Text.cs` partial 与 `ModelPreviewPageView.xaml` 的文本 Tab）。关键约定：
-
-- 格式来源与音频相同：hd2-audio-modder（ARR，只参考结构/常量，禁止复制源码）。TEXT_BANK 类型 ID `0x0D972BAB10B40FD3`；toc_data **没有** 16 字节前缀（与 WWISE_BANK 不同）：magic `0x3E85F3AE` + version 1 + 条目数 + 语言 ID + uint32 ID 表 + uint32 绝对偏移表 + UTF-8 NUL 结尾文本。
-- 游戏文本绝大多数在包 `9ba626afa44a3aa3`，slim 布局下按语言一个文本库（单库实测 ~4300 条，允许 0 条空库；字符串 ID 是 7 位数，不是从 1 顺序编号）。
-- “已替换/原版/新增”标记复用 `GameAudioBaseline`（`EntryKind.TextBank` + `TryGetTextEntry`）：文本库惰性整库解析并缓存（单库 1-2MB 文本，远小于音频媒体红线）；`Found` 比对文本、`ResourceMissing` = 新增条目。
-- 文本列表必须是虚拟化 ListBox + ListCollectionView（与音频列表同一约束）。
-
-### Lua 脚本静态还原与提取（2026-09-12）
-
-模型预览页承载脚本模组（Bingus/Shared-Mod-Loader 生态）的 Lua 静态还原（`Services/Parsing/LuaScriptInspectionService` + `Services/Parsing/LuaJitDumpDecoder` / `LuaJitDumpDisassembler` / `LuaJitDecompiler`，UI 在 `ModelPreviewPageViewModel.Lua.cs` partial 与"Lua 脚本"Tab，Tab 序 4）。**安全红线：全程纯静态解析（bytes→结构→文本），任何代码路径都不得加载/编译/执行/求值还原出的 Lua；不引入 Lua VM 绑定（如 Lua.NET）**。关键约定：
-
-- **格式**：LuaJIT dump（魔数 `1B 4C 4A` + 版本 1=2.0/2=2.1 + flags ULEB）。原型块以 ULEB size 开头（0=结束符），**子原型先于父原型写入流**，KGC CHILD 按完成栈弹出引用。KNUM 用 33 位 ULEB（bit0=is-double）；**KGC I64/U64/COMPLEX 与 KTAB 的 INT/NUM 用两段普通 ULEB**（33 位只属于 KNUM，混用会流错位——Bingus 夹具回归守护）。比较/测试指令后紧跟 JMP：**op 成立 → 执行 JMP；不成立 → 跳过 JMP 直落**，因此 if 条件渲染用发射指令的反转（ISLT→>=、ISEQS→~=，见 ljd `_COMPARISON_MAP`）。泛型 for 有两种布局：体紧跟 ITERC 之后，或 ITERC 在循环底 + 入口 JMP/ISNEXT 跳到底部（pairs 走 ISNEXT+ITERN）。
-- **嵌套**：真身常藏在 `assert(loadstring(<内嵌 dump>))("@模块名")` 的字符串常量里——解析器从字符串常量递归提取内嵌 dump（`EmbeddedDumpCandidates`），提取/报告/提取功能都会单列嵌套块；直接字符串搜索只看得到表象。
-- **忠实优先，跳过优于猜测**：表达式只在直线段内折叠且 CALL 结果一律物化为显式赋值（副作用绝不丢）；结构无法验证的原型**整体回退**为权威清单，FNEW 子原型失败时用**标注占位闭包**（不传染整树）。报告 = 源码级还原（尽力而为）+ 权威清单（luajit -bl 风格）+ 字符串汇总 + 安全声明，两者并存互校。
-- **提取全部**：`ExtractAsync` 把每个含脚本资源写成 `payload.bin` / `blockN.luajit` / `blockN.decompiled.lua` / `blockN.listing.txt` / `blockN.strings.txt` / `report.txt` + README 安全声明，仅写文件不执行。
-- 回归：`LuaScriptInspectionServiceTests`（夹具 = Bingus Shared Loader v3 两层真实 dump，`LuaJitRealWorldFixture`）；改解析/还原规则后必须跑它并与 ljd 输出人工对照。
-
-### 材质变体去重与纯黑占位材质（特例模型黑色预览问题）
-
-某些特例模型（如角色装甲"白银之城-侦探-CW9"）在预览中整体显示为黑色，但游戏内显示正常。根因是模型同时包含高分辨率正常材质和低分辨率纯黑占位材质，预览工具渲染了全部变体导致纯黑覆盖。修复分两层：
-
-1. **材质变体去重（同一几何体的不同材质）**：同一 MeshInfo 内，`VertexOffset`/`VertexCount`/`IndexCount` 相同但 `IndexOffset` 不同的 section 引用的是不同索引存储位置但同一组三角形（材质变体）。去重分组键必须使用 `(MeshInfoIndex, VertexOffset, VertexCount, IndexCount)`，**不能包含 `IndexOffset`**，否则变体不会被分到同一组。同组内保留 Albedo 纹理像素数最大的变体（高分辨率正常材质 > 低分辨率纯黑占位）。
-
-2. **纯黑占位材质检测（独立几何体区域的纯黑材质）**：部分 section 使用 BC7 或 BC1 编码的纯黑占位材质（所有块解码后像素为 `(0,0,0,255)`；索米圣诞装用的是 128x128 BC1，format 71），几何体与正常 section 不同，去重无法处理。先从顶层纹理的开头、四分位、中间和末尾等至少 5 个位置有界采样压缩块（BC1 块 8 字节、BC7 块 16 字节）；再解码受限尺寸的缩略图，只有每个 BGRA 像素都是 `(0,0,0,255)` 才能判为纯黑。**不能只检查前 64 字节**：真实贴图的起始块可能稀疏或空白，而脸部等有效内容在后续区域。跳过纯黑 section 时，**只在 stream 中存在非纯黑 section 时才跳过**，避免移除该 stream 的全部几何体导致模型缺少部分。
-
-3. **语义 hash 识别**：纹理语义 hash 使用 murmur64 高 32 位算法（`h32(name.lower())`）。`0xCAED6CD6` = h32("normal")，`0x756F6FA6` = h32("mra")，需在 `GetTextureRole` 中正确分类为 `Normal` 和 `Mask`，否则材质贴图匹配会失败。
-
-4. **稀疏 section 的预览容量**：section 的顶点窗口可能覆盖共享缓冲中的大量未引用顶点。全局预览容量统计前，必须按三角形实际引用的索引压缩 position/UV；局部高精度 section 的限制可以高于普通部件，但仍由全模型的顶点和索引总上限兜底。不能把完整顶点窗口直接计入容量，否则角色主体或附件会被错误跳过。
-
-排查类似问题的步骤：先用诊断测试输出每个 mesh 的 `UnitId`/`StreamIndex`/`MeshInfoIndex`/`VertexCount`/`TriangleCount`/`ColorTextureId`；找出相同 Unit/St/MI 但不同 ColorTexId 的成对 mesh；在 `TryReadUnitMaterialSections` 去重逻辑处添加临时 `Console.WriteLine` 输出 section 的 `(VertexOffset, VertexCount, IndexOffset, IndexCount)`，确认变体的 IndexOffset 是否不同；解码关键纹理统计平均颜色确认是否纯黑。
-
-### 流光（油光）与发光材质的预览显示
-
-WPF 固定管线只有 Diffuse/Specular/Emissive 三种材质，预览按语义输入组合渲染（`ModelPreviewPageViewModel.Rebuild.cs` 的 `ResolveMaterialInputs`/`ComposeMaterial`）：
-
-- **流光/油光**：语义 `0xFF2C91CC`（AlbedoIridescence）归类为 `ModelPreviewTextureRole.Iridescence`，但它仍是颜色贴图——必须继续参与 BaseColor 回退链并写入 `ColorTextureId`，否则流光材质会错拿其它输入当 Albedo。其实测 Alpha 承载流光强度（同一材质未开流光 Alpha≈0，开油光后=255，见 Milltina TG-8"油光材质"选项）；`MeasureIridescenceStrength` 统计解码预览的平均 Alpha，>阈值时叠加 `SpecularMaterial` 静态高光层，强度为 0 就不加，不要改成"有该语义就一律加高光"。**Alpha 非均匀（标准差 > 0.15）时必须返回 0**：大量角色模组（安德莉亚、瑞希等）把同一张贴图同时绑定到 Albedo 与 AlbedoIridescence 语义，此时 Alpha 是镂空/覆盖遮罩（透明+不透明混合），不是流光强度，按强度解释会让整模错误叠加高光。**不要给流光加动态扫光动画**（用户决策：流光材质≠油性材质，扫光动画实现过一版后被明确撤销，测试 `CreateAnimatedMaterial_Iridescent_KeepsStaticSheenWithoutSweepBand` 守护）。
-- **发光**：Emissive 语义输入用 `EmissiveMaterial` 自发光 pass 渲染（替代旧的 0.22 透明度 Diffuse 叠加）。**只有 Emissive、没有 BaseColor 的材质**（发光饰条/眼睛等，含 BaseColor 回退链落到 Emissive 贴图的情形，用 `IsEmissiveOnlyMaterial` 判定）必须 Diffuse 压暗（`EmissiveOnlyDiffuseColor`）+ Emissive 呼吸脉冲渲染为自发光——全亮 Diffuse 会让白色 Emissive 一直饱和，与普通白色布料无从区分。
-- **动画材质的线程约束**（目前仅自发光呼吸脉冲使用）：动画画刷不能冻结（含活动动画的 Freezable 无法 Freeze），必须在 **UI 线程**创建并只挂到未冻结的 live 模型上（`AttachAnimatedMaterials` 在 `CreateLiveModelGroup` 之后整体替换 children[i]↔meshes[i]）。无头测试环境没有驱动画刷时钟的渲染循环（无 composition target），动画时钟不走，动画的视觉效果只能靠结构断言验证。
-- **悬空贴图引用是常态**：模组材质可能引用不存在的贴图 ID（Milltina TG-8 帘子材质 0xD28C 的 5 个贴图在模组、用户模组库、游戏归档 17k 贴图定位表三处都不存在，其 parent 是特殊着色器模板，观感由材质常量驱动）——预览只能灰模回退，不要猜测贴图内容或解码未知常量表。
-- 材质缓存键 `CreateMaterialKey` 必须包含组合形态（Base/Emissive/流光强度），因为相同贴图 ID 在不同材质里可能带不同角色。
-- 手动选中单张贴图的材质模式保持只显示该贴图，不叠加高光/自发光/动画。
-
-## 6. 长任务、日志和设置
-
-### 后台任务
-
-下载、导入、哈希/指纹、部署、清理、删除、导出、版本检查和批量修复等耗时操作应接入 `BackgroundTaskService`：
-
-```csharp
-var task = _backgroundTaskService.Add(name, description);
-try
-{
-    // 长任务
-    _backgroundTaskService.Complete(task, readyDescription);
-}
-catch (OperationCanceledException)
-{
-    _backgroundTaskService.Cancel(task, canceledDescription);
-}
-catch (Exception ex)
-{
-    _backgroundTaskService.Fail(task, ex.Message);
-}
-```
-
-有总量时进度使用 `0..1`；未知总量使用 `IsIndeterminate`。不要从业务代码直接操作任务集合或后台线程直接改任务属性。
-
-**耗时操作统一走 `BackgroundTaskService.RunAsync(...)`**：它负责后台线程执行（内部 `Task.Run`）并自动管理任务状态生命周期（`Add` → Running → `Complete`/`Fail`/`Cancel`），调用方不要再手写 `Add` + `Task.Run` + `Complete/Fail` 样板。work 委托在后台线程运行，只做计算；需要更新任务页描述/进度时用 `BackgroundTaskContext.Report(...)`（自动切回 UI 线程）；返回结果后由调用方在 UI 线程应用，不要在 work 内直接操作 WPF 集合或绑定属性。`BackgroundTaskService` 单独用 `Add/Update/Complete` 只管理状态、不提供后台线程；`await` 异步方法也不代表 CPU 密集工作离开了 UI 线程——异步 IO 会让出 UI，但同步 CPU 密集代码（LZ4 解码、SHA-256、压缩/解压、大文件解析循环）仍在调用线程（UI）执行并导致界面卡顿。服务内部的 CPU 密集解析（如 `GameUnitReferenceReader` 的索引构建与 Unit 引用解析、`ModService` 的复制/删除/解压）仍应在服务内部后台化，一处修复惠及所有调用方。新增/修改耗时服务方法后，检查所有 UI 入口（`[RelayCommand]`、点击详情等）是否仍会在 UI 线程触发 CPU 密集工作。
-
-新增耗时操作时按"前台/后台"分类注册任务：有专属进度弹窗/对话框的操作（部署、删除、导入、更新、清理、导出、批量修复、二分部署、Init、Rescan）是前台任务，用 `RunAsync(..., isForeground: true)` 或 `Add(..., isForeground: true)`——任务页不显示，进入终态后由服务自动从 `Tasks` 移除；无弹窗的静默后台操作（哈希计算/迁移/重算、版本检查、冲突/护甲扫描等）用默认 `isForeground: false`，在任务页显示。任务页只展示后台任务（`VisibleTasks` 按 `IsForeground` 过滤）。前台任务即使从集合移除，弹窗持有的 `task.Steps` 集合引用依然有效，步骤列表照常更新；不要为"任务页不显示"而删掉前台任务的注册或弹窗步骤机制，否则部署弹窗的步骤列表会失效。
-
-### 日志和设置
-
-- 使用 `ILogger<T>`，按实际严重程度选择 `Trace`、`Debug`、`Information`、`Warning`、`Error`、`Critical`。
-- 设置持久化路径为程序目录下的 `settings.json`，具体字段和迁移逻辑以 `SettingsService.cs` 为准。
-- 日志清理由 `AutoCleanLogs` 和 `MaxLogFiles` 控制，按数量保留最新日志，适合低频打开应用的场景；修改时同步设置页面、本地化和加载兼容逻辑。
-- Helldivers2PatchTool（独立工具）的文件日志由 Helldivers2PatchTool/FileLogger.cs 提供：写入程序目录 logs/，每次启动最多保留最新 5 个 .log（PatchToolLogging.CleanExcessLogs）；最低记录级别为 Debug，扫描/修复全流程输出每个补丁与每个 Unit 的明细。不能直接复用主程序 FileLogger（它依赖主程序 App.Current.LogLevel）。修改独立工具日志时同步检查 MainWindow.xaml.cs 的 _loggerFactory 初始化与流程日志。
-- 路径设置必须验证目录和必要游戏文件；部署默认复制文件，符号链接仅在用户明确开启且权限满足时使用。
-
-## 7. 安全和变更边界
-
-- 删除 Mod 或部署文件前确认最终绝对路径在预期目录内；优先使用回收站、备份或可恢复操作。
-- 修复流程必须先保存备份元数据，失败时恢复原文件，并在日志中说明跳过、失败和回滚原因。
-- 不把游戏资源、用户 Mod 或样例文件提交到仓库；源文件默认只读检查。
-- 移除功能时删除完整连接链路，并用 `rg` 做残留引用扫描，确认设置、菜单、服务、资源和文档没有孤立入口。
-- 修改公共样式、解析器、部署源数据或共享服务后，优先检查所有调用方，而不是只验证当前页面。
-
-## 8. 高频错误提醒
-
-以下问题在本项目中已经多次造成误判、回归或返工，改代码前应逐项确认：
-
-| 容易犯的错误 | 必须遵守的做法 |
-|---|---|
-| 看到检测异常就直接修复 | 已知能正常进游戏的 Mod 先只读分析真实 Patch、备份和哈希；先排除检测器误报，再决定是否修复。 |
-| 用字典数量比较 Patch 类型表 | Legacy Patch 可以保留声明数量为 0 的空类型槽；按类型值双向比较，不能比较字典项数量。 |
-| 只显示 `patchFile.Name` | 多选项目录经常包含同名 `.patch_0`；诊断和工具输出必须使用相对路径，不能把同名显示成重复扫描。 |
-| 把所有大小不一致都当成损坏 | 区分真正截断（期望数据超出声明范围）和合法填充/警告；提出修复前先读取 `.hd2mm-backup.json`。 |
-| 混淆二进制偏移基址 | 每个字段先标明所属记录和相对/绝对关系；MeshInfo 的材料/Section 偏移相对 MeshInfo 起点，GPU 顶点偏移要叠加正确的 Unit/Stream 基址，并用真实样例验证。 |
-| 把整份多 GB 文件读入内存或无界哈希 | `.gpu_resources` 只做有界随机读取；使用 64 位偏移、范围检查和有限并发，避免为了诊断复制或扫描整个文件。 |
-| 解析失败后静默退回整 Stream 或用球体/方盒掩盖 | 失败必须可观测、可测试；按每个 MeshInfo、Section、Transform 解码，优先修正数据模型，不增加形状猜测规则。 |
-| 资源查看器显示 `0 个 GPU Stream` 就认定 GPU 损坏 | 先检查 Unit 版本门槛。版本 `1` 使用与 `10800437` 相同的旧顶点格式（如 `26/29/31/24`），应按旧格式表有界读取；只有实际 StreamInfo、步长、GPU 窗口或顶点样本失败才可判为 GPU 异常。 |
-| 只限制每个 Patch，忘记全局容量 | 合并结果时再次检查总 Mesh、顶点和索引上限；并发数、读取上限和缓存上限都要有明确总量。 |
-| 用旧快照或数据库覆盖主页选择 | 部署使用用户操作时捕获的 Profile/启用状态快照；单 Mod 刷新后同时更新 `ModViewModel`、主页摘要和缓存。 |
-| Manifest 每改一个字段就立即保存 | `Done()` 中组装最终清单并一次保存；保留 `NexusData`，Legacy 修改跨入 V1 后立即重建运行时选项和主页状态。 |
-| 批量修复只在按钮或最后一步过滤 | 在 `VersionCheckBatchRepairService` 生成计划前就限制为明确支持的 Unit 类型；音频和其他未支持类型只能跳过并说明原因。 |
-| 用 `armornames.txt`、外部映射或冲突缓存替代事实 | Armor 关系/污染检查直接读取已启用 Mod 的 Patch；它是独立扫描，不要自动变成通用冲突或修复流程。 |
-| XAML 重写后只看页面、不查 code-behind | 删除或重命名控件后立即 `rg` 查找旧 `x:Name`；同时检查共享样式、DataTemplate、深色主题默认箭头和所有导航入口。 |
-| 把取消异常当成崩溃 | `TaskCanceledException` 可能只是防抖或新请求取消；先确认实际使用的功能和取消来源，再判断是否是真故障。 |
-| `await` 长任务或手写 `Add`+`Task.Run`+`Complete/Fail` 样板 | 耗时操作统一走 `BackgroundTaskService.RunAsync(...)`（后台线程 + 状态生命周期一把管，见 §6）；`BackgroundTaskService` 单独用 `Add/Update/Complete` 只管理状态、不提供后台线程，`await` 只让出异步 IO，同步 CPU 密集代码（LZ4 解码、SHA-256、压缩/解压、大文件解析）仍在调用线程（UI）执行。服务内部 CPU 密集解析优先在服务内部后台化（参考 `GameUnitReferenceReader`/`ModService`/`ModHashService`/`PatchResourceInspectionService`），改完后检查所有 UI 入口。 |
-| 切换配置/模组库时逐项改 `ObservableCollection`，或用 `List.Contains` 在全量模组循环内判断分组成员 | 大列表视图先用普通 `List` 构造完再一次替换绑定集合；分组成员判断先建立 `HashSet<Guid>`；SQLite 整组写入不要占用 UI 线程，先完成内存切换再后台持久化。 |
-| 用过时断言或并行构建验证 | 按当前 MSTest 版本使用 `Assert.AreEqual` 等兼容断言；涉及共享 `obj` 时串行构建/测试，验证生成代码时不要使用 `--no-build`；修改进程级 `Environment.CurrentDirectory` 的测试类必须标记 `[DoNotParallelize]`，否则会互相读取对方的 `settings.json`。 |
-| 只验证 CLI 发布，不验证 VS 发布 | 修改 `Helldivers2PatchTool` 时复现对应 Publish Profile；独立工具不能直接引用自包含 EXE，且共享主程序构建必须固定 `net10.0-windows` 和 `win-x64`。 |
-| 模型预览整体黑色或局部缺失只查材质引用 | 特例模型同时含高分辨率正常材质和 BC7 纯黑占位材质；先按 `(MeshInfoIndex, VO, VC, IC)` 去重材质变体（不含 IO），再以多点 BC7 采样加解码后的全像素纯黑验证过滤占位，不能只看前 64 字节。对稀疏 section，按三角形引用压缩顶点后再做全局容量判断。详见 §5。 |
-| 旧角色材质只替换父模板 ID | 先与同一装备的可用 Mod 对照。已验证 DP-00 的 `0x102/1280B/248B` 角色材质在当前游戏仍保留旧结构，只需将父模板 `0x54AE...` 替为 `0x8F66...`；不要凭另一份样例把变量表、结束偏移或材质版本重建。没有同资源证据的 emissive/未知 schema 仅警告，不自动重写。 |
-| 旧角色材质包只给“引用 0x54AE 材质的 Unit”改用游戏 LOD | 对已验证的旧角色签名，`Unit=1`、游戏引用为 `0x00A4CD36` 且 Unit 实际引用待迁移的 `0x54AE...` 角色材质时，旧 LOD/Section 材质绑定会导致进舰船崩溃；自动修复必须改用当前游戏 LOD，同时保留 Mod 的 GPU 几何与纹理。未知材质或其他 Unit 版本仍按原有自定义模型策略处理。 |
-| 旧角色材质包内不引用 0x54AE 的 Unit（如 Torso 槽位）被 strongCustomSlots 误保留旧 LOD | 同包的其他部位可能只引用游戏材质，`RequiresCurrentGameLodForLegacyCharacterMaterial` 对它们返回 false，自动分类又会因“Torso 槽位存在强自定义信号”而保留其 Mod LOD；修复后进入游戏选择装备崩溃（如七海nana7mi 替换 FS-34 灭绝者）。只要 patch 内存在 `0x54AE→0x8F66` 迁移，就应让该 patch 所有 `Unit=1` 且游戏引用 `0x00A4CD36` 的 Unit 统一改用游戏 LOD（`RequiresCurrentGameLodForLegacyCharacterPack`），保证同包 LOD 一致；与可正常运行的同类 Mod（如嘉然 DP-00：全部 Unit 均为游戏 LOD）对齐。 |
-| 自动 Unit 修复只看 Mesh ID 或单个 Unit 的 GPU 大小 | 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；应按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动，不能只用单个 GPU 大小决定修复策略。 |
-| 把所有当前 Unit 都当成 `10800438` | 当前游戏的 DP-00 资源实际使用 `0x00A4CD36`，其他资源可能使用 `0x10800438`；应从同 File ID 的游戏引用读取版本，并让 GPU 结构检查同时识别两个已验证版本。 |
-| 用根容器直接解析页面 VM 或新增页面后返回主菜单内存不释放 | DI 容器会强引用所有解析过的 `IDisposable`（所有 `PageViewModelBase` 子类）到 `ServiceProviderEngineScope._disposables`，直到根容器/scope 释放；导航页面必须由 `NavigationStore` 通过独立 `IServiceScope` 解析（`Navigate<T>` 内部 `CreateScope`，导航离开时丢弃旧 scope），不要用注入的 `IServiceProvider` 直接 `GetRequiredService<页面VM>` 后手动 `Navigate(page)`，否则该页面及其模型/纹理数据会被容器持有到进程退出。 |
-| 自定义角色可能沿用原 Mesh ID，并把一个部位拆成 Slim、Stocky 与小型 Any 材质/遮罩层；LOD 还承载 MeshInfo/Section 的材质绑定。发现强自定义信号后，必须按 `CustomizationSlot` 成组保留 Mod LOD，并继续保留同 Mesh 签名联动。静态装备页可能只显示 Slim，仍需验证实际玩家的 Stocky/动态渲染。 |
-| 批量复制文件用无界 `Task.WhenAll` + 手动 `FileStream.CopyToAsync` | 部署（`ModService.DeployAsync`）、导入（`IOExtensions.CopyTo`）、增量更新（`UpdateAsync`）统一为：收集文件对后用 `Parallel.ForEachAsync`/`Parallel.ForEach` 限制并发（`Math.Clamp(Environment.ProcessorCount / 2, 2, 4)`）+ Windows 内核态 `File.Copy(..., true)`（CopyFile2）。无界并发会让磁盘队列过深反而降吞吐；托管 `CopyToAsync` 比内核态复制慢且每个文件多一份异步状态机/缓冲开销。符号链接部署分支保留 `File.CreateSymbolicLink`。手动流复制的 buffer 统一用 81920，不要用 4096。 |
-| `RunAsync` 终态同步执行，抢在排队的步骤更新（BeginInvoke）前把任务标记终态 | `RunAsync` 的 `Complete`/`Fail`/`Cancel` 必须经 `QueueOnUiThread`（无条件 `Dispatcher.BeginInvoke`）排队执行，不能用 `RunOnUiThread`（UI 线程调用时同步执行）。否则 work 期间入队的 `CompleteStep`/`UpdateStep`（如符号链接部署瞬间完成的步骤）会被终态守卫（`task.Status != Running`）拦截，步骤永远停在"正在部署"（蓝色 Running），成功弹窗也显示冻结状态。复制模式部署慢、队列基本排空所以不暴露；符号链接模式必现。 |
-| 用 `TaskCompletionSource` 桥接弹窗后不处理用户点“取消”按钮 | `MessageBoxSelectionMessage` 的取消按钮默认只隐藏覆盖层、不触发任何回调；`MessageBoxConfirmMessage` 的“否”按钮才触发 `Abort`。凡是用 TCS 等待弹窗结果的调用方必须给 `MessageBoxSelectionMessage` 传 `Abort` 回调（如 `Abort = () => tcs.TrySetResult(取消值)`），否则用户点取消后流程永久挂起。 | 
-| 保存分组状态时覆盖了用户的自定义排序 | `SaveAllAsync`/`SaveStatesAsync` 按快照 `Mods` 顺序写 `SortOrder`；在非 Dashboard 页面保存分组状态时，必须保留原分组顺序：优先用 `ProfileSaveCoordinator.GetCurrentOrder()` 过滤出成员后作为 `preferredOrder` 传入 `Capture`（Dashboard 导航前已保存过用户顺序），取不到时退回 ModService 加载顺序。 |
-| 会话结束/取消后仍读取已清空的会话对象 | 结束类方法（如 `FinishAsync`）内部会清空会话（`Current = null`），总结弹窗、结果展示必须在调用结束方法之前捕获会话引用并传入，不能在之后从服务重新读取。 |
-| 把护甲下拉框里同名重复项当成数据错误去"去重名字"，或改护甲过滤时仍用单 `Id` 判断 | 同名两项是同一套装的护甲本体与头盔两个 archive（本来就应合并为一个套装选项）。过滤走 `FilterByArmor(meshes, option.Ids)` 多 ID 重载；单 ID 过滤会丢掉头盔/本体独占网格。详见 §5 护甲选择小节。 |
-| 合并/删除翻译键后不做双向引用验证 | 删除键后必须验证：① 代码中无残留旧键引用（`rg` 旧键名）；② 反向提取代码里所有 `{loc:Loc ...}` 与 `_localizationService["..."]` 引用，逐一确认存在于 zh-CN 和 en-US（能暴露历史拼写错误，如 `NexusDownloadPage.PremiumRequiredMsg` 与 JSON 中的 `NexusDownload.PremiumRequiredMsg` 前缀不一致——本地化服务对缺失键可能静默返回空串，界面只显示空白不会报错）。修改代码引用时，键名必须与 JSON 完全一致，不能凭印象写近似键名。 |
-| 以为拖拽期间滚轮消息会正常到达 WPF | OLE 拖拽循环会吞掉 WM_MOUSEWHEEL（WPF 收不到 PreviewMouseWheel）。拖拽中滚轮必须用 WH_MOUSE_LL 低级钩子，钩子直接装在 UI 线程即可（OLE 循环会泵消息，回调在 UI 线程执行）。钩子回调里处理完滚轮要**返回 1 吞掉消息**，不能让滚轮进入 OLE 循环（可能被当作按键状态变化导致拖拽被意外终止）。钩子回调必须 try/catch 且非滚轮消息原样 CallNextHookEx。 |
-| 合成拖拽事件刷新插入指示线时用 PreviewDragOver | gong 在 ItemsControl 上默认 `EventType.Auto` 只监听**冒泡**的 `DragOver`（非 ItemsControl 才监听 Preview*）。合成指示线刷新必须 raise `DragDrop.DragOverEvent`（冒泡），PreviewDragOver 不会进入 gong 管线，指示线不会刷新。`DragEventArgs` 带坐标的构造函数是 internal，只能用反射创建（有测试守护签名）。 |
-| 只依赖 CompositionTarget.Rendering 检测拖拽结束 | 应用空闲无渲染时 Rendering 会停发，Esc 取消/窗口外释放会留下僵尸状态和钩子。需要 DispatcherTimer 看门狗（300ms）轮询 `GetAsyncKeyState(VK_LBUTTON)` 兜底清理，停用最后一个状态时卸载钩子并取消渲染订阅。行为的所有入口（DragOver/Drop/渲染帧/钩子回调）都要 try/catch——滚动增强绝不允许破坏拖拽本身。 |
-| 只向上查找 ScrollViewer | ListBox 的 ScrollViewer 是**视觉后代**（模板内），不是祖先。查找要祖先优先、找不到再递归后代。 |
-| 用 SendInput 合成滚轮验证拖拽中滚轮滚动 | SendInput 的 MOUSEEVENTF_WHEEL 不携带真实按键状态，会清空全局异步按键状态（GetAsyncKeyState 返回抬起），导致 OLE QueryContinueDrag 看到 keys=0 提前结束拖拽——自动化测试的假象，真实鼠标滚轮自带 MK_LBUTTON。此类交互验证要区分真实输入与合成输入。 |
-| 在 MSTest 里直接 ApplyTemplate 测试 WPF 控件 | MSTest 环境不加载 WPF 默认主题样式（控件的 Template/Style 为 null，新建 Application 也不行）。UI 测试需要手工构造显式 ControlTemplate（FrameworkElementFactory）来搭建视觉树，并用 Measure/Arrange 建立视觉父子链。 |
-| 把需要 code-behind 访问的命名元素放进 Window.Style 的 ControlTemplate | 模板内的 `x:Name` 是模板作用域，Window 类不会生成对应字段（编译报 CS0103 "名称不存在"），用 `OnApplyTemplate` 里 `Template.FindName("name", this)` 获取引用。**不要把 Window.Content 改为 Grid 包裹 ContentControl/ContentPresenter 来容纳覆盖层**：`ContentControl.Content` 和显式设置 Content 的 `ContentPresenter` 都会把页面加为逻辑子（`SetLogicalChild`），而本项目的页面视图是 `Page` 类型，`Page.OnVisualParentChanged` 校验逻辑父必须是 Window/Frame，运行时报 XamlParseException "Page 只能具有 Window 或 Frame 父级"（启动即崩）。模板内裸 `<ContentPresenter>`（未设置 Content，隐式呈现 TemplatedParent.Content）不会触发该校验，这是原结构能正常工作的原因。 |
-| 主窗口接收文件拖拽时直接挂在 Window 的 DragOver/Drop 上或逐页面防 gong | 文件拖拽（FileDrop）必须用 Window 层的 `PreviewDragOver`/`PreviewDrop`（隧道事件最先到达根）并在识别到文件时 `e.Handled = true`，否则 string[] 会被 gong 的 `DefaultDropHandler.CanAcceptData`（`data is IEnumerable && !(data is string)`）当成排序数据，Drop 时插入 ObservableCollection 抛类型异常。内部拖拽（ModViewModel 等）不是 FileDrop，不受影响。防御性上仍应在实现 `IDropTarget` 的 VM（Dashboard/DeploymentOrder）的 DragOver/Drop 开头识别 `string[]` 或含 FileDrop 的 IDataObject 直接 return。提示层显隐用"DragOver 持续刷新时间戳 + DragLeave 后 300ms 复查"避免子元素间移动时闪烁。 |
-| 启动黑闪（LOGO 透明区透出黑底）只查闪屏图片 alpha | WPF 默认 `<SplashScreen>` 项在 `CompositionTarget.Rendering`（**帧渲染前**触发）第一次时就关闭闪屏，此时主窗口首帧还没提交给 DWM，DWM 侧主窗口区域是纯黑的；闪屏 LOGO 透明，黑底就从透明区透出"一闪"。修复：csproj 移除 SplashScreen 项（图片改 `<Resource>`），自实现透明闪屏窗口（`AllowsTransparency` + `Topmost`），在 `MainWindow.ContentRendered`（首帧真正渲染完成后）再 `Close()`。验证：启动进程 + `CopyFromScreen` 连续截屏统计中央区域纯黑帧比例（采样间隔 ≤20ms），修复后应全程为 0。 |
-| 嵌套压缩包导入撞 `IOException` 0x80070020 sharing violation 就以为是「外层还没写完 inner 就在读」 | SharpSevenZip 的 `ExtractArchive` 同步等待所有 native 句柄释放（`using var aec` + `_archive?.Close()` + Dispose 链），外层 `await Task.Run` 也确实等到 lambda 退出，所以"外层没写完 inner 就在读"是误判。真正原因是 **Windows Defender / 其他 AV 的实时扫描会在 SharpSevenZip 刚 `File.Create` 出来的文件上短暂持有独占锁**（minifilter 行为），紧接着的递归解压 / 临时目录清理 / `File.Create` 覆盖都会撞 sharing violation，尤其「外层包 = 内层包同名的单层包装」场景必现。修复：`ModService.ExtractArchiveAsync` 与 `TryDeleteTemporaryDirectory` 仅对 `ERROR_SHARING_VIOLATION (0x80070020)` / `ERROR_LOCK_VIOLATION (0x80070021)` 做线性退避重试（解压 6 次/累计 ≤3s，清理 4 次/累计 ≤0.6s）；其他错误（密码、CRC、文件不存在等）保持原行为不动。日志里反复出现「`_xxx\VRC ...zip` because it is being used by another process」+ Test\Temp\ 残留同名 inner 目录就是这个症状的指纹。 |
-| 用 `ToolGood.Words.WordsHelper` 引用拼音库 | `ToolGood.Words.Pinyin` 包的命名空间是 `ToolGood.Words.Pinyin`（WordsHelper / PinyinMatch 都在其下），不是 `ToolGood.Words`。`GetPinyin(name, false)` 输出无音调、首字母大写，英文/数字原样保留（`Helldivers2` → `Helldivers2`），转匹配串前要 `ToLowerInvariant()`；`GetFirstPinyin(name)` 同。搜索场景应把转换结果按 Mod 名称惰性缓存（名称不变），不要在防抖热路径里重复转换。**进程首次调用会加载 8 万词组字典（实测约 180ms）且发生在调用线程**：上千 Mod 批量转换仅需数毫秒、每次过滤仅需亚毫秒级，真正的成本只在首次字典加载——应在 Mod 列表就绪后在后台线程预热（快照 + `Task.Run` 串行遍历触发缓存构建），避免用户第一次输入搜索时在 UI 线程上卡顿。 |
-| 构建报 CS2001 找不到 `obj\...\*.g.cs`，且同时出现多个随机后缀 `_wpftmp.csproj` | obj 目录残留了旧 WPF 临时编译产物（多个随机后缀 wpftmp 项目交错），删除 `Helldivers2ModManager\obj\Debug` 目录及其中 `*wpftmp*` 文件后重新**串行**构建（`/m:1`）即可恢复；正常构建后留下的 wpftmp 残留属于成功产物，无需清理。 |
-| 用 Ww2Ogg 的 Default codebook 转换 HD2 WEM 并以为成功 | Default 转换不会抛异常，但产物 NVorbis 解码在 `Residue0.Init` 报错（HD2 用 aoTuV 编码）。转换必须 AoTuV 优先、Default 兜底，并以 `VorbisReader` 构造成功作为"可播放"判据；不要只看 `GenerateOgg` 是否抛异常。 |
-| 把 Wwise bank 的 DATA chunk 或整个音频补丁读入内存做清单 | 音频检查只读 TOC、chunk 头、DIDX 和每条目 128 字节头探针；语音包单 patch 可有数千条目（如超级中配 6343 条/117ms），媒体数据一律按需切片读取。 |
-| 把 V1 manifest 的 `"Options": []`（空数组）当成会展开出补丁 | 空选项列表与无选项等同：`GetSelectedPatchFiles` 与 `DeployAsync` 都必须回退模组根目录补丁（纯文本模组导入即产生 `Options: []`，此前部署/覆盖扫描/预览全部拿到 0 个补丁）。注意与"关闭"占位选项（`Options.Count>1` 但某选项 Include 为空）区分，后者仍按占位处理。 |
-| 只在内存里记录「当前配置文件」就以为重启会恢复 | 当前配置文件的选择必须落盘到 `app_state` 表（键 `last_selected_group_id`）：`ModGroupService.InitAsync` 读取恢复，`SelectGroupAsync`/`DeleteGroupAsync` 立即写入。内存字段 `_lastSelectedGroupId` 初值为默认配置文件，只改内存会让重启后静默回落到默认配置文件。不要在设置页或 `mod_groups` 加列承载。详见 §3。 |
-| 新增/更新 `Resources/Data/*-names.json` 名称表只改一个消费点 | 名称表有两个消费点：`ArmorReuseService`（已知 archive 白名单 + 名称回退，护甲表优先、头盔表兜底）与 `ModelPreviewBackend.BuildArmorOptions`（预览选项命名，同样护甲优先、头盔兜底、未知显示 `Armor {id}`）。新增表（如 `helmet-names.json`）两处都要接入；表内的 `数据来自` 元数据键会被反序列化进字典，但 `IsArchiveId` 16 位十六进制校验 + `TryGetValue` 使其无害。csproj 用 `Resources\Data\*.json` 通配符打包，新文件无需登记；若扩展了白名单语义（护甲→护甲/头盔），`ArmorReusePage.*` 本地化（zh-CN/en-US）必须同步更新。 |
-
-这些提醒不能替代测试；它们的作用是避免沿着已知错误方向继续实现。
-
-## 9. 验证命令
-
-在仓库根目录执行：
+## 9. 验证与交付
 
 ```powershell
-# 构建解决方案
-dotnet build Helldivers2ModManager.sln --configuration Debug
-
-# 运行主测试项目
+dotnet build Helldivers2ModManager.sln --configuration Debug /m:1
 dotnet test tests/Helldivers2ModManager.Tests/Helldivers2ModManager.Tests.csproj --configuration Debug
-
-# 主程序发布
-dotnet publish src/Helldivers2ModManager/Helldivers2ModManager.csproj `
-  --configuration Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o publish
-
-# 独立工具发布时使用各自项目文件和输出目录
-dotnet publish src/Purger/Purger.csproj --configuration Release -r win-x64 `
-  --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o publish
 ```
 
-行为敏感的修改还应按场景补充验证：
-
-- 部署/修复：比较源文件和备份哈希，验证失败回滚。
-- Patch/资源解析：使用真实样例，验证正常、截断、越界和未知结构。
-- 预览：验证模型几何、材质匹配、纹理通道、取消和旧结果不会回写。
-- UI/本地化：验证页面导航、DataTemplate、语言切换和共享样式。
-
-完成后再次执行 `git status --short`，确认没有临时文件、发布目录或无关改动被留下。
+- 共享 WPF 输出串行构建/测试。主程序或调试器锁定 bin 时不要关闭用户进程，使用 `--artifacts-path <专用系统临时目录>` 隔离产物，验证路径后清理。
+- 修改后首次验证不要用 --no-build。依赖源码/夹具的测试用 CallerFilePath 定位仓库，不能假设测试当前目录位于仓库；修改全局当前目录的测试标记 DoNotParallelize。
+- WPF 测试显式构造 ControlTemplate 并 Measure/Arrange；无头测试通过不代表视觉验收。CS2001 缺生成文件先排除并行构建/旧 wpftmp，仅清理已核实的相关生成目录，不清成功产物。
+- 按改动范围验证：解析的边界/截断/未知格式；部署修复的哈希/备份/回滚；预览的取消/缓存/旧结果；UI 的导航/双语/样式。无需每次全库审计。
+- 发布使用对应项目及独立输出目录，Release / win-x64 / self-contained / PublishSingleFile；修改 PatchTool 发布配置须同时验证 CLI 和 VS Publish Profile。
+- 完成后检查工作树和临时文件，说明验证结果及未完成的人工验收。
 

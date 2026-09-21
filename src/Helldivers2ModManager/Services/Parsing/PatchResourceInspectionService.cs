@@ -18,9 +18,9 @@ namespace Helldivers2ModManager.Services;
 internal sealed class PatchResourceInspectionService
 {
     private const int PatchHeaderMagic = unchecked((int)0xF0000011);
-    private const ulong UnitTypeId = 0xE0A48D0BE9A7453FUL;
-    private const ulong TextureTypeId = 0xCD4238C6A0C69E32UL;
-    private const ulong MaterialTypeId = 0xEAC0B497876ADEDFUL;
+    private const ulong UnitTypeId = PatchResourceTypeIds.Unit;
+    private const ulong TextureTypeId = PatchResourceTypeIds.Texture;
+    private const ulong MaterialTypeId = PatchResourceTypeIds.Material;
     private const uint OriginalUnitVersion = 1;
     private const uint LegacyVerifiedUnitVersion = 10800437;
     private const uint CurrentVerifiedUnitVersion = 10800438;

@@ -222,12 +222,7 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         PatchResourceInspectionService inspectionService,
         ModelPreviewBackend previewBackend,
         GpuSkinningService gpuSkinningService,
-        LocalizationService localizationService,
-        AudioBankInspectionService audioInspectionService,
-        AudioPlaybackService audioPlaybackService,
-        ModTypeDetectionService modTypeDetectionService,
-        TextBankInspectionService textInspectionService,
-        Services.Parsing.LuaScriptInspectionService luaScriptInspectionService)
+        LocalizationService localizationService)
     {
         _logger = logger;
         _navigationStore = new Lazy<NavigationStore>(provider.GetRequiredService<NavigationStore>);
@@ -236,25 +231,12 @@ internal sealed partial class ModelPreviewPageViewModel : PageViewModelBase
         _previewBackend = previewBackend;
         _gpuSkinningService = gpuSkinningService;
         _localizationService = localizationService;
-        _audioInspectionService = audioInspectionService;
-        _audioPlaybackService = audioPlaybackService;
-        _modTypeDetectionService = modTypeDetectionService;
-        _textInspectionService = textInspectionService;
-        _luaInspectionService = luaScriptInspectionService;
         _localizationService.PropertyChanged += LocalizationServiceOnPropertyChanged;
         _animationTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromMilliseconds(15)
         };
         _animationTimer.Tick += AnimationTimerOnTick;
-        _audioPositionTimer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromMilliseconds(100)
-        };
-        _audioPositionTimer.Tick += AudioPositionTimerOnTick;
-        _audioPlaybackService.PlaybackEnded += AudioPlaybackServiceOnPlaybackEnded;
-        InitializeAudioView();
-        InitializeTextView();
 
         _ = RefreshModsAsync();
     }

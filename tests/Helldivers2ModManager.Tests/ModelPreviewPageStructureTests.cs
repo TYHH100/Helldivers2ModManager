@@ -18,48 +18,15 @@ public sealed class ModelPreviewPageStructureTests
         var tabControl = tabControls[0];
         var tabs = tabControl.Elements().Where(element => element.Name.LocalName == "TabItem").ToArray();
 
-        Assert.AreEqual(5, tabs.Length);
+        Assert.AreEqual(2, tabs.Length);
         Assert.AreEqual("{loc:Loc ModelPreviewPage.PartsAndVariants}", tabs[0].Attribute("Header")?.Value);
         Assert.AreEqual("{loc:Loc ModelPreviewPage.Meshes}", tabs[1].Attribute("Header")?.Value);
-        Assert.AreEqual("{loc:Loc ModelPreviewPage.AudioTab}", tabs[2].Attribute("Header")?.Value);
-        // 音频 Tab 仅在模组确有音频条目时可见。
-        Assert.IsTrue(tabs[2].Attribute("Visibility")?.Value == "{Binding HasAudioEntries, Converter={StaticResource BoolToVisibilityConverter}}");
         Assert.IsFalse(tabs[0].Descendants().Any(element => element.Name.LocalName == "DataGrid"));
         Assert.AreEqual(1, tabs[1].Descendants().Count(element => element.Name.LocalName == "DataGrid"));
         Assert.IsTrue(tabs[0].Descendants().Any(element =>
             element.Name.LocalName == "ItemsControl" &&
             element.Attribute("ItemsSource")?.Value == "{Binding PreviewOptions}"));
-        // 音频 Tab 的条目列表必须是虚拟化 ListBox（语音包数千条目，ItemsControl+ScrollViewer 会实体化全部行拖死 UI）。
-        var audioList = tabs[2].Descendants().Single(element =>
-            element.Name.LocalName == "ListBox" &&
-            element.Attribute("ItemsSource")?.Value == "{Binding AudioEntriesView}");
-        Assert.AreEqual("True", audioList.Attribute(VirtualizingIsVirtualizing)?.Value ?? audioList.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
-        Assert.IsTrue(audioList.Descendants().Any(element =>
-            element.Name.LocalName == "Button" &&
-            element.Attribute("Command")?.Value.Contains("ToggleAudioEntryPlaybackCommand") == true));
-        Assert.IsTrue(tabs[2].Descendants().Any(element => element.Name.LocalName == "GroupStyle"));
-
-                // 字幕文本 Tab 仅在模组确有文本条目时可见，且列表必须虚拟化。
-        Assert.AreEqual("{loc:Loc ModelPreviewPage.TextTab}", tabs[3].Attribute("Header")?.Value);
-        Assert.IsTrue(tabs[3].Attribute("Visibility")?.Value == "{Binding HasTextEntries, Converter={StaticResource BoolToVisibilityConverter}}");
-        var textList = tabs[3].Descendants().Single(element =>
-            element.Name.LocalName == "ListBox" &&
-            element.Attribute("ItemsSource")?.Value == "{Binding TextEntriesView}");
-        Assert.AreEqual("True", textList.Attribute(VirtualizingIsVirtualizing)?.Value ?? textList.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
-        Assert.IsTrue(tabs[3].Descendants().Any(element => element.Name.LocalName == "GroupStyle"));
-
-        // Lua 脚本 Tab 仅在模组确有脚本条目时可见；还原文本必须只读（静态解析安全契约）。
-        Assert.AreEqual("{loc:Loc ModelPreviewPage.LuaTab}", tabs[4].Attribute("Header")?.Value);
-        Assert.IsTrue(tabs[4].Attribute("Visibility")?.Value == "{Binding HasLuaEntries, Converter={StaticResource BoolToVisibilityConverter}}");
-        var luaReportBox = tabs[4].Descendants().Single(element =>
-            element.Name.LocalName == "TextBox" &&
-            element.Attribute("Text")?.Value == "{Binding LuaReportText, Mode=OneWay}");
-        Assert.AreEqual("True", luaReportBox.Attribute("IsReadOnly")?.Value);
-        Assert.IsTrue(tabs[4].Descendants().Any(element =>
-            element.Name.LocalName == "Button" &&
-            element.Attribute("Command")?.Value.Contains("CopyLuaReportCommand") == true));
-
-var bodyShapeOptions = document
+        var bodyShapeOptions = document
             .Descendants()
             .Where(element => element.Name.LocalName == "RadioButton" &&
                               element.Attribute("GroupName")?.Value == "ModelPreviewBodyShape")
@@ -75,6 +42,55 @@ var bodyShapeOptions = document
         Assert.IsTrue(armorComboBox.Descendants().Any(element =>
             element.Name.LocalName == "TextBlock" &&
             element.Attribute("Text")?.Value == "{Binding DisplayName}"));
+    }
+
+
+    [TestMethod]
+    public void PatchResourceViewer_OwnsVirtualizedAudioTextAndReadOnlyLua()
+    {
+        var document = XDocument.Load(Path.Combine(FindRepositoryRoot().FullName,
+            "src", "Helldivers2ModManager", "Views", "PatchResourceViewerPageView.xaml"));
+        var tabControl = document.Descendants().Single(element => element.Name.LocalName == "TabControl");
+        var tabs = tabControl.Elements().Where(element => element.Name.LocalName == "TabItem").ToArray();
+        Assert.AreEqual(6, tabs.Length);
+        Assert.AreEqual("{loc:Loc PatchResourceViewerPage.Toc}", tabs[0].Attribute("Header")?.Value);
+        Assert.AreEqual("{loc:Loc PatchResourceViewerPage.GpuStreams}", tabs[1].Attribute("Header")?.Value);
+        Assert.AreEqual("{loc:Loc PatchResourceViewerPage.Textures}", tabs[2].Attribute("Header")?.Value);
+        Assert.AreEqual("{loc:Loc ModelPreviewPage.AudioTab}", tabs[3].Attribute("Header")?.Value);
+        // 音频 Tab 仅在模组确有音频条目时可见。
+        Assert.IsTrue(tabs[3].Attribute("Visibility")?.Value == "{Binding HasAudioEntries, Converter={StaticResource BoolToVisibilityConverter}}");
+        // 音频 Tab 的条目列表必须是虚拟化 ListBox（语音包数千条目，ItemsControl+ScrollViewer 会实体化全部行拖死 UI）。
+        var audioList = tabs[3].Descendants().Single(element =>
+            element.Name.LocalName == "ListBox" &&
+            element.Attribute("ItemsSource")?.Value == "{Binding AudioEntriesView}");
+        Assert.AreEqual("True", audioList.Attribute(VirtualizingIsVirtualizing)?.Value ?? audioList.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
+        Assert.IsTrue(audioList.Descendants().Any(element =>
+            element.Name.LocalName == "Button" &&
+            element.Attribute("Command")?.Value.Contains("ToggleAudioEntryPlaybackCommand") == true));
+        Assert.IsTrue(tabs[3].Descendants().Any(element => element.Name.LocalName == "GroupStyle"));
+
+        // 字幕文本 Tab 仅在模组确有文本条目时可见，且列表必须虚拟化。
+        Assert.AreEqual("{loc:Loc ModelPreviewPage.TextTab}", tabs[4].Attribute("Header")?.Value);
+        Assert.IsTrue(tabs[4].Attribute("Visibility")?.Value == "{Binding HasTextEntries, Converter={StaticResource BoolToVisibilityConverter}}");
+        var textList = tabs[4].Descendants().Single(element =>
+            element.Name.LocalName == "ListBox" &&
+            element.Attribute("ItemsSource")?.Value == "{Binding TextEntriesView}");
+        Assert.AreEqual("True", textList.Attribute(VirtualizingIsVirtualizing)?.Value ?? textList.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
+        Assert.IsTrue(tabs[4].Descendants().Any(element => element.Name.LocalName == "GroupStyle"));
+
+        // Lua 脚本 Tab 仅在模组确有脚本条目时可见；还原文本必须只读（静态解析安全契约）。
+        Assert.AreEqual("{loc:Loc ModelPreviewPage.LuaTab}", tabs[5].Attribute("Header")?.Value);
+        Assert.IsTrue(tabs[5].Attribute("Visibility")?.Value == "{Binding HasLuaEntries, Converter={StaticResource BoolToVisibilityConverter}}");
+        var luaReportBox = tabs[5].Descendants().Single(element =>
+            element.Name.LocalName == "TextBox" &&
+            element.Attribute("Text")?.Value == "{Binding LuaReportText, Mode=OneWay}");
+        Assert.AreEqual("True", luaReportBox.Attribute("IsReadOnly")?.Value);
+        Assert.IsTrue(tabs[5].Descendants().Any(element =>
+            element.Name.LocalName == "Button" &&
+            element.Attribute("Command")?.Value.Contains("CopyLuaReportCommand") == true));
+        foreach (var list in tabs[3].Descendants().Concat(tabs[4].Descendants())
+            .Where(element => element.Name.LocalName == "ListBox"))
+            Assert.AreEqual("True", list.Attribute("VirtualizingPanel.IsVirtualizingWhenGrouping")?.Value);
     }
 
     [TestMethod]
@@ -98,9 +114,9 @@ var bodyShapeOptions = document
 
     private static XName VirtualizingIsVirtualizing => XName.Get("IsVirtualizing", "http://schemas.microsoft.com/winfx/2006/xaml/presentation");
 
-    private static DirectoryInfo FindRepositoryRoot()
+    private static DirectoryInfo FindRepositoryRoot([System.Runtime.CompilerServices.CallerFilePath] string sourcePath = "")
     {
-        for (DirectoryInfo? current = new(Directory.GetCurrentDirectory()); current is not null; current = current.Parent)
+        for (DirectoryInfo? current = new(Path.GetDirectoryName(sourcePath)!); current is not null; current = current.Parent)
         {
             if (File.Exists(Path.Combine(current.FullName, "Helldivers2ModManager.sln")))
                 return current;

@@ -24,6 +24,17 @@ internal sealed partial class ModelPreviewPageViewModel
     [RelayCommand]
     private void GoBack() => _navigationStore.Value.Navigate<DashboardPageViewModel>();
 
+    [RelayCommand]
+    private void OpenPatchResources()
+    {
+        var mod = SelectedMod;
+        _navigationStore.Value.Navigate<PatchResourceViewerPageViewModel>(page =>
+        {
+            if (mod is not null)
+                page.SetInitialMod(mod);
+        });
+    }
+
     [RelayCommand(AllowConcurrentExecutions = false)]
     private async Task RefreshMods() => await RefreshModsAsync();
 
@@ -40,7 +51,6 @@ internal sealed partial class ModelPreviewPageViewModel
     partial void OnModelGroupChanged(Model3DGroup? value)
     {
         OnPropertyChanged(nameof(HasModel));
-        OnPropertyChanged(nameof(IsAudioOnlyPreview));
     }
 
     partial void OnSelectedMeshChanged(ModelPreviewMesh? value) => QueueRebuild();
@@ -257,10 +267,6 @@ internal sealed partial class ModelPreviewPageViewModel
             ModelGroup = null;
             SuggestedCameraDistance = 5;
             SuggestedCameraYaw = 0;
-            StopAudioPlayback(clearCurrent: true);
-            ClearAudioCollections();
-            ClearTextCollections();
-            ClearLuaCollections();
         }
 
         try
@@ -354,75 +360,6 @@ internal sealed partial class ModelPreviewPageViewModel
             if (!string.IsNullOrWhiteSpace(result.Error))
                 StatusText += " " + result.Error;
 
-            // 多选项全音频模组：直接跳过音频预览（用户决策——每个选项各自携带 bank/stream，
-            // 全量解析与原版比对的代价过高，部署后在游戏内体验即可）。
-            if (await ShouldSkipAudioPreviewAsync(mod, cancellationToken))
-            {
-                if (!IsCurrentLoad(mod, loadGeneration))
-                    return;
-                ApplyAudioInventory(AudioInventoryResult.Empty);
-                if (Meshes.Count == 0)
-                    StatusText = _localizationService["ModelPreviewPage.AudioMultiOptionSkipped"];
-            }
-            else
-            {
-                var audioResult = await LoadAudioInventoryAsync(
-                    mod,
-                    selectedPatchFiles,
-                    patchSetKey,
-                    loadGeneration,
-                    cancellationToken);
-                if (!IsCurrentLoad(mod, loadGeneration))
-                    return;
-                ApplyAudioInventory(audioResult);
-                if (Meshes.Count == 0 && HasAudioEntries)
-                {
-                    // Audio-only mods have no 3D preview to describe; the audio summary replaces
-                    // the "no geometry" status and the audio tab becomes the landing tab.
-                    UpdateAudioSummaryStatus(audioResult.PatchCount, audioResult.Error);
-                    if (resetView)
-                        SelectedPreviewTabIndex = AudioPreviewTabIndex;
-                }
-            }
-
-            // 字幕/文本预览与音频独立加载（文本模组通常不含音频资源；多选项音频跳过分支里文本仍要预览）。
-            var textResult = await LoadTextInventoryAsync(
-                mod,
-                selectedPatchFiles,
-                patchSetKey,
-                loadGeneration,
-                cancellationToken);
-            if (!IsCurrentLoad(mod, loadGeneration))
-                return;
-            ApplyTextInventory(textResult);
-            if (Meshes.Count == 0 && !HasAudioEntries && HasTextEntries)
-            {
-                UpdateTextSummaryStatus(textResult.PatchCount, textResult.Error);
-                if (resetView)
-                    SelectedPreviewTabIndex = TextPreviewTabIndex;
-            }
-            else if (Meshes.Count > 0 && resetView)
-            {
-                SelectedPreviewTabIndex = 0;
-            }
-
-            // Lua 脚本还原与文本独立加载（脚本模组通常只有脚本资源，没有几何/音频/文本）。
-            // 解析本身在服务内部的后台线程执行；结果只进文本视图，绝不进入任何执行路径。
-            var luaResult = await LoadLuaInventoryAsync(
-                mod,
-                selectedPatchFiles,
-                patchSetKey,
-                loadGeneration,
-                cancellationToken);
-            if (!IsCurrentLoad(mod, loadGeneration))
-                return;
-            ApplyLuaInventory(luaResult);
-            if (Meshes.Count == 0 && !HasAudioEntries && !HasTextEntries && HasLuaEntries)
-            {
-                UpdateLuaSummaryStatus(luaResult.PatchCount, luaResult.Error);
-                if (resetView)
-                    SelectedPreviewTabIndex = LuaScriptsPreviewTabIndex;
-            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

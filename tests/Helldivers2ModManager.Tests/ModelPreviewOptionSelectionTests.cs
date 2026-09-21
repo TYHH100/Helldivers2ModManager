@@ -168,9 +168,9 @@ public sealed class ModelPreviewOptionSelectionTests
             .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-    private static DirectoryInfo FindRepositoryRoot()
+    private static DirectoryInfo FindRepositoryRoot([System.Runtime.CompilerServices.CallerFilePath] string sourcePath = "")
     {
-        for (DirectoryInfo? current = new(Directory.GetCurrentDirectory()); current is not null; current = current.Parent)
+        for (DirectoryInfo? current = new(Path.GetDirectoryName(sourcePath)!); current is not null; current = current.Parent)
         {
             if (File.Exists(Path.Combine(current.FullName, "Helldivers2ModManager.sln")))
                 return current;

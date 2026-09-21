@@ -75,7 +75,12 @@ internal sealed partial class DashboardPageViewModel
     [RelayCommand]
     void PatchResourceViewer()
     {
-        _navStore.Value.Navigate<PatchResourceViewerPageViewModel>();
+        var mod = GetSelectedModData().FirstOrDefault();
+        _navStore.Value.Navigate<PatchResourceViewerPageViewModel>(page =>
+        {
+            if (mod is not null)
+                page.SetInitialMod(mod);
+        });
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]

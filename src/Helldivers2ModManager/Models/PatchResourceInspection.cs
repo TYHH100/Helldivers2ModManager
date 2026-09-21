@@ -484,6 +484,7 @@ internal sealed class PatchTocInspectionItem
 
     public string FileIdText => $"0x{FileId:X16}";
     public string TypeIdText => $"0x{TypeId:X16}";
+    public string TypeNameText => PatchResourceTypeIds.GetDisplayName(TypeId);
     public string MainRangeText => $"0x{MainOffset:X} + {MainSize:N0}";
     public string GpuRangeText => GpuSize == 0 ? "-" : $"0x{GpuOffset:X} + {GpuSize:N0}";
     public string StreamRangeText => StreamSize == 0 ? "-" : $"0x{StreamOffset:X} + {StreamSize:N0}";

@@ -9,9 +9,9 @@ using System.Windows;
 
 namespace Helldivers2ModManager.ViewModels;
 
-internal sealed partial class ModelPreviewPageViewModel
+internal sealed partial class PatchResourceViewerPageViewModel
 {
-    internal const int LuaScriptsPreviewTabIndex = 4;
+    internal const int LuaScriptsPreviewTabIndex = 5;
 
     private const int MaxCachedLuaInventories = 2;
 
@@ -91,7 +91,7 @@ internal sealed partial class ModelPreviewPageViewModel
     [RelayCommand]
     private async Task ExtractLuaFilesAsync()
     {
-        if (SelectedMod is not { } mod)
+        if (_isDisposed || SelectedMod is not { } mod)
             return;
 
         var dialog = new Microsoft.Win32.OpenFolderDialog
@@ -101,15 +101,20 @@ internal sealed partial class ModelPreviewPageViewModel
         if (dialog.ShowDialog() != true)
             return;
 
+        var generation = _loadGeneration;
+        var token = _pageLifetimeCancellation.Token;
         try
         {
             IsLuaExtracting = true;
-            var patchFiles = GetPreviewPatchFiles(mod);
+            var patchFiles = _modService.GetSelectedPatchFiles(mod);
             var result = await _luaInspectionService.ExtractAsync(
                 mod.Directory,
                 patchFiles,
                 dialog.FolderName,
-                CancellationToken.None);
+                token);
+
+            if (!IsCurrentLoad(mod, generation))
+                return;
 
             if (result.Error is not null)
             {
@@ -126,14 +131,19 @@ internal sealed partial class ModelPreviewPageViewModel
                     .Replace("{path}", result.DestinationDirectory);
             }
         }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            LuaMessageText = _localizationService["ModelPreviewPage.LuaExtractFailed"].Replace("{message}", ex.Message);
+            if (IsCurrentLoad(mod, generation))
+                LuaMessageText = _localizationService["ModelPreviewPage.LuaExtractFailed"].Replace("{message}", ex.Message);
         }
         finally
         {
-            IsLuaExtracting = false;
-            OnPropertyChanged(nameof(HasLuaMessage));
+            if (!_isDisposed)
+            {
+                IsLuaExtracting = false;
+                OnPropertyChanged(nameof(HasLuaMessage));
+            }
         }
     }
 

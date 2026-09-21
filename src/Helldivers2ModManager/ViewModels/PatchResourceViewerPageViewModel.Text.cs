@@ -10,9 +10,9 @@ using System.Windows.Data;
 
 namespace Helldivers2ModManager.ViewModels;
 
-internal sealed partial class ModelPreviewPageViewModel
+internal sealed partial class PatchResourceViewerPageViewModel
 {
-    internal const int TextPreviewTabIndex = 3;
+    internal const int TextPreviewTabIndex = 4;
 
     private const int MaxCachedTextInventories = 2;
 
