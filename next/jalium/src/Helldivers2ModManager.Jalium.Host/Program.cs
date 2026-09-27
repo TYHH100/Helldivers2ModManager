@@ -29,12 +29,12 @@ internal static class Program
         Directory.CreateDirectory(dataRoot);
         var settings = new SettingsService(NullLogger<SettingsService>.Instance,
             Path.Combine(appRoot, "settings.json"), appRoot);
-        if (!settings.InitAsync().GetAwaiter().GetResult())
+        if (!Task.Run(() => settings.InitAsync()).GetAwaiter().GetResult())
         {
             settings.InitDefault();
             settings.StorageDirectory = dataRoot;
             settings.TempDirectory = Path.Combine(appRoot, "temp");
-            settings.SaveAsync().GetAwaiter().GetResult();
+            Task.Run(() => settings.SaveAsync()).GetAwaiter().GetResult();
         }
 
         var localization = new LocalizationService(NullLogger<LocalizationService>.Instance,
@@ -47,7 +47,9 @@ internal static class Program
             new ModCatalogService(NullLogger<ModCatalogService>.Instance),
             new EnabledDataRepository(NullLogger<EnabledDataRepository>.Instance, database),
             NullLogger<DashboardLibraryService>.Instance);
-        var workspace = DashboardWorkspace.OpenAsync(settings, library, groups, groupRepository)
+        // 库内有模组时 OpenAsync 会真正异步挂起，其 await 续体投递回主线程同步上下文；
+        // 主线程此刻阻塞在 GetResult 会死锁。放线程池上等待，续体在池线程继续，不回主线程。
+        var workspace = Task.Run(() => DashboardWorkspace.OpenAsync(settings, library, groups, groupRepository))
             .GetAwaiter().GetResult();
         using var runtime = new DashboardRuntime(settings, localization, database, workspace,
             () => DashboardWorkspace.OpenAsync(settings, library, groups, groupRepository),

@@ -139,6 +139,7 @@ dotnet test tests/Helldivers2ModManager.Tests/Helldivers2ModManager.Tests.csproj
 ```
 
 - 共享 WPF 输出串行构建/测试。主程序或调试器锁定 bin 时不要关闭用户进程，使用 `--artifacts-path <专用系统临时目录>` 隔离产物，验证路径后清理。
+- Jalium Host 启动期在主线程阻塞等待异步初始化（InitAsync/SaveAsync/OpenAsync 的 GetAwaiter().GetResult()）时 → 用 `Task.Run` 包住等待。主线程装有 DispatcherSynchronizationContext，直接阻塞会让 await 续体投递回被阻塞的主线程死锁；库里有模组时必现，空库时全程同步完成所以不暴露。
 - 测试调用 `ModService.Init` 后要释放数据库或清理隔离目录时 → 先等待 `HashMigrationTask`，避免后台哈希迁移仍占用 SQLite 文件。
 - 修改后首次验证不要用 --no-build。依赖源码/夹具的测试用 CallerFilePath 定位仓库，不能假设测试当前目录位于仓库；修改全局当前目录的测试标记 DoNotParallelize。
 - WPF 测试显式构造 ControlTemplate 并 Measure/Arrange；无头测试通过不代表视觉验收。CS2001 缺生成文件先排除并行构建/旧 wpftmp，仅清理已核实的相关生成目录，不清成功产物。
