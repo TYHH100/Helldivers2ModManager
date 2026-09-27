@@ -221,10 +221,31 @@ internal sealed partial class DashboardRuntime
         var messageBox = _messageBoxOverlay;
         if (layout is null || tasks is null || messageBox is null)
             return;
-        var selection = ExportSettingsDialog.Show(layout.Window, localization);
+        var selection = await messageBox.PromptExportSettingsAsync(localization["DashboardPage.ExportTitle"],
+            localization["DashboardPage.ExportMsg"],
+            new[]
+            {
+                localization["DashboardPage.ExportZip"], localization["DashboardPage.Export7zFast"],
+                localization["DashboardPage.Export7zStandard"], localization["DashboardPage.Export7zHigh"],
+                localization["DashboardPage.Export7zUltra"],
+            },
+            new[]
+            {
+                localization["DashboardPage.ExportZipCrypto"], localization["DashboardPage.ExportAes128"],
+                localization["DashboardPage.ExportAes192"], localization["DashboardPage.ExportAes256"],
+            });
         if (selection is null)
             return;
-        var is7z = selection.Format.Contains("7z", StringComparison.OrdinalIgnoreCase);
+        var opt = selection.Format;
+        var is7z = opt.StartsWith("7z", StringComparison.OrdinalIgnoreCase);
+        // 与原版一致：按本地化文本精确匹配档位，Zip 与 7z 标准档都落到 Normal。
+        var isFast = opt == localization["DashboardPage.Export7zFast"];
+        var isHigh = opt == localization["DashboardPage.Export7zHigh"];
+        var isUltra = opt == localization["DashboardPage.Export7zUltra"];
+        var level = isFast ? SharpCompressionLevel.Fast
+            : isHigh ? SharpCompressionLevel.High
+            : isUltra ? SharpCompressionLevel.Ultra : SharpCompressionLevel.Normal;
+        var levelName = isFast ? "Fast" : isHigh ? "High" : isUltra ? "Ultra" : "Normal";
         var extension = is7z ? "7z" : "zip";
         var save = new SaveFileDialog
         {
@@ -235,12 +256,6 @@ internal sealed partial class DashboardRuntime
         if (save.ShowDialog() != true)
             return;
 
-        var level = selection.Level.Contains("Fast", StringComparison.OrdinalIgnoreCase)
-            ? SharpCompressionLevel.Fast
-            : selection.Level.Contains("High", StringComparison.OrdinalIgnoreCase)
-                ? SharpCompressionLevel.High
-                : selection.Level.Contains("Ultra", StringComparison.OrdinalIgnoreCase)
-                    ? SharpCompressionLevel.Ultra : SharpCompressionLevel.Normal;
         var dict = level switch
         {
             SharpCompressionLevel.Fast => "8m",
@@ -254,10 +269,12 @@ internal sealed partial class DashboardRuntime
         if (level is SharpCompressionLevel.High or SharpCompressionLevel.Ultra
             && totalSize > 1024L * 1024 * 1024)
         {
-            var sizeText = $"{totalSize / (1024.0 * 1024 * 1024):F2} GB";
+            var sizeText = totalSize >= 1024L * 1024 * 1024 * 1024
+                ? $"{totalSize / (1024.0 * 1024 * 1024 * 1024):F2} TB"
+                : $"{totalSize / (1024.0 * 1024 * 1024):F2} GB";
             var dictText = level == SharpCompressionLevel.Ultra ? "128MB" : "64MB";
             var message = localization["DashboardPage.ExportMemoryMsgPrefix"] + sizeText
-                + localization["DashboardPage.ExportMemoryMsgMid"] + selection.Level
+                + localization["DashboardPage.ExportMemoryMsgMid"] + levelName
                 + localization["DashboardPage.ExportMemoryMsgCompression"] + dictText
                 + localization["DashboardPage.ExportMemoryMsgSuffix"];
             if (!await messageBox.ConfirmAsync(localization["DashboardPage.ExportMemoryWarning"], message))

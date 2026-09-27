@@ -11,7 +11,7 @@ internal static class MessageBoxVisualCheck
 {
     public static int Run(string screenshotPath, bool passwordPrompt = false, bool textPrompt = false,
         bool selectionPrompt = false, bool singleSelectionPrompt = false, bool checklistPrompt = false,
-        bool progressPrompt = false)
+        bool progressPrompt = false, bool exportSettingsPrompt = false)
     {
         var localization = new LocalizationService(NullLogger<LocalizationService>.Instance,
             Path.Combine(AppContext.BaseDirectory, "Language"));
@@ -51,6 +51,14 @@ internal static class MessageBoxVisualCheck
                     localization["VersionCheckDetail.UnitSelectionMessage"],
                     [new MessageBoxSelectionOption("Custom unit", Detail: "3 patch entries | LOD 4096->8192 | ID 0x0123456789ABCDEF"),
                      new MessageBoxSelectionOption("Standard unit", Detail: "1 patch entry | LOD 2048->4096 | ID 0xFEDCBA9876543210")]);
+            else if (exportSettingsPrompt)
+                _ = overlay.PromptExportSettingsAsync(localization["DashboardPage.ExportTitle"],
+                    localization["DashboardPage.ExportMsg"],
+                    [localization["DashboardPage.ExportZip"], localization["DashboardPage.Export7zFast"],
+                        localization["DashboardPage.Export7zStandard"], localization["DashboardPage.Export7zHigh"],
+                        localization["DashboardPage.Export7zUltra"]],
+                    [localization["DashboardPage.ExportZipCrypto"], localization["DashboardPage.ExportAes128"],
+                        localization["DashboardPage.ExportAes192"], localization["DashboardPage.ExportAes256"]]);
             else if (passwordPrompt)
                 _ = overlay.PromptPasswordAsync(localization["DashboardPage.ArchivePasswordTitle"],
                     localization["DashboardPage.ArchivePasswordMessage"].Replace("{file}", "Example.zip"));

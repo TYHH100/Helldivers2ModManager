@@ -38,6 +38,7 @@
 - Jalium 页面含万级动画条目时 → 保留只物化可视行的选择器；不要直接用 `ComboBox.ItemsSource`，并验证搜索、滚动和源索引回传。
 - Jalium Core 链接原版解析服务时缺类型或运行时名称表 → 同步链接对应非 UI 模型，并在 Host 显式复制所需 `Resources/Data`；构建成功后还要检查输出目录中的数据文件。
 - Jalium 音乐播放器收到 `BackgroundMusicService` 的播放/曲目事件时 → 通过创建窗口时捕获的 Jalium `Dispatcher` 更新控件；音频停止回调可能来自后台线程，不能直接改 UI。
+- Jalium 业务确认/输入类弹窗一律走主窗口共享覆盖层；模态子窗口（目录浏览器等）内部的输入提示内联为该窗口自己的覆盖层——主窗口覆盖层会被模态子窗口遮挡，不嵌套独立提示窗口。导出设置提示沿用原版布局：合并的格式/压缩档位下拉（5 项），选 7z 隐藏 ZIP 加密下拉，密码勾选后留空确认把消息替换为必填提示并保持打开。
 - WPF 集合和绑定属性只在 UI 线程更新。大列表先构造普通 List 再整体替换，成员判断用 HashSet；音频/文本列表用虚拟化 ListBox + ListCollectionView，分组时也启用虚拟化。
 - 动画选择必须保留 `VirtualizedTextPicker`：只物化可视行、回传源索引、按偏移定位选中项。不要换回 ComboBox 或修改全局 FluentComboBox（BringIntoView 会线性生成大量容器）。
 - 耗时业务统一用 `BackgroundTaskService.RunAsync`；work 内只做后台计算，通过 `BackgroundTaskContext.Report` 更新进度，结果回 UI 应用。`await` 和单独 Add/Update 不会把 CPU 工作移出 UI 线程。

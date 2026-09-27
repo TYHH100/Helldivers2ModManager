@@ -36,6 +36,10 @@ internal static class PatchViewerVisualCheck
             return MessageBoxVisualCheck.Run(screenshotPath, checklistPrompt: true);
         if (page == "progress")
             return MessageBoxVisualCheck.Run(screenshotPath, progressPrompt: true);
+        if (page == "export-settings")
+            return MessageBoxVisualCheck.Run(screenshotPath, exportSettingsPrompt: true);
+        if (page == "folder-picker")
+            return FolderPickerVisualCheck.Run(screenshotPath);
         if (page is not ("audio" or "text" or "texture"))
             return 2;
         var localization = new LocalizationService(NullLogger<LocalizationService>.Instance,

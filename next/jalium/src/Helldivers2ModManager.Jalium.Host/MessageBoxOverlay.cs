@@ -11,6 +11,9 @@ internal sealed record MessageBoxSelectionOption(string Text, string? Color = nu
     public static implicit operator MessageBoxSelectionOption(string text) => new(text);
 }
 
+/// <summary>导出设置确认结果；格式选项为合并的“格式+压缩等级”本地化文本，与原版覆盖层一致。</summary>
+internal sealed record MessageBoxExportSettings(string Format, bool UsePassword, string Password, string Encryption);
+
 internal sealed class MessageBoxOverlay : Grid, IDisposable
 {
     private readonly LocalizationService _localization;
@@ -38,6 +41,12 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
     private readonly List<CheckBox> _selectionChecks = [];
     private readonly ComboBox _singleSelection = new();
     private readonly StackPanel _singleSelectionPanel = new();
+    private readonly ComboBox _exportFormat = new();
+    private readonly ComboBox _exportEncryption = new();
+    private readonly TextBlock _exportEncryptionDescription = new();
+    private readonly CheckBox _exportUsePassword = new();
+    private readonly PasswordBox _exportPassword = new();
+    private readonly StackPanel _exportPanel = new();
     private readonly Button _accept = new();
     private readonly Button _cancel = new();
     private DialogRequest? _active;
@@ -143,6 +152,30 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
         _progressPanel.Visibility = Visibility.Collapsed;
         Grid.SetRow(_progressPanel, 1);
         layout.Children.Add(_progressPanel);
+        _exportFormat.Height = 36;
+        _exportFormat.Margin = new Thickness(0, 0, 0, 8);
+        _exportFormat.SelectionChanged += (_, _) => UpdateExportEncryptionState();
+        _exportEncryption.Height = 36;
+        _exportEncryption.Margin = new Thickness(0, 0, 0, 4);
+        _exportEncryption.SelectionChanged += (_, _) => UpdateExportEncryptionDescription();
+        _exportEncryptionDescription.FontSize = 12;
+        _exportEncryptionDescription.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
+        _exportEncryptionDescription.TextWrapping = TextWrapping.Wrap;
+        _exportEncryptionDescription.Margin = new Thickness(0, 0, 0, 8);
+        _exportUsePassword.Content = _localization["DashboardPage.ExportPasswordEnabled"];
+        _exportUsePassword.Margin = new Thickness(0, 0, 0, 8);
+        _exportUsePassword.Checked += (_, _) => _exportPassword.IsEnabled = true;
+        _exportUsePassword.Unchecked += (_, _) => _exportPassword.IsEnabled = false;
+        _exportPassword.Height = 36;
+        _exportPassword.IsEnabled = false;
+        _exportPanel.Children.Add(_exportFormat);
+        _exportPanel.Children.Add(_exportEncryption);
+        _exportPanel.Children.Add(_exportEncryptionDescription);
+        _exportPanel.Children.Add(_exportUsePassword);
+        _exportPanel.Children.Add(_exportPassword);
+        _exportPanel.Visibility = Visibility.Collapsed;
+        Grid.SetRow(_exportPanel, 2);
+        layout.Children.Add(_exportPanel);
         dialog.Child = layout;
         Children.Add(dialog);
     }
@@ -206,6 +239,23 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
         Enqueue(new DialogRequest(title, message, DialogKind.SingleSelection, null,
             SingleSelectionResult: result, Options: options.Select(option => new MessageBoxSelectionOption(option)).ToArray(),
             InitiallySelected: [initialIndex]));
+        return result.Task;
+    }
+
+    /// <summary>
+    /// 导出格式/加密/密码设置；取消返回 null。格式选项为合并文本（Zip 与 7z 各档位），
+    /// 选 7z 时隐藏加密选择（与原版覆盖层一致）；密码勾选后留空确认会把消息替换为必填提示并保持打开。
+    /// </summary>
+    public Task<MessageBoxExportSettings?> PromptExportSettingsAsync(string title, string message,
+        IReadOnlyList<string> formatOptions, IReadOnlyList<string> encryptionOptions)
+    {
+        if (_disposed) return Task.FromResult<MessageBoxExportSettings?>(null);
+        var result = new TaskCompletionSource<MessageBoxExportSettings?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        Enqueue(new DialogRequest(title, message, DialogKind.ExportSettings, null,
+            ExportSettingsResult: result,
+            Options: formatOptions.Select(option => new MessageBoxSelectionOption(option)).ToArray(),
+            EncryptionOptions: encryptionOptions.ToArray()));
         return result.Task;
     }
 
@@ -313,7 +363,8 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
         var input = _active.Kind == DialogKind.Input;
         var selection = _active.Kind == DialogKind.MultiSelection;
         var singleSelection = _active.Kind == DialogKind.SingleSelection;
-        var confirm = _active.Kind == DialogKind.Confirm || password || input || selection || singleSelection;
+        var exportSettings = _active.Kind == DialogKind.ExportSettings;
+        var confirm = _active.Kind == DialogKind.Confirm || password || input || selection || singleSelection || exportSettings;
         _password.Password = string.Empty;
         _password.Visibility = password ? Visibility.Visible : Visibility.Collapsed;
         _inputPanel.Visibility = input ? Visibility.Visible : Visibility.Collapsed;
@@ -323,6 +374,18 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
             ? _active.Options.Select(option => option.Text).ToArray() : null;
         _singleSelection.SelectedIndex = singleSelection && _active.Options.Count > 0
             ? Math.Clamp(_active.InitiallySelected.FirstOrDefault(), 0, _active.Options.Count - 1) : -1;
+        _exportPanel.Visibility = exportSettings ? Visibility.Visible : Visibility.Collapsed;
+        if (exportSettings)
+        {
+            _exportFormat.ItemsSource = _active.Options.Select(option => option.Text).ToArray();
+            _exportFormat.SelectedIndex = _active.Options.Count > 0 ? 0 : -1;
+            _exportEncryption.ItemsSource = _active.EncryptionOptions;
+            _exportEncryption.SelectedIndex = _active.EncryptionOptions.Count - 1;
+            _exportUsePassword.IsChecked = false;
+            _exportPassword.IsEnabled = false;
+            _exportPassword.Password = string.Empty;
+            UpdateExportEncryptionState();
+        }
         _selectionList.Children.Clear();
         _selectionChecks.Clear();
         _selectionError.Text = string.Empty;
@@ -346,16 +409,39 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
         _textInput.MaxLength = input ? Math.Max(0, _active.MaxLength) : 0;
         _inputError.Text = string.Empty;
         _cancel.Visibility = confirm ? Visibility.Visible : Visibility.Collapsed;
-        _cancel.Content = password || input || selection || singleSelection
+        _cancel.Content = password || input || selection || singleSelection || exportSettings
             ? _localization["Common.Cancel"] : _localization["MessageBox.No"];
-        _accept.Content = password || input || selection || singleSelection ? _localization["Common.Confirm"]
-            : confirm ? _localization["MessageBox.Yes"] : _localization["Common.OK"];
+        _accept.Content = password || input || selection || singleSelection || exportSettings
+            ? _localization["Common.Confirm"] : confirm ? _localization["MessageBox.Yes"] : _localization["Common.OK"];
         Visibility = Visibility.Visible;
         if (password) _password.Focus();
         else if (input) _textInput.Focus();
         else if (selection) _selectionScroll.Focus();
         else if (singleSelection) _singleSelection.Focus();
+        else if (exportSettings) _exportFormat.Focus();
         else Focus();
+    }
+
+    // 原版语义：选 7z 时压缩自带加密，隐藏 ZIP 加密下拉与说明；选 Zip 时恢复并刷新说明文本。
+    private void UpdateExportEncryptionState()
+    {
+        var is7z = (_exportFormat.SelectedItem as string)?.StartsWith("7z", StringComparison.OrdinalIgnoreCase) == true;
+        _exportEncryption.Visibility = is7z ? Visibility.Collapsed : Visibility.Visible;
+        _exportEncryptionDescription.Visibility = is7z ? Visibility.Collapsed : Visibility.Visible;
+        UpdateExportEncryptionDescription();
+    }
+
+    private void UpdateExportEncryptionDescription()
+    {
+        var key = (_exportEncryption.SelectedIndex) switch
+        {
+            0 => "DashboardPage.ExportZipCryptoDescription",
+            1 => "DashboardPage.ExportAes128Description",
+            2 => "DashboardPage.ExportAes192Description",
+            3 => "DashboardPage.ExportAes256Description",
+            _ => null,
+        };
+        _exportEncryptionDescription.Text = key is null ? string.Empty : _localization[key];
     }
 
     private void SetProgressVisible(bool visible)
@@ -366,6 +452,7 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
         _inputPanel.Visibility = visible ? Visibility.Collapsed : _inputPanel.Visibility;
         _selectionPanel.Visibility = visible ? Visibility.Collapsed : _selectionPanel.Visibility;
         _singleSelectionPanel.Visibility = visible ? Visibility.Collapsed : _singleSelectionPanel.Visibility;
+        _exportPanel.Visibility = visible ? Visibility.Collapsed : _exportPanel.Visibility;
         _buttonPanel.Visibility = standard;
         _progressPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -417,6 +504,21 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
             _inputError.Text = error;
             return;
         }
+        MessageBoxExportSettings? exportSettings = null;
+        if (accepted && request.Kind == DialogKind.ExportSettings)
+        {
+            var usePassword = _exportUsePassword.IsChecked == true;
+            var pwd = _exportPassword.Password;
+            if (usePassword && pwd.Length == 0)
+            {
+                // 原版行为：把消息替换为必填提示并保持弹窗打开。
+                _message.Text = _localization["DashboardPage.ExportPasswordRequired"];
+                return;
+            }
+            exportSettings = new MessageBoxExportSettings(
+                _exportFormat.SelectedItem as string ?? string.Empty, usePassword, pwd,
+                _exportEncryption.SelectedItem as string ?? string.Empty);
+        }
         IReadOnlyList<int>? selected = accepted && request.Kind == DialogKind.MultiSelection
             ? _selectionChecks.Select((check, index) => (check, index))
                 .Where(item => item.check.IsChecked == true).Select(item => item.index).ToArray()
@@ -460,6 +562,8 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
         _selectionList.Children.Clear();
         _selectionChecks.Clear();
         _singleSelection.ItemsSource = null;
+        _exportFormat.ItemsSource = null;
+        _exportEncryption.ItemsSource = null;
         _active = null;
         Visibility = Visibility.Collapsed;
         request.Result?.TrySetResult(accepted);
@@ -467,6 +571,7 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
         request.TextResult?.TrySetResult(text);
         request.SelectionResult?.TrySetResult(selected);
         request.SingleSelectionResult?.TrySetResult(selectedIndex);
+        request.ExportSettingsResult?.TrySetResult(exportSettings);
         ShowNext();
     }
 
@@ -487,6 +592,7 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
         _active?.TextResult?.TrySetResult(null);
         _active?.SelectionResult?.TrySetResult(null);
         _active?.SingleSelectionResult?.TrySetResult(null);
+        _active?.ExportSettingsResult?.TrySetResult(null);
         _active = null;
         while (_pending.TryDequeue(out var request))
         {
@@ -495,18 +601,21 @@ internal sealed class MessageBoxOverlay : Grid, IDisposable
             request.TextResult?.TrySetResult(null);
             request.SelectionResult?.TrySetResult(null);
             request.SingleSelectionResult?.TrySetResult(null);
+            request.ExportSettingsResult?.TrySetResult(null);
         }
         _password.Password = string.Empty;
         _textInput.Text = string.Empty;
         Visibility = Visibility.Collapsed;
     }
 
-    private enum DialogKind { Info, Error, Confirm, Password, Input, MultiSelection, SingleSelection }
+    private enum DialogKind { Info, Error, Confirm, Password, Input, MultiSelection, SingleSelection, ExportSettings }
     private sealed record DialogRequest(string Title, string Message, DialogKind Kind,
         TaskCompletionSource<bool>? Result, TaskCompletionSource<string?>? PasswordResult = null,
         TaskCompletionSource<string?>? TextResult = null, string InitialText = "", int MaxLength = 2048,
         Func<string, string?>? Validate = null, TaskCompletionSource<IReadOnlyList<int>?>? SelectionResult = null,
         IReadOnlyList<MessageBoxSelectionOption> Options = default!, IReadOnlyCollection<int> InitiallySelected = default!,
         Func<IReadOnlyList<int>, Task<string?>>? ValidateSelection = null,
-        TaskCompletionSource<int?>? SingleSelectionResult = null);
+        TaskCompletionSource<int?>? SingleSelectionResult = null,
+        IReadOnlyList<string> EncryptionOptions = default!,
+        TaskCompletionSource<MessageBoxExportSettings?>? ExportSettingsResult = null);
 }

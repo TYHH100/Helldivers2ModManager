@@ -243,6 +243,100 @@ public sealed class MessageBoxOverlayTests
         Assert.IsFalse(overlay.IsOpen);
     }
 
+    [TestMethod]
+    public async Task ExportSettings_ReturnsSelectionAndCancelReturnsNull()
+    {
+        using var overlay = CreateOverlay();
+        var first = overlay.PromptExportSettingsAsync("Export", "Pick a format",
+            ["ZIP", "7z Fast", "7z Standard", "7z High", "7z Ultra"],
+            ["ZipCrypto", "AES-128", "AES-192", "AES-256"]);
+        var second = overlay.PromptExportSettingsAsync("Export", "Pick a format",
+            ["ZIP", "7z Standard"], ["ZipCrypto", "AES-256"]);
+        var panel = GetExportPanel(overlay);
+
+        Assert.AreEqual(0, panel.Format.SelectedIndex);
+        Assert.AreEqual(3, panel.Encryption.SelectedIndex);
+        Assert.IsFalse(panel.UsePassword.IsChecked == true);
+        Assert.IsFalse(panel.Password.IsEnabled);
+
+        panel.Format.SelectedIndex = 1;
+        ClickButton(overlay, 1);
+
+        var result = await first;
+        Assert.IsNotNull(result);
+        Assert.AreEqual("7z Fast", result.Format);
+        Assert.IsFalse(result.UsePassword);
+        Assert.AreEqual(string.Empty, result.Password);
+        Assert.AreEqual("AES-256", result.Encryption);
+        Assert.AreEqual("Export", overlay.Title);
+
+        ClickButton(overlay, 0);
+        Assert.IsNull(await second);
+        Assert.IsFalse(overlay.IsOpen);
+    }
+
+    [TestMethod]
+    public async Task ExportSettings_HidesEncryptionFor7zAndRequiresPassword()
+    {
+        using var overlay = CreateOverlay();
+        var expectedRequired = new LocalizationService(
+            NullLogger<LocalizationService>.Instance, GetLanguageDirectory())["DashboardPage.ExportPasswordRequired"];
+        var result = overlay.PromptExportSettingsAsync("Export", "Pick a format",
+            ["ZIP", "7z High"], ["ZipCrypto", "AES-256"]);
+        var panel = GetExportPanel(overlay);
+
+        Assert.AreEqual(Visibility.Visible, panel.Encryption.Visibility);
+        panel.Format.SelectedIndex = 1;
+        Assert.AreEqual(Visibility.Collapsed, panel.Encryption.Visibility);
+        Assert.AreEqual(Visibility.Collapsed, panel.Description.Visibility);
+        panel.Format.SelectedIndex = 0;
+        Assert.AreEqual(Visibility.Visible, panel.Encryption.Visibility);
+
+        panel.UsePassword.IsChecked = true;
+        Assert.IsTrue(panel.Password.IsEnabled);
+        ClickButton(overlay, 1);
+
+        Assert.IsTrue(overlay.IsOpen);
+        Assert.AreEqual(expectedRequired, overlay.Message);
+        Assert.IsFalse(result.IsCompleted);
+
+        panel.Password.Password = "secret";
+        ClickButton(overlay, 1);
+
+        var value = await result;
+        Assert.IsNotNull(value);
+        Assert.AreEqual("ZIP", value.Format);
+        Assert.IsTrue(value.UsePassword);
+        Assert.AreEqual("secret", value.Password);
+        Assert.AreEqual("AES-256", value.Encryption);
+        Assert.IsFalse(overlay.IsOpen);
+    }
+
+    [TestMethod]
+    public async Task WindowClose_CancelsActiveAndQueuedExportSettings()
+    {
+        var overlay = CreateOverlay();
+        var active = overlay.PromptExportSettingsAsync("First", "Pick", ["ZIP"], ["AES-256"]);
+        var queued = overlay.PromptExportSettingsAsync("Second", "Pick", ["ZIP"], ["AES-256"]);
+
+        overlay.Dispose();
+
+        Assert.IsNull(await active);
+        Assert.IsNull(await queued);
+        Assert.IsFalse(overlay.IsOpen);
+    }
+
+    private static (ComboBox Format, ComboBox Encryption, TextBlock Description,
+        CheckBox UsePassword, PasswordBox Password) GetExportPanel(MessageBoxOverlay overlay)
+    {
+        var dialog = (Border)overlay.Children[0];
+        var layout = (Grid)dialog.Child!;
+        var panel = (StackPanel)layout.Children[8];
+        return ((ComboBox)panel.Children[0], (ComboBox)panel.Children[1],
+            (TextBlock)panel.Children[2], (CheckBox)panel.Children[3],
+            (PasswordBox)panel.Children[4]);
+    }
+
     private static void ClickButton(MessageBoxOverlay overlay, int index)
     {
         var dialog = (Border)overlay.Children[0];

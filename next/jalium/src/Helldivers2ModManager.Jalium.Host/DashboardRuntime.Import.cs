@@ -174,37 +174,6 @@ internal sealed partial class DashboardRuntime
         return await completion.Task;
     }
 
-    /* legacy prompt removed; shared MessageBoxOverlay owns prompts */
-    private Window CreatePromptLegacy(string title, string message)
-    {
-        var dialog = new Window
-        {
-            Title = title,
-            Width = 480,
-            Height = 230,
-            Owner = _layout!.Window,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        };
-        var panel = new StackPanel { Margin = new Thickness(20) };
-        panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
-        dialog.Content = panel;
-        return dialog;
-    }
-
-    private StackPanel PromptButtons(Window dialog, Action confirm)
-    {
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) };
-        var cancel = new Button { Content = localization["Common.Cancel"], Width = 88, Height = 36 };
-        cancel.Click += (_, _) => dialog.Close();
-        var accept = new Button { Content = localization["Common.Confirm"], Width = 88,
-            Height = 36, Margin = new Thickness(8, 0, 0, 0) };
-        accept.Click += (_, _) => { confirm(); dialog.Close(); };
-        buttons.Children.Add(cancel);
-        buttons.Children.Add(accept);
-        return buttons;
-    }
-
     private void ShowImportResult(ModImportResult result, string? groupWarning)
     {
         var summary = result.Failed > 0
