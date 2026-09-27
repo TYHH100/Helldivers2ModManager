@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <PackageReference Include="Jalium.UI.Desktop" Version="26.10.9" />
+    <PackageReference Include="Jalium.UI.Interop" Version="26.10.9" ExcludeAssets="native" />
+    <ProjectReference Include="../Helldivers2ModManager.Jalium.Core/Helldivers2ModManager.Jalium.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Helldivers2ModManager.Jalium.Host.Tests" />
+    <InternalsVisibleTo Include="Helldivers2ModManager.Jalium.Benchmarks" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="../../../../src/Helldivers2ModManager/Resources/Language/*.json" Link="Language/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../src/Helldivers2ModManager/Resources/Images/logo_icon.png" Link="Images/logo_icon.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../src/Helldivers2ModManager/Resources/Images/github_icon.png" Link="Images/github_icon.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../src/Helldivers2ModManager/Resources/Images/discord_icon.png" Link="Images/discord_icon.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../src/Helldivers2ModManager/Resources/Native/7z.dll" Link="7z.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../src/Helldivers2ModManager/Resources/Data/armor-names.json" Link="Resources/Data/armor-names.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../src/Helldivers2ModManager/Resources/Data/helmet-names.json" Link="Resources/Data/helmet-names.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../native/bin/win-x64/jalium_texture.dll" Link="jalium_texture.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../native/bin/win-x64/jalium_texture.dll')" />
+  </ItemGroup>
+
+  <!-- Jalium.UI.Interop copies all native DLLs via None items; keep its rendering libraries only. -->
+  <Target Name="ExcludeOptionalBrowserRuntime" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <None Remove="$(NuGetPackageRoot)jalium.ui.interop/26.10.9/runtimes/win-x64/native/WebView2Loader.dll;$(NuGetPackageRoot)jalium.ui.interop/26.10.9/runtimes/win-x64/native/jalium.native.browser.dll" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="RemoveOptionalBrowserRuntime" AfterTargets="Build;Publish">
+    <Delete Files="$(TargetDir)WebView2Loader.dll;$(TargetDir)jalium.native.browser.dll" />
+    <Delete Files="$(PublishDir)WebView2Loader.dll;$(PublishDir)jalium.native.browser.dll"
+            Condition="'$(PublishDir)' != ''" />
+    <Error Text="Optional browser runtime remained in the Jalium host output."
+           Condition="Exists('$(TargetDir)WebView2Loader.dll') or Exists('$(TargetDir)jalium.native.browser.dll')" />
+    <Error Text="Optional browser runtime remained in the Jalium publish output."
+           Condition="'$(PublishDir)' != '' and (Exists('$(PublishDir)WebView2Loader.dll') or Exists('$(PublishDir)jalium.native.browser.dll'))" />
+  </Target>
+</Project>

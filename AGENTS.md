@@ -26,6 +26,18 @@
 
 - VM 使用已有基类/ObservableObject 与 CommunityToolkit；业务逻辑在 VM/Service。大型类按流水线拆 partial，功能写入对应文件。
 - 公共样式放 `Resources/Styles/`，引用前核对资源键。改 XAML 后检查 code-behind 的旧名称、模板、导航入口及深色主题。
+- Jalium.UI 列表显示对象类型名而非卡片时 → 核查当前包的 `ItemTemplateSelector` 实机行为；已验证 `ItemTemplate` 可渲染，模板测试之外还要用真实窗口截图确认。
+- Jalium.UI 列表的 `Items.Groups` 有数据却不显示组标题时 → 用虚拟化 ListBox 中的显式标题行，并用真实窗口截图核对；当前包即使把 `GroupDescriptions` 配在 `ListBox.Items` 上，也可能只渲染平铺条目。
+- Jalium.UI ListBox 的条目只占左侧窄列或默认内边距过大时 → 为 ListBoxItem 设置零内边距、横向拉伸的 ContentPresenter 模板；需要选择的列表再补选中态 Trigger，并用窗口截图核对文字与元数据不重叠。
+- Jalium.UI 中部分 Segoe Fluent Icons/MDL2 私用区字符显示为方框时 → 先用真实窗口确认，再对受影响按钮选用 Segoe UI Symbol 中的通用符号，并保留本地化 ToolTip。
+- Jalium 主窗口新增覆盖层时 → 保持原版从下到上的图片预览、版本诊断、冲突明细、消息框、引导、Toast 顺序；确认框必须能盖住发起它的诊断覆盖层，并测试取消会解除等待。
+- Jalium.UI 窗口出现双层标题栏时 → 自定义标题栏配合 `IsShowTitleBar = false`，运行窗口确认后再验收。
+- Jalium.UI 选图时 `Jalium.UI.Controls.OpenFileDialog` 不可访问 → 用当前包公开的 `Microsoft.Win32.OpenFileDialog`；不要为此引入 WinForms 隐式引用造成控件名冲突。
+- Jalium.UI `Viewport3D` 只完成场景树/命中测试而未接入当前桌面绘制链时 → 不把空白视口当作已完成；隔离 Host 使用 `HwndHost` 承载原生渲染面，并用帧缓冲像素、鼠标旋转/滚轮和贴图探针验证。
+- Jalium 迁移要求完全原生时 → 页面和覆盖层使用 Jalium 控件或原生 `HwndHost`，禁止引入 WebView、浏览器内核或 WebView 依赖；外部网页只通过系统默认浏览器打开。
+- Jalium 页面含万级动画条目时 → 保留只物化可视行的选择器；不要直接用 `ComboBox.ItemsSource`，并验证搜索、滚动和源索引回传。
+- Jalium Core 链接原版解析服务时缺类型或运行时名称表 → 同步链接对应非 UI 模型，并在 Host 显式复制所需 `Resources/Data`；构建成功后还要检查输出目录中的数据文件。
+- Jalium 音乐播放器收到 `BackgroundMusicService` 的播放/曲目事件时 → 通过创建窗口时捕获的 Jalium `Dispatcher` 更新控件；音频停止回调可能来自后台线程，不能直接改 UI。
 - WPF 集合和绑定属性只在 UI 线程更新。大列表先构造普通 List 再整体替换，成员判断用 HashSet；音频/文本列表用虚拟化 ListBox + ListCollectionView，分组时也启用虚拟化。
 - 动画选择必须保留 `VirtualizedTextPicker`：只物化可视行、回传源索引、按偏移定位选中项。不要换回 ComboBox 或修改全局 FluentComboBox（BringIntoView 会线性生成大量容器）。
 - 耗时业务统一用 `BackgroundTaskService.RunAsync`；work 内只做后台计算，通过 `BackgroundTaskContext.Report` 更新进度，结果回 UI 应用。`await` 和单独 Add/Update 不会把 CPU 工作移出 UI 线程。
@@ -39,6 +51,7 @@
 ### 设置
 
 - 新设置须同时完成：字段默认值与 Guard 属性；`CreateJsonModel / ReadAsyncFallback / ResetInternal`；SettingsPageViewModel 双向属性及 Update 通知；设置页卡片；双语资源。缺字段时回落默认值。
+- Jalium 设置页在未保存编辑期间运行重算哈希或强制清理时 → 从已保存的设置文件读取游戏和存储路径；不要直接用编辑中的 SettingsService 路径执行文件操作。
 - `settings.json` 在程序目录；读取的 FileStream/JsonDocument 必须 using 释放。路径设置校验必要游戏文件；部署默认复制，符号链接仅在用户开启且权限满足时使用。
 - 音乐播放器：EnableMusicPlayer 控制启用/显示（默认 true），AutoPlayBackgroundMusic 只控制启动播放（默认 false）；启用时确保 Music 目录存在。
 - 播放模式为 Sequential（末尾停止）、Loop、Shuffle（多首时不连续重复）；模式、音量、曲目合并保存，退出强制落盘。曲目只存 Music 下相对路径，缺失回退第一首，空库清空。
@@ -47,6 +60,7 @@
 
 - `ModGuids` 是分组成员权威，默认组也不是天然包含全部模组。默认组排序来自 `_mods / enabled_mods.SortOrder`；非默认组按 ModGuids 顺序输出，禁止兜底追加外部成员。
 - 非默认组部署序随显示序。非 Dashboard 保存时用 `ProfileSaveCoordinator.GetCurrentOrder()` 过滤成员作为 Capture 的 preferredOrder，取不到才回退 ModService 顺序。
+- 二分排查在 Jalium 等独立 UI 中使用不同的 ModData 实例时 → 部署快照从会话的 AllMods 构建；开始切到临时组前记录原分组顺序，继续排查前重新启用尚未确认的候选并保存临时组状态。
 - 导入自动入组（默认关闭）只在 `AddFilesCoreAsync` 本轮导入期间临时订阅 ModAdded，finally 解绑并加入本轮新增 GUID；不要放入通用 ModAdded 处理器（刷新库也会触发）。
 - 自动入组后重新请求配置保存；导入结束用 `SaveProfileNowAsync(showProgress: false)` 立即落盘，不能只依赖防抖或退出保存。自动入组失败记 Warning，不阻断导入，提示用 Toast。
 - 当前配置存 `app_state.last_selected_group_id`：初始化恢复，切换/删除当前组时立即保存，缺失或失效回退默认组。会话状态复用 app_state，不塞设置页、不在全量重插的 mod_groups 上加列。
@@ -117,12 +131,14 @@
 
 ## 9. 验证与交付
 
+
 ```powershell
 dotnet build Helldivers2ModManager.sln --configuration Debug /m:1
 dotnet test tests/Helldivers2ModManager.Tests/Helldivers2ModManager.Tests.csproj --configuration Debug
 ```
 
 - 共享 WPF 输出串行构建/测试。主程序或调试器锁定 bin 时不要关闭用户进程，使用 `--artifacts-path <专用系统临时目录>` 隔离产物，验证路径后清理。
+- 测试调用 `ModService.Init` 后要释放数据库或清理隔离目录时 → 先等待 `HashMigrationTask`，避免后台哈希迁移仍占用 SQLite 文件。
 - 修改后首次验证不要用 --no-build。依赖源码/夹具的测试用 CallerFilePath 定位仓库，不能假设测试当前目录位于仓库；修改全局当前目录的测试标记 DoNotParallelize。
 - WPF 测试显式构造 ControlTemplate 并 Measure/Arrange；无头测试通过不代表视觉验收。CS2001 缺生成文件先排除并行构建/旧 wpftmp，仅清理已核实的相关生成目录，不清成功产物。
 - 按改动范围验证：解析的边界/截断/未知格式；部署修复的哈希/备份/回滚；预览的取消/缓存/旧结果；UI 的导航/双语/样式。无需每次全库审计。
