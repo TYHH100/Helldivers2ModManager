@@ -131,11 +131,6 @@ internal sealed class BisectService
 		var enabledMods = _modGroupService.FilterMods(allMods)
 			.Where(static mod => mod.Enabled)
 			.ToList();
-		await _modGroupService.AddModsToGroupWithCurrentStateAsync(tempGroup.Id, enabledMods);
-		await _modGroupService.SelectGroupAsync(tempGroup.Id, allMods);
-
-		// 记录原分组顺序：优先取用户最近一次保存的顺序（导航前 Dashboard 已保存），
-		// 过滤出当前分组仍存在的成员；取不到时退回 ModService 加载顺序。
 		var groupMemberGuids = _modGroupService.FilterMods(allMods)
 			.Select(static mod => mod.Manifest.Guid)
 			.ToHashSet();
@@ -144,6 +139,8 @@ internal sealed class BisectService
 			.ToArray();
 		if (originalOrder.Length == 0)
 			originalOrder = _modGroupService.FilterMods(allMods).Select(static mod => mod.Manifest.Guid).ToArray();
+		await _modGroupService.AddModsToGroupWithCurrentStateAsync(tempGroup.Id, enabledMods);
+		await _modGroupService.SelectGroupAsync(tempGroup.Id, allMods);
 
 		var session = new BisectSession
 		{
@@ -251,15 +248,26 @@ internal sealed class BisectService
 	}
 
 	/// <summary>
-	/// 临时分组内当前仍启用的模组（用于迭代排查剩余候选）。
+	/// 原始启用集合中尚未确认为嫌疑的模组（用于迭代排查剩余候选）。
 	/// </summary>
 	public IReadOnlyList<ModData> GetRemainingEnabledMods()
 	{
 		var session = Current ?? throw new InvalidOperationException("No bisect session.");
-		var members = session.TempGroup.ModGuids.ToHashSet();
-		return session.AllMods
-			.Where(mod => members.Contains(mod.Manifest.Guid) && mod.Enabled)
+		var suspects = session.Suspects.ToHashSet();
+		return session.InitialEnabledMods
+			.Where(mod => !suspects.Contains(mod.Manifest.Guid))
 			.ToList();
+	}
+
+	public async Task PrepareRemainingVerificationAsync(IReadOnlyList<ModData> remaining)
+	{
+		var session = Current ?? throw new InvalidOperationException("No bisect session.");
+		var members = session.TempGroup.ModGuids.ToHashSet();
+		var enabled = remaining.Select(static mod => mod.Manifest.Guid).ToHashSet();
+		foreach (var mod in session.AllMods)
+			if (members.Contains(mod.Manifest.Guid))
+				mod.Enabled = enabled.Contains(mod.Manifest.Guid);
+		await _modGroupService.SaveSelectedGroupStateAsync(session.AllMods);
 	}
 
 	/// <summary>
@@ -277,7 +285,8 @@ internal sealed class BisectService
 	public Task DeployAsync(Action<string>? reportStep = null, Action<string>? reportStepDetail = null, Action? reportStepCompleted = null, Action? reportStepFailed = null)
 	{
 		var group = _modGroupService.SelectedGroup;
-		var groupMods = _modGroupService.FilterMods(_modService.Mods).ToList();
+		var session = Current ?? throw new InvalidOperationException("No bisect session.");
+		var groupMods = _modGroupService.FilterMods(session.AllMods).ToList();
 		var order = groupMods.Select(static mod => mod.Manifest.Guid).ToArray();
 		var snapshot = _profileSaveCoordinator.Capture(groupMods, order, group.Id, group.IsDefault);
 		var deploymentMods = DeploymentOrderHelper.BuildDeploymentMods(

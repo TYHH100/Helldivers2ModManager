@@ -13,12 +13,14 @@ internal sealed class ModSeparator
 
     private static string GetDefaultName()
     {
+#if HD2MM_WPF
         try
         {
             if (System.Windows.Application.Current is App app)
                 return (app.Host?.Services?.GetService(typeof(Services.LocalizationService)) as Services.LocalizationService)?["DashboardPage.DefaultSeparatorName"] ?? "新分隔符";
         }
         catch { }
+#endif
         return "新分隔符";
     }
 

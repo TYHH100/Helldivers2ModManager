@@ -751,6 +751,7 @@ internal sealed class SettingsService
 	}
 	
 	private readonly FileInfo _file;
+	private readonly string? _isolatedDataRoot;
 	private static readonly byte[] s_optionalEntropy = Encoding.UTF8.GetBytes("Helldivers2ModManager_Entropy_2024");
 	private static readonly JsonSerializerOptions s_serializerOptions = new()
 	{
@@ -865,6 +866,13 @@ internal sealed class SettingsService
 	{
 		_logger = logger;
 		_file = new FileInfo(Path.GetFullPath("settings.json"));
+	}
+
+	internal SettingsService(ILogger<SettingsService> logger, string settingsFilePath, string dataRoot)
+	{
+		_logger = logger;
+		_file = new FileInfo(Path.GetFullPath(settingsFilePath));
+		_isolatedDataRoot = Path.GetFullPath(dataRoot);
 	}
 
 	private string? EncryptString(string? plainText)
@@ -1305,13 +1313,27 @@ internal sealed class SettingsService
 		var mappingList = new List<AutoTagMapping>();
 		foreach (var mappingElm in mappingArr.EnumerateArray())
 		{
-			if (!mappingElm.TryGetProperty(nameof(AutoTagMapping.Type), out var typeProp) || typeProp.ValueKind != JsonValueKind.Number)
+			if ((!mappingElm.TryGetProperty("type", out var typeProp)
+				&& !mappingElm.TryGetProperty(nameof(AutoTagMapping.Type), out typeProp))
+				|| typeProp.ValueKind is not (JsonValueKind.String or JsonValueKind.Number))
 				continue;
-			if (!mappingElm.TryGetProperty(nameof(AutoTagMapping.TagId), out var tagIdProp) || tagIdProp.ValueKind != JsonValueKind.String)
+			ModType type;
+			if (typeProp.ValueKind == JsonValueKind.String)
+			{
+				if (!Enum.TryParse(typeProp.GetString(), true, out type) || !Enum.IsDefined(type))
+					continue;
+			}
+			else if (typeProp.TryGetInt32(out var typeValue) && Enum.IsDefined(typeof(ModType), typeValue))
+				type = (ModType)typeValue;
+			else
+				continue;
+			if ((!mappingElm.TryGetProperty("tagId", out var tagIdProp)
+				&& !mappingElm.TryGetProperty(nameof(AutoTagMapping.TagId), out tagIdProp))
+				|| tagIdProp.ValueKind != JsonValueKind.String)
 				continue;
 			if (!Guid.TryParse(tagIdProp.GetString(), out var mappingTagId))
 				continue;
-			mappingList.Add(new AutoTagMapping { Type = (ModType)typeProp.GetInt32(), TagId = mappingTagId });
+			mappingList.Add(new AutoTagMapping { Type = type, TagId = mappingTagId });
 		}
 		_autoTagMappings = mappingList;
 	}
@@ -1430,7 +1452,7 @@ internal sealed class SettingsService
 
 		try
 		{
-			var logDir = new DirectoryInfo("logs");
+			var logDir = new DirectoryInfo(_isolatedDataRoot is null ? "logs" : Path.Combine(_isolatedDataRoot, "logs"));
 			if (!logDir.Exists)
 				return;
 
@@ -1468,8 +1490,10 @@ internal sealed class SettingsService
 	private void ResetInternal()
 	{
 		_gameDirectory = string.Empty;
-		_storageDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Helldivers2ModManager");
-		_tempDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp", "Helldivers2ModManager");
+		_storageDirectory = _isolatedDataRoot ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Helldivers2ModManager");
+		_tempDirectory = _isolatedDataRoot is null
+			? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp", "Helldivers2ModManager")
+			: Path.Combine(_isolatedDataRoot, "temp");
 		_logLevel = LogLevel.Warning;
 		_opacity = 0.8f;
 		_backgroundMode = BackgroundMode.Default;
@@ -1493,7 +1517,7 @@ internal sealed class SettingsService
 		_enableAutoTagging = false;
 		_autoTagCreateMissingTags = false;
 		_autoTagMappings = [];
-		_enableMusicPlayer = false;
+		_enableMusicPlayer = true;
 		_autoPlayBackgroundMusic = false;
 		_musicPlayerHorizontalPosition = 0.98;
 		_musicPlayerVerticalPosition = 0.75;

@@ -1,7 +1,6 @@
 using Helldivers2ModManager.Exceptions;
 using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
-using Helldivers2ModManager.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualBasic.FileIO;

@@ -227,6 +227,8 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 							await CancelAndNotifyAsync();
 							break;
 						}
+						if (singleVerifyReport == _localizationService["Bisect.NotCrashed"])
+							break;
 
 						if (singleVerifyReport == _localizationService["Bisect.Crashed"])
 						{
@@ -251,6 +253,7 @@ internal sealed partial class BisectPageViewModel : PageViewModelBase
 						break;
 
 					// 先部署剩余全部模组验证是否仍崩溃，为下一轮二分建立前提
+					await _bisectService.PrepareRemainingVerificationAsync(remaining);
 					if (!await DeployWithProgressAsync())
 					{
 						await CancelAndNotifyAsync();

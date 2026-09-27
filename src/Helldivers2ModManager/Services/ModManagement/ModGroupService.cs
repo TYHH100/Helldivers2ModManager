@@ -1,6 +1,5 @@
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services.Infrastructure;
-using Helldivers2ModManager.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
@@ -110,26 +109,6 @@ internal sealed class ModGroupService
 		foreach (var guid in selected.ModGuids)
 			if (byGuid.Remove(guid, out var mod))
 				result.Add(mod);
-		return result;
-	}
-
-	public IEnumerable<ModViewModel> FilterModViewModels(IEnumerable<ModViewModel> mods)
-	{
-		if (!_initialized)
-			return mods;
-		var selected = SelectedGroup;
-		var members = GetSelectedMemberSet();
-		if (selected.IsDefault)
-			return mods.Where(mod => members.Contains(mod.Guid));
-
-		// 与 FilterMods 相同的排序规则，保证显示、快照与部署顺序都以分组持久化顺序为准。
-		var byGuid = new Dictionary<Guid, ModViewModel>();
-		foreach (var vm in mods)
-			byGuid.TryAdd(vm.Guid, vm);
-		var result = new List<ModViewModel>(selected.ModGuids.Count);
-		foreach (var guid in selected.ModGuids)
-			if (byGuid.Remove(guid, out var vm))
-				result.Add(vm);
 		return result;
 	}
 

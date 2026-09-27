@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Helldivers2ModManager.Tests;
 
@@ -33,9 +34,9 @@ public sealed class LocalizationServiceTests
         }
     }
 
-    private static string RepositoryLanguageDirectory()
+    private static string RepositoryLanguageDirectory([CallerFilePath] string sourceFile = "")
     {
-        for (DirectoryInfo? current = new(Directory.GetCurrentDirectory()); current is not null; current = current.Parent)
+        for (DirectoryInfo? current = new(Path.GetDirectoryName(sourceFile)!); current is not null; current = current.Parent)
             if (File.Exists(Path.Combine(current.FullName, "Helldivers2ModManager.sln")))
                 return Path.Combine(current.FullName, "src", "Helldivers2ModManager", "Resources", "Language");
         throw new DirectoryNotFoundException("repository root not found");

@@ -207,7 +207,8 @@ internal sealed class ModTypeDetectionService
         LocalizationService localization,
         IReadOnlyCollection<ModData> mods,
         IReadOnlyDictionary<string, ModTypeDetectionResult> detections,
-        bool createMissingTags)
+        bool createMissingTags,
+        bool saveCreatedTags = true)
     {
         if (settings.IsReadonly || mods.Count == 0)
             return 0;
@@ -252,7 +253,7 @@ internal sealed class ModTypeDetectionService
             changed++;
         }
 
-        if (anyCreated)
+        if (anyCreated && saveCreatedTags)
             _ = settings.SaveAsync();
         return changed;
     }

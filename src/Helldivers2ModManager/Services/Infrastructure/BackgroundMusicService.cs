@@ -7,13 +7,6 @@ using System.IO;
 
 namespace Helldivers2ModManager.Services.Infrastructure;
 
-internal enum MusicPlaybackMode
-{
-	Sequential,
-	Loop,
-	Shuffle,
-}
-
 [RegisterService(ServiceLifetime.Singleton)]
 internal sealed class BackgroundMusicService : IDisposable
 {

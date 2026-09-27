@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Text.Json.Serialization;
+#if HD2MM_WPF
 using System.Windows.Media;
+#endif
 
 namespace Helldivers2ModManager.Models;
 
@@ -42,14 +44,18 @@ public sealed class ModTag : INotifyPropertyChanged
             {
                 _color = value;
                 OnPropertyChanged(nameof(Color));
+#if HD2MM_WPF
                 OnPropertyChanged(nameof(Brush));
+#endif
             }
         }
     }
 
+#if HD2MM_WPF
     public SolidColorBrush Brush => GetColorBrush();
 
     public SolidColorBrush Foreground => GetForegroundBrush();
+#endif
 
     public ModTag(string name, string color = "#FF3B82F6")
     {
@@ -66,6 +72,7 @@ public sealed class ModTag : INotifyPropertyChanged
         Color = color;
     }
 
+#if HD2MM_WPF
     public SolidColorBrush GetColorBrush()
     {
         try
@@ -92,6 +99,7 @@ public sealed class ModTag : INotifyPropertyChanged
             return new SolidColorBrush(Colors.White);
         }
     }
+#endif
 
     public override string ToString()
     {

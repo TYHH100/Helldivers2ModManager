@@ -175,6 +175,45 @@ internal sealed class EnabledDataRepository
 		return results;
 	}
 
+	public async Task SaveTagsAsync(string storageDirectory, IReadOnlyList<EnabledData> updates)
+	{
+		await _writeLock.WaitAsync().ConfigureAwait(false);
+		try
+		{
+			using var connection = _databaseService.OpenConnection(storageDirectory);
+			using var transaction = connection.BeginTransaction();
+			using var command = connection.CreateCommand();
+			command.Transaction = transaction;
+			command.CommandText = """
+				INSERT INTO enabled_mods (Guid, Enabled, Toggled, Selected, TagIds, SortOrder)
+				VALUES (@Guid, @Enabled, @Toggled, @Selected, @TagIds,
+				    (SELECT COALESCE(MAX(SortOrder) + 1, 0) FROM enabled_mods))
+				ON CONFLICT(Guid) DO UPDATE SET TagIds = excluded.TagIds;
+				""";
+			var guid = command.Parameters.Add("@Guid", SqliteType.Text);
+			var enabled = command.Parameters.Add("@Enabled", SqliteType.Integer);
+			var toggled = command.Parameters.Add("@Toggled", SqliteType.Text);
+			var selected = command.Parameters.Add("@Selected", SqliteType.Text);
+			var tags = command.Parameters.Add("@TagIds", SqliteType.Text);
+			foreach (var data in updates)
+			{
+				guid.Value = data.Guid.ToString();
+				enabled.Value = data.Enabled ? 1 : 0;
+				toggled.Value = JsonSerializer.Serialize(data.Toggled, s_jsonOptions);
+				selected.Value = JsonSerializer.Serialize(data.Selected, s_jsonOptions);
+				tags.Value = data.TagIds is { Count: > 0 }
+					? JsonSerializer.Serialize(data.TagIds.Select(id => id.ToString()), s_jsonOptions)
+					: DBNull.Value;
+				command.ExecuteNonQuery();
+			}
+			transaction.Commit();
+		}
+		finally
+		{
+			_writeLock.Release();
+		}
+	}
+
 	/// <summary>
 	/// 删除数据库中指定 Guid 的记录。每次创建独立连接，用完即关。
 	/// </summary>

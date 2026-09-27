@@ -7,6 +7,17 @@ namespace Helldivers2ModManager.Services;
 [RegisterService(ServiceLifetime.Singleton)]
 internal sealed class BackgroundTaskService
 {
+	#if !HD2MM_WPF
+	private readonly Action<Action> _postToUi;
+	private readonly Func<bool> _checkUiAccess;
+
+	public BackgroundTaskService(Action<Action> postToUi, Func<bool> checkUiAccess)
+	{
+		_postToUi = postToUi;
+		_checkUiAccess = checkUiAccess;
+	}
+	#endif
+
 	public ObservableCollection<BackgroundTaskItem> Tasks { get; } = [];
 
 	/// <summary>
@@ -323,6 +334,7 @@ internal sealed class BackgroundTaskService
 			=> _service.FailStep(_task);
 	}
 
+	#if HD2MM_WPF
 	private static void RunOnUiThread(Action action)
 	{
 		var dispatcher = System.Windows.Application.Current?.Dispatcher;
@@ -337,6 +349,13 @@ internal sealed class BackgroundTaskService
 		// UI 渲染速度；排队的更新乱序到达由 Update 内的 Running 状态守卫兜底。
 		dispatcher.BeginInvoke(action);
 	}
+	#else
+	private void RunOnUiThread(Action action)
+	{
+		if (_checkUiAccess()) action();
+		else _postToUi(action);
+	}
+	#endif
 
 	/// <summary>
 	/// 把操作排到 UI 队列末尾执行（无论调用线程是否就是 UI 线程）。
@@ -345,6 +364,7 @@ internal sealed class BackgroundTaskService
 	/// （如符号链接部署，所有步骤操作瞬间入队）会在终态同步执行时被守卫拦截，
 	/// 步骤永远停留在 Running。
 	/// </summary>
+	#if HD2MM_WPF
 	private static void QueueOnUiThread(Action action)
 	{
 		var dispatcher = System.Windows.Application.Current?.Dispatcher;
@@ -356,4 +376,7 @@ internal sealed class BackgroundTaskService
 
 		dispatcher.BeginInvoke(action);
 	}
+	#else
+	private void QueueOnUiThread(Action action) => _postToUi(action);
+	#endif
 }

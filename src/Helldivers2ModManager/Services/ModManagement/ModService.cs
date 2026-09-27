@@ -2,7 +2,9 @@ using Helldivers2ModManager.Exceptions;
 using Helldivers2ModManager.Extensions;
 using Helldivers2ModManager.Models;
 using Helldivers2ModManager.Services.Infrastructure;
+#if HD2MM_WPF
 using Helldivers2ModManager.ViewModels;
+#endif
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualBasic.FileIO;
@@ -33,6 +35,7 @@ internal sealed partial class ModService
 	public bool Initialized { get; private set; }
 
 	public IReadOnlyList<ModData> Mods => _mods;
+	public Task HashMigrationTask { get; private set; } = Task.CompletedTask;
 
 	public event Action<ModData>? ModAdded;
 
@@ -43,24 +46,35 @@ internal sealed partial class ModService
 	// Guid/路径索引：与 _mods 同步维护，仅作 O(1) 查找加速；列表本身保持顺序权威（SortOrder/部署顺序）。
 	private readonly Dictionary<Guid, ModData> _modsByGuid = new();
 	private readonly Dictionary<string, ModData> _modsByPath = new(StringComparer.OrdinalIgnoreCase);
+	private readonly FileHashRepository? _fileHashRepository;
+	#if HD2MM_WPF
 	private readonly ConcurrentDictionary<Guid, ModViewModel> _modViewModelCache = new();
-	private readonly FileHashRepository _fileHashRepository;
-	private readonly ModHashService _modHashService;
-	private readonly LocalizationService _localizationService;
 	private readonly VersionCheckService _versionCheckService;
 	private readonly ModLinkRepository _modLinkRepository;
+	#endif
+	private readonly ModHashService _modHashService;
+	private readonly LocalizationService _localizationService;
 	private readonly GameProcessService _gameProcessService;
 	private SettingsService? _settingsService;
 	private ManifestParseCache? _manifestCache;
 
+	#if HD2MM_WPF
 	public ModService(ILogger<ModService> logger, FileHashRepository fileHashRepository, ModHashService modHashService, LocalizationService localizationService, VersionCheckService versionCheckService, ModLinkRepository modLinkRepository, GameProcessService gameProcessService)
+	#else
+	public ModService(ILogger<ModService> logger, ModHashService modHashService, LocalizationService localizationService, GameProcessService gameProcessService, FileHashRepository? fileHashRepository = null)
+	#endif
 	{
 		_logger = logger;
+		#if HD2MM_WPF
 		_fileHashRepository = fileHashRepository;
-		_modHashService = modHashService;
-		_localizationService = localizationService;
 		_versionCheckService = versionCheckService;
 		_modLinkRepository = modLinkRepository;
+		#endif
+		#if !HD2MM_WPF
+		_fileHashRepository = fileHashRepository;
+		#endif
+		_modHashService = modHashService;
+		_localizationService = localizationService;
 		_gameProcessService = gameProcessService;
 		_mods = new();
 	}
@@ -154,7 +168,7 @@ internal sealed partial class ModService
 		var storageDirectory = _settingsService.StorageDirectory;
 		_ = Task.Run(() => _manifestCache.Save(storageDirectory));
 		// 哈希迁移是 CPU/IO 密集操作，放到后台线程执行，避免阻塞 UI 线程
-		_ = Task.Run(async () => await _modHashService.MigrateExistingModsAsync(_mods));
+		HashMigrationTask = Task.Run(async () => await _modHashService.MigrateExistingModsAsync(_mods));
 
 		return problems.ToArray();
 	}
@@ -914,6 +928,7 @@ internal sealed partial class ModService
 		return _modsByGuid.TryGetValue(guid, out var mod) ? mod : null;
 	}
 
+	#if HD2MM_WPF
 	public ModViewModel GetOrCreateModViewModel(ModData mod, ILogger logger, SettingsService settingsService, Services.Nexus.INexusModsService nexusModsService)
 	{
 		return _modViewModelCache.GetOrAdd(mod.Manifest.Guid, _ => new ModViewModel(mod, logger, settingsService, nexusModsService, _localizationService, _versionCheckService, _modLinkRepository));
@@ -947,6 +962,7 @@ internal sealed partial class ModService
 		}
 		_modViewModelCache.Clear();
 	}
+	#endif
 
 	[MemberNotNull(nameof(_settingsService))]
 	private void GuardInitialized()
