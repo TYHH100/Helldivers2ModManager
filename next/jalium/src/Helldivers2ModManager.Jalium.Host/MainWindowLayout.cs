@@ -101,8 +101,7 @@ internal sealed class MainWindowLayout
         MusicLayer = new Canvas { Visibility = musicPlayer is null ? Visibility.Collapsed : Visibility.Visible };
         if (musicPlayer is not null)
         {
-            Canvas.SetRight(musicPlayer, 20);
-            Canvas.SetBottom(musicPlayer, 20);
+            // 位置由播放器按归一化设置自定位（可拖动）；布局完成后兜底调一次。
             MusicLayer.Children.Add(musicPlayer);
         }
         Grid.SetRow(MusicLayer, 1);
@@ -135,6 +134,7 @@ internal sealed class MainWindowLayout
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(16, 0, 0, 0),
+            Background = Brushes.Transparent,
         };
         identity.Children.Add(new Image
         {
@@ -159,7 +159,14 @@ internal sealed class MainWindowLayout
             Margin = new Thickness(12, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         });
+        AttachTitleBarDrag(identity);
         titleGrid.Children.Add(identity);
+
+        // 中列空白区承接拖动；背景需可命中测试（几乎透明的笔刷）。
+        var dragFiller = new Border { Background = new SolidColorBrush(Color.FromArgb(0x01, 0xFF, 0xFF, 0xFF)) };
+        AttachTitleBarDrag(dragFiller);
+        Grid.SetColumn(dragFiller, 1);
+        titleGrid.Children.Add(dragFiller);
 
         var controls = new StackPanel
         {
@@ -176,6 +183,47 @@ internal sealed class MainWindowLayout
         titleGrid.Children.Add(controls);
 
         return new Border { Background = WindowBackground, Child = titleGrid };
+    }
+
+    // 当前包的 WindowChrome.CaptionHeight 未让 caption 命中测试生效（窗口拖不动），
+    // 托管侧在标题栏按下时发送 WM_NCLBUTTONDOWN/HTCAPTION 交还原生移动循环。
+    private void AttachTitleBarDrag(FrameworkElement element)
+    {
+        element.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ClickCount == 2)
+            {
+                Window.WindowState = Window.WindowState == WindowState.Maximized
+                    ? WindowState.Normal : WindowState.Maximized;
+                e.Handled = true;
+                return;
+            }
+            BeginWindowDrag();
+            e.Handled = true;
+        };
+    }
+
+    internal void BeginWindowDrag()
+    {
+        var handle = Window.Handle;
+        if (handle == IntPtr.Zero)
+            return;
+        if (!NativeMethods.ReleaseCapture(handle))
+            return;
+        NativeMethods.SendMessage(handle, NativeMethods.WM_NCLBUTTONDOWN,
+            (IntPtr)NativeMethods.HTCAPTION, IntPtr.Zero);
+    }
+
+    private static class NativeMethods
+    {
+        public const int WM_NCLBUTTONDOWN = 0x00A1;
+        public const int HTCAPTION = 0x0002;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        public static extern bool ReleaseCapture(IntPtr hWnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
     }
 
     private static Button CreateTitleButton(string glyph, string tooltip, Action action, bool isClose = false)

@@ -151,6 +151,7 @@ internal sealed partial class DashboardRuntime(
         _layout.Window.DragLeave += OnImportDragLeave;
         _layout.Window.Loaded += (_, _) =>
         {
+            _musicPlayer?.ApplySavedPosition();
             StartAutoTag();
             RequestAutomaticConflictScan();
             RequestAutomaticVersionCheck();

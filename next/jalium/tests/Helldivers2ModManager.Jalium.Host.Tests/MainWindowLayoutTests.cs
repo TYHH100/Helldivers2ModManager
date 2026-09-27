@@ -47,7 +47,9 @@ public sealed class MainWindowLayoutTests
         Assert.IsNotNull(titleBar);
         var titleGrid = titleBar.Child as Grid;
         Assert.IsNotNull(titleGrid);
-        var controls = (StackPanel)titleGrid.Children[1];
+        // 中列是可拖动的填充层（WindowChrome caption 在当前包不生效，拖动走 HTCAPTION 消息）。
+        Assert.IsInstanceOfType(titleGrid.Children[1], typeof(Border));
+        var controls = (StackPanel)titleGrid.Children[2];
         Assert.AreEqual(5, controls.Children.Count);
         foreach (Button button in controls.Children)
         {

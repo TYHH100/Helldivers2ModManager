@@ -42,6 +42,12 @@ internal sealed class FloatingMusicPlayerView : Grid, IDisposable
     private bool _seeking;
     private bool _updatingTrack;
     private bool _disposed;
+    private bool _pointerDown;
+    private bool _dragging;
+    private Point _pointerStart;
+    private Point _controlStart;
+    private UIElement? _capturedSurface;
+    private Grid? _expandedHeader;
 
     public FloatingMusicPlayerView(BackgroundMusicService music, SettingsService settings,
         LocalizationService localization)
@@ -50,9 +56,9 @@ internal sealed class FloatingMusicPlayerView : Grid, IDisposable
         _settings = settings;
         _localization = localization;
         _dispatcher = Dispatcher.CurrentDispatcher;
-        Width = 360;
-        HorizontalAlignment = HorizontalAlignment.Right;
-        VerticalAlignment = VerticalAlignment.Bottom;
+        // Canvas 定位由归一化位置（MusicPlayerHorizontalPosition/VerticalPosition）驱动，
+        // 与原 WPF 播放器一致；折叠/展开尺寸变化和首次布局时重定位。
+        SizeChanged += (_, _) => ApplySavedPosition();
 
         _collapsed = new Border
         {
@@ -68,7 +74,7 @@ internal sealed class FloatingMusicPlayerView : Grid, IDisposable
             },
         };
         _collapsed.ToolTip = _localization["MusicPlayer.Expand"];
-        _collapsed.MouseLeftButtonUp += (_, _) => SetExpanded(true);
+        AttachDragHandlers(_collapsed);
         Children.Add(_collapsed);
 
         _expanded = BuildExpanded();
@@ -112,7 +118,9 @@ internal sealed class FloatingMusicPlayerView : Grid, IDisposable
         for (var i = 0; i < 7; i++)
             root.RowDefinitions.Add(new RowDefinition { Height = i == 6 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
 
-        var header = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        var header = new Grid { Margin = new Thickness(0, 0, 0, 12), Background = Brushes.Transparent };
+        AttachDragHandlers(header);
+        _expandedHeader = header;
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -238,6 +246,91 @@ internal sealed class FloatingMusicPlayerView : Grid, IDisposable
     {
         _collapsed.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
         _expanded.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // 拖动语义对齐原 WPF 播放器：按下捕获、移动超过阈值才判定拖动；
+    // 折叠球原地点击展开，拖动结束按 Canvas 可移动范围归一化保存位置。
+    private void AttachDragHandlers(FrameworkElement surface)
+    {
+        surface.MouseLeftButtonDown += (_, e) =>
+        {
+            if (Parent is not Canvas canvas)
+                return;
+            _pointerDown = true;
+            _dragging = false;
+            _pointerStart = e.GetPosition(canvas);
+            _controlStart = GetCurrentPosition(canvas);
+            _capturedSurface = surface;
+            surface.CaptureMouse();
+            e.Handled = true;
+        };
+        surface.MouseMove += (_, e) =>
+        {
+            if (!_pointerDown || Parent is not Canvas canvas)
+                return;
+            var current = e.GetPosition(canvas);
+            var offset = current - _pointerStart;
+            if (!_dragging && Math.Abs(offset.X) < 4 && Math.Abs(offset.Y) < 4)
+                return;
+            _dragging = true;
+            var maxX = Math.Max(0, canvas.ActualWidth - ActualWidth);
+            var maxY = Math.Max(0, canvas.ActualHeight - ActualHeight);
+            Canvas.SetLeft(this, Math.Clamp(_controlStart.X + offset.X, 0, maxX));
+            Canvas.SetTop(this, Math.Clamp(_controlStart.Y + offset.Y, 0, maxY));
+            e.Handled = true;
+        };
+        surface.MouseLeftButtonUp += (_, e) =>
+        {
+            if (!_pointerDown)
+                return;
+            _pointerDown = false;
+            _capturedSurface?.ReleaseMouseCapture();
+            _capturedSurface = null;
+            if (_dragging)
+            {
+                _dragging = false;
+                SavePositionFromCanvas();
+            }
+            else if (!ReferenceEquals(surface, _expandedHeader))
+            {
+                SetExpanded(true);
+            }
+            e.Handled = true;
+        };
+    }
+
+    private Point GetCurrentPosition(Canvas canvas)
+    {
+        var left = Canvas.GetLeft(this);
+        var top = Canvas.GetTop(this);
+        if (double.IsNaN(left) || double.IsNaN(top))
+            ApplySavedPosition();
+        left = Canvas.GetLeft(this);
+        top = Canvas.GetTop(this);
+        return new Point(double.IsNaN(left) ? 0 : left, double.IsNaN(top) ? 0 : top);
+    }
+
+    private void SavePositionFromCanvas()
+    {
+        if (Parent is not Canvas canvas || _settings.IsReadonly)
+            return;
+        var maxX = Math.Max(0, canvas.ActualWidth - ActualWidth);
+        var maxY = Math.Max(0, canvas.ActualHeight - ActualHeight);
+        var left = Canvas.GetLeft(this);
+        var top = Canvas.GetTop(this);
+        _settings.MusicPlayerHorizontalPosition = maxX > 0 && !double.IsNaN(left) ? Math.Clamp(left / maxX, 0, 1) : 1;
+        _settings.MusicPlayerVerticalPosition = maxY > 0 && !double.IsNaN(top) ? Math.Clamp(top / maxY, 0, 1) : 1;
+        SchedulePreferencesSave();
+    }
+
+    public void ApplySavedPosition()
+    {
+        if (Parent is not Canvas canvas)
+            return;
+        var maxX = Math.Max(0, canvas.ActualWidth - ActualWidth);
+        var maxY = Math.Max(0, canvas.ActualHeight - ActualHeight);
+        Canvas.SetLeft(this, _settings.MusicPlayerHorizontalPosition * maxX);
+        Canvas.SetTop(this, _settings.MusicPlayerVerticalPosition * maxY);
     }
 
     private void RefreshPlaylist()
