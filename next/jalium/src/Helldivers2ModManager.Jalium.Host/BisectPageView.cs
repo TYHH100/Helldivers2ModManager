@@ -142,8 +142,8 @@ internal sealed class BisectPageView : Grid, IDisposable
         _title.Text = _localization["Bisect.Title"];
         _description.Text = _localization["Bisect.Description"];
         _hint.Text = _localization["Bisect.CrashHint"];
-        _backButton.Content = new TextBlock { Text = "\uE72B",
-            FontFamily = new FontFamily("Segoe Fluent Icons"), Foreground = Foreground };
+        _backButton.Content = new TextBlock { Text = "\u2190",
+            FontFamily = new FontFamily("Segoe UI Symbol"), Foreground = Foreground };
         _backButton.ToolTip = _localization["Common.Back"];
         _startButton.Content = _localization["Bisect.Start"];
         _resumeButton.Content = _localization["Bisect.Resume"];
