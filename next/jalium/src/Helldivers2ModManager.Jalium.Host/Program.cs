@@ -21,7 +21,11 @@ internal static class Program
             new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
 #if DEBUG
         if (args is ["--visual-check", var page, var screenshotPath])
+        {
+            if (page.StartsWith("page:", StringComparison.Ordinal))
+                return PageVisualCheck.Run(page["page:".Length..], screenshotPath);
             return PatchViewerVisualCheck.Run(page, screenshotPath);
+        }
 #endif
         var appRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Helldivers2ModManagerJalium");
